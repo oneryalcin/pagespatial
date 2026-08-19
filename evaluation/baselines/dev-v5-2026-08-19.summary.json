@@ -1,0 +1,186 @@
+{
+  "schemaVersion": "pagespatial-development-baseline-summary-v2",
+  "generator": {
+    "version": 1,
+    "scriptSha256": "772bd35927cb5cd51a5408a4b892cb90ee77f1b7fb853b036c554807a57dc086",
+    "runImplementation": {
+      "commit": "89584cbf1434261823dafd8222e08b8513858060",
+      "dirty": false,
+      "workspaceHash": "d9e343db2092d3db288598c871d48808bae7f79ea45b9901ab3f2fee5ed9394d",
+      "files": 80
+    }
+  },
+  "runId": "dev-v5-2026-08-19",
+  "datasetRevision": "e3ee38f067588644b11574ccc566843ca45f6d33",
+  "manifestSha256": "14520a4f4ef3396b362e24d3a172cf8f855d263f3fbc70ec92766d70d9de4418",
+  "workspaceSha256": "d9e343db2092d3db288598c871d48808bae7f79ea45b9901ab3f2fee5ed9394d",
+  "privateRunSummarySha256": "ee7c86875e75f5b66a0ed36291336504e273a6b98aaaf7bc77d9c69a43f61136",
+  "privateRunSummaryPath": "invocations/1787145628732-30087-e03031134650.json",
+  "artifactGraph": {
+    "documents": 23,
+    "terminalPageAttempts": 162,
+    "contentHashesVerified": true
+  },
+  "startedAt": "2026-08-19T13:20:29.027Z",
+  "endedAt": "2026-08-19T13:22:14.964Z",
+  "environment": {
+    "node": "v25.8.2",
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": {
+      "model": "Apple M4 Max",
+      "logicalCores": 14
+    },
+    "totalMemoryBytes": 38654705664,
+    "browserSessions": [
+      {
+        "sessionId": "1787145634080-f49366e2514b",
+        "startedAt": "2026-08-19T13:20:34.080Z",
+        "browser": "Chromium",
+        "browserVersion": "151.0.7922.140",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "gpu": {
+          "vendor": "apple",
+          "architecture": "metal-3",
+          "device": null,
+          "description": null
+        },
+        "warmupMs": 1498.920000076294,
+        "backend": "webgpu",
+        "executableLabel": "Google Chrome"
+      }
+    ]
+  },
+  "execution": {
+    "executed": 162,
+    "resumed": 0
+  },
+  "documents": 23,
+  "pages": {
+    "expected": 162,
+    "ocrCompleted": 162,
+    "pageSpatialSucceeded": 148,
+    "failedClosed": 14
+  },
+  "backend": {
+    "webgpu": 162
+  },
+  "successfulPageEvidence": {
+    "nativeObservations": 11993,
+    "ocrObservations": 10718,
+    "sourceMatches": 7471,
+    "criticalConflicts": 273,
+    "pagesRequiringEscalation": 74
+  },
+  "ocrTimingMs": {
+    "total": 49496.789999485016,
+    "p50": 269.539999961853,
+    "p95": 592.414999961853,
+    "max": 1021.875
+  },
+  "associationCoverageDiagnostic": {
+    "pages": 148,
+    "mean": 0.6783197962131804,
+    "p50": 0.8817204301075269,
+    "min": 0,
+    "max": 1,
+    "isAccuracy": false
+  },
+  "failures": [
+    {
+      "class": "native-geometry-out-of-bounds",
+      "documents": 2,
+      "pages": 2,
+      "objectIds": [
+        "public-comps:monotaro:2025-fy:003",
+        "public-comps:monotaro:2025-fy:004"
+      ],
+      "pageNumbers": [
+        12
+      ],
+      "cases": [
+        {
+          "objectId": "public-comps:monotaro:2025-fy:003",
+          "pageNumber": 12
+        },
+        {
+          "objectId": "public-comps:monotaro:2025-fy:004",
+          "pageNumber": 12
+        }
+      ]
+    },
+    {
+      "class": "unsupported-rotated-native-geometry",
+      "documents": 1,
+      "pages": 12,
+      "objectIds": [
+        "public-comps:blackstone:2026-q1:002"
+      ],
+      "pageNumbers": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "cases": [
+        {
+          "objectId": "public-comps:blackstone:2026-q1:002",
+          "pageNumber": 2
+        },
+        {
+          "objectId": "public-comps:blackstone:2026-q1:002",
+          "pageNumber": 3
+        },
+        {
+          "objectId": "public-comps:blackstone:2026-q1:002",
+          "pageNumber": 4
+        },
+        {
+          "objectId": "public-comps:blackstone:2026-q1:002",
+          "pageNumber": 5
+        },
+        {
+          "objectId": "public-comps:blackstone:2026-q1:002",
+          "pageNumber": 6
+        },
+        {
+          "objectId": "public-comps:blackstone:2026-q1:002",
+          "pageNumber": 12
+        },
+        {
+          "objectId": "public-comps:blackstone:2026-q1:002",
+          "pageNumber": 13
+        },
+        {
+          "objectId": "public-comps:blackstone:2026-q1:002",
+          "pageNumber": 14
+        },
+        {
+          "objectId": "public-comps:blackstone:2026-q1:002",
+          "pageNumber": 15
+        },
+        {
+          "objectId": "public-comps:blackstone:2026-q1:002",
+          "pageNumber": 16
+        },
+        {
+          "objectId": "public-comps:blackstone:2026-q1:002",
+          "pageNumber": 17
+        },
+        {
+          "objectId": "public-comps:blackstone:2026-q1:002",
+          "pageNumber": 18
+        }
+      ]
+    }
+  ],
+  "goldMetrics": "not_evaluated"
+}

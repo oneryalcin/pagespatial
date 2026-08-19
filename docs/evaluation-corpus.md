@@ -93,4 +93,4 @@ The baseline records parser evidence, timings, sampled memory, actual OCR backen
 
 Do not tune parser behavior against the candidate holdout. A future sealed evaluation must unlock it through an explicit code and profile change.
 
-Publish a baseline trial only after the runner completes from a clean implementation commit and the checked-in generator verifies the full immutable artifact graph.
+The first clean-commit development pass is recorded in [Development corpus baseline](trials/2026-08-19-development-corpus-baseline.md).

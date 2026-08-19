@@ -299,7 +299,7 @@ npm run eval:baseline -- --backend webgpu
 
 PDFs, OCR assets, outputs, caches, and logs remain under `.evaluation/`, which is excluded from Git and npm packages. Use a fixed backend for reproducible resume; `auto` deliberately reruns pages because its actual provider can change. Gold-dependent metrics are explicitly `not_evaluated`. Association coverage is only a parser diagnostic. See [Development corpus evaluation](docs/evaluation-corpus.md).
 
-The runner retains immutable page attempts and invocation summaries, records browser and hardware context, and generates a text-free public aggregate from a verified content-hash chain. Corpus results are published only after a run from a clean implementation commit.
+The clean-commit baseline OCRed all 162 pages and produced 148 valid PageSpatial records in 105.9 seconds on the hardware and browser recorded in the aggregate. Fourteen pages failed closed on unproven rotated or out-of-bounds native geometry while retaining raw OCR partial evidence. The public aggregate is deterministically generated from a verified content-hash chain. See the [development corpus baseline](docs/trials/2026-08-19-development-corpus-baseline.md).
 
 ## Development
 
