@@ -1,14 +1,24 @@
 # PageSpatial
 
-PageSpatial gives every PDF page a durable evidence record: what the native parser found, what OCR found, where each item appears, and where the sources agree or conflict. It does not reduce the source document immediately to Markdown.
+**Every number your search index serves should be traceable to actual ink on an actual page — and when the extraction might be wrong, the record should say so instead of bluffing.**
 
-Status: experimental parser and adapter stack. A private, development-only corpus harness is implemented. It is not yet production-qualified.
+PageSpatial reads every PDF page twice: once through the PDF's own embedded text, once through OCR looking at the rendered page like a human would. Then it compares, ink against ink:
+
+- **The two readings agree** → that text is corroborated. Trust it.
+- **They disagree** → that's a recorded conflict. Nobody wins by default — on real documents, each reader turns out to be the wrong one about half the time.
+- **Only one reader saw it** (chart labels, scans, text missing from the PDF layer) → it's kept, labeled as single-witness evidence.
+
+The output is a per-page evidence record — every observation with its text, position, confidence, and provenance, plus the agreements, conflicts, and escalation flags between them. It's built to feed a search index that can rank corroborated evidence above shaky evidence, and to let an answer engine cite a number *with the box it came from* — or hedge when the record says the page is disputed.
+
+PageSpatial does **not** boil your document down to Markdown and call it a day. Markdown is one derived view among several; the evidence underneath is never thrown away, so any downstream decision can be re-examined later.
+
+Status: experimental parser and adapter stack with a private, development-only corpus harness. Not yet production-qualified. The project's standing commitments live in [docs/principles.md](docs/principles.md).
 
 ## Core rule
 
-> `PageSpatialDocument` is the evidence record. Markdown, search chunks, tables, chart summaries, and model prompts are derived views.
+> `PageSpatialDocument` is the evidence record. Markdown, search chunks, tables, chart summaries, and model prompts are derived views that point back at it.
 
-Raw native and OCR observations remain separate. Matches and inferred relationships retain their component observation IDs, geometry, method, confidence, and provenance.
+Raw native and OCR observations remain separate — even after they match. Matches and inferred relationships retain their component observation IDs, geometry, method, confidence, and provenance.
 
 ## Recommended execution model
 
