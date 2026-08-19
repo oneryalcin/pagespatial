@@ -1,6 +1,6 @@
 {
- "goldPilotMetricsVersion": "gold-pilot-metrics-v2",
- "createdAt": "2026-08-19T21:22:15.559Z",
+ "goldPilotMetricsVersion": "gold-pilot-metrics-v3",
+ "createdAt": "2026-08-19T21:39:54.003Z",
  "runRoot": ".evaluation/runs/dev-v10-coverage-starvation-2026-08-19",
  "goldVerifiedAt": "2026-08-19T18:31:27.725Z",
  "pages": 16,
@@ -116,8 +116,9 @@
  },
  "escalation": {
   "escalatedPages": 13,
-  "escalatedBlockingPages": 6,
-  "escalatedBlockingWithConfirmedError": 6,
+  "escalatedBlockingPages": 12,
+  "escalatedConflictBlockingPages": 6,
+  "escalatedConflictBlockingWithConfirmedError": 6,
   "escalatedUncorroboratedOnlyPages": 6,
   "escalatedUncorroboratedOnlyWithHumanGoldMissedByBoth": 5,
   "escalatedAdvisoryOnlyPages": 1,

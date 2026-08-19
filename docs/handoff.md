@@ -123,13 +123,13 @@ The browser trial also retained three tooling failures: Paddle worker prebundlin
 
 The current reference aggregate is [`evaluation/baselines/dev-v10-coverage-starvation-2026-08-19.summary.json`](../evaluation/baselines/dev-v10-coverage-starvation-2026-08-19.summary.json). Superseded aggregates ([dev-v6](../evaluation/baselines/dev-v6-2026-08-19.summary.json), [dev-v7](../evaluation/baselines/dev-v7-scale-locale-2026-08-19.summary.json), [dev-v8](../evaluation/baselines/dev-v8-critical-ink-2026-08-19.summary.json), [dev-v9](../evaluation/baselines/dev-v9-two-channel-tokens-2026-08-19.summary.json)) are retained as history; the [audit trial](trials/2026-08-19-heuristic-audit-and-critical-ink-redesign.md) and the [adversarial review fixes trial](trials/2026-08-19-adversarial-review-fixes.md) explain the lineage.
 
-dev-v10 records (23 PDFs, 162 pages, schema 0.2.0, two-channel critical tokens, coverage-starvation diagnostic):
+dev-v10 records (23 PDFs, 162 pages, schema 0.3.0, two-channel critical tokens, coverage-starvation diagnostic):
 
 - 162 OCR-completed, 162 schema-valid, 0 failed closed;
-- 17,051 native observations; 14,797 OCR observations; 11,071 source matches;
+- 17,051 native observations; 14,797 OCR observations; 11,072 source matches;
 - 627 critical conflicts; 124 pages requiring escalation (36 flagged `uncorroborated-ocr`, 22 of them previously silent single-witness pages).
 
-Gold evidence (30 labelled pages, tiered): human-verified union recall 64% on mixed pages; on the EN/JA sibling pages the human tier (tokens the native layer missed, mostly chart-embedded) is missed-by-both 3% in English vs 75% in Japanese; blocking escalations 14/14 confirmed real errors; conflict adjudications OCR-right 23 / native-right 17 / both-wrong 6; chart detector 25% recall at 96% precision. Text-free aggregates: [`evaluation/gold/`](../evaluation/gold/).
+Gold evidence (30 labelled pages, tiered): human-verified union recall 64% on mixed pages; on the EN/JA sibling pages the human tier (tokens the native layer missed, mostly chart-embedded) is missed-by-both 3% in English vs 75% in Japanese; conflict-blocking escalations 14/14 confirmed real by adjudication, while uncorroborated-only blocking pages (a disjoint subset with no adjudicable conflict) run 8/9 under the weaker missed-gold criterion against a 43% base rate; conflict adjudications OCR-right 23 / native-right 17 / both-wrong 6; chart detector 25% recall at 96% precision. Text-free aggregates: [`evaluation/gold/`](../evaluation/gold/).
 
 The median native/OCR association coverage was 85.2%; the mean was 68.6%. This is matcher coverage, not parser accuracy or OCR recall. Conflict counts are comparable only within one token-definition era (dev-v8/dev-v9 differ from dev-v6, and from each other by the two-channel change).
 

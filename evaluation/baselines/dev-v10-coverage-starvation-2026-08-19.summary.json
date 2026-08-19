@@ -4,25 +4,25 @@
     "version": 1,
     "scriptSha256": "772bd35927cb5cd51a5408a4b892cb90ee77f1b7fb853b036c554807a57dc086",
     "runImplementation": {
-      "commit": "1b27ff44abd6c9b4e331656ad5910e1536758ca7",
-      "dirty": true,
-      "workspaceHash": "b4b824ead07a70e00051ec36cf141300e4fea544d9bf8c9b5513eeb726e9cef7",
-      "files": 109
+      "commit": "4bd9c8063417c145cfa7bf32a592445e16837c14",
+      "dirty": false,
+      "workspaceHash": "8d2dec3b53c3b8ffb67dfd999fe87d53ec0a4bb6780009a467f01b4ac9c1f161",
+      "files": 103
     }
   },
   "runId": "dev-v10-coverage-starvation-2026-08-19",
   "datasetRevision": "e3ee38f067588644b11574ccc566843ca45f6d33",
   "manifestSha256": "14520a4f4ef3396b362e24d3a172cf8f855d263f3fbc70ec92766d70d9de4418",
-  "workspaceSha256": "b4b824ead07a70e00051ec36cf141300e4fea544d9bf8c9b5513eeb726e9cef7",
-  "privateRunSummarySha256": "d9d9b7846095d3ca2ec299bfc9965a34303351cfe89e97ea1f9adef9d3a281fa",
-  "privateRunSummaryPath": "invocations/1787174408521-76884-2bba0ce0e1c3.json",
+  "workspaceSha256": "8d2dec3b53c3b8ffb67dfd999fe87d53ec0a4bb6780009a467f01b4ac9c1f161",
+  "privateRunSummarySha256": "75153f72f28ee68190ecb01715446af5b5fcee8e89f5cee6b94d15db077dd0d9",
+  "privateRunSummaryPath": "invocations/1787175481306-7348-f416d2e2af0d.json",
   "artifactGraph": {
     "documents": 23,
     "terminalPageAttempts": 162,
     "contentHashesVerified": true
   },
-  "startedAt": "2026-08-19T21:20:08.775Z",
-  "endedAt": "2026-08-19T21:21:40.051Z",
+  "startedAt": "2026-08-19T21:38:01.539Z",
+  "endedAt": "2026-08-19T21:39:31.963Z",
   "environment": {
     "node": "v25.8.2",
     "platform": "darwin",
@@ -34,8 +34,8 @@
     "totalMemoryBytes": 38654705664,
     "browserSessions": [
       {
-        "sessionId": "1787174412762-b2dad47d08ca",
-        "startedAt": "2026-08-19T21:20:12.762Z",
+        "sessionId": "1787175485247-31965d43dd67",
+        "startedAt": "2026-08-19T21:38:05.247Z",
         "browser": "Chromium",
         "browserVersion": "151.0.7922.140",
         "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
@@ -45,7 +45,7 @@
           "device": null,
           "description": null
         },
-        "warmupMs": 1133.5999999046326,
+        "warmupMs": 1112.7050001621246,
         "backend": "webgpu",
         "executableLabel": "Google Chrome"
       }
@@ -68,20 +68,20 @@
   "successfulPageEvidence": {
     "nativeObservations": 17051,
     "ocrObservations": 14797,
-    "sourceMatches": 11071,
+    "sourceMatches": 11072,
     "criticalConflicts": 627,
     "pagesRequiringEscalation": 124
   },
   "ocrTimingMs": {
-    "total": 42008.254999399185,
-    "p50": 230.86500000953674,
-    "p95": 501.5199999809265,
-    "max": 854.3499999046326
+    "total": 42097.82999968529,
+    "p50": 225.2150001525879,
+    "p95": 517.1699998378754,
+    "max": 833.3300001621246
   },
   "associationCoverageDiagnostic": {
     "pages": 162,
-    "mean": 0.6860517754110854,
-    "p50": 0.8478260869565217,
+    "mean": 0.6860965061321447,
+    "p50": 0.8518518518518519,
     "min": 0,
     "max": 1,
     "isAccuracy": false
