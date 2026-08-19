@@ -7,3 +7,4 @@ public/ocr-assets/
 .env
 .env.*
 !.env.example
+.omx/
