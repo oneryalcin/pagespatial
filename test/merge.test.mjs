@@ -31,6 +31,60 @@ test('critical numeric disagreement creates an escalation', () => {
   pageSpatialSchema.parse(page);
 });
 
+// The false-confidence hole found by the gold pilot: a page of confident OCR
+// with (almost) nothing in the native layer to corroborate or contradict it
+// previously sailed through without escalating.
+test('confident OCR with a starved native layer escalates as uncorroborated single-witness', () => {
+  const ocr = Array.from({ length: 10 }, (_, index) => ({
+    pageNumber: 1,
+    text: `value ${100 + index}`,
+    box: [10, 10 + index * 18, 90, 24 + index * 18],
+    confidence: 0.92
+  }));
+  const page = buildPageSpatial({
+    document,
+    pageNumber: 1,
+    geometry: { width: 400, height: 400 },
+    nativeObservations: [],
+    ocrObservations: ocr,
+    provenance
+  });
+  const reason = page.diagnostics.escalationReasons.find((item) => item.type === 'uncorroborated-ocr');
+  assert.equal(reason.severity, 'blocking');
+  assert.equal(reason.count, 10);
+  assert.equal(reason.sourceIds.length, 10);
+  assert.equal(page.diagnostics.requiresEscalation, true);
+  pageSpatialSchema.parse(page);
+});
+
+test('coverage starvation does not fire on well-matched or sparse pages', () => {
+  const matched = buildPageSpatial({
+    document,
+    pageNumber: 1,
+    geometry: { width: 400, height: 200 },
+    nativeObservations: Array.from({ length: 8 }, (_, index) => ({
+      pageNumber: 1, text: `row ${index}`, box: [10, 10 + index * 20, 80, 26 + index * 20]
+    })),
+    ocrObservations: Array.from({ length: 8 }, (_, index) => ({
+      pageNumber: 1, text: `row ${index}`, box: [10, 10 + index * 20, 80, 26 + index * 20], confidence: 0.9
+    })),
+    provenance
+  });
+  assert.equal(matched.diagnostics.escalationReasons.some((item) => item.type === 'uncorroborated-ocr'), false);
+
+  const sparse = buildPageSpatial({
+    document,
+    pageNumber: 1,
+    geometry: { width: 400, height: 200 },
+    nativeObservations: [],
+    ocrObservations: [
+      { pageNumber: 1, text: 'lonely 7', box: [10, 10, 80, 26], confidence: 0.9 }
+    ],
+    provenance
+  });
+  assert.equal(sparse.diagnostics.escalationReasons.some((item) => item.type === 'uncorroborated-ocr'), false);
+});
+
 test('escalation reasons carry type-derived severity and a bounded share', () => {
   const page = buildPageSpatial({
     document,

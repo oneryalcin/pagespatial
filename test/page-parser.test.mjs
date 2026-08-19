@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as publicApi from '../dist/index.js';
 import { assemblePageSpatial, buildPageSpatial as internalBuildPageSpatial } from '../dist/page-parser.js';
+import { resolveDiagnosticOptions } from '../dist/index.js';
 
 const document = {
   documentId: 'page-helper-doc',
@@ -66,7 +67,7 @@ function helperInput(overrides = {}) {
     configuration: {
       renderScale: 2,
       concurrency: 1,
-      diagnosticPolicy: diagnosticOptions
+      diagnosticPolicy: resolveDiagnosticOptions(diagnosticOptions)
     },
     diagnostics: diagnosticOptions,
     ...overrides

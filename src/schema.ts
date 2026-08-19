@@ -94,7 +94,7 @@ const relationSchema = z.object({
 });
 
 const escalationReasonSchema = z.object({
-  type: z.enum(['critical-token-conflict', 'critical-token-omission', 'ambiguous-derived-relation', 'low-ocr-confidence']),
+  type: z.enum(['critical-token-conflict', 'critical-token-omission', 'ambiguous-derived-relation', 'low-ocr-confidence', 'uncorroborated-ocr']),
   severity: z.enum(['blocking', 'advisory']),
   sourceIds: z.array(z.string()), count: z.number().int().nonnegative(),
   share: z.number().min(0).max(1)
@@ -104,7 +104,9 @@ const diagnosticsSchema = z.object({
   thresholds: z.object({
     lowOcrConfidence: z.number().min(0).max(1),
     minimumRelationConfidence: z.number().min(0).max(1),
-    maximumRelationAmbiguity: z.number().min(0).max(1)
+    maximumRelationAmbiguity: z.number().min(0).max(1),
+    uncorroboratedOcrMinimumCount: z.number().int().positive(),
+    uncorroboratedOcrMaximumCoverage: z.number().min(0).max(1)
   }),
   ocrObservationCount: z.number().int().nonnegative(), nativeObservationCount: z.number().int().nonnegative(),
   sourceMatchCount: z.number().int().nonnegative(), nativeOcrAssociationCoverage: z.number().min(0).max(1),
@@ -349,6 +351,21 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
     }],
     ['low-ocr-confidence', { severity: 'advisory', count: lowConfidenceIds.length, share: ocrShare(lowConfidenceIds.length), sourceIds: lowConfidenceIds }]
   ]);
+  const engagedOcrIds = new Set([...matchedOcrIds, ...conflictedOcrIds]);
+  const confidentOcr = page.ocrObservations.filter((observation) =>
+    observation.confidence >= page.diagnostics.thresholds.lowOcrConfidence);
+  const uncorroboratedOcr = confidentOcr.filter((observation) => !engagedOcrIds.has(observation.id));
+  const engagedCoverage = confidentOcr.length
+    ? (confidentOcr.length - uncorroboratedOcr.length) / confidentOcr.length
+    : 1;
+  const starvationFires = confidentOcr.length >= page.diagnostics.thresholds.uncorroboratedOcrMinimumCount
+    && engagedCoverage <= page.diagnostics.thresholds.uncorroboratedOcrMaximumCoverage;
+  expectedReasons.set('uncorroborated-ocr', {
+    severity: 'blocking',
+    count: starvationFires ? uncorroboratedOcr.length : 0,
+    share: starvationFires ? ocrShare(uncorroboratedOcr.length) : 0,
+    sourceIds: starvationFires ? uncorroboratedOcr.map((observation) => observation.id) : []
+  });
   for (const [type, expected] of expectedReasons) {
     const actual = page.diagnostics.escalationReasons.filter((reason) => reason.type === type);
     if (expected.count === 0 && actual.length) {

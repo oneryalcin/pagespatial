@@ -105,6 +105,11 @@ const escalation = {
   escalatedPages: 0,
   escalatedBlockingPages: 0,
   escalatedBlockingWithConfirmedError: 0,
+  // Pages whose only blocking reason is uncorroborated-ocr carry no conflict
+  // a human could adjudicate; their confirmation signal is human gold the
+  // engines missed, tracked separately from conflict-confirmed errors.
+  escalatedUncorroboratedOnlyPages: 0,
+  escalatedUncorroboratedOnlyWithHumanGoldMissedByBoth: 0,
   escalatedAdvisoryOnlyPages: 0,
   cleanPages: 0,
   cleanWithHumanGoldMissedByBoth: 0
@@ -190,10 +195,15 @@ for (const page of verdicts.pages) {
   }
 
   const reasons = record.diagnostics.escalationReasons ?? [];
-  const hasBlocking = reasons.some((reason) => reason.severity === 'blocking');
+  const blockingTypes = reasons.filter((reason) => reason.severity === 'blocking').map((reason) => reason.type);
+  const hasBlocking = blockingTypes.length > 0;
+  const uncorroboratedOnly = hasBlocking && blockingTypes.every((type) => type === 'uncorroborated-ocr');
   if (record.diagnostics.requiresEscalation) {
     escalation.escalatedPages += 1;
-    if (hasBlocking) {
+    if (uncorroboratedOnly) {
+      escalation.escalatedUncorroboratedOnlyPages += 1;
+      if (pageHuman.neither > 0) escalation.escalatedUncorroboratedOnlyWithHumanGoldMissedByBoth += 1;
+    } else if (hasBlocking) {
       escalation.escalatedBlockingPages += 1;
       if (confirmedError) escalation.escalatedBlockingWithConfirmedError += 1;
     } else {

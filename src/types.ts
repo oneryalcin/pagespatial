@@ -144,13 +144,15 @@ export type EscalationReasonType =
   | 'critical-token-conflict'
   | 'critical-token-omission'
   | 'ambiguous-derived-relation'
-  | 'low-ocr-confidence';
+  | 'low-ocr-confidence'
+  | 'uncorroborated-ocr';
 
 /**
- * Derived from the reason type, never from a threshold: contradictory evidence
- * (critical-token reasons) blocks; individually weak evidence (low confidence,
- * ambiguous relations) advises. Lets a downstream router adopt "blocking only"
- * without PageSpatial choosing for it.
+ * Derived from the reason type, never from a threshold: contradictory
+ * evidence (critical-token reasons) and unverifiable-by-construction evidence
+ * (uncorroborated single-witness pages) block; individually weak evidence
+ * (low confidence, ambiguous relations) advises. Lets a downstream router
+ * adopt "blocking only" without PageSpatial choosing for it.
  */
 export type EscalationSeverity = 'blocking' | 'advisory';
 
@@ -168,6 +170,10 @@ export interface PageDiagnostics {
     lowOcrConfidence: number;
     minimumRelationConfidence: number;
     maximumRelationAmbiguity: number;
+    /** Minimum confident OCR observations before coverage starvation can fire. */
+    uncorroboratedOcrMinimumCount: number;
+    /** Maximum engaged share of confident OCR below which the page is single-witness. */
+    uncorroboratedOcrMaximumCoverage: number;
   };
   ocrObservationCount: number;
   nativeObservationCount: number;

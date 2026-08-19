@@ -1,7 +1,7 @@
 {
  "goldPilotMetricsVersion": "gold-pilot-metrics-v2",
- "createdAt": "2026-08-19T20:19:13.175Z",
- "runRoot": ".evaluation/runs/dev-v9-two-channel-tokens-2026-08-19",
+ "createdAt": "2026-08-19T21:22:15.938Z",
+ "runRoot": ".evaluation/runs/dev-v10-coverage-starvation-2026-08-19",
  "goldVerifiedAt": "2026-08-19T19:05:49.973Z",
  "pages": 14,
  "validatedInputs": [
@@ -108,7 +108,9 @@
   "escalatedPages": 13,
   "escalatedBlockingPages": 8,
   "escalatedBlockingWithConfirmedError": 8,
-  "escalatedAdvisoryOnlyPages": 5,
+  "escalatedUncorroboratedOnlyPages": 3,
+  "escalatedUncorroboratedOnlyWithHumanGoldMissedByBoth": 3,
+  "escalatedAdvisoryOnlyPages": 2,
   "cleanPages": 1,
   "cleanWithHumanGoldMissedByBoth": 0
  },

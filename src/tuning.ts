@@ -25,6 +25,24 @@ export const REFERENCE_RENDER_SCALE = 1.6;
  * provenance (ocrAdapterConfiguration) so the band's effect is measurable.
  */
 
+/**
+ * Coverage-starvation escalation (the false-confidence hole): a page whose
+ * OCR produces plenty of confident text while almost none of it engages the
+ * native layer (neither matches nor conflicts) is a single-witness page —
+ * there is nothing to corroborate or contradict it, so confidently-wrong OCR
+ * would otherwise pass silently. Structural rule, not a quality judgment:
+ * "confident" reuses the lowOcrConfidence boundary. The coverage cutoff is
+ * definitional, not fitted: a page is flagged when the MAJORITY of its
+ * confident OCR is single-witness. The dev-corpus distribution is bimodal
+ * (a starved cluster at 0-40% engaged coverage — scans, CJK chart pages,
+ * scanned slide decks — and a corroborated cluster at 80-100%, with a
+ * sparse valley between), so any cutoff inside the valley selects the same
+ * cluster; "majority" is the least arbitrary member. The known
+ * false-confidence page sits at 29% coverage; image-only scans at 0%.
+ */
+export const UNCORROBORATED_OCR_MINIMUM_COUNT = 8;
+export const UNCORROBORATED_OCR_MAXIMUM_COVERAGE = 0.5;
+
 /** Vertical spatial-index bucket for native/OCR candidate lookup (was 64px @1.6). */
 export const ASSOCIATION_BUCKET_PT = 40;
 
