@@ -1,0 +1,39 @@
+{
+  "name": "pagespatial",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Source-preserving spatial evidence records for PDF ingestion",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema.json": "./schemas/pagespatial.schema.json"
+  },
+  "files": [
+    "dist",
+    "schemas",
+    "docs",
+    "SECURITY.md",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/generate-schema.mjs",
+    "verify:schema": "node scripts/generate-schema.mjs --check",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "check": "npm run typecheck && npm test && npm run verify:schema",
+    "example": "npm run build && node examples/merge-page.mjs"
+  },
+  "dependencies": {
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0",
+    "typescript": "7.0.2"
+  }
+}

@@ -1,0 +1,1033 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "0.1.0"
+    },
+    "document": {
+      "type": "object",
+      "properties": {
+        "documentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "pageCount": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sourceUri": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "documentId",
+        "revisionId",
+        "sha256",
+        "pageCount"
+      ],
+      "additionalProperties": false
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "const": "0.1.0"
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "revisionId": {
+            "type": "string"
+          },
+          "documentSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "pageId": {
+            "type": "string"
+          },
+          "pageNumber": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "geometry": {
+            "type": "object",
+            "properties": {
+              "width": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "height": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "pointWidth": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "pointHeight": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "rotation": {
+                "type": "number"
+              },
+              "viewportTransform": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "minItems": 6,
+                "maxItems": 6,
+                "items": false
+              }
+            },
+            "required": [
+              "width",
+              "height"
+            ],
+            "additionalProperties": false
+          },
+          "nativeObservations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "pageNumber": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "text": {
+                  "type": "string"
+                },
+                "box": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "items": false
+                },
+                "polygon": {
+                  "minItems": 3,
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": false
+                  }
+                },
+                "adapterId": {
+                  "type": "string"
+                },
+                "pointBox": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "items": false
+                },
+                "mcid": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "structureRole": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "geometryMethod": {
+                  "type": "string",
+                  "enum": [
+                    "rendered-input-v1",
+                    "pdfjs-viewport-matrix-v1",
+                    "axis-aligned-fallback-v1"
+                  ]
+                },
+                "font": {
+                  "type": "string"
+                },
+                "fontSize": {
+                  "type": "number"
+                },
+                "isBold": {
+                  "type": "boolean"
+                },
+                "isItalic": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "pageNumber",
+                "text",
+                "box",
+                "mcid",
+                "structureRole",
+                "geometryMethod"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "ocrObservations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "pageNumber": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "text": {
+                  "type": "string"
+                },
+                "box": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "items": false
+                },
+                "polygon": {
+                  "minItems": 3,
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": false
+                  }
+                },
+                "adapterId": {
+                  "type": "string"
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "model": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "pageNumber",
+                "text",
+                "box",
+                "confidence"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "nativeLines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "pageNumber": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "text": {
+                  "type": "string"
+                },
+                "sourceIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "box": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "items": false
+                }
+              },
+              "required": [
+                "id",
+                "pageNumber",
+                "text",
+                "sourceIds",
+                "box"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "sourceMatches": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "pageNumber": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "nativeIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "ocrId": {
+                  "type": "string"
+                },
+                "nativeCandidateType": {
+                  "type": "string",
+                  "enum": [
+                    "line",
+                    "item"
+                  ]
+                },
+                "method": {
+                  "type": "string",
+                  "const": "text-geometry-v1"
+                },
+                "textSimilarity": {
+                  "type": "number"
+                },
+                "geometryOverlap": {
+                  "type": "number"
+                },
+                "confidence": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "pageNumber",
+                "nativeIds",
+                "ocrId",
+                "nativeCandidateType",
+                "method",
+                "textSimilarity",
+                "geometryOverlap",
+                "confidence"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "pageNumber": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "nativeIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "ocrId": {
+                  "type": "string"
+                },
+                "nativeText": {
+                  "type": "string"
+                },
+                "ocrText": {
+                  "type": "string"
+                },
+                "nativeCriticalTokens": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "ocrCriticalTokens": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "geometryOverlap": {
+                  "type": "number"
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "critical-token-disagreement",
+                    "critical-token-omission"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "pageNumber",
+                "nativeIds",
+                "ocrId",
+                "nativeText",
+                "ocrText",
+                "nativeCriticalTokens",
+                "ocrCriticalTokens",
+                "geometryOverlap",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "spatialRows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "pageNumber": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "text": {
+                  "type": "string"
+                },
+                "sourceIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "box": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "items": false
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "pageNumber",
+                "text",
+                "sourceIds",
+                "box",
+                "confidence"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "derivedRelations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "pageNumber": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "kind": {
+                  "type": "string",
+                  "const": "chart-category-value"
+                },
+                "method": {
+                  "type": "string"
+                },
+                "confidence": {
+                  "type": "number"
+                },
+                "ambiguity": {
+                  "type": "number"
+                },
+                "sourceIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "box": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "items": false
+                },
+                "components": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "role": {
+                        "type": "string"
+                      },
+                      "sourceId": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "box": {
+                        "type": "array",
+                        "prefixItems": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "minItems": 4,
+                        "maxItems": 4,
+                        "items": false
+                      }
+                    },
+                    "required": [
+                      "role",
+                      "sourceId",
+                      "text",
+                      "box"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "attributes": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "derived": {
+                  "type": "boolean",
+                  "const": true
+                }
+              },
+              "required": [
+                "id",
+                "pageNumber",
+                "kind",
+                "method",
+                "confidence",
+                "ambiguity",
+                "sourceIds",
+                "box",
+                "components",
+                "attributes",
+                "derived"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "diagnostics": {
+            "type": "object",
+            "properties": {
+              "thresholds": {
+                "type": "object",
+                "properties": {
+                  "lowOcrConfidence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "minimumRelationConfidence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "maximumRelationAmbiguity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "lowOcrConfidence",
+                  "minimumRelationConfidence",
+                  "maximumRelationAmbiguity"
+                ],
+                "additionalProperties": false
+              },
+              "ocrObservationCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "nativeObservationCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "sourceMatchCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "nativeOcrAssociationCoverage": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "sourceUnmatchedOcrCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "criticalConflictCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "criticalOmissionCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "lowConfidenceOcrCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "requiresEscalation": {
+                "type": "boolean"
+              },
+              "escalationReasons": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "critical-token-conflict",
+                        "critical-token-omission",
+                        "ambiguous-derived-relation",
+                        "low-ocr-confidence"
+                      ]
+                    },
+                    "sourceIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "sourceIds",
+                    "count"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "thresholds",
+              "ocrObservationCount",
+              "nativeObservationCount",
+              "sourceMatchCount",
+              "nativeOcrAssociationCoverage",
+              "sourceUnmatchedOcrCount",
+              "criticalConflictCount",
+              "criticalOmissionCount",
+              "lowConfidenceOcrCount",
+              "requiresEscalation",
+              "escalationReasons"
+            ],
+            "additionalProperties": false
+          },
+          "projection": {
+            "type": "object",
+            "properties": {
+              "markdown": {
+                "type": "string"
+              },
+              "format": {
+                "type": "string",
+                "const": "pagespatial-markdown-v1"
+              },
+              "trust": {
+                "type": "string",
+                "const": "untrusted-document-content"
+              },
+              "derived": {
+                "type": "boolean",
+                "const": true
+              }
+            },
+            "required": [
+              "markdown",
+              "format",
+              "trust",
+              "derived"
+            ],
+            "additionalProperties": false
+          },
+          "provenance": {
+            "type": "object",
+            "properties": {
+              "parserName": {
+                "type": "string"
+              },
+              "parserVersion": {
+                "type": "string"
+              },
+              "runId": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "nativeAdapter": {
+                "type": "string"
+              },
+              "ocrAdapter": {
+                "type": "string"
+              },
+              "renderer": {
+                "type": "string"
+              },
+              "backend": {
+                "type": "string"
+              },
+              "configuration": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "parserName",
+              "parserVersion",
+              "runId",
+              "createdAt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "documentId",
+          "revisionId",
+          "documentSha256",
+          "pageId",
+          "pageNumber",
+          "geometry",
+          "nativeObservations",
+          "ocrObservations",
+          "nativeLines",
+          "sourceMatches",
+          "conflicts",
+          "spatialRows",
+          "derivedRelations",
+          "diagnostics",
+          "projection",
+          "provenance"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "properties": {
+        "pageCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "pagesParsed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "pagesRequiringEscalation": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "ocrObservationCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "nativeObservationCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sourceMatchCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "nativeOcrAssociationCoverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "criticalConflictCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "criticalOmissionCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "pageCount",
+        "pagesParsed",
+        "pagesRequiringEscalation",
+        "ocrObservationCount",
+        "nativeObservationCount",
+        "sourceMatchCount",
+        "nativeOcrAssociationCoverage",
+        "criticalConflictCount",
+        "criticalOmissionCount"
+      ],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "parserName": {
+          "type": "string"
+        },
+        "parserVersion": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "nativeAdapter": {
+          "type": "string"
+        },
+        "ocrAdapter": {
+          "type": "string"
+        },
+        "renderer": {
+          "type": "string"
+        },
+        "backend": {
+          "type": "string"
+        },
+        "configuration": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "parserName",
+        "parserVersion",
+        "runId",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "document",
+    "pages",
+    "diagnostics",
+    "provenance"
+  ],
+  "additionalProperties": false,
+  "$id": "https://pagespatial.dev/schema/0.1.0/pagespatial.schema.json",
+  "title": "PageSpatialDocument"
+}
