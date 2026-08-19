@@ -147,7 +147,7 @@ PAGESPATIAL_SMOKE_ASSETS=/path/to/verified/ocr-assets npm run test:browser:webgp
 
 ## AnyDoc and PDF Inspector
 
-For PDFs, [AnyDoc](https://github.com/firecrawl/anydoc) delegates to [PDF Inspector](https://github.com/firecrawl/pdf-inspector). PageSpatial integrates PDF Inspector directly on Node for page-addressable Markdown. PDF.js supplies native observations and full text transforms because PDF Inspector's scalar text rectangles do not preserve enough orientation data for general rotated-page geometry. Calling AnyDoc as well would parse the same PDF twice without stronger page evidence.
+For PDFs, [AnyDoc](https://github.com/firecrawl/anydoc) delegates to [PDF Inspector](https://github.com/firecrawl/pdf-inspector). PageSpatial integrates PDF Inspector directly on Node as the preferred page-addressable Markdown source. It uses deduplicated PDF.js Markdown when Inspector output is blank or the page contains coincident text overlays. PDF.js also supplies native observations and full text transforms because PDF Inspector's scalar text rectangles do not preserve enough orientation data for general rotated-page geometry. Calling AnyDoc as well would parse the same PDF twice without stronger page evidence.
 
 ```ts
 import { createParser } from 'pagespatial';
@@ -299,7 +299,7 @@ npm run eval:baseline -- --backend webgpu
 
 PDFs, OCR assets, outputs, caches, and logs remain under `.evaluation/`, which is excluded from Git and npm packages. Use a fixed backend for reproducible resume; `auto` deliberately reruns pages because its actual provider can change. Gold-dependent metrics are explicitly `not_evaluated`. Association coverage is only a parser diagnostic. See [Development corpus evaluation](docs/evaluation-corpus.md).
 
-The clean-commit baseline OCRed all 162 pages and produced 148 valid PageSpatial records in 105.9 seconds on the hardware and browser recorded in the aggregate. Fourteen pages failed closed on unproven rotated or out-of-bounds native geometry while retaining raw OCR partial evidence. The public aggregate is deterministically generated from a verified content-hash chain. See the [development corpus baseline](docs/trials/2026-08-19-development-corpus-baseline.md).
+The geometry-normalized clean-commit baseline OCRed all 162 pages and produced 162 schema-valid PageSpatial records in 156.9 seconds on the hardware and browser recorded in the aggregate. PDF.js text-item transforms now define native geometry; PDF Inspector supplies preferred page Markdown and unambiguous metadata, with deduplicated PDF.js Markdown used for blank Inspector output or coincident overlays. This resolved the 12 rotated-page failures and the two coincident-overlay failures from the first baseline without clipping source boxes or discarding raw observations. The public aggregate is deterministically generated from a verified content-hash chain. See the [geometry-normalization follow-up](docs/trials/2026-08-19-geometry-normalization-follow-up.md); the [first development baseline](docs/trials/2026-08-19-development-corpus-baseline.md) remains as historical evidence.
 
 ## Development
 

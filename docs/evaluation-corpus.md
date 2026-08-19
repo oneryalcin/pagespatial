@@ -16,7 +16,7 @@ The holdout is recorded for future sealing, but this implementation has no holdo
 
 Every selected development page uses both inputs:
 
-1. PDF Inspector provides page-aligned Markdown and unambiguous structure metadata. It runs once per document in a killable Node child process and caches its whole-document extraction inside that process.
+1. PDF Inspector provides the preferred page-aligned Markdown and unambiguous structure metadata. Deduplicated PDF.js Markdown is used when Inspector output is blank or the page contains coincident text overlays. Inspector runs once per document in a killable Node child process and caches its whole-document extraction inside that process.
 2. PDF.js provides native text observations, full item transforms, page bounds, and canonical rendered geometry.
 3. PP-OCRv6 Tiny reads every rendered page and returns text, confidence, and polygons. OCR inference is serialized through one engine.
 4. The internal page assembler preserves both sources, their geometry, matches, conflicts, derived relations, diagnostics, and provenance.
@@ -93,4 +93,4 @@ The baseline records parser evidence, timings, sampled memory, actual OCR backen
 
 Do not tune parser behavior against the candidate holdout. A future sealed evaluation must unlock it through an explicit code and profile change.
 
-The first clean-commit development pass is recorded in [Development corpus baseline](trials/2026-08-19-development-corpus-baseline.md).
+The first clean-commit development pass is recorded in [Development corpus baseline](trials/2026-08-19-development-corpus-baseline.md). Its geometry failures and the clean 162-page rerun are recorded separately in [Geometry normalization follow-up](trials/2026-08-19-geometry-normalization-follow-up.md).

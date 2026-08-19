@@ -29,6 +29,8 @@ These failures identify the next two parser tasks:
 1. Add real rotated-page conformance and a proven Inspector-to-rendered transform.
 2. Diagnose the two out-of-bounds native boxes and define a source-preserving policy before changing bounds handling.
 
+Both tasks were later resolved by making PDF.js text-item transforms the native geometry authority while retaining PDF Inspector for Markdown and unambiguous metadata. See [Geometry normalization follow-up](2026-08-19-geometry-normalization-follow-up.md). This file remains the historical record of the original fail-closed run.
+
 ## Evidence and limits
 
 The committed aggregate is `evaluation/baselines/dev-v5-2026-08-19.summary.json`. Private page records and PDFs remain outside Git and npm packages. The checked-in generator verified the full content-hash chain from the immutable invocation through 23 immutable document summaries and 162 immutable attempts before writing the aggregate. `current.json` and mutable page convenience files are outside that historical graph.
