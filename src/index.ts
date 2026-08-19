@@ -4,7 +4,7 @@ export type { AssociationOptions, AssociationResult } from './merge.js';
 export type { DiagnosticOptions } from './diagnostics.js';
 export type { BuildPageSpatialInput, ParseOptions } from './parser.js';
 
-export { assertBox, assertBoxWithin, assertPageGeometry, boxArea, intersectionArea, overlapOverSmaller, pointBounds, pointBoxToRenderedBox, roundBox, transformPoint, unionBoxes } from './geometry.js';
+export { assertBox, assertBoxWithin, assertPageGeometry, boxArea, intersectionArea, overlapOverSmaller, pointBounds, pointBoxToRenderedBox, renderedPixelsPerPoint, roundBox, transformPoint, unionBoxes } from './geometry.js';
 export { createDerivedId, createObservationId, createPageId } from './ids.js';
 export { criticalTokens, normalizeEvidenceText, sameTokenMultiset, textSimilarity } from './text.js';
 export { buildNativeLines, buildSpatialRows, readingOrder } from './reading-order.js';

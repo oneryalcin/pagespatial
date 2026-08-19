@@ -46,26 +46,35 @@ export function buildDiagnostics(input: {
   const ambiguousRelations = input.derivedRelations.filter((relation) =>
     relation.confidence < relationThreshold || relation.ambiguity > ambiguityThreshold);
   const escalationReasons: PageDiagnostics['escalationReasons'] = [];
+  const ocrShare = (count: number): number => input.ocrObservations.length ? count / input.ocrObservations.length : 0;
 
   if (criticalConflicts.length) escalationReasons.push({
     type: 'critical-token-conflict',
+    severity: 'blocking',
     sourceIds: uniqueIds(criticalConflicts.flatMap((conflict) => [conflict.ocrId, ...conflict.nativeIds])),
-    count: criticalConflicts.length
+    count: criticalConflicts.length,
+    share: ocrShare(criticalConflicts.length)
   });
   if (criticalOmissions.length) escalationReasons.push({
     type: 'critical-token-omission',
+    severity: 'blocking',
     sourceIds: uniqueIds(criticalOmissions.flatMap((conflict) => [conflict.ocrId, ...conflict.nativeIds])),
-    count: criticalOmissions.length
+    count: criticalOmissions.length,
+    share: ocrShare(criticalOmissions.length)
   });
   if (ambiguousRelations.length) escalationReasons.push({
     type: 'ambiguous-derived-relation',
+    severity: 'advisory',
     sourceIds: uniqueIds(ambiguousRelations.flatMap((relation) => relation.sourceIds)),
-    count: ambiguousRelations.length
+    count: ambiguousRelations.length,
+    share: input.derivedRelations.length ? ambiguousRelations.length / input.derivedRelations.length : 0
   });
   if (lowConfidence.length) escalationReasons.push({
     type: 'low-ocr-confidence',
+    severity: 'advisory',
     sourceIds: lowConfidence.map((observation) => observation.id),
-    count: lowConfidence.length
+    count: lowConfidence.length,
+    share: ocrShare(lowConfidence.length)
   });
 
   return {

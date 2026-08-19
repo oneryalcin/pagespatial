@@ -1,3 +1,4 @@
+import { REFERENCE_RENDER_SCALE } from './tuning.js';
 import type { Box, PageGeometry, Point, ViewportTransform } from './types.js';
 
 export function assertBox(box: readonly number[]): asserts box is Box {
@@ -86,11 +87,32 @@ export function assertPageGeometry(geometry: PageGeometry): void {
     Math.max(...corners.map((point) => point[0])),
     Math.max(...corners.map((point) => point[1]))
   ];
+  // Renderers ceil viewport dimensions to whole pixels, so the transformed
+  // bounds may fall short of the rendered size by up to one pixel per edge.
   const tolerance = 1.01;
   if (Math.abs(envelope[0]) > tolerance || Math.abs(envelope[1]) > tolerance
     || Math.abs(envelope[2] - width) > tolerance || Math.abs(envelope[3] - height) > tolerance) {
     throw new Error('Viewport transform does not map PDF point bounds to the rendered page.');
   }
+}
+
+/**
+ * Rendered pixels per PDF point, derived from the page geometry so spatial
+ * heuristics scale with the actual render resolution. The viewport transform
+ * magnitude is authoritative (correct under rotation); axis bounds are the
+ * fallback. Geometry without point information reports the reference scale
+ * the heuristics were tuned at.
+ */
+export function renderedPixelsPerPoint(geometry: PageGeometry): number {
+  const { viewportTransform } = geometry;
+  if (viewportTransform) {
+    const magnitude = Math.hypot(viewportTransform[0], viewportTransform[1]);
+    if (Number.isFinite(magnitude) && magnitude > 0) return magnitude;
+  }
+  const bounds = pointBounds(geometry);
+  if (bounds && (geometry.rotation ?? 0) % 180 === 0) return geometry.width / (bounds[2] - bounds[0]);
+  if (bounds) return geometry.width / (bounds[3] - bounds[1]);
+  return REFERENCE_RENDER_SCALE;
 }
 
 export function assertBoxWithin(box: Box, bounds: Box, label: string): void {

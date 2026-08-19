@@ -158,7 +158,8 @@ export const pdfJsNativeAdapter: NativePageAdapter<PdfJsSession> = {
         rotation: viewport.rotation
       },
       observations,
-      markdown: pdfJsPageMarkdown(items)
+      markdown: pdfJsPageMarkdown(items),
+      markdownSource: 'pdfjs-deduplicated'
     };
   }
 };

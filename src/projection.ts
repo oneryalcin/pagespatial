@@ -21,6 +21,7 @@ export function projectMarkdown(input: {
   spatialRows: readonly SpatialRow[];
   derivedRelations: readonly DerivedRelation[];
   nativeMarkdown?: string;
+  nativeMarkdownSource?: string;
 }): PageProjection {
   const nativeLines = input.nativeLines ?? buildNativeLines(input.nativeObservations);
   const matchedOcr = new Set(input.sourceMatches.map((match) => match.ocrId));
@@ -50,9 +51,10 @@ export function projectMarkdown(input: {
     sections.push(table.join('\n'));
   }
 
-  if (input.nativeMarkdown?.trim()) {
+  const usesAdapterMarkdown = Boolean(input.nativeMarkdown?.trim());
+  if (usesAdapterMarkdown) {
     sections.push('## Native structure reference');
-    sections.push(input.nativeMarkdown.trim());
+    sections.push(input.nativeMarkdown!.trim());
   } else if (nativeLines.length) {
     sections.push('## Native observations');
     sections.push(nativeLines.map((line) => `${evidenceComment({
@@ -72,6 +74,9 @@ export function projectMarkdown(input: {
     markdown: sections.join('\n\n'),
     format: 'pagespatial-markdown-v1',
     trust: 'untrusted-document-content',
-    derived: true
+    derived: true,
+    markdownSource: usesAdapterMarkdown
+      ? input.nativeMarkdownSource ?? 'native-adapter'
+      : 'pagespatial-native-lines'
   };
 }

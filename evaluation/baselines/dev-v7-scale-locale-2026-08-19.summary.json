@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "pagespatial-development-baseline-summary-v2",
+  "generator": {
+    "version": 1,
+    "scriptSha256": "772bd35927cb5cd51a5408a4b892cb90ee77f1b7fb853b036c554807a57dc086",
+    "runImplementation": {
+      "commit": "021a95d6e3c29eb406817d1be51eb589eeecb860",
+      "dirty": true,
+      "workspaceHash": "d79549e0db19b4a4701808c5030a032711c59ea2e4bbbd3c45c1985b10bdc009",
+      "files": 88
+    }
+  },
+  "runId": "dev-v7-scale-locale-2026-08-19",
+  "datasetRevision": "e3ee38f067588644b11574ccc566843ca45f6d33",
+  "manifestSha256": "14520a4f4ef3396b362e24d3a172cf8f855d263f3fbc70ec92766d70d9de4418",
+  "workspaceSha256": "d79549e0db19b4a4701808c5030a032711c59ea2e4bbbd3c45c1985b10bdc009",
+  "privateRunSummarySha256": "d7c200ebeb51f0b937ad02cb7ed57602f34131cb64417aef44096edf8c62e36a",
+  "privateRunSummaryPath": "invocations/1787154544067-58923-882d494c6aa4.json",
+  "artifactGraph": {
+    "documents": 23,
+    "terminalPageAttempts": 162,
+    "contentHashesVerified": true
+  },
+  "startedAt": "2026-08-19T15:49:04.723Z",
+  "endedAt": "2026-08-19T15:50:42.568Z",
+  "environment": {
+    "node": "v25.8.2",
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": {
+      "model": "Apple M4 Max",
+      "logicalCores": 14
+    },
+    "totalMemoryBytes": 38654705664,
+    "browserSessions": [
+      {
+        "sessionId": "1787154554933-ea059de20b4b",
+        "startedAt": "2026-08-19T15:49:14.933Z",
+        "browser": "Chromium",
+        "browserVersion": "151.0.7922.140",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+        "gpu": {
+          "vendor": "apple",
+          "architecture": "metal-3",
+          "device": null,
+          "description": null
+        },
+        "warmupMs": 1252.6100001335144,
+        "backend": "webgpu",
+        "executableLabel": "Google Chrome"
+      }
+    ]
+  },
+  "execution": {
+    "executed": 162,
+    "resumed": 0
+  },
+  "documents": 23,
+  "pages": {
+    "expected": 162,
+    "ocrCompleted": 162,
+    "pageSpatialSucceeded": 162,
+    "failedClosed": 0
+  },
+  "backend": {
+    "webgpu": 162
+  },
+  "successfulPageEvidence": {
+    "nativeObservations": 17051,
+    "ocrObservations": 14797,
+    "sourceMatches": 11244,
+    "criticalConflicts": 449,
+    "pagesRequiringEscalation": 98
+  },
+  "ocrTimingMs": {
+    "total": 42119.68500137329,
+    "p50": 229.52999997138977,
+    "p95": 481.27500009536743,
+    "max": 742.5199999809265
+  },
+  "associationCoverageDiagnostic": {
+    "pages": 162,
+    "mean": 0.690657357017915,
+    "p50": 0.8589743589743589,
+    "min": 0,
+    "max": 1,
+    "isAccuracy": false
+  },
+  "failures": [],
+  "goldMetrics": "not_evaluated"
+}

@@ -31,6 +31,27 @@ test('critical numeric disagreement creates an escalation', () => {
   pageSpatialSchema.parse(page);
 });
 
+test('escalation reasons carry type-derived severity and a bounded share', () => {
+  const page = buildPageSpatial({
+    document,
+    pageNumber: 1,
+    geometry: { width: 200, height: 200 },
+    nativeObservations: [{ pageNumber: 1, text: 'FY2022 revenue 647', box: [10, 20, 180, 40] }],
+    ocrObservations: [
+      { pageNumber: 1, text: 'FY2022 revenue 641', box: [10, 20, 180, 40], confidence: 0.99 },
+      { pageNumber: 1, text: 'blur', box: [10, 60, 60, 80], confidence: 0.31 }
+    ],
+    provenance
+  });
+  const conflict = page.diagnostics.escalationReasons.find((item) => item.type === 'critical-token-conflict');
+  const weak = page.diagnostics.escalationReasons.find((item) => item.type === 'low-ocr-confidence');
+  assert.equal(conflict.severity, 'blocking');
+  assert.equal(conflict.share, 1 / 2);
+  assert.equal(weak.severity, 'advisory');
+  assert.equal(weak.share, 1 / 2);
+  pageSpatialSchema.parse(page);
+});
+
 test('multiple conflicts may share one native source without invalid diagnostics', () => {
   const page = buildPageSpatial({
     document,

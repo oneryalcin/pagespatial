@@ -17,10 +17,16 @@ export function pdfJsTextItemPointBox(item: TextItem): Box {
   const [a, b, c, d, x, y] = item.transform;
   const horizontalLength = Math.hypot(a!, b!);
   const verticalLength = Math.hypot(c!, d!);
-  const widthX = horizontalLength > 0 ? (a! / horizontalLength) * item.width : item.width;
-  const widthY = horizontalLength > 0 ? (b! / horizontalLength) * item.width : 0;
-  const heightX = verticalLength > 0 ? c! : 0;
-  const heightY = verticalLength > 0 ? d! : Math.max(1, item.height);
+  // Reject, don't repair: a zero-length axis means the item has no real extent
+  // in that direction, and any substituted height/width would be fabricated
+  // evidence (PDF.js derives item.height from this same vector).
+  if (horizontalLength === 0 || verticalLength === 0) {
+    throw new Error('PDF.js returned a singular text transform.');
+  }
+  const widthX = (a! / horizontalLength) * item.width;
+  const widthY = (b! / horizontalLength) * item.width;
+  const heightX = c!;
+  const heightY = d!;
   const points = [
     [x!, y!],
     [x! + widthX, y! + widthY],
@@ -44,6 +50,8 @@ export function pdfJsPageMarkdown(items: readonly TextItem[]): string {
   }
   for (const item of uniqueItems) {
     const y = item.transform[5]!;
+    // Baseline y in PDF points (scale-independent): items whose baselines sit
+    // within a quarter of a typical 10pt line are treated as one markdown row.
     const row = rows.find((candidate) => Math.abs(candidate.y - y) <= 2.5);
     if (row) row.items.push(item);
     else rows.push({ y, items: [item] });
