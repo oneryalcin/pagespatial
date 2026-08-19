@@ -1,3 +1,4 @@
+import { UNCORROBORATED_OCR_MAXIMUM_COVERAGE, UNCORROBORATED_OCR_MINIMUM_COUNT } from './tuning.js';
 import type {
   DerivedRelation,
   EvidenceConflict,
@@ -11,13 +12,17 @@ export interface DiagnosticOptions {
   lowOcrConfidence?: number;
   minimumRelationConfidence?: number;
   maximumRelationAmbiguity?: number;
+  uncorroboratedOcrMinimumCount?: number;
+  uncorroboratedOcrMaximumCoverage?: number;
 }
 
 export function resolveDiagnosticOptions(options: DiagnosticOptions = {}): Required<DiagnosticOptions> {
   return {
     lowOcrConfidence: options.lowOcrConfidence ?? 0.5,
     minimumRelationConfidence: options.minimumRelationConfidence ?? 0.7,
-    maximumRelationAmbiguity: options.maximumRelationAmbiguity ?? 0.25
+    maximumRelationAmbiguity: options.maximumRelationAmbiguity ?? 0.25,
+    uncorroboratedOcrMinimumCount: options.uncorroboratedOcrMinimumCount ?? UNCORROBORATED_OCR_MINIMUM_COUNT,
+    uncorroboratedOcrMaximumCoverage: options.uncorroboratedOcrMaximumCoverage ?? UNCORROBORATED_OCR_MAXIMUM_COVERAGE
   };
 }
 
@@ -76,12 +81,37 @@ export function buildDiagnostics(input: {
     count: lowConfidence.length,
     share: ocrShare(lowConfidence.length)
   });
+  // Coverage starvation: confident OCR that neither matches nor conflicts
+  // with the native layer is single-witness evidence. When almost all of a
+  // page's confident OCR is single-witness, nothing on the page could have
+  // caught a confidently-wrong reading, so the page escalates as
+  // unverifiable-by-construction (blocking).
+  const engaged = new Set([...matched, ...conflictIds]);
+  const confident = input.ocrObservations.filter((observation) => observation.confidence >= lowThreshold);
+  const uncorroborated = confident.filter((observation) => !engaged.has(observation.id));
+  const engagedCoverage = confident.length ? (confident.length - uncorroborated.length) / confident.length : 1;
+  if (confident.length >= policy.uncorroboratedOcrMinimumCount
+    && engagedCoverage < policy.uncorroboratedOcrMaximumCoverage) {
+    escalationReasons.push({
+      type: 'uncorroborated-ocr',
+      severity: 'blocking',
+      sourceIds: uncorroborated.map((observation) => observation.id),
+      count: uncorroborated.length,
+      // share uses ALL OCR observations as its denominator, consistent with
+      // every other reason; the firing condition uses confident observations
+      // only, so share and (1 - engagedCoverage) differ on mixed-confidence
+      // pages.
+      share: ocrShare(uncorroborated.length)
+    });
+  }
 
   return {
     thresholds: {
       lowOcrConfidence: lowThreshold,
       minimumRelationConfidence: relationThreshold,
-      maximumRelationAmbiguity: ambiguityThreshold
+      maximumRelationAmbiguity: ambiguityThreshold,
+      uncorroboratedOcrMinimumCount: policy.uncorroboratedOcrMinimumCount,
+      uncorroboratedOcrMaximumCoverage: policy.uncorroboratedOcrMaximumCoverage
     },
     ocrObservationCount: input.ocrObservations.length,
     nativeObservationCount: input.nativeObservations.length,
