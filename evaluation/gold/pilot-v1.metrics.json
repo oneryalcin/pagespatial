@@ -1,0 +1,165 @@
+{
+ "goldPilotMetricsVersion": "gold-pilot-metrics-v1",
+ "createdAt": "2026-08-19T19:07:26.489Z",
+ "runRoot": ".evaluation/runs/dev-v8-critical-ink-2026-08-19",
+ "goldVerifiedAt": "2026-08-19T18:31:27.725Z",
+ "pages": 16,
+ "criticalTokenRecall": {
+  "goldTokens": 325,
+  "native": 0.28,
+  "ocr": 0.4185,
+  "union": 0.4615,
+  "missedByBoth": 175
+ },
+ "conflictComposition": {
+  "ocr": 6,
+  "both-wrong": 5,
+  "native": 2
+ },
+ "chartRelations": {
+  "goldTuples": 25,
+  "detectedRelations": 0,
+  "recall": 0
+ },
+ "escalation": {
+  "escalatedPages": 9,
+  "escalatedWithConfirmedError": 6,
+  "cleanPages": 7,
+  "cleanWithMissedGoldToken": 4
+ },
+ "perPage": [
+  {
+   "objectId": "legistar:seattle:2159:v0:attachment:3326",
+   "pageNumber": 1,
+   "gold": 23,
+   "native": 1,
+   "ocr": 9,
+   "neither": 14
+  },
+  {
+   "objectId": "osf:file:64a59e4ea2a2f4140943711a:v1",
+   "pageNumber": 2,
+   "gold": 25,
+   "native": 23,
+   "ocr": 23,
+   "neither": 2
+  },
+  {
+   "objectId": "legistar:seattle:1859:v0:attachment:3318",
+   "pageNumber": 7,
+   "gold": 42,
+   "native": 0,
+   "ocr": 35,
+   "neither": 7
+  },
+  {
+   "objectId": "legistar:seattle:1794:v0:attachment:3283",
+   "pageNumber": 27,
+   "gold": 28,
+   "native": 0,
+   "ocr": 11,
+   "neither": 17
+  },
+  {
+   "objectId": "legistar:seattle:1794:v0:attachment:3283",
+   "pageNumber": 1,
+   "gold": 7,
+   "native": 0,
+   "ocr": 1,
+   "neither": 6
+  },
+  {
+   "objectId": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+   "pageNumber": 1,
+   "gold": 1,
+   "native": 0,
+   "ocr": 1,
+   "neither": 0
+  },
+  {
+   "objectId": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+   "pageNumber": 2,
+   "gold": 5,
+   "native": 2,
+   "ocr": 3,
+   "neither": 2
+  },
+  {
+   "objectId": "public-comps:asseco-poland:2025-fy:001",
+   "pageNumber": 14,
+   "gold": 11,
+   "native": 6,
+   "ocr": 4,
+   "neither": 5
+  },
+  {
+   "objectId": "public-comps:asseco-poland:2025-fy:001",
+   "pageNumber": 15,
+   "gold": 23,
+   "native": 13,
+   "ocr": 5,
+   "neither": 10
+  },
+  {
+   "objectId": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+   "pageNumber": 3,
+   "gold": 36,
+   "native": 34,
+   "ocr": 31,
+   "neither": 2
+  },
+  {
+   "objectId": "world-bank:P178566:document:34223652",
+   "pageNumber": 1,
+   "gold": 12,
+   "native": 7,
+   "ocr": 7,
+   "neither": 4
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 12,
+   "gold": 1,
+   "native": 1,
+   "ocr": 1,
+   "neither": 0
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 64,
+   "gold": 1,
+   "native": 0,
+   "ocr": 0,
+   "neither": 1
+  },
+  {
+   "objectId": "pa-sers:2024-09-24:llr-vii:consultant-memo",
+   "pageNumber": 1,
+   "gold": 3,
+   "native": 2,
+   "ocr": 3,
+   "neither": 0
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 12,
+   "gold": 1,
+   "native": 1,
+   "ocr": 1,
+   "neither": 0
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 61,
+   "gold": 106,
+   "native": 1,
+   "ocr": 1,
+   "neither": 105
+  }
+ ],
+ "caveats": [
+  "Pilot-scale: 16 stratified pages, not the full corpus.",
+  "Recall is text-containment under the same-ink canonicalization; box agreement is not yet scored.",
+  "Gold source: machine pre-labels verified by one human annotator; no second annotator or adjudication yet."
+ ]
+}

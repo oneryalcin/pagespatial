@@ -1,0 +1,149 @@
+{
+ "goldPilotMetricsVersion": "gold-pilot-metrics-v1",
+ "createdAt": "2026-08-19T19:07:26.135Z",
+ "runRoot": ".evaluation/runs/dev-v8-critical-ink-2026-08-19",
+ "goldVerifiedAt": "2026-08-19T19:05:49.973Z",
+ "pages": 14,
+ "criticalTokenRecall": {
+  "goldTokens": 669,
+  "native": 0.8266,
+  "ocr": 0.7997,
+  "union": 0.8341,
+  "missedByBoth": 111
+ },
+ "conflictComposition": {
+  "ocr": 17,
+  "both-wrong": 1,
+  "native": 15
+ },
+ "chartRelations": {
+  "goldTuples": 107,
+  "detectedRelations": 28,
+  "recall": 0
+ },
+ "escalation": {
+  "escalatedPages": 13,
+  "escalatedWithConfirmedError": 8,
+  "cleanPages": 1,
+  "cleanWithMissedGoldToken": 1
+ },
+ "perPage": [
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 10,
+   "gold": 16,
+   "native": 14,
+   "ocr": 14,
+   "neither": 2
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 11,
+   "gold": 5,
+   "native": 3,
+   "ocr": 3,
+   "neither": 2
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 30,
+   "gold": 50,
+   "native": 39,
+   "ocr": 35,
+   "neither": 11
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 60,
+   "gold": 100,
+   "native": 100,
+   "ocr": 100,
+   "neither": 0
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 61,
+   "gold": 166,
+   "native": 166,
+   "ocr": 162,
+   "neither": 0
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 62,
+   "gold": 15,
+   "native": 1,
+   "ocr": 1,
+   "neither": 14
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 63,
+   "gold": 40,
+   "native": 38,
+   "ocr": 37,
+   "neither": 2
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 10,
+   "gold": 3,
+   "native": 1,
+   "ocr": 1,
+   "neither": 2
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 11,
+   "gold": 11,
+   "native": 6,
+   "ocr": 4,
+   "neither": 4
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 30,
+   "gold": 51,
+   "native": 1,
+   "ocr": 4,
+   "neither": 47
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 60,
+   "gold": 145,
+   "native": 144,
+   "ocr": 139,
+   "neither": 1
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 62,
+   "gold": 16,
+   "native": 3,
+   "ocr": 3,
+   "neither": 13
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 63,
+   "gold": 50,
+   "native": 37,
+   "ocr": 32,
+   "neither": 12
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 64,
+   "gold": 1,
+   "native": 0,
+   "ocr": 0,
+   "neither": 1
+  }
+ ],
+ "caveats": [
+  "Pilot-scale: 16 stratified pages, not the full corpus.",
+  "Recall is text-containment under the same-ink canonicalization; box agreement is not yet scored.",
+  "Gold source: machine pre-labels verified by one human annotator; no second annotator or adjudication yet."
+ ]
+}
