@@ -8,10 +8,7 @@ PageSpatial is an experimental PDF ingestion library. It creates a durable evide
 
 This document tells the next engineer what exists, why the current design was chosen, what was tested, what remains unproven, and what to do next. API examples and detailed contracts stay in the linked files rather than being copied here.
 
-Two standing principles frame all of it:
-
-- **The library feeds an index; it is not the product.** Its output exists to make enterprise search/retrieval/answering trustworthy. The unique value delivered to the index is per-chunk trust metadata (source IDs, coordinates, corroboration state, escalation severity), not the text alone. Do not strip that metadata at the index boundary.
-- **Humans belong to the evaluation loop only.** At enterprise ingestion scale no human reviews pages in the production path. Escalation is a routing signal, never a review queue: blocking pages route to an automated stronger-model tier or are indexed carrying their conflict records; advisory pages are indexed with their confidence metadata; documents always flow. Human effort (gold labeling, adjudication, spot checks) exists solely to measure and improve the library. LLMs are used sparingly and cost-consciously — the deterministic pipeline handles every page; models enter only where deterministic methods are structurally blind or during evaluation.
+The project's standing commitments live in [principles](principles.md) — read it first; when a proposed change conflicts with a principle, the principle wins until deliberately revisited. The two most often at risk of drift: the library feeds an index and its value is per-chunk trust metadata, not text; and humans belong to the evaluation loop only — escalation is a routing signal for automated tiers, never a production review queue.
 
 Start with:
 
