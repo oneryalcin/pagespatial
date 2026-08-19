@@ -48,6 +48,8 @@ Measure:
 
 Critical tokens include numbers, signs, accounting negatives, dates, actual/estimate suffixes, currencies, percentages, units, magnitude suffixes, identifiers, and other corpus-specific values that can materially change an answer.
 
+Before token scoring, evaluators must reconstruct adjacent same-line source fragments that form one visible token. PDF font runs can split `27,148,453` into `27`, `,`, and `148,453`; scoring these run boundaries as separate gold tokens produces a false failure. Normalization may remove presentation-only thousands separators and unify equivalent minus characters, but it must preserve sign, accounting-negative, currency, percentage, date, unit, magnitude, and actual/estimate meaning. Parser output is not ground truth: use independently labelled visible tokens and retain fragment-level diagnostics separately.
+
 `Bidirectional` means checking both directions:
 
 - every gold critical token must appear correctly in the extracted evidence;
@@ -194,4 +196,3 @@ The `1-pager_Example.pdf` result is feasibility evidence only:
 - the retained pages are unrotated, while rotation and transform handling currently have synthetic unit coverage;
 - the Gemini image result is a separate image-understanding comparator and does not validate the PageSpatial merge;
 - metrics without independent gold labels remain `not evaluated` under this rubric.
-

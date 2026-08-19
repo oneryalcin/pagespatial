@@ -41,6 +41,19 @@ source PDF
                          └─ projections
 ```
 
+## Recommended extraction composition
+
+PageSpatial combines native parsing and OCR; it does not select one as the source of truth.
+
+| Runtime | Native source | Visual source | Operational behavior |
+| --- | --- | --- | --- |
+| Browser | Shared PDF.js session | PP-OCRv6 Tiny over every rendered page | Progressive page completion; one serialized OCR engine; WebGPU with sticky WASM fallback |
+| Node/server | PDF Inspector when its Markdown is useful, or another page-native adapter | PP-OCR or a benchmarked GPU OCR adapter | Inspector performs one cached whole-document native pass; rendering and OCR remain independently replaceable |
+
+Raw native and OCR observations survive even when they match. A successful association reduces duplication in projections; it does not delete either source. If one extractor misses chart text, a scanned region, or a split financial value, the other source can recover it. If the sources materially disagree, diagnostics must escalate instead of silently choosing one.
+
+PDF Inspector Markdown is useful but derived. A page may preserve every numeric value while still assigning a heading or unlabeled total to the wrong table row. Value preservation and table-relationship correctness are evaluated separately.
+
 ## Identity
 
 The caller supplies a document ID, revision ID, and source SHA-256. Observation IDs are deterministic for the document revision, page, source, text, geometry, and occurrence. They are stable for equivalent adapter output but are not a substitute for the source-file hash.
@@ -65,6 +78,12 @@ The TypeScript Zod validator enforces semantic invariants that JSON Schema canno
 - Vision-model output must be labelled as model-derived and mapped back to source observations where possible.
 
 Downstream authorization, deletion state, document canonicality, and revision selection remain outside parser relevance and confidence scores.
+
+## Critical-token evaluation
+
+PDF text layers frequently split one visible value across adjacent font runs. Evaluation first joins geometrically adjacent same-line fragments, then normalizes presentation-only thousands separators and equivalent minus characters. It must retain currency, sign, accounting-negative, percentage, date, unit, magnitude, and actual/estimate meaning.
+
+Another parser's output is not gold truth. Production scores use independently labelled visible tokens and boxes. Native-to-OCR agreement remains a diagnostic, while row, column, header, chart, and other inferred relationships receive separate gold measurements.
 
 ## Official integration boundary
 

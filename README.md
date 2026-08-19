@@ -1,6 +1,6 @@
 # PageSpatial
 
-PageSpatial is a source-preserving spatial evidence layer for PDF ingestion. It combines native PDF observations and visual OCR observations without reducing the source document immediately to Markdown.
+PageSpatial gives every PDF page a durable evidence record: what the native parser found, what OCR found, where each item appears, and where the sources agree or conflict. It does not reduce the source document immediately to Markdown.
 
 Status: experimental parser and adapter stack. The browser path is implemented and ready for corpus evaluation. It is not yet production-qualified.
 
@@ -9,6 +9,26 @@ Status: experimental parser and adapter stack. The browser path is implemented a
 > `PageSpatialDocument` is the evidence record. Markdown, search chunks, tables, chart summaries, and model prompts are derived views.
 
 Raw native and OCR observations remain separate. Matches and inferred relationships retain their component observation IDs, geometry, method, confidence, and provenance.
+
+## Recommended execution model
+
+Run native extraction and PP-OCR together. They solve different problems:
+
+1. **Native extraction** recovers selectable text, fonts, tagged roles, and document structure.
+2. **PP-OCRv6 Tiny** reads every rendered page, including charts, diagrams, scans, and text missing from the PDF text layer.
+3. **PageSpatial** keeps both sources, associates nearby equivalent observations, and records conflicts or uncertainty.
+4. **Markdown and search indexes** are generated afterward from the evidence record.
+
+The recommended browser stack is PDF.js + PP-OCR. On Node, PDF Inspector can replace the native extractor when page-aligned Markdown and richer native structure justify its whole-document startup cost. PP-OCR still runs; PDF Inspector is not an OCR replacement.
+
+```text
+PDF ─┬─ native extraction ─ positioned text and structure ─┐
+     └─ rendered pages ─── PP-OCR text and polygons ───────┤
+                                                            v
+                                                   PageSpatialDocument
+                                                            │
+                                             Markdown, retrieval, answers
+```
 
 ## Runtime architecture
 
@@ -127,7 +147,7 @@ PAGESPATIAL_SMOKE_ASSETS=/path/to/verified/ocr-assets npm run test:browser:webgp
 
 ## AnyDoc and PDF Inspector
 
-For PDFs, [AnyDoc](https://github.com/firecrawl/anydoc) delegates to [PDF Inspector](https://github.com/firecrawl/pdf-inspector). PageSpatial integrates PDF Inspector directly on Node because it returns page-addressable Markdown and positioned native observations. Calling AnyDoc as well would parse the same PDF again and return document-wide Markdown without stronger page evidence.
+For PDFs, [AnyDoc](https://github.com/firecrawl/anydoc) delegates to [PDF Inspector](https://github.com/firecrawl/pdf-inspector). PageSpatial integrates PDF Inspector directly on Node because it returns page-addressable Markdown and positioned native observations. Calling AnyDoc as well would parse the same PDF twice and return document-wide Markdown without stronger page evidence.
 
 ```ts
 import { createParser } from 'pagespatial';
@@ -141,7 +161,7 @@ const parser = createParser({
 });
 ```
 
-This optional path performs a whole-document PDF Inspector extraction once and caches it per Node session. It can improve Markdown and tagged-PDF roles, but it may delay the first page on a large document. Rendering and server OCR remain explicit adapters. Rotated, cropped, or shifted native geometry is rejected until each mode passes a real retained conformance fixture. The default browser path stays progressive and uses PDF.js native text plus PP-OCR on every page.
+This path performs one whole-document PDF Inspector extraction and caches it per Node session. Use it when improved Markdown is worth the startup delay. Rendering and OCR remain separate adapters, and both Inspector and OCR evidence are retained. Rotated, cropped, or shifted Inspector geometry is rejected until each mode passes a real retained conformance fixture. The default browser path stays progressive and uses PDF.js native text plus PP-OCR on every page.
 
 ## Pure page merge
 
@@ -249,6 +269,17 @@ The release rubric is in [docs/evaluation-rubric.md](docs/evaluation-rubric.md).
 - Answer accuracy and evidence grounding pass independently.
 - A material false acceptance is a hard release failure.
 - Performance and cost select between candidates only after evidence-safety gates pass.
+
+Financial values are compared after geometry-aware reconstruction of adjacent PDF font runs. For example, PDF.js may expose one visible value as `27`, `,`, and `148,453`; the evaluator must reconstruct `27,148,453` before scoring. Parser run boundaries are not ground truth.
+
+Current retained evidence:
+
+- A three-page mixed native/chart sample recovered chart-only `FY2021` and `527` through PP-OCR with no external requests.
+- On one dense annual-report table, PDF Inspector and PP-OCR each recovered all 39 independently checked critical table values.
+- After font-run reconstruction, PDF.js and PDF Inspector agreed on all 45 critical tokens across that page.
+- Inspector's Markdown still made one row-boundary error. Numeric preservation and table-relationship accuracy therefore remain separate gates.
+
+These are feasibility results, not production qualification. See the [dense financial table trial](docs/trials/2026-08-19-dense-financial-table-recovery.md) and the [production evaluation rubric](docs/evaluation-rubric.md).
 
 ## Development
 
