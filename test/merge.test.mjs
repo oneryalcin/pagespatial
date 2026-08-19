@@ -57,6 +57,34 @@ test('confident OCR with a starved native layer escalates as uncorroborated sing
   pageSpatialSchema.parse(page);
 });
 
+// The cutoff means strict MAJORITY single-witness: an exact half-engaged
+// page must not fire, or the documented justification is false at its own
+// boundary.
+test('coverage starvation does not fire on an exact half-engaged tie', () => {
+  const matchedHalf = Array.from({ length: 4 }, (_, index) => ({
+    text: `alpha beta ${index}`,
+    box: [10, 10 + index * 22, 150, 28 + index * 22]
+  }));
+  const page = buildPageSpatial({
+    document,
+    pageNumber: 1,
+    geometry: { width: 400, height: 400 },
+    nativeObservations: matchedHalf.map((item) => ({ pageNumber: 1, ...item })),
+    ocrObservations: [
+      ...matchedHalf.map((item) => ({ pageNumber: 1, ...item, confidence: 0.9 })),
+      ...Array.from({ length: 4 }, (_, index) => ({
+        pageNumber: 1,
+        text: `orphan ${index}`,
+        box: [200, 10 + index * 22, 350, 28 + index * 22],
+        confidence: 0.9
+      }))
+    ],
+    provenance
+  });
+  assert.equal(page.diagnostics.sourceMatchCount, 4);
+  assert.equal(page.diagnostics.escalationReasons.some((item) => item.type === 'uncorroborated-ocr'), false);
+});
+
 test('coverage starvation does not fire on well-matched or sparse pages', () => {
   const matched = buildPageSpatial({
     document,

@@ -215,7 +215,7 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
   });
 
   const page: PageSpatial = {
-    schemaVersion: '0.2.0',
+    schemaVersion: '0.3.0',
     documentId: input.document.documentId,
     revisionId: input.document.revisionId,
     documentSha256: input.document.sha256,

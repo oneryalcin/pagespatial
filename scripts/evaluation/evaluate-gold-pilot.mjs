@@ -103,11 +103,14 @@ const conflictComposition = {};
 const relationTotals = { goldTuples: 0, detectedRelations: 0, matchedGoldTuples: 0, matchedDetections: 0 };
 const escalation = {
   escalatedPages: 0,
+  // Every page carrying any blocking-severity reason. Two disjoint subsets:
+  // conflict-blocking pages (critical-token reasons; confirmed via human
+  // conflict adjudication) and uncorroborated-only pages (no conflict a
+  // human could adjudicate; their confirmation signal is human gold the
+  // engines missed). escalatedBlockingPages = sum of the two subsets.
   escalatedBlockingPages: 0,
-  escalatedBlockingWithConfirmedError: 0,
-  // Pages whose only blocking reason is uncorroborated-ocr carry no conflict
-  // a human could adjudicate; their confirmation signal is human gold the
-  // engines missed, tracked separately from conflict-confirmed errors.
+  escalatedConflictBlockingPages: 0,
+  escalatedConflictBlockingWithConfirmedError: 0,
   escalatedUncorroboratedOnlyPages: 0,
   escalatedUncorroboratedOnlyWithHumanGoldMissedByBoth: 0,
   escalatedAdvisoryOnlyPages: 0,
@@ -200,12 +203,13 @@ for (const page of verdicts.pages) {
   const uncorroboratedOnly = hasBlocking && blockingTypes.every((type) => type === 'uncorroborated-ocr');
   if (record.diagnostics.requiresEscalation) {
     escalation.escalatedPages += 1;
+    if (hasBlocking) escalation.escalatedBlockingPages += 1;
     if (uncorroboratedOnly) {
       escalation.escalatedUncorroboratedOnlyPages += 1;
       if (pageHuman.neither > 0) escalation.escalatedUncorroboratedOnlyWithHumanGoldMissedByBoth += 1;
     } else if (hasBlocking) {
-      escalation.escalatedBlockingPages += 1;
-      if (confirmedError) escalation.escalatedBlockingWithConfirmedError += 1;
+      escalation.escalatedConflictBlockingPages += 1;
+      if (confirmedError) escalation.escalatedConflictBlockingWithConfirmedError += 1;
     } else {
       // Advisory-only escalations have no conflict record for a human to
       // adjudicate, so "confirmed error" is not measurable for them here.
@@ -223,8 +227,19 @@ for (const page of verdicts.pages) {
   });
 }
 
+// Reconciliation invariants: the escalation taxonomy must partition pages.
+if (escalation.escalatedConflictBlockingPages + escalation.escalatedUncorroboratedOnlyPages !== escalation.escalatedBlockingPages) {
+  throw new Error('Blocking subsets do not sum to escalatedBlockingPages.');
+}
+if (escalation.escalatedBlockingPages + escalation.escalatedAdvisoryOnlyPages !== escalation.escalatedPages) {
+  throw new Error('Blocking and advisory-only pages do not sum to escalatedPages.');
+}
+if (escalation.escalatedPages + escalation.cleanPages !== verdicts.pages.length) {
+  throw new Error('Escalated and clean pages do not sum to the evaluated page count.');
+}
+
 const metrics = {
-  goldPilotMetricsVersion: 'gold-pilot-metrics-v2',
+  goldPilotMetricsVersion: 'gold-pilot-metrics-v3',
   createdAt: new Date().toISOString(),
   runRoot,
   goldVerifiedAt: verdicts.verifiedAt,

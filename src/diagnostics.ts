@@ -91,12 +91,16 @@ export function buildDiagnostics(input: {
   const uncorroborated = confident.filter((observation) => !engaged.has(observation.id));
   const engagedCoverage = confident.length ? (confident.length - uncorroborated.length) / confident.length : 1;
   if (confident.length >= policy.uncorroboratedOcrMinimumCount
-    && engagedCoverage <= policy.uncorroboratedOcrMaximumCoverage) {
+    && engagedCoverage < policy.uncorroboratedOcrMaximumCoverage) {
     escalationReasons.push({
       type: 'uncorroborated-ocr',
       severity: 'blocking',
       sourceIds: uncorroborated.map((observation) => observation.id),
       count: uncorroborated.length,
+      // share uses ALL OCR observations as its denominator, consistent with
+      // every other reason; the firing condition uses confident observations
+      // only, so share and (1 - engagedCoverage) differ on mixed-confidence
+      // pages.
       share: ocrShare(uncorroborated.length)
     });
   }

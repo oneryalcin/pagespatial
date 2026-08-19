@@ -122,7 +122,7 @@ const provenanceSchema = z.object({
 });
 
 const pageSpatialBaseSchema = z.object({
-  schemaVersion: z.literal('0.2.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
+  schemaVersion: z.literal('0.3.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
   pageId: z.string(), pageNumber: z.number().int().positive(), geometry: pageGeometrySchema,
   nativeObservations: z.array(nativeObservationSchema), ocrObservations: z.array(ocrObservationSchema),
   nativeLines: z.array(nativeLineSchema), sourceMatches: z.array(sourceMatchSchema), conflicts: z.array(conflictSchema),
@@ -359,7 +359,7 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
     ? (confidentOcr.length - uncorroboratedOcr.length) / confidentOcr.length
     : 1;
   const starvationFires = confidentOcr.length >= page.diagnostics.thresholds.uncorroboratedOcrMinimumCount
-    && engagedCoverage <= page.diagnostics.thresholds.uncorroboratedOcrMaximumCoverage;
+    && engagedCoverage < page.diagnostics.thresholds.uncorroboratedOcrMaximumCoverage;
   expectedReasons.set('uncorroborated-ocr', {
     severity: 'blocking',
     count: starvationFires ? uncorroboratedOcr.length : 0,
@@ -386,7 +386,7 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
 });
 
 const pageSpatialDocumentBaseSchema = z.object({
-  schemaVersion: z.literal('0.2.0'),
+  schemaVersion: z.literal('0.3.0'),
   document: documentIdentitySchema,
   pages: z.array(pageSpatialSchema),
   diagnostics: z.object({
