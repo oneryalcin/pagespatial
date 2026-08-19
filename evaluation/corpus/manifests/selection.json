@@ -1,0 +1,71 @@
+{
+  "version": "landfill-candidate-v1",
+  "created_at": "2026-08-19",
+  "huggingface": {
+    "repo_type": "dataset",
+    "repo_id": "oneryalcin/enterprise-document-landfill",
+    "private": true,
+    "revision": "e3ee38f067588644b11574ccc566843ca45f6d33",
+    "url": "https://huggingface.co/datasets/oneryalcin/enterprise-document-landfill"
+  },
+  "source_reports": [
+    "financial.json",
+    "government.json",
+    "osf.json"
+  ],
+  "split_policy": {
+    "unit": "document-family",
+    "no_page_overlap": true,
+    "no_translation_sibling_overlap": true,
+    "no_packet_sibling_overlap": true,
+    "no_version_sibling_overlap": true,
+    "status": "candidate-not-sealed"
+  },
+  "development_object_ids": [
+    "public-comps:monotaro:2025-fy:004",
+    "public-comps:monotaro:2025-fy:003",
+    "public-comps:asseco-poland:2025-fy:001",
+    "public-comps:ares:2026-q1:002",
+    "public-comps:blackstone:2026-q1:002",
+    "pa-sers:2024-09-24:llr-vii:staff-memo",
+    "pa-sers:2024-09-24:llr-vii:consultant-memo",
+    "pa-sers:2024-09-24:llr-vii:manager-presentation",
+    "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+    "legistar:seattle:2438:v0:attachment:6113",
+    "legistar:seattle:1794:v0:attachment:3283",
+    "legistar:seattle:2159:v0:attachment:3326",
+    "legistar:seattle:1859:v0:attachment:3318",
+    "world-bank:P170734:document:34222345",
+    "world-bank:P178566:document:34223652",
+    "osf:file:64a59e4ea2a2f4140943711a:v1",
+    "osf:file:686ffb54a56d843965a6c614:v1",
+    "osf:file:607883db0c818200885135da:v1",
+    "osf:file:6046e27ec7e7e6002f6ae7ee:v1",
+    "osf:file:6a74c836f0cba432843c7153:v1",
+    "osf:file:670e77f61b29952574a5e7a2:v1",
+    "osf:file:6826158a05236079589c42c3:v1",
+    "osf:file:6826162a05236079589c42d8:v1"
+  ],
+  "holdout_object_ids": [
+    "public-comps:erajaya:2025-fy:001",
+    "public-comps:kkr:2026-q1:003",
+    "pa-sers:2025-07-22:active-core-fixed-income-managers:1:1ac34067bd2a",
+    "legistar:seattle:2479:v0:attachment:4291",
+    "legistar:seattle:1958:v0:attachment:3310",
+    "legistar:seattle:2156:v0:attachment:3321",
+    "legistar:seattle:17286:v0:attachment:48499",
+    "world-bank:P000755:document:34225967",
+    "world-bank:P173783:document:34219407",
+    "osf:file:69781018d1a6f1f26a8ef797:v1",
+    "osf:file:67898081d49db8de10c0e4b5:v1",
+    "osf:file:67c9ea0bc0b41e91d8fd6c97:v1",
+    "osf:file:652d65a187852d06ada59245:v1"
+  ],
+  "confirmed_image_only_object_ids": [
+    "legistar:seattle:2438:v0:attachment:6113",
+    "legistar:seattle:1794:v0:attachment:3283",
+    "legistar:seattle:1958:v0:attachment:3310",
+    "legistar:seattle:1859:v0:attachment:3318",
+    "osf:file:67898081d49db8de10c0e4b5:v1"
+  ]
+}

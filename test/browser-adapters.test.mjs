@@ -82,6 +82,16 @@ test('Node PDF session checks known byte size before copying', async () => {
   await assert.rejects(() => openNodePdfSession(input, { maxBytes: 8 }), /limit is 8/);
 });
 
+test('Node PDF session accepts a Buffer without passing Buffer to PDF.js', async () => {
+  const session = await openNodePdfSession(Buffer.from(simplePdf()), { maxPages: 1 });
+  try {
+    assert.equal(session.source.identity.pageCount, 1);
+    assert.equal(session.bytes.constructor, Uint8Array);
+  } finally {
+    await session.dispose();
+  }
+});
+
 test('Node PDF session cannot return an in-flight page after disposal starts', async () => {
   const session = await openNodePdfSession(simplePdf(), { maxPages: 1 });
   let resolvePage;

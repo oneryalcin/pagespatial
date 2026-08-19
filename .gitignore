@@ -2,6 +2,7 @@ node_modules/
 dist/
 coverage/
 public/ocr-assets/
+.evaluation/
 .DS_Store
 .env
 .env.*

@@ -41,7 +41,13 @@
     "test:browser:webgpu": "npm run build && node test/browser-smoke/run.mjs webgpu",
     "check": "npm run typecheck && npm test && npm run verify:schema",
     "example": "npm run build && node examples/merge-page.mjs",
-    "prepare:ocr-assets": "node scripts/prepare-ppocr-assets.mjs"
+    "prepare:ocr-assets": "node scripts/prepare-ppocr-assets.mjs",
+    "eval:corpus:check": "node scripts/evaluation/generate-corpus-manifest.mjs --check",
+    "eval:corpus:dry-run": "node scripts/evaluation/materialize.mjs --dry-run",
+    "eval:corpus:materialize": "node scripts/evaluation/materialize.mjs",
+    "eval:ocr-assets": "node scripts/prepare-ppocr-assets.mjs --output .evaluation/ocr-assets",
+    "eval:baseline": "npm run build && node scripts/evaluation/run-baseline.mjs",
+    "eval:baseline:summary": "npm run build && node scripts/evaluation/generate-baseline-summary.mjs"
   },
   "dependencies": {
     "zod": "4.4.3"

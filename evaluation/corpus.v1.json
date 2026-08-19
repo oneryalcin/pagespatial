@@ -1,0 +1,3049 @@
+{
+  "schemaVersion": "pagespatial-corpus-v1",
+  "dataset": {
+    "repoType": "dataset",
+    "repoId": "oneryalcin/enterprise-document-landfill",
+    "revision": "e3ee38f067588644b11574ccc566843ca45f6d33"
+  },
+  "documents": [
+    {
+      "objectId": "public-comps:monotaro:2025-fy:004",
+      "path": "raw/public-comps/monotaro/2025-fy/004-integrated-report-2025-en.pdf",
+      "sha256": "909b4674e9e82d58dd6db43b74a59f6aa8481fb8e0d7d7b6d4cac8805df3033b",
+      "pageCount": 64,
+      "split": "development",
+      "familyId": "family:monotaro-2025-integrated-report",
+      "selectionNotes": [
+        "long integrated report; bilingual-facing English edition; multi-column narrative, KPI tables, charts and photo spreads",
+        "Long report with mixed narrative, tables, charts, and designed pages; English counterpart supports paired-language evaluation.",
+        "high overall; sparse cover/photo pages",
+        "embedded photos and chart artwork alongside selectable text"
+      ],
+      "pages": [
+        {
+          "pageNumber": 10,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 11,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 12,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 30,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 60,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 61,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 62,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 63,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 64,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "public-comps:monotaro:2025-fy:003",
+      "path": "raw/public-comps/monotaro/2025-fy/003-integrated-report-2025-ja.pdf",
+      "sha256": "9d8bf861e43cdb9315651c9fbda1369ab621811a439ff42fe70397f98a7c621b",
+      "pageCount": 64,
+      "split": "development",
+      "familyId": "family:monotaro-2025-integrated-report",
+      "selectionNotes": [
+        "Japanese integrated report; dense Japanese text, tables, charts and visual spreads",
+        "Direct language-paired document for multilingual tokenization and geometry checks; same page structure as English edition.",
+        "high; 109 fonts indicate complex multilingual glyph coverage",
+        "photos and rasterized design elements with native Japanese text"
+      ],
+      "pages": [
+        {
+          "pageNumber": 10,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 11,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 12,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 30,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 60,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 61,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 62,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 63,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        },
+        {
+          "pageNumber": 64,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "multilingual",
+            "translation-sibling"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "public-comps:erajaya:2025-fy:001",
+      "path": "raw/public-comps/erajaya/2025-fy/001-annual-report-2025-id-en.pdf",
+      "sha256": "7f1eeca9f25eb80cb4a9b157553075e2742ad3115e6d49318e5920732176555c",
+      "pageCount": 230,
+      "split": "holdout",
+      "familyId": "public-comps:erajaya:2025-fy:001",
+      "selectionNotes": [
+        "very long Indonesian-English bilingual annual report; facing-page bilingual prose, photo timelines, financial statements and charts",
+        "Largest long-form bilingual report in this scope; tests page selection across narrative, tables and paired translations.",
+        "very high on statement pages; lower on photo spreads",
+        "many photos; rendered page 16-17 visibly combines selectable-looking prose blocks and photographic panels"
+      ],
+      "pages": [
+        {
+          "pageNumber": 16,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 17,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 50,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 51,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 52,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 53,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 54,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 55,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 150,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 151,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 152,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 153,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 154,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 155,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 220,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 221,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 222,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 223,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 224,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 225,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 226,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 227,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 228,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 229,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 230,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column",
+            "form",
+            "multilingual",
+            "long-document"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "public-comps:asseco-poland:2025-fy:001",
+      "path": "raw/public-comps/asseco-poland/2025-fy/001-consolidated-financial-statements-pl.pdf",
+      "sha256": "7f84c3668bc57c89b2ce30427abc26c59dd4849451f6d33f71d9d5deb730a5d0",
+      "pageCount": 152,
+      "split": "development",
+      "familyId": "public-comps:asseco-poland:2025-fy:001",
+      "selectionNotes": [
+        "Polish consolidated financial statements; dense multi-column accounting tables, footnotes and statement grids",
+        "Dense table-heavy control case with Polish glyphs and accounting footnotes; complements visually designed reports.",
+        "high on tables; sparse image/cover pages",
+        "mostly native vector/text financial document with limited images"
+      ],
+      "pages": [
+        {
+          "pageNumber": 13,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 14,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 15,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 16,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 17,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 18,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 19,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 20,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 70,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 71,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 72,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 73,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 74,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 75,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 76,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 77,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 78,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 79,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 80,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 145,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 146,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 147,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 148,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 149,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 150,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 151,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 152,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "multi-column",
+            "multilingual",
+            "long-document"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "public-comps:ares:2026-q1:002",
+      "path": "raw/public-comps/ares/2026-q1/002-quarterly-report-10-q.pdf",
+      "sha256": "31f04055ed52950e35cc309b9652d502740c1bdf7072f6973e01e93761dc5707",
+      "pageCount": 101,
+      "split": "development",
+      "familyId": "public-comps:ares:2026-q1:002",
+      "selectionNotes": [
+        "SEC-style quarterly filing; native legal prose, tabular financial statements, footnotes and occasional graphics",
+        "Long regulatory filing baseline for reading order, tables, footnotes and section transitions.",
+        "moderate-high; statement/footnote pages dense",
+        "limited embedded raster evidence relative to reports"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 5,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 6,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 7,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 8,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 48,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 49,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 50,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 51,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 52,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 53,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 54,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 55,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 63,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 64,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 65,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 66,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 67,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 68,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 69,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 70,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 95,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 96,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 97,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 98,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 99,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 100,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 101,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "public-comps:blackstone:2026-q1:002",
+      "path": "raw/public-comps/blackstone/2026-q1/002-supplemental-financial-data.pdf",
+      "sha256": "c129043bba247a6867115ba8dcfa58cb4ba1c5dad2fe68f99701ebda3d9038c9",
+      "pageCount": 21,
+      "split": "development",
+      "familyId": "public-comps:blackstone:2026-q1:002",
+      "selectionNotes": [
+        "short supplemental financial data book; dense KPI tables, compact charts and footnotes",
+        "Compact dense-financial-table and chart case; useful dev document for exact numeric token geometry.",
+        "high for 21 pages",
+        "substantial chart/table artwork and raster assets"
+      ],
+      "pages": [
+        {
+          "pageNumber": 2,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart"
+          ]
+        },
+        {
+          "pageNumber": 5,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart"
+          ]
+        },
+        {
+          "pageNumber": 6,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart"
+          ]
+        },
+        {
+          "pageNumber": 12,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart"
+          ]
+        },
+        {
+          "pageNumber": 13,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart"
+          ]
+        },
+        {
+          "pageNumber": 14,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart"
+          ]
+        },
+        {
+          "pageNumber": 15,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart"
+          ]
+        },
+        {
+          "pageNumber": 16,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart"
+          ]
+        },
+        {
+          "pageNumber": 17,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart"
+          ]
+        },
+        {
+          "pageNumber": 18,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "public-comps:kkr:2026-q1:003",
+      "path": "raw/public-comps/kkr/2026-q1/003-investor-presentation.pdf",
+      "sha256": "71d15a441ed322171b3178dd670fb2ff53b7f7117ee8b06cb009c7e96d7cd373",
+      "pageCount": 52,
+      "split": "holdout",
+      "familyId": "public-comps:kkr:2026-q1:003",
+      "selectionNotes": [
+        "investor slide deck; charts, diagrams, large numerals, sparse text and image-backed layouts",
+        "Presentation-specific layout with charts/diagrams and sparse text; exercises geometry beyond prose tables.",
+        "moderate; slide-dependent",
+        "many embedded slide images/charts"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 8,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 9,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 10,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 11,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 12,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 13,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 14,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 15,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 30,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 31,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 32,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 33,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 34,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 35,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 48,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 49,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 50,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 51,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 52,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "pa-sers:2024-09-24:llr-vii:staff-memo",
+      "path": "raw/pa-sers/investment-committee/2024-09-24/llr-equity-partners-vii/001-staff-memo.pdf",
+      "sha256": "905ecec319fd1ac986015d26eeb774f8b3865ef058444291814a0967f7fb6806",
+      "pageCount": 1,
+      "split": "development",
+      "familyId": "family:llr-vii-2024-09-24-packet",
+      "selectionNotes": [
+        "one-page investment committee staff memo; compact headings, bullets and decision text",
+        "Short memo endpoint and packet anchor; tests small-page extraction and decision wording.",
+        "moderate-high",
+        "native memo with minimal embedded artwork"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "packet-sibling"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "pa-sers:2024-09-24:llr-vii:consultant-memo",
+      "path": "raw/pa-sers/investment-committee/2024-09-24/llr-equity-partners-vii/002-consultant-memo.pdf",
+      "sha256": "1f026cc0d68e9abcc5177935d3244b654b77e1611060aadd15ffb4741411dcb0",
+      "pageCount": 2,
+      "split": "development",
+      "familyId": "family:llr-vii-2024-09-24-packet",
+      "selectionNotes": [
+        "two-page consultant memo; dense prose, headings and compact tables/assessment blocks",
+        "Paired short analytical memo in the same decision packet as staff memo and presentation.",
+        "high",
+        "mostly native text"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "slides",
+            "packet-sibling"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "slides",
+            "packet-sibling"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+      "path": "raw/pa-sers/investment-committee/2024-09-24/llr-equity-partners-vii/003-manager-presentation.pdf",
+      "sha256": "c74e6e91d54744d4977f9129a72ee0054eff9937791125aa0209592be01b658d",
+      "pageCount": 11,
+      "split": "development",
+      "familyId": "family:llr-vii-2024-09-24-packet",
+      "selectionNotes": [
+        "manager presentation; image-backed slides, charts and diagrams with sparse extracted text",
+        "Strong visual/raster stress case and direct sibling of staff/consultant memos; preserves packet relationship.",
+        "very low",
+        "confirmed mixed raster/native: 1,384 image records and only 1,397 extracted characters; likely rasterized slide content"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides",
+            "packet-sibling"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides",
+            "packet-sibling"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides",
+            "packet-sibling"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides",
+            "packet-sibling"
+          ]
+        },
+        {
+          "pageNumber": 5,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides",
+            "packet-sibling"
+          ]
+        },
+        {
+          "pageNumber": 6,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides",
+            "packet-sibling"
+          ]
+        },
+        {
+          "pageNumber": 7,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides",
+            "packet-sibling"
+          ]
+        },
+        {
+          "pageNumber": 8,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides",
+            "packet-sibling"
+          ]
+        },
+        {
+          "pageNumber": 9,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides",
+            "packet-sibling"
+          ]
+        },
+        {
+          "pageNumber": 10,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides",
+            "packet-sibling"
+          ]
+        },
+        {
+          "pageNumber": 11,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides",
+            "packet-sibling"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "pa-sers:2025-07-22:active-core-fixed-income-managers:1:1ac34067bd2a",
+      "path": "raw/pa-sers/investment-committee/2025-07-22/active-core-fixed-income-managers/001-staff_memo.pdf",
+      "sha256": "aca12ef11a7acad6a5f30819d219a31a25705895d64ea105135b9668392892ba",
+      "pageCount": 23,
+      "split": "holdout",
+      "familyId": "pa-sers:2025-07-22:active-core-fixed-income-managers:1:1ac34067bd2a",
+      "selectionNotes": [
+        "investment committee staff memo packet; text-native sections, tables and appendices",
+        "Longer memo packet than the one-page LLR memo; tests section hierarchy and appendices without relying on slide visuals.",
+        "low-moderate overall; table/appendix pages denser",
+        "mixed memo packet with embedded charts/manager materials"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 5,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 15,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 16,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 17,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 18,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 19,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 20,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 21,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 22,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 23,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "slides"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+      "path": "raw/pa-sers/investment-committee/2026-06-09/skyknight-capital-fund-v-l-p/003-presentation.pdf",
+      "sha256": "96f5a05d2aaa27c96fcb45513dac3488731a67169ef57f6856fc07d76c678356",
+      "pageCount": 11,
+      "split": "development",
+      "familyId": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+      "selectionNotes": [
+        "private-equity presentation; charts, deal diagrams, logos and image-heavy slides",
+        "Second PA presentation with different raster/text balance; helps avoid overfitting to the LLR image-only tendency.",
+        "moderate",
+        "native text plus embedded charts/logos"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 5,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 6,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 7,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 8,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 9,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 10,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 11,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "legistar:seattle:2438:v0:attachment:6113",
+      "path": "raw/legistar/seattle/bodies/169/matters/2438/v0/attachments/007-6113.pdf",
+      "sha256": "0239b4baffa00b372215c3fae97a8243f536a1acda8ddc43ac6e333cff891a2d",
+      "pageCount": 20,
+      "split": "development",
+      "familyId": "legistar:seattle:2438:v0:attachment:6113",
+      "selectionNotes": [
+        "Clean image-only baseline for scan OCR and geometry.",
+        "genuine image-only scan",
+        "zero pdftotext tokens on all 20 pages",
+        "20 image objects; zero fonts",
+        "letter pages",
+        "612 x 792 pts"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "image-only"
+          ]
+        },
+        {
+          "pageNumber": 10,
+          "labels": [
+            "image-only"
+          ]
+        },
+        {
+          "pageNumber": 20,
+          "labels": [
+            "image-only"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "legistar:seattle:2479:v0:attachment:4291",
+      "path": "raw/legistar/seattle/bodies/169/matters/2479/v0/attachments/007-4291.pdf",
+      "sha256": "5b4a6e5ad887483fab330f72e88eb9ac54f7f491ac42df404105c9cf2033eb70",
+      "pageCount": 33,
+      "split": "holdout",
+      "familyId": "legistar:seattle:2479:v0:attachment:4291",
+      "selectionNotes": [
+        "Tests near-image-only classification and stray hidden text handling.",
+        "image-only scan with one stray text token on page 1",
+        "zero tokens on pages 2-33",
+        "33 image objects; one font",
+        "letter pages",
+        "612 x 792 pts"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "sparse-overlay"
+          ]
+        },
+        {
+          "pageNumber": 17,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "sparse-overlay"
+          ]
+        },
+        {
+          "pageNumber": 33,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "sparse-overlay"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "legistar:seattle:1794:v0:attachment:3283",
+      "path": "raw/legistar/seattle/bodies/169/matters/1794/v0/attachments/006-3283.pdf",
+      "sha256": "68d3c15e51bc52bc805d43a4b592c9945ae059463b6f18808715d007116e3b29",
+      "pageCount": 27,
+      "split": "development",
+      "familyId": "legistar:seattle:1794:v0:attachment:3283",
+      "selectionNotes": [
+        "Landscape ordinance scan; useful for unusual page size and long repeated legal pages.",
+        "genuine image-only scan",
+        "zero tokens on all pages",
+        "27 image objects; zero fonts",
+        "landscape 1224 x 792 pts",
+        "1224 x 792 pts"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "image-only",
+            "landscape"
+          ]
+        },
+        {
+          "pageNumber": 14,
+          "labels": [
+            "image-only",
+            "landscape"
+          ]
+        },
+        {
+          "pageNumber": 27,
+          "labels": [
+            "image-only",
+            "landscape"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "legistar:seattle:1958:v0:attachment:3310",
+      "path": "raw/legistar/seattle/bodies/169/matters/1958/v0/attachments/006-3310.pdf",
+      "sha256": "f992a582ae0294eb7a1c82197ad7e450f46da80df9fde5246a4c28848cee25a4",
+      "pageCount": 17,
+      "split": "holdout",
+      "familyId": "legistar:seattle:1958:v0:attachment:3310",
+      "selectionNotes": [
+        "Second landscape scan template; checks rotation/crop and layout generalization.",
+        "genuine image-only scan",
+        "zero tokens on all pages",
+        "17 image objects; zero fonts",
+        "landscape 1224 x 792 pts",
+        "1224 x 792 pts"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "image-only",
+            "landscape"
+          ]
+        },
+        {
+          "pageNumber": 9,
+          "labels": [
+            "image-only",
+            "landscape"
+          ]
+        },
+        {
+          "pageNumber": 17,
+          "labels": [
+            "image-only",
+            "landscape"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "legistar:seattle:2156:v0:attachment:3321",
+      "path": "raw/legistar/seattle/bodies/169/matters/2156/v0/attachments/005-3321.pdf",
+      "sha256": "aab0f7e38e7231a3280b721772ce56113b7c5f074df510b4dec05f98cf598e39",
+      "pageCount": 82,
+      "split": "holdout",
+      "familyId": "legistar:seattle:2156:v0:attachment:3321",
+      "selectionNotes": [
+        "Longest government scan; stresses page traversal, repeated templates, and sparse hidden text.",
+        "sparse text overlay on raster scans",
+        "page token counts 3, then 2 on every remaining page",
+        "82 image objects; 2 fonts",
+        "letter pages",
+        "612 x 792 pts"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native"
+          ]
+        },
+        {
+          "pageNumber": 41,
+          "labels": [
+            "native-text",
+            "mixed-raster-native"
+          ]
+        },
+        {
+          "pageNumber": 82,
+          "labels": [
+            "native-text",
+            "mixed-raster-native"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "legistar:seattle:2159:v0:attachment:3326",
+      "path": "raw/legistar/seattle/bodies/169/matters/2159/v0/attachments/014-3326.pdf",
+      "sha256": "baeffd849ffe8505faeec8f844eefe29148fde8d210c9bde8bc0387210012840",
+      "pageCount": 24,
+      "split": "development",
+      "familyId": "legistar:seattle:2159:v0:attachment:3326",
+      "selectionNotes": [
+        "Tests page-level scan status when only a cover carries hidden text.",
+        "near-image-only scan",
+        "page 1 has 1 token; pages 2-24 have zero",
+        "24 image objects; 1 font",
+        "letter pages",
+        "612 x 792 pts"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "sparse-overlay"
+          ]
+        },
+        {
+          "pageNumber": 12,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "sparse-overlay"
+          ]
+        },
+        {
+          "pageNumber": 24,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "sparse-overlay"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "legistar:seattle:1859:v0:attachment:3318",
+      "path": "raw/legistar/seattle/bodies/169/matters/1859/v0/attachments/010-3318.pdf",
+      "sha256": "725f4b428d49a365184b8993146e14c2ebd37fdeb3bb774a801c95fc6c7f9fa8",
+      "pageCount": 14,
+      "split": "development",
+      "familyId": "legistar:seattle:1859:v0:attachment:3318",
+      "selectionNotes": [
+        "Clean portrait scan control with a different document length.",
+        "genuine image-only scan",
+        "zero tokens on all pages",
+        "14 image objects; zero fonts",
+        "letter pages",
+        "612 x 792 pts"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "image-only"
+          ]
+        },
+        {
+          "pageNumber": 7,
+          "labels": [
+            "image-only"
+          ]
+        },
+        {
+          "pageNumber": 14,
+          "labels": [
+            "image-only"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "legistar:seattle:17286:v0:attachment:48499",
+      "path": "raw/legistar/seattle/bodies/285/matters/17286/v0/attachments/009-48499.pdf",
+      "sha256": "1eaf91f45c0eff3abe2ea2ca561539e7ee475b852a2a5f87742493f7b82d7c73",
+      "pageCount": 10,
+      "split": "holdout",
+      "familyId": "legistar:seattle:17286:v0:attachment:48499",
+      "selectionNotes": [
+        "Native/mixed government control with wide presentation pages and dense multi-column content.",
+        "native-text presentation, not a scan",
+        "10 pages, 1,044 total tokens",
+        "2 raster images; 4 fonts",
+        "wide 960 x 540 pts pages",
+        "960 x 540 pts"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "multi-column",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 5,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "multi-column",
+            "slides"
+          ]
+        },
+        {
+          "pageNumber": 10,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "multi-column",
+            "slides"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "world-bank:P170734:document:34222345",
+      "path": "raw/world-bank/projects/P170734/documents/2023-12-21/001-34222345.pdf",
+      "sha256": "63e9dad0bf52ded5d0e09b7f5bdb917ef1fdec76ebfea607c6d2be80744a1c4b",
+      "pageCount": 8,
+      "split": "development",
+      "familyId": "world-bank:P170734:document:34222345",
+      "selectionNotes": [
+        "Dense procurement tables plus a nearly empty page and raster-heavy material; strong mixed-content stress case.",
+        "mixed raster/native procurement plan",
+        "page token counts [297,8,157,225,64,1009,827,48]",
+        "128 image objects; 7 fonts",
+        "letter pages",
+        "612 x 792 pts"
+      ],
+      "pages": [
+        {
+          "pageNumber": 2,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table"
+          ]
+        },
+        {
+          "pageNumber": 6,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table"
+          ]
+        },
+        {
+          "pageNumber": 7,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "world-bank:P000755:document:34225967",
+      "path": "raw/world-bank/projects/P000755/documents/2023-12-27/001-34225967.pdf",
+      "sha256": "10c01e522544b3356bcd1fa3215b5a6ad684c06ef174db6499cc207f1cf77490",
+      "pageCount": 137,
+      "split": "holdout",
+      "familyId": "world-bank:P000755:document:34225967",
+      "selectionNotes": [
+        "Longest World Bank document; includes sparse and dense pages, repeated tables, and raster inserts.",
+        "long native/mixed procurement plan",
+        "page 61 has 9 tokens; page 101 has 0; page 136 has 1,119",
+        "108 image objects; 5 fonts",
+        "letter pages",
+        "612 x 792 pts"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 61,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 101,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 137,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "long-document"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "world-bank:P178566:document:34223652",
+      "path": "raw/world-bank/projects/P178566/documents/2023-12-22/001-34223652.pdf",
+      "sha256": "1d77e1f0480d1e8aa2c76741ca06d491b0b8ae57d6ed5521d647a81ef7084795",
+      "pageCount": 4,
+      "split": "development",
+      "familyId": "world-bank:P178566:document:34223652",
+      "selectionNotes": [
+        "Text-native dense table control to separate parser failures from OCR failures.",
+        "native-text procurement plan, not image-only",
+        "page token counts [296,136,1251,180]",
+        "zero image objects; 7 fonts",
+        "letter pages",
+        "612 x 792 pts"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "dense-table"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "labels": [
+            "native-text",
+            "dense-table"
+          ]
+        },
+        {
+          "pageNumber": 4,
+          "labels": [
+            "native-text",
+            "dense-table"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "world-bank:P173783:document:34219407",
+      "path": "raw/world-bank/projects/P173783/documents/2023-12-20/001-34219407.pdf",
+      "sha256": "931bc308860510506cbb779e4ffdb3345327d7f86431ada0e6958167a71acf24",
+      "pageCount": 7,
+      "split": "holdout",
+      "familyId": "world-bank:P173783:document:34219407",
+      "selectionNotes": [
+        "Dense repeated procurement-table control with no raster dependency.",
+        "native-text procurement plan, not image-only",
+        "page token counts [291,70,1274,1024,1069,1001,788]",
+        "zero image objects; 7 fonts",
+        "letter pages",
+        "612 x 792 pts"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "dense-table"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "labels": [
+            "native-text",
+            "dense-table"
+          ]
+        },
+        {
+          "pageNumber": 7,
+          "labels": [
+            "native-text",
+            "dense-table"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "osf:file:64a59e4ea2a2f4140943711a:v1",
+      "path": "raw/osf/institutions/brown/projects/ckp7t/007-64a59e4ea2a2f4140943711a-v1.pdf",
+      "sha256": "a06ddba529ff277a72a639928808860c6fe3b27bf759e5f2070408dfd4d2dbad",
+      "pageCount": 144,
+      "split": "development",
+      "familyId": "osf:file:64a59e4ea2a2f4140943711a:v1",
+      "selectionNotes": [
+        "Long clinical instrument bundle; dense tables, checkboxes, branching instructions, formula-like symbols.",
+        "Long heterogeneous academic/form layout; table and field geometry.",
+        "612 x 792 pts Letter"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "form",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "form",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "form",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 72,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "form",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 143,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "form",
+            "long-document"
+          ]
+        },
+        {
+          "pageNumber": 144,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "form",
+            "long-document"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "osf:file:686ffb54a56d843965a6c614:v1",
+      "path": "raw/osf/institutions/brown/projects/kafw5/phases-protocol-paper-1cb72ac3/008-686ffb54a56d843965a6c614-v1.pdf",
+      "sha256": "74e8ea267c4d1ec4fb1b2bfee29e7c6dd735e12c3bb023bb68bbbc008626fd92",
+      "pageCount": 44,
+      "split": "development",
+      "familyId": "osf:file:686ffb54a56d843965a6c614:v1",
+      "selectionNotes": [
+        "JMIR preprint; multi-column scholarly text, tables/diagrams, watermark, supplementary appendix.",
+        "Primary academic multi-column, figure, table case.",
+        "595.276 x 841.89 pts A4"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column"
+          ]
+        },
+        {
+          "pageNumber": 3,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column"
+          ]
+        },
+        {
+          "pageNumber": 22,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column"
+          ]
+        },
+        {
+          "pageNumber": 43,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column"
+          ]
+        },
+        {
+          "pageNumber": 44,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "multi-column"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "osf:file:69781018d1a6f1f26a8ef797:v1",
+      "path": "raw/osf/institutions/csusb/projects/wzyre/096-69781018d1a6f1f26a8ef797-v1.pdf",
+      "sha256": "1674d5296512ac565decc361810ea4ee0c412d442d25900125fbcf4753459383",
+      "pageCount": 1,
+      "split": "holdout",
+      "familyId": "osf:file:69781018d1a6f1f26a8ef797:v1",
+      "selectionNotes": [
+        "One-page workshop flyer with many logos/illustrations and small mixed text blocks.",
+        "Very short image-heavy document.",
+        "594.75 x 842.25 pts A4"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "osf:file:607883db0c818200885135da:v1",
+      "path": "raw/osf/institutions/cmu/projects/k6b4h/06-publications-9b49cfa0/191-607883db0c818200885135da-v1.pdf",
+      "sha256": "bdb9263fdefd2f132bcac084d7a6fbdba1f8f1f8c7cce7bfd2bb0dab616591b2",
+      "pageCount": 20,
+      "split": "development",
+      "familyId": "osf:file:607883db0c818200885135da:v1",
+      "selectionNotes": [
+        "Lightning-talk slide deck; sparse text and image backgrounds; page 10 effectively image-only.",
+        "Mixed raster/text slide geometry.",
+        "720 x 405 pts landscape"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "slides",
+            "landscape"
+          ]
+        },
+        {
+          "pageNumber": 10,
+          "labels": [
+            "image-only",
+            "mixed-raster-native",
+            "slides",
+            "landscape"
+          ]
+        },
+        {
+          "pageNumber": 20,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "slides",
+            "landscape"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "osf:file:6046e27ec7e7e6002f6ae7ee:v1",
+      "path": "raw/osf/institutions/cmu/projects/pfqsc/157-6046e27ec7e7e6002f6ae7ee-v1.pdf",
+      "sha256": "d8b294f4d99c2781deb51c71f06be2e5cd3ad24b893d62de81b6bd54706e721b",
+      "pageCount": 28,
+      "split": "development",
+      "familyId": "osf:file:6046e27ec7e7e6002f6ae7ee:v1",
+      "selectionNotes": [
+        "SAS-generated output; repeated statistical tables, aligned decimals, covariance estimates.",
+        "Clean table/number and formula-adjacent stress case.",
+        "612 x 792 pts Letter"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "dense-table"
+          ]
+        },
+        {
+          "pageNumber": 14,
+          "labels": [
+            "native-text",
+            "dense-table"
+          ]
+        },
+        {
+          "pageNumber": 28,
+          "labels": [
+            "native-text",
+            "dense-table"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "osf:file:6a74c836f0cba432843c7153:v1",
+      "path": "raw/osf/institutions/asu/projects/7f4a5/003-6a74c836f0cba432843c7153-v1.pdf",
+      "sha256": "d18f4cc61a5368a901f57e368f82a6c193b2b852d0ce3efbe4a63f15ed4ba48a",
+      "pageCount": 36,
+      "split": "development",
+      "familyId": "osf:file:6a74c836f0cba432843c7153:v1",
+      "selectionNotes": [
+        "Text-native undergraduate honors thesis with title page, hierarchy, citations and long-page flow.",
+        "Academic baseline with low image complexity.",
+        "612 x 792 pts Letter"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text"
+          ]
+        },
+        {
+          "pageNumber": 18,
+          "labels": [
+            "native-text"
+          ]
+        },
+        {
+          "pageNumber": 36,
+          "labels": [
+            "native-text"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "osf:file:670e77f61b29952574a5e7a2:v1",
+      "path": "raw/osf/institutions/bt/projects/qx48g/074-670e77f61b29952574a5e7a2-v1.pdf",
+      "sha256": "4926c7bdff7d56576ec2a045f139352048ee2c4ce9945fc64db271a7225beedd",
+      "pageCount": 148,
+      "split": "development",
+      "familyId": "osf:file:670e77f61b29952574a5e7a2:v1",
+      "selectionNotes": [
+        "Very long presentation with charts, photos and sparse text; page 74 had 1 extracted character and 4 images.",
+        "Long slide/raster fallback case.",
+        "960 x 540 pts landscape"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides",
+            "long-document",
+            "landscape"
+          ]
+        },
+        {
+          "pageNumber": 2,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides",
+            "long-document",
+            "landscape"
+          ]
+        },
+        {
+          "pageNumber": 74,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides",
+            "long-document",
+            "landscape"
+          ]
+        },
+        {
+          "pageNumber": 148,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "chart",
+            "slides",
+            "long-document",
+            "landscape"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "osf:file:67898081d49db8de10c0e4b5:v1",
+      "path": "raw/osf/institutions/bt/projects/3vb57/preprint-27085689/150-67898081d49db8de10c0e4b5-v1.pdf",
+      "sha256": "f4641d450a64f74f927c045b632966b8b03550865ad35cad54c3eaa7f75d5362",
+      "pageCount": 1,
+      "split": "holdout",
+      "familyId": "osf:file:67898081d49db8de10c0e4b5:v1",
+      "selectionNotes": [
+        "Confirmed image-only figure; single extraction character is an artefact.",
+        "Required explicit image-only page.",
+        "612 x 792 pts Letter"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "image-only",
+            "chart"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "osf:file:6826158a05236079589c42c3:v1",
+      "path": "raw/osf/institutions/bt/projects/3vb57/preprint-27085689/146-6826158a05236079589c42c3-v1.pdf",
+      "sha256": "50ceaee66564a9f22d1b01da1c2b4e4cba9225b9394ed5b33a800cf259a68125",
+      "pageCount": 27,
+      "split": "development",
+      "familyId": "family:nviq-preprint-27085689",
+      "selectionNotes": [
+        "Current NVIQ scholarly preprint; text-native sections, references and formula-like notation.",
+        "Academic equations/formula-like and multi-column flow.",
+        "612 x 792 pts Letter"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "multi-column",
+            "version-sibling"
+          ]
+        },
+        {
+          "pageNumber": 13,
+          "labels": [
+            "native-text",
+            "multi-column",
+            "version-sibling"
+          ]
+        },
+        {
+          "pageNumber": 27,
+          "labels": [
+            "native-text",
+            "multi-column",
+            "version-sibling"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "osf:file:6826162a05236079589c42d8:v1",
+      "path": "raw/osf/institutions/bt/projects/3vb57/preprint-27085689/previous-versions-9951a898/145-6826162a05236079589c42d8-v1.pdf",
+      "sha256": "8cd6656fbe0c901f68d1e2faf1321400548d0c9ee2276c3c4b81543c9fda6425",
+      "pageCount": 27,
+      "split": "development",
+      "familyId": "family:nviq-preprint-27085689",
+      "selectionNotes": [
+        "Previous NVIQ version in same project/preprint family; different content/hash.",
+        "Preserves project/version relationship for version-aware retrieval.",
+        "612 x 792 pts Letter"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "version-sibling"
+          ]
+        },
+        {
+          "pageNumber": 13,
+          "labels": [
+            "native-text",
+            "version-sibling"
+          ]
+        },
+        {
+          "pageNumber": 27,
+          "labels": [
+            "native-text",
+            "version-sibling"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "osf:file:67c9ea0bc0b41e91d8fd6c97:v1",
+      "path": "raw/osf/institutions/bt/projects/6kyfp/item-development-be570ea2/preprint-27085689/153-67c9ea0bc0b41e91d8fd6c97-v1.pdf",
+      "sha256": "c08dcdf0746b74aac65afce8b73be761ebd55f91eb91ed592f7b02fc3d4acd90",
+      "pageCount": 41,
+      "split": "holdout",
+      "familyId": "family:real-e-preprint-27085689",
+      "selectionNotes": [
+        "Current ReAL-E academic preprint with dense prose, table/figure material and Spearman-Brown formula.",
+        "Academic equations/formula and mixed text/figure case.",
+        "612 x 792 pts Letter"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "version-sibling"
+          ]
+        },
+        {
+          "pageNumber": 20,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "version-sibling"
+          ]
+        },
+        {
+          "pageNumber": 41,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "dense-table",
+            "chart",
+            "version-sibling"
+          ]
+        }
+      ]
+    },
+    {
+      "objectId": "osf:file:652d65a187852d06ada59245:v1",
+      "path": "raw/osf/institutions/bt/projects/6kyfp/item-development-be570ea2/preprint-27085689/previous-versions-27d8ffdc/154-652d65a187852d06ada59245-v1.pdf",
+      "sha256": "684bf3c1c5b67faedd67df928575be08b1cb8b81189c1a462f261f6378420334",
+      "pageCount": 57,
+      "split": "holdout",
+      "familyId": "family:real-e-preprint-27085689",
+      "selectionNotes": [
+        "Previous ReAL-E version; longer document and different page-level content.",
+        "Paired version-diff and long academic holdout.",
+        "612 x 792 pts Letter"
+      ],
+      "pages": [
+        {
+          "pageNumber": 1,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "version-sibling"
+          ]
+        },
+        {
+          "pageNumber": 28,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "version-sibling"
+          ]
+        },
+        {
+          "pageNumber": 57,
+          "labels": [
+            "native-text",
+            "mixed-raster-native",
+            "version-sibling"
+          ]
+        }
+      ]
+    }
+  ]
+}

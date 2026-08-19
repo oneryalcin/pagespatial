@@ -1,38 +1,18 @@
 import type { ParserAdapters } from './adapters.js';
-import { buildDiagnostics, resolveDiagnosticOptions, type DiagnosticOptions } from './diagnostics.js';
-import { pointBoxToRenderedBox, roundBox } from './geometry.js';
-import { createObservationId, createPageId } from './ids.js';
-import { associateNativeAndOcr, type AssociationOptions } from './merge.js';
-import { projectMarkdown } from './projection.js';
-import { buildSpatialRows } from './reading-order.js';
-import { inferSimpleYearValueRelations } from './relations.js';
-import { documentIdentitySchema, pageSpatialDocumentSchema, pageSpatialSchema } from './schema.js';
+import { resolveDiagnosticOptions, type DiagnosticOptions } from './diagnostics.js';
+import type { AssociationOptions } from './merge.js';
+import { assemblePageSpatial } from './page-parser.js';
+import { documentIdentitySchema, pageSpatialDocumentSchema } from './schema.js';
 import type {
   DocumentIdentity,
   DocumentSource,
   ExtractionProvenance,
-  NativeObservation,
-  NativeObservationInput,
-  NativePageResult,
-  NativePointObservationInput,
-  OcrObservation,
-  OcrObservationInput,
-  PageGeometry,
   PageSpatial,
   PageSpatialDocument
 } from './types.js';
 
-export interface BuildPageSpatialInput {
-  document: DocumentIdentity;
-  pageNumber: number;
-  geometry: PageGeometry;
-  nativeObservations: Array<NativeObservationInput | NativePointObservationInput>;
-  ocrObservations: OcrObservationInput[];
-  nativeMarkdown?: string;
-  provenance: ExtractionProvenance;
-  association?: AssociationOptions;
-  diagnostics?: DiagnosticOptions;
-}
+export { buildPageSpatial } from './page-parser.js';
+export type { BuildPageSpatialInput } from './page-parser.js';
 
 export interface ParseOptions {
   concurrency?: number;
@@ -42,151 +22,6 @@ export interface ParseOptions {
   association?: AssociationOptions;
   diagnostics?: DiagnosticOptions;
   runId?: string;
-}
-
-function normalizeNative(
-  document: DocumentIdentity,
-  pageNumber: number,
-  geometry: PageGeometry,
-  inputs: Array<NativeObservationInput | NativePointObservationInput>
-): NativeObservation[] {
-  for (const input of inputs) {
-    if (input.pageNumber !== pageNumber) {
-      throw new Error(`Native observation for page ${input.pageNumber} was supplied while building page ${pageNumber}.`);
-    }
-  }
-  const suppliedIds = inputs.flatMap((input) => input.id ? [input.id] : []);
-  if (new Set(suppliedIds).size !== suppliedIds.length) {
-    throw new Error(`Native adapter supplied duplicate observation IDs on page ${pageNumber}.`);
-  }
-  const duplicateCounts = new Map<string, number>();
-  return inputs
-    .filter((input) => input.text.trim())
-    .map((input) => {
-      const transformed = input.pointBox
-        ? pointBoxToRenderedBox(input.pointBox, geometry)
-        : { box: roundBox(input.box!), method: 'rendered-input-v1' as const };
-      const duplicateKey = `${input.text.normalize('NFKC')}|${transformed.box.join(',')}`;
-      const occurrence = duplicateCounts.get(duplicateKey) ?? 0;
-      duplicateCounts.set(duplicateKey, occurrence + 1);
-      const id = createObservationId({
-        documentSha256: document.sha256,
-        pageNumber,
-        source: 'native',
-        text: input.text,
-        box: transformed.box,
-        occurrence
-      });
-      return {
-        ...input,
-        id,
-        adapterId: input.id,
-        pageNumber,
-        text: input.text.trim(),
-        box: transformed.box,
-        pointBox: input.pointBox,
-        mcid: input.mcid ?? null,
-        structureRole: input.structureRole ?? null,
-        geometryMethod: transformed.method
-      };
-    });
-}
-
-function normalizeOcr(document: DocumentIdentity, pageNumber: number, inputs: OcrObservationInput[]): OcrObservation[] {
-  for (const input of inputs) {
-    if (input.pageNumber !== pageNumber) {
-      throw new Error(`OCR observation for page ${input.pageNumber} was supplied while building page ${pageNumber}.`);
-    }
-  }
-  const suppliedIds = inputs.flatMap((input) => input.id ? [input.id] : []);
-  if (new Set(suppliedIds).size !== suppliedIds.length) {
-    throw new Error(`OCR adapter supplied duplicate observation IDs on page ${pageNumber}.`);
-  }
-  const duplicateCounts = new Map<string, number>();
-  return inputs
-    .filter((input) => input.text.trim())
-    .map((input) => {
-      const box = roundBox(input.box);
-      const duplicateKey = `${input.text.normalize('NFKC')}|${box.join(',')}`;
-      const occurrence = duplicateCounts.get(duplicateKey) ?? 0;
-      duplicateCounts.set(duplicateKey, occurrence + 1);
-      return {
-        ...input,
-        id: createObservationId({
-          documentSha256: document.sha256,
-          pageNumber,
-          source: 'ocr',
-          text: input.text,
-          box,
-          occurrence
-        }),
-        adapterId: input.id,
-        pageNumber,
-        text: input.text.trim(),
-        box,
-        confidence: Math.max(0, Math.min(1, input.confidence))
-      };
-    });
-}
-
-export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
-  documentIdentitySchema.parse(input.document);
-  if (input.pageNumber < 1 || input.pageNumber > input.document.pageCount) {
-    throw new Error(`Page ${input.pageNumber} is outside document page count ${input.document.pageCount}.`);
-  }
-  const pageId = createPageId(input.document.sha256, input.pageNumber);
-  const nativeObservations = normalizeNative(input.document, input.pageNumber, input.geometry, input.nativeObservations);
-  const ocrObservations = normalizeOcr(input.document, input.pageNumber, input.ocrObservations);
-  const association = associateNativeAndOcr(nativeObservations, ocrObservations, input.association);
-  const spatialRows = buildSpatialRows(ocrObservations);
-  const derivedRelations = inferSimpleYearValueRelations(pageId, ocrObservations);
-  const diagnostics = buildDiagnostics({
-    nativeObservations,
-    ocrObservations,
-    sourceMatches: association.sourceMatches,
-    conflicts: association.conflicts,
-    derivedRelations,
-    options: input.diagnostics
-  });
-  const projection = projectMarkdown({
-    pageNumber: input.pageNumber,
-    nativeObservations,
-    ocrObservations,
-    sourceMatches: association.sourceMatches,
-    spatialRows,
-    derivedRelations,
-    nativeMarkdown: input.nativeMarkdown
-  });
-
-  const page: PageSpatial = {
-    schemaVersion: '0.1.0',
-    documentId: input.document.documentId,
-    revisionId: input.document.revisionId,
-    documentSha256: input.document.sha256,
-    pageId,
-    pageNumber: input.pageNumber,
-    geometry: input.geometry,
-    nativeObservations,
-    ocrObservations,
-    nativeLines: association.nativeLines,
-    sourceMatches: association.sourceMatches,
-    conflicts: association.conflicts,
-    spatialRows,
-    derivedRelations,
-    diagnostics,
-    projection,
-    provenance: input.provenance
-  };
-  return pageSpatialSchema.parse(page) as PageSpatial;
-}
-
-function mergeGeometry(nativePage: NativePageResult | undefined, rendered: PageGeometry): PageGeometry {
-  return {
-    ...nativePage?.geometry,
-    ...rendered,
-    width: rendered.width,
-    height: rendered.height
-  };
 }
 
 function documentDiagnostics(pages: readonly PageSpatial[]): PageSpatialDocument['diagnostics'] {
@@ -255,6 +90,9 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
               const nativePage = nativeResult.value;
               const rendered = renderedResult.value;
               try {
+                // Preserve the adapter call boundary: invalid native/rendered
+                // results must fail before OCR starts. assemblePageSpatial
+                // repeats these guards for direct evaluation-harness callers.
                 if (nativePage.pageNumber !== pageNumber) {
                   throw new Error(`Native adapter returned page ${nativePage.pageNumber} while parsing page ${pageNumber}.`);
                 }
@@ -267,38 +105,22 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
                   throw new Error(`Renderer returned page ${rendered.pageNumber} while parsing page ${pageNumber}.`);
                 }
                 const ocr = await adapters.ocr.recognize(rendered, { signal: controller.signal });
-                if (ocr.pageNumber !== pageNumber) {
-                  throw new Error(`OCR adapter returned page ${ocr.pageNumber} while parsing page ${pageNumber}.`);
-                }
-                for (const observation of ocr.observations) {
-                  if (observation.pageNumber !== pageNumber) {
-                    throw new Error(`OCR page ${pageNumber} contains an observation for page ${observation.pageNumber}.`);
-                  }
-                }
                 abortIfNeeded(controller.signal);
-                const provenance: ExtractionProvenance = {
-                  parserName: 'pagespatial',
-                  parserVersion: '0.1.0',
+                const page = assemblePageSpatial({
+                  document,
+                  pageNumber,
+                  nativePage,
+                  renderedPage: rendered,
+                  ocrPage: ocr,
                   runId,
-                  createdAt: new Date().toISOString(),
                   nativeAdapter: `${adapters.native.name}@${adapters.native.version}`,
                   renderer: `${adapters.renderer.name}@${adapters.renderer.version}`,
                   ocrAdapter: `${adapters.ocr.name}@${adapters.ocr.version}`,
-                  backend: ocr.backend,
                   configuration: {
                     renderScale,
                     concurrency,
                     diagnosticPolicy: resolveDiagnosticOptions(options.diagnostics)
-                  }
-                };
-                const page = buildPageSpatial({
-                  document,
-                  pageNumber,
-                  geometry: mergeGeometry(nativePage, rendered.geometry),
-                  nativeObservations: nativePage.observations,
-                  ocrObservations: ocr.observations,
-                  nativeMarkdown: nativePage.markdown,
-                  provenance,
+                  },
                   association: options.association,
                   diagnostics: options.diagnostics
                 });

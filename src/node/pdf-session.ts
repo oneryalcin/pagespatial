@@ -29,7 +29,12 @@ export async function openNodePdfSession(input: Uint8Array | ArrayBuffer, option
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) throw new Error('maxBytes must be a positive safe integer.');
   if (input.byteLength > maxBytes) throw new Error(`PDF is ${input.byteLength} bytes; limit is ${maxBytes}.`);
-  const bytes = input instanceof Uint8Array ? input.slice() : new Uint8Array(input.slice(0));
+  const view = input instanceof Uint8Array ? input : new Uint8Array(input);
+  // Buffer is a Uint8Array subclass whose slice() remains a Buffer. PDF.js
+  // rejects Buffer even when the public contract accepts Uint8Array, so always
+  // copy into a plain Uint8Array.
+  const bytes = new Uint8Array(view.byteLength);
+  bytes.set(view);
   if (bytes.byteLength > maxBytes) throw new Error(`PDF is ${bytes.byteLength} bytes; limit is ${maxBytes}.`);
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const loadingTask = pdfjs.getDocument({ data: bytes.slice() });

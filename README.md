@@ -2,7 +2,7 @@
 
 PageSpatial gives every PDF page a durable evidence record: what the native parser found, what OCR found, where each item appears, and where the sources agree or conflict. It does not reduce the source document immediately to Markdown.
 
-Status: experimental parser and adapter stack. The browser path is implemented and ready for corpus evaluation. It is not yet production-qualified.
+Status: experimental parser and adapter stack. A private, development-only corpus harness is implemented. It is not yet production-qualified.
 
 ## Core rule
 
@@ -70,7 +70,7 @@ TypeScript owns the public SDK, canonical schemas, orchestration, deterministic 
 - A server GPU adapter implementation.
 - Production persistence, access control, or revision storage.
 - General table reconstruction or complex chart interpretation.
-- A sealed, representative evaluation corpus.
+- Independent gold labels for the private evaluation corpus.
 
 These boundaries are intentional. Root imports remain runtime-neutral. Browser and Node integrations are separate subpath exports.
 
@@ -280,6 +280,26 @@ Current retained evidence:
 - Inspector's Markdown still made one row-boundary error. Numeric preservation and table-relationship accuracy therefore remain separate gates.
 
 These are feasibility results, not production qualification. See the [dense financial table trial](docs/trials/2026-08-19-dense-financial-table-recovery.md) and the [production evaluation rubric](docs/evaluation-rubric.md).
+
+## Development corpus baseline
+
+The repository includes a manifest and runner for the private `oneryalcin/enterprise-document-landfill` dataset. It runs PDF Inspector and PP-OCRv6 Tiny on the same 162 nominated development pages, then assembles one source-preserving PageSpatial record per page. The 13 candidate holdout documents cannot be selected or downloaded by these commands.
+
+```sh
+# Inspect the exact 23 development paths without network or filesystem writes.
+npm run eval:corpus:dry-run
+
+# Authenticate with `hf`, download exact files at the pinned revision, and verify SHA-256.
+npm run eval:corpus:materialize
+
+# Prepare hash-verified local OCR assets, then run the development baseline.
+npm run eval:ocr-assets
+npm run eval:baseline -- --backend webgpu
+```
+
+PDFs, OCR assets, outputs, caches, and logs remain under `.evaluation/`, which is excluded from Git and npm packages. Use a fixed backend for reproducible resume; `auto` deliberately reruns pages because its actual provider can change. Gold-dependent metrics are explicitly `not_evaluated`. Association coverage is only a parser diagnostic. See [Development corpus evaluation](docs/evaluation-corpus.md).
+
+The runner retains immutable page attempts and invocation summaries, records browser and hardware context, and generates a text-free public aggregate from a verified content-hash chain. Corpus results are published only after a run from a clean implementation commit.
 
 ## Development
 
