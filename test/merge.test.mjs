@@ -108,3 +108,12 @@ test('observation IDs are stable when distinct adapter records are reordered', (
   const ids = (page) => Object.fromEntries(page.ocrObservations.map((item) => [item.text, item.id]));
   assert.deepEqual(ids(forward), ids(reverse));
 });
+
+test('association rejects unsafe bucket and threshold configuration', () => {
+  for (const bucketSize of [0, Number.NaN, Number.POSITIVE_INFINITY, 4097]) {
+    assert.throws(() => associateNativeAndOcr([], [], { bucketSize }), /bucketSize/);
+  }
+  for (const option of ['minimumTextSimilarity', 'minimumGeometryOverlap']) {
+    assert.throws(() => associateNativeAndOcr([], [], { [option]: 1.1 }), new RegExp(option));
+  }
+});

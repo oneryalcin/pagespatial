@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { degrees, PDFDocument, StandardFonts } from 'pdf-lib';
 globalThis.DOMMatrix ??= class DOMMatrix {};
 globalThis.ImageData ??= class ImageData {};
 globalThis.Path2D ??= class Path2D {};
@@ -11,6 +12,7 @@ const {
   pdfJsNativeAdapter
 } = await import('../dist/browser/index.js');
 const { createPdfInspectorNativeAdapter, openNodePdfSession } = await import('../dist/node/pdf-inspector.js');
+const { buildPageSpatial, pointBoxToRenderedBox } = await import('../dist/index.js');
 
 function simplePdf() {
   const content = 'BT /F1 12 Tf 72 720 Td (Hello PageSpatial) Tj ET';
@@ -103,31 +105,74 @@ test('Node PDF session cannot return an in-flight page after disposal starts', a
   await disposal;
 });
 
-test('Firecrawl PDF Inspector rejects unproven crop and rotation coordinate modes', async () => {
-  for (const mode of ['crop', 'rotation']) {
-    const session = await openNodePdfSession(simplePdf(), { maxPages: 1 });
-    const original = session.getPage.bind(session);
-    session.getPage = async (...args) => {
-      const page = await original(...args);
-      return new Proxy(page, {
-        get(target, property) {
-          if (property === 'view' && mode === 'crop') return [10, 20, 602, 772];
-          if (property === 'getViewport' && mode === 'rotation') {
-            return (options) => ({ ...target.getViewport(options), rotation: 90 });
-          }
-          const value = Reflect.get(target, property, target);
-          return typeof value === 'function' ? value.bind(target) : value;
-        }
-      });
-    };
-    try {
-      await assert.rejects(
-        () => createPdfInspectorNativeAdapter().extractPage(session.source, 1),
-        mode === 'crop' ? /cropped or shifted page/ : /rotated page/
-      );
-    } finally {
-      await session.dispose();
+test('composite native adapter uses PDF.js geometry for real quarter-turn pages', async () => {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  for (const rotation of [0, 90, 180, 270]) {
+    const page = pdf.addPage([200, 300]);
+    page.setRotation(degrees(rotation));
+    page.drawText(`Rotation ${rotation}`, { x: 30, y: 240, size: 12, font });
+  }
+  const session = await openNodePdfSession(await pdf.save(), { maxPages: 4 });
+  try {
+    const adapter = createPdfInspectorNativeAdapter();
+    for (const [index, rotation] of [0, 90, 180, 270].entries()) {
+      const pageNumber = index + 1;
+      const native = await adapter.extractPage(session.source, pageNumber);
+      const page = await session.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: 1.6 });
+      assert.equal(native.geometry.rotation, rotation);
+      assert.match(native.markdown, new RegExp(`Rotation ${rotation}`));
+      for (const observation of native.observations) {
+        const transformed = pointBoxToRenderedBox(observation.pointBox, {
+          ...native.geometry,
+          width: Math.ceil(viewport.width),
+          height: Math.ceil(viewport.height),
+          viewportTransform: viewport.transform
+        });
+        assert.ok(transformed.box[0] >= 0 && transformed.box[1] >= 0);
+        assert.ok(transformed.box[2] <= Math.ceil(viewport.width));
+        assert.ok(transformed.box[3] <= Math.ceil(viewport.height));
+      }
     }
+  } finally {
+    await session.dispose();
+  }
+});
+
+test('coincident native overlays remain source evidence but appear once in derived text', async () => {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const page = pdf.addPage([200, 200]);
+  for (let index = 0; index < 3; index += 1) page.drawText('11', { x: 100, y: 20, size: 10, font });
+  const session = await openNodePdfSession(await pdf.save(), { maxPages: 1 });
+  try {
+    const native = await createPdfInspectorNativeAdapter().extractPage(session.source, 1);
+    const proxy = await session.getPage(1);
+    const viewport = proxy.getViewport({ scale: 1.6 });
+    const pageSpatial = buildPageSpatial({
+      document: session.source.identity,
+      pageNumber: 1,
+      geometry: {
+        ...native.geometry,
+        width: Math.ceil(viewport.width),
+        height: Math.ceil(viewport.height),
+        viewportTransform: viewport.transform
+      },
+      nativeObservations: native.observations,
+      ocrObservations: [],
+      nativeMarkdown: native.markdown,
+      provenance: { parserName: 'test', parserVersion: '1', runId: 'run', createdAt: new Date(0).toISOString() }
+    });
+    const overlays = pageSpatial.nativeObservations.filter((item) => item.text === '11');
+    assert.equal(overlays.length, 3);
+    assert.equal(new Set(overlays.map((item) => item.box.join(','))).size, 1);
+    const line = pageSpatial.nativeLines.find((item) => item.sourceIds.some((id) => overlays.some((overlay) => overlay.id === id)));
+    assert.equal(line.text, '11');
+    assert.equal(line.sourceIds.length, 3);
+    assert.equal(pageSpatial.projection.markdown.match(/\b11\b/gu)?.length, 1);
+  } finally {
+    await session.dispose();
   }
 });
 

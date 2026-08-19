@@ -1,7 +1,7 @@
 import type { ParserAdapters } from './adapters.js';
 import { resolveDiagnosticOptions, type DiagnosticOptions } from './diagnostics.js';
 import type { AssociationOptions } from './merge.js';
-import { assemblePageSpatial } from './page-parser.js';
+import { assemblePageSpatial, validateNativePageGeometry } from './page-parser.js';
 import { documentIdentitySchema, pageSpatialDocumentSchema } from './schema.js';
 import type {
   DocumentIdentity,
@@ -104,6 +104,7 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
                 if (rendered.pageNumber !== pageNumber) {
                   throw new Error(`Renderer returned page ${rendered.pageNumber} while parsing page ${pageNumber}.`);
                 }
+                validateNativePageGeometry(pageNumber, nativePage, rendered);
                 const ocr = await adapters.ocr.recognize(rendered, { signal: controller.signal });
                 abortIfNeeded(controller.signal);
                 const page = assemblePageSpatial({

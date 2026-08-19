@@ -33,12 +33,20 @@ export function buildNativeLines(observations: readonly NativeObservation[]): Na
 
   return groups.map((group, index) => {
     const items = group.items.sort((left, right) => left.box[0] - right.box[0]);
+    const visualItems: NativeObservation[] = [];
+    const seenVisuals = new Set<string>();
+    for (const item of items) {
+      const key = `${item.text.normalize('NFKC')}|${item.box.join(',')}`;
+      if (seenVisuals.has(key)) continue;
+      seenVisuals.add(key);
+      visualItems.push(item);
+    }
     const box = unionBoxes(items.map((item) => item.box));
     if (!box) throw new Error('Native line has no geometry.');
     return {
       id: `${items[0]!.id}:line:${index}`,
       pageNumber: items[0]!.pageNumber,
-      text: items.map((item) => item.text).join(' ').replace(/\s+/g, ' ').trim(),
+      text: visualItems.map((item) => item.text).join(' ').replace(/\s+/g, ' ').trim(),
       sourceIds: items.map((item) => item.id),
       box
     };
@@ -76,4 +84,3 @@ export function buildSpatialRows(observations: readonly OcrObservation[]): Spati
       };
     });
 }
-

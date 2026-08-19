@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
+import type { TextItem } from 'pdfjs-dist/types/src/display/api.js';
 import type { NativePageAdapter } from '../adapters.js';
-import type { NativePointObservationInput } from '../types.js';
+import { pdfJsPageMarkdown, pdfJsTextObservations, type PdfJsTextMetadata } from '../pdfjs-text.js';
 import { openNodePdfSession, type NodePdfSession, type NodePdfSessionOptions } from './pdf-session.js';
 
 interface InspectorTextItem {
@@ -44,6 +45,10 @@ function abortIfNeeded(signal?: AbortSignal): void {
   if (signal?.aborted) throw signal.reason ?? new DOMException('The operation was aborted.', 'AbortError');
 }
 
+function textKey(text: string): string {
+  return text.normalize('NFKC').replace(/\s+/gu, '');
+}
+
 export function createPdfInspectorNativeAdapter(options: PdfInspectorAdapterOptions = {}): NativePageAdapter<NodePdfSession> {
   const cache = new WeakMap<NodePdfSession, Promise<InspectorExtraction>>();
 
@@ -71,8 +76,8 @@ export function createPdfInspectorNativeAdapter(options: PdfInspectorAdapterOpti
   };
 
   return {
-    name: 'firecrawl-pdf-inspector-native',
-    version: '1.14.2',
+    name: 'pdf-inspector-markdown-pdfjs-geometry',
+    version: '1.14.2+pdfjs.5.5.207',
     async extractPage(source, pageNumber, extractOptions) {
       abortIfNeeded(extractOptions?.signal);
       const [page, extraction] = await Promise.all([
@@ -80,45 +85,54 @@ export function createPdfInspectorNativeAdapter(options: PdfInspectorAdapterOpti
         extract(source.data)
       ]);
       abortIfNeeded(extractOptions?.signal);
+      const content = await page.getTextContent();
+      abortIfNeeded(extractOptions?.signal);
       const viewport = page.getViewport({ scale: 1 });
-      if (viewport.rotation % 360 !== 0) {
-        throw new Error(`PDF Inspector native geometry for rotated page ${pageNumber} is not enabled until a real rotated fixture passes conformance.`);
-      }
       const [viewX0, viewY0, viewX1, viewY1] = page.view;
-      if (![viewX0, viewY0, viewX1, viewY1].every(Number.isFinite)) throw new Error('PDF.js returned invalid page bounds.');
-      if (viewX0 !== 0 || viewY0 !== 0) {
-        throw new Error(`PDF Inspector native geometry for cropped or shifted page ${pageNumber} is not enabled until a real fixture passes conformance.`);
+      if (![viewX0, viewY0, viewX1, viewY1].every(Number.isFinite) || viewX1! <= viewX0! || viewY1! <= viewY0!) {
+        throw new Error('PDF.js returned invalid page bounds.');
       }
       const roleByMcid = new Map(
         extraction.structure
           .filter((entry) => entry.page === pageNumber)
           .map((entry) => [entry.mcid, entry.role])
       );
-      const observations: NativePointObservationInput[] = extraction.textItems
-        .filter((item) => item.page === pageNumber && item.itemType === 'Text' && item.text.trim())
-        .map((item, index) => ({
-          id: `pdf-inspector:${pageNumber}:${index}`,
-          pageNumber,
-          text: item.text,
-          pointBox: [
-            item.x,
-            item.y,
-            item.x + item.width,
-            item.y + item.height
-          ],
-          mcid: item.mcid ?? null,
-          structureRole: item.mcid === undefined ? null : roleByMcid.get(item.mcid) ?? null,
-          font: item.font,
-          fontSize: item.fontSize,
-          isBold: item.isBold,
-          isItalic: item.isItalic
-        }));
-      const markdown = extraction.markdownPages.find((candidate) => candidate.page === pageNumber - 1)?.markdown ?? '';
+      const inspectorByText = new Map<string, InspectorTextItem[]>();
+      for (const item of extraction.textItems) {
+        if (item.page !== pageNumber || item.itemType !== 'Text' || !item.text.trim()) continue;
+        const key = textKey(item.text);
+        inspectorByText.set(key, [...(inspectorByText.get(key) ?? []), item]);
+      }
+      const items = content.items.filter((item): item is TextItem => 'str' in item && Boolean(item.str.trim()));
+      const pdfTextCounts = new Map<string, number>();
+      for (const item of items) {
+        const key = textKey(item.str);
+        pdfTextCounts.set(key, (pdfTextCounts.get(key) ?? 0) + 1);
+      }
+      const observations = pdfJsTextObservations(items, pageNumber, (item): PdfJsTextMetadata | undefined => {
+        const key = textKey(item.str);
+        const candidates = inspectorByText.get(key);
+        const matched = pdfTextCounts.get(key) === 1 && candidates?.length === 1 ? candidates[0] : undefined;
+        if (!matched) return undefined;
+        return {
+          mcid: matched.mcid ?? null,
+          structureRole: matched.mcid === undefined ? null : roleByMcid.get(matched.mcid) ?? null,
+          font: matched.font,
+          fontSize: matched.fontSize,
+          isBold: matched.isBold,
+          isItalic: matched.isItalic
+        };
+      });
+      const visualKeys = observations.map((observation) => `${observation.text.normalize('NFKC')}|${observation.pointBox.join(',')}`);
+      const hasCoincidentOverlay = new Set(visualKeys).size !== visualKeys.length;
+      const inspectorMarkdown = extraction.markdownPages.find((candidate) => candidate.page === pageNumber - 1)?.markdown ?? '';
+      const markdown = hasCoincidentOverlay || !inspectorMarkdown.trim() ? pdfJsPageMarkdown(items) : inspectorMarkdown;
       return {
         pageNumber,
         geometry: {
-          pointWidth: viewport.width,
-          pointHeight: viewport.height,
+          pointBounds: [viewX0!, viewY0!, viewX1!, viewY1!],
+          pointWidth: viewX1! - viewX0!,
+          pointHeight: viewY1! - viewY0!,
           rotation: viewport.rotation
         },
         observations,

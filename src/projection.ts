@@ -1,4 +1,5 @@
-import type { DerivedRelation, NativeObservation, OcrObservation, PageProjection, SourceMatch, SpatialRow } from './types.js';
+import type { DerivedRelation, NativeLine, NativeObservation, OcrObservation, PageProjection, SourceMatch, SpatialRow } from './types.js';
+import { buildNativeLines } from './reading-order.js';
 
 function evidenceComment(input: {
   pageNumber: number;
@@ -14,12 +15,14 @@ function evidenceComment(input: {
 export function projectMarkdown(input: {
   pageNumber: number;
   nativeObservations: readonly NativeObservation[];
+  nativeLines?: readonly NativeLine[];
   ocrObservations: readonly OcrObservation[];
   sourceMatches: readonly SourceMatch[];
   spatialRows: readonly SpatialRow[];
   derivedRelations: readonly DerivedRelation[];
   nativeMarkdown?: string;
 }): PageProjection {
+  const nativeLines = input.nativeLines ?? buildNativeLines(input.nativeObservations);
   const matchedOcr = new Set(input.sourceMatches.map((match) => match.ocrId));
   const recoveredRows = input.spatialRows.filter((row) => row.sourceIds.some((id) => !matchedOcr.has(id)));
   const sections: string[] = [`# Page ${input.pageNumber}`];
@@ -50,9 +53,15 @@ export function projectMarkdown(input: {
   if (input.nativeMarkdown?.trim()) {
     sections.push('## Native structure reference');
     sections.push(input.nativeMarkdown.trim());
-  } else if (input.nativeObservations.length) {
+  } else if (nativeLines.length) {
     sections.push('## Native observations');
-    sections.push(input.nativeObservations.map((observation) => observation.text).join('\n\n'));
+    sections.push(nativeLines.map((line) => `${evidenceComment({
+      pageNumber: input.pageNumber,
+      sourceIds: line.sourceIds,
+      box: line.box,
+      confidence: null,
+      derived: false
+    })}\n${line.text}`).join('\n\n'));
   }
 
   if (!input.nativeObservations.length && !recoveredRows.length) {

@@ -48,7 +48,7 @@ PageSpatial combines native parsing and OCR; it does not select one as the sourc
 | Runtime | Native source | Visual source | Operational behavior |
 | --- | --- | --- | --- |
 | Browser | Shared PDF.js session | PP-OCRv6 Tiny over every rendered page | Progressive page completion; one serialized OCR engine; WebGPU with sticky WASM fallback |
-| Node/server | PDF Inspector when its Markdown is useful, or another page-native adapter | PP-OCR or a benchmarked GPU OCR adapter | Inspector performs one cached whole-document native pass; rendering and OCR remain independently replaceable |
+| Node/server | PDF Inspector Markdown and unambiguous metadata over PDF.js text geometry, or another page-native adapter | PP-OCR or a benchmarked GPU OCR adapter | Inspector performs one cached whole-document pass; rendering and OCR remain independently replaceable |
 
 Raw native and OCR observations survive even when they match. A successful association reduces duplication in projections; it does not delete either source. If one extractor misses chart text, a scanned region, or a split financial value, the other source can recover it. If the sources materially disagree, diagnostics must escalate instead of silently choosing one.
 
@@ -62,7 +62,7 @@ Adapter-supplied IDs are retained only as provenance. They must be unique within
 
 ## Coordinates
 
-Rendered top-left pixels are the canonical display coordinate system. Native PDF-point rectangles use the renderer's complete six-value viewport transform. All four corners are transformed so rotation, translation, crop-box shifts, and scale are retained.
+Rendered top-left pixels are the canonical display coordinate system. Native PDF-point rectangles use PDF.js text-item transforms plus the renderer's complete six-value viewport transform. All four corners are transformed so rotation, translation, crop-box shifts, and scale are retained. The PDF user-space bounds (`page.view`) are retained as `pointBounds`; geometry is rejected if the viewport matrix does not map those bounds to the rendered page.
 
 ## Validation contract
 
@@ -96,7 +96,7 @@ Backend policy is explicit:
 3. On initialization mismatch or the first prediction failure, dispose it and retry once with WASM.
 4. Keep WASM sticky for that adapter lifetime.
 
-The Node PDF Inspector adapter is optional. It is the PDF engine used by AnyDoc and provides page Markdown, positioned text, and tagged structure roles. `openNodePdfSession()` provides bytes, identity, page geometry, and cached page proxies; rendering and OCR remain caller-selected adapters. PDF Inspector currently extracts the full native document once, so it is not the default browser path and must be benchmarked on large documents. Its native geometry rejects rotated, cropped, and shifted pages until retained real fixtures prove each coordinate convention; use another native adapter for those pages.
+The Node PDF Inspector adapter is optional. It is the PDF engine used by AnyDoc and provides page Markdown and tagged structure metadata. `openNodePdfSession()` provides bytes, identity, cached page proxies, PDF.js text observations, and canonical page bounds; rendering and OCR remain caller-selected adapters. PDF Inspector currently extracts the full document once, so it is not the default browser path and must be benchmarked on large documents. PDF Inspector rectangles are not used as geometry because they omit the full per-item orientation matrix. Metadata is joined only for unambiguous one-to-one normalized text; ambiguous repeats remain unenriched.
 
 ## Resource ownership
 

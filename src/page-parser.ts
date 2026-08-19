@@ -1,5 +1,5 @@
 import { buildDiagnostics, type DiagnosticOptions } from './diagnostics.js';
-import { pointBoxToRenderedBox, roundBox } from './geometry.js';
+import { assertBoxWithin, assertPageGeometry, pointBounds, pointBoxToRenderedBox, roundBox } from './geometry.js';
 import { createObservationId, createPageId } from './ids.js';
 import { associateNativeAndOcr, type AssociationOptions } from './merge.js';
 import { projectMarkdown } from './projection.js';
@@ -141,14 +141,50 @@ function normalizeOcr(document: DocumentIdentity, pageNumber: number, inputs: Oc
     });
 }
 
+function assertPolygonMatchesBox(
+  polygon: readonly (readonly [number, number])[] | undefined,
+  box: readonly [number, number, number, number],
+  geometry: PageGeometry,
+  label: string
+): void {
+  assertBoxWithin(box, [0, 0, geometry.width, geometry.height], label);
+  if (!polygon) return;
+  if (polygon.length < 3) throw new Error(`${label} polygon must contain at least three points.`);
+  const xs = polygon.map((point) => point[0]);
+  const ys = polygon.map((point) => point[1]);
+  if (polygon.some((point) => !Number.isFinite(point[0]) || !Number.isFinite(point[1]))) {
+    throw new Error(`${label} polygon contains a non-finite point.`);
+  }
+  const envelope = roundBox([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
+  assertBoxWithin(envelope, [0, 0, geometry.width, geometry.height], `${label} polygon`);
+  if (envelope.some((value, index) => Math.abs(value - box[index]!) > 0.01)) {
+    throw new Error(`${label} polygon does not match its evidence box.`);
+  }
+}
+
+function validateNormalizedGeometry(
+  geometry: PageGeometry,
+  nativeObservations: readonly NativeObservation[],
+  ocrObservations: readonly OcrObservation[]
+): void {
+  for (const observation of nativeObservations) {
+    assertPolygonMatchesBox(observation.polygon, observation.box, geometry, 'Native observation');
+  }
+  for (const observation of ocrObservations) {
+    assertPolygonMatchesBox(observation.polygon, observation.box, geometry, 'OCR observation');
+  }
+}
+
 export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
   documentIdentitySchema.parse(input.document);
   if (input.pageNumber < 1 || input.pageNumber > input.document.pageCount) {
     throw new Error(`Page ${input.pageNumber} is outside document page count ${input.document.pageCount}.`);
   }
+  assertPageGeometry(input.geometry);
   const pageId = createPageId(input.document.sha256, input.pageNumber);
   const nativeObservations = normalizeNative(input.document, input.pageNumber, input.geometry, input.nativeObservations);
   const ocrObservations = normalizeOcr(input.document, input.pageNumber, input.ocrObservations);
+  validateNormalizedGeometry(input.geometry, nativeObservations, ocrObservations);
   const association = associateNativeAndOcr(nativeObservations, ocrObservations, input.association);
   const spatialRows = buildSpatialRows(ocrObservations);
   const derivedRelations = inferSimpleYearValueRelations(pageId, ocrObservations);
@@ -163,6 +199,7 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
   const projection = projectMarkdown({
     pageNumber: input.pageNumber,
     nativeObservations,
+    nativeLines: association.nativeLines,
     ocrObservations,
     sourceMatches: association.sourceMatches,
     spatialRows,
@@ -201,6 +238,49 @@ function mergeGeometry(nativePage: NativePageResult, rendered: PageGeometry): Pa
   };
 }
 
+function assertCoordinateBasisAgreement(nativePage: NativePageResult, rendered: PageGeometry): void {
+  if (!nativePage.observations.some((observation) => observation.pointBox)) return;
+  const nativeBounds = pointBounds(nativePage.geometry);
+  const renderedBounds = pointBounds(rendered);
+  if (!nativeBounds || !renderedBounds) return;
+  const agrees = nativeBounds.every((value, index) => {
+    const other = renderedBounds[index]!;
+    return Math.abs(value - other) <= Math.max(1, Math.abs(value), Math.abs(other)) * 1e-6;
+  });
+  if (!agrees) {
+    throw new Error('Native and rendered PDF point bounds do not describe the same coordinate basis.');
+  }
+}
+
+export function validateNativePageGeometry(
+  pageNumber: number,
+  nativePage: NativePageResult,
+  renderedPage: Pick<RenderedPage, 'pageNumber' | 'geometry'>
+): PageGeometry {
+  if (nativePage.pageNumber !== pageNumber || renderedPage.pageNumber !== pageNumber) {
+    throw new Error('Native and rendered page identities must match before geometry validation.');
+  }
+  assertCoordinateBasisAgreement(nativePage, renderedPage.geometry);
+  const geometry = mergeGeometry(nativePage, renderedPage.geometry);
+  assertPageGeometry(geometry);
+  const suppliedIds = nativePage.observations.flatMap((observation) => observation.id ? [observation.id] : []);
+  if (new Set(suppliedIds).size !== suppliedIds.length) {
+    throw new Error(`Native adapter supplied duplicate observation IDs on page ${pageNumber}.`);
+  }
+  for (const observation of nativePage.observations) {
+    if (observation.pageNumber !== pageNumber) {
+      throw new Error(`Native page ${pageNumber} contains an observation for page ${observation.pageNumber}.`);
+    }
+    if (observation.pointBox) {
+      if (observation.polygon) throw new Error('Native point observations cannot carry an undeclared polygon coordinate space.');
+      pointBoxToRenderedBox(observation.pointBox, geometry);
+    } else {
+      assertPolygonMatchesBox(observation.polygon, roundBox(observation.box!), geometry, 'Native observation');
+    }
+  }
+  return geometry;
+}
+
 function assertPageResultIdentity(input: AssemblePageSpatialInput): void {
   const { pageNumber, nativePage, renderedPage, ocrPage } = input;
   if (nativePage.pageNumber !== pageNumber) {
@@ -226,6 +306,7 @@ function assertPageResultIdentity(input: AssemblePageSpatialInput): void {
 
 export function assemblePageSpatial(input: AssemblePageSpatialInput): PageSpatial {
   assertPageResultIdentity(input);
+  const geometry = validateNativePageGeometry(input.pageNumber, input.nativePage, input.renderedPage);
   const provenance: ExtractionProvenance = {
     parserName: 'pagespatial',
     parserVersion: '0.1.0',
@@ -240,7 +321,7 @@ export function assemblePageSpatial(input: AssemblePageSpatialInput): PageSpatia
   return buildPageSpatial({
     document: input.document,
     pageNumber: input.pageNumber,
-    geometry: mergeGeometry(input.nativePage, input.renderedPage.geometry),
+    geometry,
     nativeObservations: input.nativePage.observations,
     ocrObservations: input.ocrPage.observations,
     nativeMarkdown: input.nativePage.markdown,

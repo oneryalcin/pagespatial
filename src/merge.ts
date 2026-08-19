@@ -48,6 +48,17 @@ export function associateNativeAndOcr(
   const minimumGeometry = options.minimumGeometryOverlap ?? 0.12;
   const criticalText = options.criticalCandidateTextSimilarity ?? 0.5;
   const criticalGeometry = options.criticalCandidateGeometryOverlap ?? 0.45;
+  if (!Number.isFinite(bucketSize) || bucketSize < 1 || bucketSize > 4096) {
+    throw new Error('Association bucketSize must be between 1 and 4096.');
+  }
+  for (const [label, value] of [
+    ['minimumTextSimilarity', minimumText],
+    ['minimumGeometryOverlap', minimumGeometry],
+    ['criticalCandidateTextSimilarity', criticalText],
+    ['criticalCandidateGeometryOverlap', criticalGeometry]
+  ] as const) {
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`${label} must be between 0 and 1.`);
+  }
   const nativeLines = buildNativeLines(nativeObservations);
   const candidates: Candidate[] = [
     ...nativeLines.map((line) => ({
@@ -141,4 +152,3 @@ export function associateNativeAndOcr(
 
   return { nativeLines, sourceMatches, conflicts, matchedOcrIds };
 }
-

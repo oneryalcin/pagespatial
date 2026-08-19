@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { assertPageGeometry, pointBounds, pointBoxToRenderedBox } from './geometry.js';
 
 const boxSchema = z.tuple([z.number(), z.number(), z.number(), z.number()]);
 const pointSchema = z.tuple([z.number(), z.number()]);
@@ -16,10 +17,17 @@ export const documentIdentitySchema = z.object({
 export const pageGeometrySchema = z.object({
   width: z.number().positive(),
   height: z.number().positive(),
+  pointBounds: boxSchema.optional(),
   pointWidth: z.number().positive().optional(),
   pointHeight: z.number().positive().optional(),
   rotation: z.number().optional(),
   viewportTransform: viewportTransformSchema.optional()
+}).superRefine((geometry, context) => {
+  try {
+    assertPageGeometry(geometry);
+  } catch (error) {
+    issue(context, [], error instanceof Error ? error.message : String(error));
+  }
 });
 
 const observationBase = {
@@ -131,8 +139,8 @@ function validBox(box: readonly number[], width: number, height: number): boolea
   return box.every(Number.isFinite)
     && box[0]! >= 0
     && box[1]! >= 0
-    && box[2]! >= box[0]!
-    && box[3]! >= box[1]!
+    && box[2]! > box[0]!
+    && box[3]! > box[1]!
     && box[2]! <= width
     && box[3]! <= height;
 }
@@ -176,6 +184,19 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
         issue(context, [...path, 'polygon', pointIndex], 'Polygon points must be finite and within page bounds.');
       }
     });
+    if (item.polygon) {
+      const xs = item.polygon.map((point) => point[0]!);
+      const ys = item.polygon.map((point) => point[1]!);
+      const envelope = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+      if (envelope.some((value, index) => Math.abs(value - item.box[index]!) > 0.01)) {
+        issue(context, [...path, 'polygon'], 'Polygon envelope must match its evidence box.');
+      }
+      const area = Math.abs(item.polygon.reduce((sum, point, index) => {
+        const next = item.polygon![(index + 1) % item.polygon!.length]!;
+        return sum + point[0]! * next[1]! - next[0]! * point[1]!;
+      }, 0)) / 2;
+      if (!Number.isFinite(area) || area <= 0) issue(context, [...path, 'polygon'], 'Polygon must have positive finite area.');
+    }
   };
   const validateSourceIds = (ids: readonly string[], allowed: ReadonlySet<string>, path: PropertyKey[]): void => {
     if (!ids.length) issue(context, path, 'Source references must not be empty.');
@@ -185,17 +206,40 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
 
   page.nativeObservations.forEach((item, index) => {
     validatePageAndBox(item, ['nativeObservations', index]);
+    if (item.pointBox && item.geometryMethod === 'rendered-input-v1') {
+      issue(context, ['nativeObservations', index, 'geometryMethod'], 'Point-space native evidence must declare a point-to-rendered geometry method.');
+    }
+    if (!item.pointBox && item.geometryMethod !== 'rendered-input-v1') {
+      issue(context, ['nativeObservations', index, 'geometryMethod'], 'Rendered native evidence cannot claim a point-space geometry method.');
+    }
+    if (item.pointBox && item.polygon) {
+      issue(context, ['nativeObservations', index, 'polygon'], 'Point-space native evidence cannot carry a polygon with an undeclared coordinate space.');
+    }
     if (item.pointBox) {
-      const pointWidth = page.geometry.pointWidth;
-      const pointHeight = page.geometry.pointHeight;
+      const expectedMethod = page.geometry.viewportTransform ? 'pdfjs-viewport-matrix-v1' : 'axis-aligned-fallback-v1';
+      if (item.geometryMethod !== expectedMethod) {
+        issue(context, ['nativeObservations', index, 'geometryMethod'], `Expected ${expectedMethod} for the page geometry.`);
+      }
+    }
+    if (item.pointBox) {
+      const bounds = pointBounds(page.geometry);
       const ordered = item.pointBox.every(Number.isFinite)
-        && item.pointBox[0] >= 0
-        && item.pointBox[1] >= 0
+        && (bounds === null || item.pointBox[0] >= bounds[0])
+        && (bounds === null || item.pointBox[1] >= bounds[1])
         && item.pointBox[2] >= item.pointBox[0]
         && item.pointBox[3] >= item.pointBox[1];
-      if (!ordered || (pointWidth !== undefined && item.pointBox[2] > pointWidth)
-        || (pointHeight !== undefined && item.pointBox[3] > pointHeight)) {
+      if (!ordered || (bounds !== null && item.pointBox[2] > bounds[2])
+        || (bounds !== null && item.pointBox[3] > bounds[3])) {
         issue(context, ['nativeObservations', index, 'pointBox'], 'Native point box must be ordered, finite, and within declared PDF point bounds.');
+      } else {
+        try {
+          const transformed = pointBoxToRenderedBox(item.pointBox, page.geometry).box;
+          if (transformed.some((value, boxIndex) => Math.abs(value - item.box[boxIndex]!) > 0.01)) {
+            issue(context, ['nativeObservations', index, 'pointBox'], 'Native point box must transform to its rendered evidence box.');
+          }
+        } catch (error) {
+          issue(context, ['nativeObservations', index, 'pointBox'], error instanceof Error ? error.message : String(error));
+        }
       }
     }
   });

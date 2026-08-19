@@ -40,14 +40,76 @@ export function transformPoint(point: Point, transform: ViewportTransform): Poin
   return [a * point[0] + c * point[1] + e, b * point[0] + d * point[1] + f];
 }
 
+export function pointBounds(geometry: Pick<PageGeometry, 'pointBounds' | 'pointWidth' | 'pointHeight'>): Box | null {
+  if (geometry.pointBounds) return geometry.pointBounds;
+  if (geometry.pointWidth && geometry.pointHeight) return [0, 0, geometry.pointWidth, geometry.pointHeight];
+  return null;
+}
+
+export function assertPageGeometry(geometry: PageGeometry): void {
+  const { width, height, viewportTransform } = geometry;
+  if (![width, height].every((value) => Number.isFinite(value) && value > 0)) {
+    throw new Error('Rendered page dimensions must be positive finite numbers.');
+  }
+  if (geometry.rotation !== undefined && !Number.isFinite(geometry.rotation)) {
+    throw new Error('Page rotation must be finite when declared.');
+  }
+  const bounds = pointBounds(geometry);
+  if (bounds) {
+    assertBox(bounds);
+    if (bounds[2] <= bounds[0] || bounds[3] <= bounds[1]) throw new Error('PDF point bounds must have positive area.');
+    if (geometry.pointWidth !== undefined && Math.abs((bounds[2] - bounds[0]) - geometry.pointWidth) > 1e-6) {
+      throw new Error('PDF point width does not match point bounds.');
+    }
+    if (geometry.pointHeight !== undefined && Math.abs((bounds[3] - bounds[1]) - geometry.pointHeight) > 1e-6) {
+      throw new Error('PDF point height does not match point bounds.');
+    }
+  }
+  if (!viewportTransform) return;
+  if (!bounds) throw new Error('A viewport transform requires declared PDF point bounds.');
+  if (!viewportTransform.every(Number.isFinite)) throw new Error('Viewport transform must contain only finite numbers.');
+  const [a, b, c, d] = viewportTransform;
+  const determinant = a * d - b * c;
+  if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-12) {
+    throw new Error('Viewport transform must be finite and invertible.');
+  }
+  const sourceCorners: Point[] = [
+    [bounds[0], bounds[1]],
+    [bounds[2], bounds[1]],
+    [bounds[0], bounds[3]],
+    [bounds[2], bounds[3]]
+  ];
+  const corners = sourceCorners.map((point) => transformPoint(point, viewportTransform));
+  const envelope: Box = [
+    Math.min(...corners.map((point) => point[0])),
+    Math.min(...corners.map((point) => point[1])),
+    Math.max(...corners.map((point) => point[0])),
+    Math.max(...corners.map((point) => point[1]))
+  ];
+  const tolerance = 1.01;
+  if (Math.abs(envelope[0]) > tolerance || Math.abs(envelope[1]) > tolerance
+    || Math.abs(envelope[2] - width) > tolerance || Math.abs(envelope[3] - height) > tolerance) {
+    throw new Error('Viewport transform does not map PDF point bounds to the rendered page.');
+  }
+}
+
+export function assertBoxWithin(box: Box, bounds: Box, label: string): void {
+  assertBox(box);
+  if (box[2] <= box[0] || box[3] <= box[1]) throw new Error(`${label} must have positive area.`);
+  if (box[0] < bounds[0] || box[1] < bounds[1] || box[2] > bounds[2] || box[3] > bounds[3]) {
+    throw new Error(`${label} is outside declared bounds.`);
+  }
+}
+
 export function pointBoxToRenderedBox(pointBox: Box, geometry: PageGeometry): {
   box: Box;
   method: 'pdfjs-viewport-matrix-v1' | 'axis-aligned-fallback-v1';
 } {
   const { width, height, pointWidth, pointHeight, viewportTransform } = geometry;
-  if (![width, height].every((value) => Number.isFinite(value) && value > 0)) {
-    throw new Error('Rendered page dimensions must be positive.');
-  }
+  assertPageGeometry(geometry);
+  const sourceBounds = pointBounds(geometry);
+  assertBox(pointBox);
+  if (sourceBounds) assertBoxWithin(pointBox, sourceBounds, 'Native point box');
 
   if (viewportTransform) {
     const sourceCorners: Point[] = [
@@ -57,29 +119,30 @@ export function pointBoxToRenderedBox(pointBox: Box, geometry: PageGeometry): {
       [pointBox[2], pointBox[3]]
     ];
     const corners = sourceCorners.map((point) => transformPoint(point, viewportTransform));
-    return {
-      box: roundBox([
+    const box = roundBox([
         Math.min(...corners.map((point) => point[0])),
         Math.min(...corners.map((point) => point[1])),
         Math.max(...corners.map((point) => point[0])),
         Math.max(...corners.map((point) => point[1]))
-      ]),
-      method: 'pdfjs-viewport-matrix-v1'
-    };
+      ]);
+    assertBoxWithin(box, [0, 0, width, height], 'Transformed native box');
+    return { box, method: 'pdfjs-viewport-matrix-v1' };
   }
 
   if (!pointWidth || !pointHeight) {
     throw new Error('Point dimensions or a viewport transform are required for native point geometry.');
   }
+  if (sourceBounds && (sourceBounds[0] !== 0 || sourceBounds[1] !== 0 || (geometry.rotation ?? 0) % 360 !== 0)) {
+    throw new Error('Axis-aligned fallback supports only unshifted, unrotated PDF point bounds.');
+  }
   const scaleX = width / pointWidth;
   const scaleY = height / pointHeight;
-  return {
-    box: roundBox([
+  const box = roundBox([
       pointBox[0] * scaleX,
       height - pointBox[3] * scaleY,
       pointBox[2] * scaleX,
       height - pointBox[1] * scaleY
-    ]),
-    method: 'axis-aligned-fallback-v1'
-  };
+    ]);
+  assertBoxWithin(box, [0, 0, width, height], 'Transformed native box');
+  return { box, method: 'axis-aligned-fallback-v1' };
 }

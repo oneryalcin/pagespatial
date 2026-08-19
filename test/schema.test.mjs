@@ -33,6 +33,37 @@ test('runtime schema enforces document and evidence invariants', async () => {
   const outOfBoundsPolygon = clone(valid);
   outOfBoundsPolygon.pages[0].ocrObservations[0].polygon = [[1, 1], [2, 2], [9999, 9999]];
   assert.equal(pageSpatialDocumentSchema.safeParse(outOfBoundsPolygon).success, false);
+
+  const mismatchedPolygon = clone(valid);
+  mismatchedPolygon.pages[0].ocrObservations[0].polygon = [[20, 20], [99, 20], [99, 40], [20, 40]];
+  assert.equal(pageSpatialDocumentSchema.safeParse(mismatchedPolygon).success, false);
+
+  const zeroAreaPolygon = clone(valid);
+  zeroAreaPolygon.pages[0].ocrObservations[0].polygon = [[20, 20], [60, 30], [100, 40]];
+  assert.equal(pageSpatialDocumentSchema.safeParse(zeroAreaPolygon).success, false);
+
+  const invalidTransform = clone(valid);
+  invalidTransform.pages[0].geometry = {
+    width: 200,
+    height: 200,
+    pointBounds: [0, 0, 100, 100],
+    pointWidth: 100,
+    pointHeight: 100,
+    viewportTransform: [1, 0, 0, 1, Number.NaN, 0]
+  };
+  assert.equal(pageSpatialDocumentSchema.safeParse(invalidTransform).success, false);
+
+  const falseRenderedProvenance = clone(valid);
+  delete falseRenderedProvenance.pages[0].nativeObservations[0].pointBox;
+  assert.equal(pageSpatialDocumentSchema.safeParse(falseRenderedProvenance).success, false);
+
+  const falsePointProvenance = clone(valid);
+  falsePointProvenance.pages[0].nativeObservations[0].geometryMethod = 'rendered-input-v1';
+  assert.equal(pageSpatialDocumentSchema.safeParse(falsePointProvenance).success, false);
+
+  const falseFallbackProvenance = clone(valid);
+  falseFallbackProvenance.pages[0].nativeObservations[0].geometryMethod = 'axis-aligned-fallback-v1';
+  assert.equal(pageSpatialDocumentSchema.safeParse(falseFallbackProvenance).success, false);
 });
 
 test('runtime schema cannot hide a critical conflict by clearing escalation', () => {
@@ -89,4 +120,11 @@ test('published JSON Schema independently enforces exact coordinate tuples', asy
   const longBox = clone(valid);
   longBox.pages[0].ocrObservations[0].box = [20, 20, 100, 40, 50];
   assert.equal(validate(longBox), false);
+
+  const shiftedBounds = clone(valid);
+  shiftedBounds.pages[0].geometry.pointBounds = [10, 20, 110, 120];
+  shiftedBounds.pages[0].geometry.pointWidth = 100;
+  shiftedBounds.pages[0].geometry.pointHeight = 100;
+  shiftedBounds.pages[0].geometry.viewportTransform = [2, 0, 0, -2, -20, 240];
+  assert.equal(validate(shiftedBounds), true, JSON.stringify(validate.errors));
 });

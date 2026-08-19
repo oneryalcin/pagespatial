@@ -7,11 +7,11 @@ import {
 } from 'pdfjs-dist';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api.js';
 import type { NativePageAdapter, PageRenderer } from '../adapters.js';
+import { pdfJsPageMarkdown, pdfJsTextItemPointBox as sharedTextItemPointBox, pdfJsTextObservations } from '../pdfjs-text.js';
 import type {
   Box,
   DocumentIdentity,
   DocumentSource,
-  NativePointObservationInput,
   PageGeometry,
   RenderedPage,
   ViewportTransform
@@ -134,48 +134,6 @@ export async function openPdfJsSession(input: PdfInput, options: PdfJsSessionOpt
   return session;
 }
 
-function textItemPointBox(item: TextItem): Box {
-  if (item.transform.length !== 6 || item.transform.some((value) => !Number.isFinite(value))) {
-    throw new Error('PDF.js returned an invalid text transform.');
-  }
-  const a = item.transform[0]!;
-  const b = item.transform[1]!;
-  const c = item.transform[2]!;
-  const d = item.transform[3]!;
-  const x = item.transform[4]!;
-  const y = item.transform[5]!;
-  const horizontalLength = Math.hypot(a, b);
-  const verticalLength = Math.hypot(c, d);
-  const widthX = horizontalLength > 0 ? (a / horizontalLength) * item.width : item.width;
-  const widthY = horizontalLength > 0 ? (b / horizontalLength) * item.width : 0;
-  const heightX = verticalLength > 0 ? c : 0;
-  const heightY = verticalLength > 0 ? d : Math.max(1, item.height);
-  const points = [
-    [x, y],
-    [x + widthX, y + widthY],
-    [x + heightX, y + heightY],
-    [x + widthX + heightX, y + widthY + heightY]
-  ];
-  const xs = points.map((point) => point[0]!);
-  const ys = points.map((point) => point[1]!);
-  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
-}
-
-function pageMarkdown(items: TextItem[]): string {
-  const rows: Array<{ y: number; items: TextItem[] }> = [];
-  for (const item of items) {
-    const y = item.transform[5]!;
-    const row = rows.find((candidate) => Math.abs(candidate.y - y) <= 2.5);
-    if (row) row.items.push(item);
-    else rows.push({ y, items: [item] });
-  }
-  return rows
-    .sort((left, right) => right.y - left.y)
-    .map((row) => row.items.sort((left, right) => left.transform[4]! - right.transform[4]!).map((item) => item.str).join(' ').replace(/\s+/g, ' ').trim())
-    .filter(Boolean)
-    .join('\n\n');
-}
-
 export const pdfJsNativeAdapter: NativePageAdapter<PdfJsSession> = {
   name: 'pdfjs-native',
   version: '5.5.207',
@@ -186,25 +144,21 @@ export const pdfJsNativeAdapter: NativePageAdapter<PdfJsSession> = {
     abortIfNeeded(options?.signal);
     const viewport = page.getViewport({ scale: 1 });
     const items = content.items.filter((item): item is TextItem => 'str' in item && Boolean(item.str.trim()));
-    const observations: NativePointObservationInput[] = items.map((item, index) => ({
-      id: `pdfjs:${pageNumber}:${index}`,
-      pageNumber,
-      text: item.str,
-      pointBox: textItemPointBox(item),
-      mcid: null,
-      structureRole: null,
-      font: item.fontName,
-      fontSize: Math.max(1, Math.hypot(item.transform[2], item.transform[3]))
-    }));
+    const [viewX0, viewY0, viewX1, viewY1] = page.view;
+    if (![viewX0, viewY0, viewX1, viewY1].every(Number.isFinite) || viewX1! <= viewX0! || viewY1! <= viewY0!) {
+      throw new Error('PDF.js returned invalid page bounds.');
+    }
+    const observations = pdfJsTextObservations(items, pageNumber);
     return {
       pageNumber,
       geometry: {
-        pointWidth: viewport.width,
-        pointHeight: viewport.height,
+        pointBounds: [viewX0!, viewY0!, viewX1!, viewY1!],
+        pointWidth: viewX1! - viewX0!,
+        pointHeight: viewY1! - viewY0!,
         rotation: viewport.rotation
       },
       observations,
-      markdown: pageMarkdown(items)
+      markdown: pdfJsPageMarkdown(items)
     };
   }
 };
@@ -287,6 +241,7 @@ export function createPdfJsCanvasRenderer(options: {
         const geometry: PageGeometry = {
           width,
           height,
+          pointBounds: [viewX0!, viewY0!, viewX1!, viewY1!],
           pointWidth: viewX1! - viewX0!,
           pointHeight: viewY1! - viewY0!,
           rotation: viewport.rotation,
@@ -303,7 +258,7 @@ export function createPdfJsCanvasRenderer(options: {
 
 /** Exposed for geometry conformance tests; application code should use the adapter. */
 export function pdfJsTextItemPointBox(item: TextItem): Box {
-  return textItemPointBox(item);
+  return sharedTextItemPointBox(item);
 }
 
 /** Exposed for consumers that need PDF.js's exact matrix composition semantics. */

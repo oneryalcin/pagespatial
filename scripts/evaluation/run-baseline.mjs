@@ -88,9 +88,10 @@ await exec(process.execPath, [join(root, 'scripts/prepare-ppocr-assets.mjs'), '-
 const assetManifestPath = join(ocrAssets, 'manifest.json');
 const assetManifest = JSON.parse(await readFile(assetManifestPath, 'utf8'));
 const assetManifestHash = await sha256File(assetManifestPath);
+const nativeAdapterIdentity = 'pdf-inspector-markdown-pdfjs-geometry@1.14.2+pdfjs.5.5.207';
 const profile = {
   id: 'pdf-inspector-ppocrv6-selected-pages-v1',
-  nativeAdapter: '@firecrawl/pdf-inspector@1.14.2',
+  nativeAdapter: nativeAdapterIdentity,
   renderer: 'pdfjs-dist@5.5.207',
   ocrAdapter: '@paddleocr/paddleocr-js@0.4.2',
   backendPolicy: backend,
@@ -432,7 +433,7 @@ try {
             renderedPage: { pageNumber: browserPage.renderedPageNumber, geometry: browserPage.geometry },
             ocrPage: browserPage.ocr,
             runId,
-            nativeAdapter: '@firecrawl/pdf-inspector@1.14.2',
+            nativeAdapter: nativeAdapterIdentity,
             renderer: 'pdfjs-dist@5.5.207',
             ocrAdapter: '@paddleocr/paddleocr-js@0.4.2',
             createdAt,

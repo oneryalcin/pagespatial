@@ -144,6 +144,29 @@ test('single-page helper rejects every cross-page adapter boundary', () => {
   }
 });
 
+test('single-page helper rejects conflicting native and renderer point-space bounds', () => {
+  const mismatchedNative = {
+    ...nativePage,
+    geometry: {
+      pointBounds: [10, 20, 110, 120],
+      pointWidth: 100,
+      pointHeight: 100
+    },
+    observations: [{ ...nativePage.observations[0], pointBox: [20, 70, 70, 90] }]
+  };
+  const mismatchedRenderer = {
+    ...renderedPage,
+    geometry: {
+      ...renderedPage.geometry,
+      pointBounds: [0, 0, 100, 100]
+    }
+  };
+  assert.throws(
+    () => assemblePageSpatial(helperInput({ nativePage: mismatchedNative, renderedPage: mismatchedRenderer })),
+    /do not describe the same coordinate basis/
+  );
+});
+
 test('full-document parser still rejects invalid native evidence before invoking OCR', async () => {
   let ocrCalled = false;
   const source = { identity: document, data: new Uint8Array([1]), mimeType: 'application/pdf' };
@@ -181,4 +204,16 @@ test('page assembly seam stays internal while public buildPageSpatial remains co
     provenance: assemblePageSpatial(helperInput()).provenance
   });
   publicApi.pageSpatialSchema.parse(publicPage);
+});
+
+test('public Markdown projection remains source-compatible without nativeLines', () => {
+  const projection = publicApi.projectMarkdown({
+    pageNumber: 1,
+    nativeObservations: [],
+    ocrObservations: [],
+    sourceMatches: [],
+    spatialRows: [],
+    derivedRelations: []
+  });
+  assert.match(projection.markdown, /No text observations/);
 });

@@ -19,7 +19,7 @@ Run native extraction and PP-OCR together. They solve different problems:
 3. **PageSpatial** keeps both sources, associates nearby equivalent observations, and records conflicts or uncertainty.
 4. **Markdown and search indexes** are generated afterward from the evidence record.
 
-The recommended browser stack is PDF.js + PP-OCR. On Node, PDF Inspector can replace the native extractor when page-aligned Markdown and richer native structure justify its whole-document startup cost. PP-OCR still runs; PDF Inspector is not an OCR replacement.
+The recommended browser stack is PDF.js + PP-OCR. On Node, the composite adapter adds PDF Inspector's page-aligned Markdown and unambiguous structure metadata while PDF.js remains the geometry authority. PP-OCR still runs; PDF Inspector is not an OCR replacement.
 
 ```text
 PDF ─┬─ native extraction ─ positioned text and structure ─┐
@@ -39,7 +39,7 @@ PDF ─┬─ native extraction ─ positioned text and structure ─┐
                  │                                 │
 Browser/private use                 Server/scale
         TypeScript SDK                      TypeScript orchestration
-        shared PDF.js session               PDF Inspector/native parser
+        shared PDF.js session               PDF Inspector Markdown + PDF.js geometry
         PP-OCR WebGPU/WASM                  GPU OCR adapter
         Web Workers                         bounded batching
                  │                                 │
@@ -62,7 +62,7 @@ TypeScript owns the public SDK, canonical schemas, orchestration, deterministic 
 - Bounded page concurrency and progressive page completion callbacks.
 - A shared PDF.js browser session, page-native extractor, and canvas renderer.
 - A PP-OCRv6 Tiny browser adapter with verified WebGPU and sticky WASM fallback.
-- An optional Node PDF Inspector adapter for page-aligned Markdown and positioned native text.
+- An optional Node composite adapter for PDF Inspector Markdown plus PDF.js-positioned native text.
 
 ## Not included yet
 
@@ -147,7 +147,7 @@ PAGESPATIAL_SMOKE_ASSETS=/path/to/verified/ocr-assets npm run test:browser:webgp
 
 ## AnyDoc and PDF Inspector
 
-For PDFs, [AnyDoc](https://github.com/firecrawl/anydoc) delegates to [PDF Inspector](https://github.com/firecrawl/pdf-inspector). PageSpatial integrates PDF Inspector directly on Node because it returns page-addressable Markdown and positioned native observations. Calling AnyDoc as well would parse the same PDF twice and return document-wide Markdown without stronger page evidence.
+For PDFs, [AnyDoc](https://github.com/firecrawl/anydoc) delegates to [PDF Inspector](https://github.com/firecrawl/pdf-inspector). PageSpatial integrates PDF Inspector directly on Node for page-addressable Markdown. PDF.js supplies native observations and full text transforms because PDF Inspector's scalar text rectangles do not preserve enough orientation data for general rotated-page geometry. Calling AnyDoc as well would parse the same PDF twice without stronger page evidence.
 
 ```ts
 import { createParser } from 'pagespatial';
@@ -161,7 +161,7 @@ const parser = createParser({
 });
 ```
 
-This path performs one whole-document PDF Inspector extraction and caches it per Node session. Use it when improved Markdown is worth the startup delay. Rendering and OCR remain separate adapters, and both Inspector and OCR evidence are retained. Rotated, cropped, or shifted Inspector geometry is rejected until each mode passes a real retained conformance fixture. The default browser path stays progressive and uses PDF.js native text plus PP-OCR on every page.
+This path performs one whole-document PDF Inspector extraction and caches it per Node session. Use it when improved Markdown is worth the startup delay. PDF.js text-item transforms and the renderer's six-value viewport matrix define geometry for normal, rotated, and shifted pages. Inspector metadata is attached only when normalized text is unambiguous in both sources. Repeated or ambiguous strings keep PDF.js defaults instead of receiving guessed roles. The default browser path stays progressive and uses PDF.js native text plus PP-OCR on every page.
 
 ## Pure page merge
 

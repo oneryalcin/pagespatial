@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pointBoxToRenderedBox } from '../dist/index.js';
+import { assertPageGeometry, pointBoxToRenderedBox } from '../dist/index.js';
 
 test('transforms all four point-box corners with the PDF viewport matrix', () => {
   const result = pointBoxToRenderedBox([10, 20, 40, 30], {
-    width: 200,
-    height: 300,
+    width: 300,
+    height: 200,
+    pointBounds: [-3.5, -2.5, 96.5, 147.5],
     pointWidth: 100,
     pointHeight: 150,
     viewportTransform: [0, 2, 2, 0, 5, 7]
@@ -25,3 +26,56 @@ test('uses a documented axis-aligned fallback when no matrix exists', () => {
   assert.equal(result.method, 'axis-aligned-fallback-v1');
 });
 
+test('accepts all PDF.js quarter-turn viewport matrices', () => {
+  const cases = [
+    { rotation: 0, width: 100, height: 200, transform: [1, 0, 0, -1, 0, 200] },
+    { rotation: 90, width: 200, height: 100, transform: [0, 1, 1, 0, 0, 0] },
+    { rotation: 180, width: 100, height: 200, transform: [-1, 0, 0, 1, 100, 0] },
+    { rotation: 270, width: 200, height: 100, transform: [0, -1, -1, 0, 200, 100] }
+  ];
+  for (const candidate of cases) {
+    const geometry = {
+      width: candidate.width,
+      height: candidate.height,
+      pointBounds: [0, 0, 100, 200],
+      pointWidth: 100,
+      pointHeight: 200,
+      rotation: candidate.rotation,
+      viewportTransform: candidate.transform
+    };
+    assert.doesNotThrow(() => assertPageGeometry(geometry));
+    const result = pointBoxToRenderedBox([10, 20, 40, 40], geometry);
+    assert.ok(result.box[0] >= 0 && result.box[1] >= 0);
+    assert.ok(result.box[2] <= candidate.width && result.box[3] <= candidate.height);
+  }
+});
+
+test('handles shifted PDF point bounds only through a verified viewport matrix', () => {
+  const geometry = {
+    width: 100,
+    height: 200,
+    pointBounds: [10, 20, 110, 220],
+    pointWidth: 100,
+    pointHeight: 200,
+    viewportTransform: [1, 0, 0, -1, -10, 220]
+  };
+  assert.deepEqual(pointBoxToRenderedBox([20, 200, 50, 210], geometry).box, [10, 10, 40, 20]);
+  assert.throws(() => pointBoxToRenderedBox([20, 200, 50, 210], { ...geometry, viewportTransform: undefined }), /unshifted/);
+});
+
+test('rejects non-finite, singular, inconsistent, and out-of-bounds geometry', () => {
+  const base = {
+    width: 100,
+    height: 200,
+    pointBounds: [0, 0, 100, 200],
+    pointWidth: 100,
+    pointHeight: 200
+  };
+  assert.throws(() => assertPageGeometry({ ...base, viewportTransform: [1, 0, 0, 1, Number.NaN, 0] }), /finite/);
+  assert.throws(() => assertPageGeometry({ ...base, viewportTransform: [1, 2, 2, 4, 0, 0] }), /invertible/);
+  assert.throws(() => assertPageGeometry({ ...base, viewportTransform: [1, 0, 0, -1, 10, 200] }), /does not map/);
+  assert.throws(
+    () => pointBoxToRenderedBox([-1, 20, 40, 40], { ...base, viewportTransform: [1, 0, 0, -1, 0, 200] }),
+    /outside declared bounds/
+  );
+});

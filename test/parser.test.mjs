@@ -104,6 +104,23 @@ test('parser releases rendered resources when OCR fails', async () => {
   assert.deepEqual(candidate.released, [1]);
 });
 
+test('parser rejects unsafe native geometry before invoking OCR', async () => {
+  const candidate = adapters('webgpu');
+  let ocrCalls = 0;
+  candidate.value.native.extractPage = async (_source, pageNumber) => ({
+    pageNumber,
+    geometry: { pointBounds: [0, 0, 100, 100], pointWidth: 100, pointHeight: 100 },
+    observations: [{ pageNumber, text: 'unsafe', pointBox: [-1_000_000, 10, 50, 20] }]
+  });
+  candidate.value.ocr.recognize = async () => {
+    ocrCalls += 1;
+    return { pageNumber: 1, observations: [] };
+  };
+  await assert.rejects(() => createParser(candidate.value).parse(source), /outside declared bounds/);
+  assert.equal(ocrCalls, 0);
+  assert.deepEqual(candidate.released, [1]);
+});
+
 test('parser releases rendered resources when parallel native extraction fails', async () => {
   const candidate = adapters('webgpu');
   candidate.value.native.extractPage = async () => {
@@ -141,6 +158,25 @@ test('parser rejects duplicate adapter observation IDs before association', asyn
     ]
   });
   await assert.rejects(() => createParser(candidate).parse(source), /duplicate observation IDs/);
+});
+
+test('parser rejects duplicate native adapter IDs before invoking OCR', async () => {
+  const candidate = adapters('webgpu').value;
+  let ocrCalls = 0;
+  candidate.native.extractPage = async (_source, pageNumber) => ({
+    pageNumber,
+    geometry: { pointWidth: 100, pointHeight: 100 },
+    observations: [
+      { id: 'duplicate', pageNumber, text: 'first', pointBox: [10, 80, 40, 90] },
+      { id: 'duplicate', pageNumber, text: 'second', pointBox: [50, 80, 90, 90] }
+    ]
+  });
+  candidate.ocr.recognize = async () => {
+    ocrCalls += 1;
+    return { pageNumber: 1, observations: [] };
+  };
+  await assert.rejects(() => createParser(candidate).parse(source), /duplicate observation IDs/);
+  assert.equal(ocrCalls, 0);
 });
 
 test('failed concurrent parse waits for workers and cannot emit late page callbacks', async () => {

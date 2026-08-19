@@ -16,8 +16,8 @@ The holdout is recorded for future sealing, but this implementation has no holdo
 
 Every selected development page uses both inputs:
 
-1. PDF Inspector provides page-aligned native observations and Markdown. It runs once per document in a killable Node child process and caches its whole-document extraction inside that process.
-2. PDF.js renders the canonical page geometry in a loopback-only browser.
+1. PDF Inspector provides page-aligned Markdown and unambiguous structure metadata. It runs once per document in a killable Node child process and caches its whole-document extraction inside that process.
+2. PDF.js provides native text observations, full item transforms, page bounds, and canonical rendered geometry.
 3. PP-OCRv6 Tiny reads every rendered page and returns text, confidence, and polygons. OCR inference is serialized through one engine.
 4. The internal page assembler preserves both sources, their geometry, matches, conflicts, derived relations, diagnostics, and provenance.
 

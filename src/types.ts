@@ -21,6 +21,8 @@ export interface DocumentSource<TData = unknown> {
 export interface PageGeometry {
   width: number;
   height: number;
+  /** PDF user-space bounds [x0, y0, x1, y1]. Defaults to [0, 0, pointWidth, pointHeight] for legacy callers. */
+  pointBounds?: Box;
   pointWidth?: number;
   pointHeight?: number;
   rotation?: number;
