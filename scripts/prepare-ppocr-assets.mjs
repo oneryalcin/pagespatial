@@ -5,7 +5,11 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const manifestPath = join(root, 'assets', 'ppocrv6-tiny.manifest.json');
+const manifestFlag = process.argv.indexOf('--manifest');
+if (manifestFlag >= 0 && !process.argv[manifestFlag + 1]) throw new Error('--manifest requires a path.');
+const manifestPath = manifestFlag >= 0
+  ? resolve(process.argv[manifestFlag + 1])
+  : join(root, 'assets', 'ppocrv6-tiny.manifest.json');
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
 const outputFlag = process.argv.indexOf('--output');
 if (outputFlag >= 0 && !process.argv[outputFlag + 1]) throw new Error('--output requires a directory path.');

@@ -48,9 +48,11 @@ globalThis.pagespatialCorpus = {
       maxCanvasSide: options.maxCanvasSide,
       maxCanvasPixels: options.maxCanvasPixels
     });
+    const variant = options.ocrVariant ?? 'tiny';
     ocr = createPpOcrV6BrowserAdapter({
-      detectionModelUrl: '/ocr/models/PP-OCRv6_tiny_det_onnx_infer.tar',
-      recognitionModelUrl: '/ocr/models/PP-OCRv6_tiny_rec_onnx_infer.tar',
+      variant,
+      detectionModelUrl: `/ocr/models/PP-OCRv6_${variant}_det_onnx_infer.tar`,
+      recognitionModelUrl: `/ocr/models/PP-OCRv6_${variant}_rec_onnx_infer.tar`,
       wasmPaths: '/ocr/ort/',
       backend: options.backend,
       localOnly: true,

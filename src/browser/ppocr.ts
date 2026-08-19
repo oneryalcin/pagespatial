@@ -14,10 +14,17 @@ export interface PpOcrBackendEvent {
   fallbackReason?: string;
 }
 
+export type PpOcrVariant = 'tiny' | 'small';
+
 export interface PpOcrBrowserOptions {
   detectionModelUrl: string;
   recognitionModelUrl: string;
   wasmPaths: string;
+  /**
+   * PP-OCRv6 tier. Tiny supports 49 languages EXCLUDING Japanese; small adds
+   * Japanese and stronger multilingual recognition at ~3x the asset size.
+   */
+  variant?: PpOcrVariant;
   backend?: 'auto' | 'webgpu' | 'wasm';
   localOnly?: boolean;
   detectorLimit?: number;
@@ -104,6 +111,8 @@ export function createPpOcrV6BrowserAdapter(options: PpOcrBrowserOptions): PpOcr
     throw new Error('recognitionBatchSize must be a positive safe integer.');
   }
 
+  const variant: PpOcrVariant = options.variant ?? 'tiny';
+  if (!['tiny', 'small'].includes(variant)) throw new Error(`Unsupported PP-OCRv6 variant: ${variant}`);
   const createEngine = options.createEngine ?? defaultCreateEngine;
   let engine: PpOcrEngine | null = null;
   let backend: 'webgpu' | 'wasm' | null = null;
@@ -123,8 +132,8 @@ export function createPpOcrV6BrowserAdapter(options: PpOcrBrowserOptions): PpOcr
     return {
       initialize: false,
       worker: true,
-      textDetectionModelName: 'PP-OCRv6_tiny_det',
-      textRecognitionModelName: 'PP-OCRv6_tiny_rec',
+      textDetectionModelName: `PP-OCRv6_${variant}_det`,
+      textRecognitionModelName: `PP-OCRv6_${variant}_rec`,
       textDetectionModelAsset: { url: options.detectionModelUrl },
       textRecognitionModelAsset: { url: options.recognitionModelUrl },
       batch_size: 1,
@@ -231,16 +240,17 @@ export function createPpOcrV6BrowserAdapter(options: PpOcrBrowserOptions): PpOcr
         box: boxFromPolygon(polygon),
         polygon,
         confidence: item.score,
-        model: 'PP-OCRv6_tiny'
+        model: `PP-OCRv6_${variant}`
       };
     });
     return { pageNumber: page.pageNumber, observations, backend: backend ?? undefined };
   };
 
   return {
-    name: 'ppocrv6-tiny-browser',
+    name: `ppocrv6-${variant}-browser`,
     version: '0.4.2',
     configuration: {
+      variant,
       requestedBackend: options.backend ?? 'auto',
       recognitionThreshold,
       detectorLimit,
