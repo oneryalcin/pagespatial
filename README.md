@@ -311,5 +311,5 @@ npm run example
 npm run prepare:ocr-assets -- --output ./public/ocr-assets
 ```
 
-See [Architecture](docs/architecture.md) and [Evidence Search migration](docs/evidence-search-migration.md).
+See [Architecture](docs/architecture.md), [engineering handoff](docs/handoff.md), and [Evidence Search migration](docs/evidence-search-migration.md).
 The first real-PDF adapter trial is recorded in [docs/trials/2026-08-19-official-browser-adapters.md](docs/trials/2026-08-19-official-browser-adapters.md).
