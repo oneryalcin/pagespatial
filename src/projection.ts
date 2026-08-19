@@ -22,8 +22,9 @@ export function projectMarkdown(input: {
   derivedRelations: readonly DerivedRelation[];
   nativeMarkdown?: string;
   nativeMarkdownSource?: string;
+  pixelsPerPoint?: number;
 }): PageProjection {
-  const nativeLines = input.nativeLines ?? buildNativeLines(input.nativeObservations);
+  const nativeLines = input.nativeLines ?? buildNativeLines(input.nativeObservations, input.pixelsPerPoint);
   const matchedOcr = new Set(input.sourceMatches.map((match) => match.ocrId));
   const recoveredRows = input.spatialRows.filter((row) => row.sourceIds.some((id) => !matchedOcr.has(id)));
   const sections: string[] = [`# Page ${input.pageNumber}`];

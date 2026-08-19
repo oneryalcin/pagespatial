@@ -1,6 +1,6 @@
 import { overlapOverSmaller } from './geometry.js';
 import { buildNativeLines } from './reading-order.js';
-import { criticalTokens, sameTokenMultiset, textSimilarity } from './text.js';
+import { criticalTokens, criticalTokensAgree, textSimilarity } from './text.js';
 import {
   ASSOCIATION_BUCKET_PT,
   ASSOCIATION_GEOMETRY_WEIGHT,
@@ -137,7 +137,7 @@ export function associateNativeAndOcr(
     if (criticalLocal) {
       const nativeCritical = criticalTokens(criticalLocal.native.text);
       const ocrCritical = criticalTokens(ocr.text);
-      if ((nativeCritical.length || ocrCritical.length) && !sameTokenMultiset(nativeCritical, ocrCritical)) {
+      if ((nativeCritical.length || ocrCritical.length) && !criticalTokensAgree(nativeCritical, ocrCritical)) {
         conflicts.push({
           id: `conflict:${ocr.id}`,
           pageNumber: ocr.pageNumber,

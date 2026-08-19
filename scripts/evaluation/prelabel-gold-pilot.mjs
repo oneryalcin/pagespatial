@@ -131,20 +131,25 @@ for (const [index, page] of sample.entries()) {
 
   const record = recordIndex.get(`${page.objectId}#${page.pageNumber}`);
   const geometry = record?.pageSpatial?.geometry;
-  const conflicts = (record?.pageSpatial?.conflicts ?? []).map((conflict) => ({
-    id: conflict.id,
-    nativeText: conflict.nativeText,
-    ocrText: conflict.ocrText,
-    reason: conflict.reason,
-    normalizedBox: geometry
-      ? [
-          Math.round((record.pageSpatial.ocrObservations.find((o) => o.id === conflict.ocrId)?.box?.[1] ?? 0) / geometry.height * 1000),
-          Math.round((record.pageSpatial.ocrObservations.find((o) => o.id === conflict.ocrId)?.box?.[0] ?? 0) / geometry.width * 1000),
-          Math.round((record.pageSpatial.ocrObservations.find((o) => o.id === conflict.ocrId)?.box?.[3] ?? 0) / geometry.height * 1000),
-          Math.round((record.pageSpatial.ocrObservations.find((o) => o.id === conflict.ocrId)?.box?.[2] ?? 0) / geometry.width * 1000)
-        ]
-      : null
-  }));
+  const conflicts = (record?.pageSpatial?.conflicts ?? []).map((conflict) => {
+    const box = record.pageSpatial.ocrObservations.find((observation) => observation.id === conflict.ocrId)?.box;
+    return {
+      id: conflict.id,
+      nativeText: conflict.nativeText,
+      ocrText: conflict.ocrText,
+      reason: conflict.reason,
+      // No fabricated [0,0,0,0] region: without a real box the adjudicator
+      // sees null and must locate the text itself.
+      normalizedBox: geometry && box
+        ? [
+            Math.round(box[1] / geometry.height * 1000),
+            Math.round(box[0] / geometry.width * 1000),
+            Math.round(box[3] / geometry.height * 1000),
+            Math.round(box[2] / geometry.width * 1000)
+          ]
+        : null
+    };
+  });
 
   let adjudication = null;
   if (conflicts.length) {

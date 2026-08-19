@@ -1,15 +1,97 @@
 {
- "goldPilotMetricsVersion": "gold-pilot-metrics-v1",
- "createdAt": "2026-08-19T19:07:26.135Z",
- "runRoot": ".evaluation/runs/dev-v8-critical-ink-2026-08-19",
+ "goldPilotMetricsVersion": "gold-pilot-metrics-v2",
+ "createdAt": "2026-08-19T20:19:13.175Z",
+ "runRoot": ".evaluation/runs/dev-v9-two-channel-tokens-2026-08-19",
  "goldVerifiedAt": "2026-08-19T19:05:49.973Z",
  "pages": 14,
+ "validatedInputs": [
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 10,
+   "sha256": "909b4674e9e82d58dd6db43b74a59f6aa8481fb8e0d7d7b6d4cac8805df3033b"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 11,
+   "sha256": "909b4674e9e82d58dd6db43b74a59f6aa8481fb8e0d7d7b6d4cac8805df3033b"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 30,
+   "sha256": "909b4674e9e82d58dd6db43b74a59f6aa8481fb8e0d7d7b6d4cac8805df3033b"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 60,
+   "sha256": "909b4674e9e82d58dd6db43b74a59f6aa8481fb8e0d7d7b6d4cac8805df3033b"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 61,
+   "sha256": "909b4674e9e82d58dd6db43b74a59f6aa8481fb8e0d7d7b6d4cac8805df3033b"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 62,
+   "sha256": "909b4674e9e82d58dd6db43b74a59f6aa8481fb8e0d7d7b6d4cac8805df3033b"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 63,
+   "sha256": "909b4674e9e82d58dd6db43b74a59f6aa8481fb8e0d7d7b6d4cac8805df3033b"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 10,
+   "sha256": "9d8bf861e43cdb9315651c9fbda1369ab621811a439ff42fe70397f98a7c621b"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 11,
+   "sha256": "9d8bf861e43cdb9315651c9fbda1369ab621811a439ff42fe70397f98a7c621b"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 30,
+   "sha256": "9d8bf861e43cdb9315651c9fbda1369ab621811a439ff42fe70397f98a7c621b"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 60,
+   "sha256": "9d8bf861e43cdb9315651c9fbda1369ab621811a439ff42fe70397f98a7c621b"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 62,
+   "sha256": "9d8bf861e43cdb9315651c9fbda1369ab621811a439ff42fe70397f98a7c621b"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 63,
+   "sha256": "9d8bf861e43cdb9315651c9fbda1369ab621811a439ff42fe70397f98a7c621b"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 64,
+   "sha256": "9d8bf861e43cdb9315651c9fbda1369ab621811a439ff42fe70397f98a7c621b"
+  }
+ ],
  "criticalTokenRecall": {
-  "goldTokens": 669,
-  "native": 0.8266,
-  "ocr": 0.7997,
-  "union": 0.8341,
-  "missedByBoth": 111
+  "humanVerified": {
+   "goldTokens": 120,
+   "native": 0.3583,
+   "ocr": 0.425,
+   "union": 0.45,
+   "missedByBoth": 66
+  },
+  "silverNativeCorroborated": {
+   "goldTokens": 558,
+   "native": 0.9946,
+   "ocr": 0.9731,
+   "union": 0.9946,
+   "missedByBoth": 3,
+   "note": "Silver labels were auto-accepted because native text agreed; native/union rates on this tier are tautological by construction and must not be quoted as independent recall."
+  }
  },
  "conflictComposition": {
   "ocr": 17,
@@ -19,131 +101,275 @@
  "chartRelations": {
   "goldTuples": 107,
   "detectedRelations": 28,
-  "recall": 0
+  "recall": 0.2523,
+  "precision": 0.9643
  },
  "escalation": {
   "escalatedPages": 13,
-  "escalatedWithConfirmedError": 8,
+  "escalatedBlockingPages": 8,
+  "escalatedBlockingWithConfirmedError": 8,
+  "escalatedAdvisoryOnlyPages": 5,
   "cleanPages": 1,
-  "cleanWithMissedGoldToken": 1
+  "cleanWithHumanGoldMissedByBoth": 0
  },
  "perPage": [
   {
    "objectId": "public-comps:monotaro:2025-fy:004",
    "pageNumber": 10,
-   "gold": 16,
-   "native": 14,
-   "ocr": 14,
-   "neither": 2
+   "human": {
+    "gold": 2,
+    "native": 2,
+    "ocr": 2,
+    "union": 2,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 14,
+    "native": 14,
+    "ocr": 13,
+    "union": 14,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:004",
    "pageNumber": 11,
-   "gold": 5,
-   "native": 3,
-   "ocr": 3,
-   "neither": 2
+   "human": {
+    "gold": 2,
+    "native": 1,
+    "ocr": 1,
+    "union": 1,
+    "neither": 1
+   },
+   "silver": {
+    "gold": 3,
+    "native": 3,
+    "ocr": 3,
+    "union": 3,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:004",
    "pageNumber": 30,
-   "gold": 50,
-   "native": 39,
-   "ocr": 35,
-   "neither": 11
+   "human": {
+    "gold": 12,
+    "native": 12,
+    "ocr": 11,
+    "union": 12,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 39,
+    "native": 39,
+    "ocr": 39,
+    "union": 39,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:004",
    "pageNumber": 60,
-   "gold": 100,
-   "native": 100,
-   "ocr": 100,
-   "neither": 0
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 100,
+    "native": 100,
+    "ocr": 100,
+    "union": 100,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:004",
    "pageNumber": 61,
-   "gold": 166,
-   "native": 166,
-   "ocr": 162,
-   "neither": 0
+   "human": {
+    "gold": 1,
+    "native": 1,
+    "ocr": 0,
+    "union": 1,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 165,
+    "native": 165,
+    "ocr": 162,
+    "union": 165,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:004",
    "pageNumber": 62,
-   "gold": 15,
-   "native": 1,
-   "ocr": 1,
-   "neither": 14
+   "human": {
+    "gold": 14,
+    "native": 13,
+    "ocr": 14,
+    "union": 14,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 1,
+    "native": 1,
+    "ocr": 1,
+    "union": 1,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:004",
    "pageNumber": 63,
-   "gold": 40,
-   "native": 38,
-   "ocr": 37,
-   "neither": 2
+   "human": {
+    "gold": 2,
+    "native": 2,
+    "ocr": 1,
+    "union": 2,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 39,
+    "native": 39,
+    "ocr": 38,
+    "union": 39,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:003",
    "pageNumber": 10,
-   "gold": 3,
-   "native": 1,
-   "ocr": 1,
-   "neither": 2
+   "human": {
+    "gold": 2,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 2
+   },
+   "silver": {
+    "gold": 1,
+    "native": 1,
+    "ocr": 1,
+    "union": 1,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:003",
    "pageNumber": 11,
-   "gold": 11,
-   "native": 6,
-   "ocr": 4,
-   "neither": 4
+   "human": {
+    "gold": 5,
+    "native": 4,
+    "ocr": 4,
+    "union": 4,
+    "neither": 1
+   },
+   "silver": {
+    "gold": 6,
+    "native": 5,
+    "ocr": 4,
+    "union": 5,
+    "neither": 1
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:003",
    "pageNumber": 30,
-   "gold": 51,
-   "native": 1,
-   "ocr": 4,
-   "neither": 47
+   "human": {
+    "gold": 51,
+    "native": 3,
+    "ocr": 7,
+    "union": 7,
+    "neither": 44
+   },
+   "silver": {
+    "gold": 1,
+    "native": 1,
+    "ocr": 1,
+    "union": 1,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:003",
    "pageNumber": 60,
-   "gold": 145,
-   "native": 144,
-   "ocr": 139,
-   "neither": 1
+   "human": {
+    "gold": 1,
+    "native": 1,
+    "ocr": 1,
+    "union": 1,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 144,
+    "native": 144,
+    "ocr": 139,
+    "union": 144,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:003",
    "pageNumber": 62,
-   "gold": 16,
-   "native": 3,
-   "ocr": 3,
-   "neither": 13
+   "human": {
+    "gold": 13,
+    "native": 1,
+    "ocr": 2,
+    "union": 2,
+    "neither": 11
+   },
+   "silver": {
+    "gold": 3,
+    "native": 2,
+    "ocr": 2,
+    "union": 2,
+    "neither": 1
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:003",
    "pageNumber": 63,
-   "gold": 50,
-   "native": 37,
-   "ocr": 32,
-   "neither": 12
+   "human": {
+    "gold": 13,
+    "native": 1,
+    "ocr": 6,
+    "union": 6,
+    "neither": 7
+   },
+   "silver": {
+    "gold": 42,
+    "native": 41,
+    "ocr": 40,
+    "union": 41,
+    "neither": 1
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:003",
    "pageNumber": 64,
-   "gold": 1,
-   "native": 0,
-   "ocr": 0,
-   "neither": 1
+   "human": {
+    "gold": 2,
+    "native": 2,
+    "ocr": 2,
+    "union": 2,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   }
  ],
  "caveats": [
-  "Pilot-scale: 16 stratified pages, not the full corpus.",
-  "Recall is text-containment under the same-ink canonicalization; box agreement is not yet scored.",
-  "Gold source: machine pre-labels verified by one human annotator; no second annotator or adjudication yet."
+  "Pilot-scale: 14 pages, not the full corpus.",
+  "Recall is occurrence-consuming token containment under the same-ink canonicalization; box agreement is not yet scored.",
+  "Human-tier gold: machine pre-labels verified by one annotator; no second annotator or adjudication yet. Silver tier is not independent of the native engine.",
+  "Chart precision counts detections matched by any gold tuple; unmatched detections may be correct tuples the gold set does not cover."
  ]
 }

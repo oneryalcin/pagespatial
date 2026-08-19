@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { criticalTokens, sameTokenMultiset } from '../dist/index.js';
+import { criticalTokens, criticalTokensAgree } from '../dist/index.js';
 
 const NBSP = '\u00a0';
 const THIN = '\u2009';
@@ -9,7 +9,7 @@ const SOFT_HYPHEN = '\u00ad';
 const MINUS = '\u2212';
 
 function agrees(native, ocr) {
-  return sameTokenMultiset(criticalTokens(native), criticalTokens(ocr));
+  return criticalTokensAgree(criticalTokens(native), criticalTokens(ocr));
 }
 
 // Critical tokens compare two transcriptions of the SAME ink, so only
@@ -31,7 +31,19 @@ const MATCHES = [
   ['percent spacing healed', 'grew 5 %', 'grew 5%'],
   ['dates stay one verbatim token', '12/31/2024', '12/31/2024'],
   ['soft hyphen is invisible formatting', `soft${SOFT_HYPHEN}hyphen 42`, 'softhyphen 42'],
-  ['accounting negative with non-Western currency', '(₹5,000)', '-₹5,000']
+  ['accounting negative with non-Western currency', '(₹5,000)', '-₹5,000'],
+  // Segmentation invariance: an observation that covers less ink than its
+  // counterpart (unit word or label split into another observation or line)
+  // must never conflict. These rows feed DIFFERENT segmentations to each side.
+  ['unit word split across observations', '112.6 billion', '112.6'],
+  ['label word split across observations', 'in 2024', '2024'],
+  ['year prefix split across observations', 'FY 2024', '2024'],
+  ['interleaved labels between values', 'Cash 1,234 Debt 5,678', '1,234 Debt 5,678'],
+  // Leading words are labels, not magnitude: alphabetic OCR noise before a
+  // number must not block. Deliberate trade: a misread leading currency code
+  // (USD vs USO) is no longer caught; trailing units still are.
+  ['misread leading label does not block', 'EBITDA 45.6%', 'EBlTDA 45.6%'],
+  ['misread leading currency code is accepted (documented trade)', 'USD 450', 'USO 450']
 ];
 
 const CONFLICTS = [
@@ -41,7 +53,7 @@ const CONFLICTS = [
   ['estimate vs forecast year suffix', 'FY2024E', 'FY2024F'],
   ['O/0 confusable is exactly what we detect', '10.5%', '1O.5%'],
   ['misread unit word escalates', '$5 million', '$5 rnillion'],
-  ['misread currency code escalates', 'USD 450', 'USO 450']
+  ['unit words present on both sides must agree', '3.5 mm', '3.5 m']
 ];
 
 for (const [name, native, ocr] of MATCHES) {

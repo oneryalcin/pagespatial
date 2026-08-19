@@ -1,5 +1,15 @@
 # Gold pilot: first independent accuracy measurements
 
+> **RETRACTED IN PART (2026-08-19).** Four independent reviews found the
+> measurement tooling behind this trial defective: the chart-relation join
+> could never match (the detector is not dead — 25% recall / 96% precision),
+> auto-accepted tokens made the headline "native recall" partly tautological,
+> and tokenizer glue inflated missed-by-both rates. The parser-side findings
+> (CJK/chart gap direction, false-confidence page, conflict composition)
+> survive with corrected magnitudes. Corrected numbers and the full fix
+> record: [adversarial review fixes](2026-08-19-adversarial-review-fixes.md)
+> and repository issue #8. Preserved unedited below per change rules.
+
 Date: 2026-08-19
 Run evaluated: [dev-v8](../../evaluation/baselines/dev-v8-critical-ink-2026-08-19.summary.json)
 Aggregates: [pilot-v1 metrics](../../evaluation/gold/pilot-v1.metrics.json), [batch2-v1 metrics](../../evaluation/gold/batch2-v1.metrics.json)

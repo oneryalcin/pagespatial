@@ -210,11 +210,12 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
     spatialRows,
     derivedRelations,
     nativeMarkdown: input.nativeMarkdown,
-    nativeMarkdownSource: input.nativeMarkdownSource
+    nativeMarkdownSource: input.nativeMarkdownSource,
+    pixelsPerPoint
   });
 
   const page: PageSpatial = {
-    schemaVersion: '0.1.0',
+    schemaVersion: '0.2.0',
     documentId: input.document.documentId,
     revisionId: input.document.revisionId,
     documentSha256: input.document.sha256,

@@ -6,14 +6,15 @@
  * verdicts" to download a gold-verdicts JSON. That exported file — not the
  * machine proposal — is the gold input for the evaluator.
  *
- * With --run-root, tokens whose critical-token multiset also appears in the
- * page's NATIVE text layer are tier-marked "corroborated": the vision
- * pre-labeler and the PDF's embedded bytes are mechanically independent
- * witnesses, so agreement auto-accepts the label (verdict "auto") and the row
- * is collapsed by default. OCR agreement deliberately does NOT corroborate —
- * it shares the pre-labeler's vision failure modes. Human attention goes only
- * to uncorroborated rows, which are by construction the tokens the native
- * layer missed.
+ * With --run-root, tokens corroborated by the page's NATIVE text layer —
+ * compatible token AND overlapping position, each native occurrence consumed
+ * at most once — are tier-marked "auto" (SILVER tier, collapsed by default).
+ * Silver labels are not independent of the native engine and the evaluator
+ * reports them separately from human-verified gold. OCR agreement
+ * deliberately does not corroborate — it shares the pre-labeler's vision
+ * failure modes. Every non-corroborated row must be explicitly marked by the
+ * human; the evaluator rejects unreviewed rows, so a do-nothing export
+ * cannot silently agree with the machine.
  *
  * Usage:
  *   node scripts/evaluation/build-gold-review.mjs \
@@ -23,7 +24,7 @@
  */
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { criticalTokens } from '../../dist/text.js';
+import { criticalTokens, criticalTokensCompatible } from '../../dist/text.js';
 
 function arg(name, optional) {
   const index = process.argv.indexOf(name);
@@ -46,24 +47,43 @@ if (runRoot) {
     for (const file of pages) {
       const record = JSON.parse(readFileSync(join(documentsRoot, doc, 'pages', file), 'utf8'));
       if (!record.pageSpatial) continue;
-      nativePools.set(`${record.objectId}#${record.pageNumber}`,
-        criticalTokens(record.pageSpatial.nativeObservations.map((observation) => observation.text).join('\n')));
+      const { width, height } = record.pageSpatial.geometry;
+      // Pool entries carry the observation box normalized to the review UI's
+      // 0-1000 [ymin,xmin,ymax,xmax] space so corroboration is position-aware.
+      const entries = record.pageSpatial.nativeObservations.flatMap((observation) => {
+        const [x0, y0, x1, y1] = observation.box;
+        const box = [y0 / height * 1000, x0 / width * 1000, y1 / height * 1000, x1 / width * 1000];
+        return criticalTokens(observation.text).map((token) => ({ token, box }));
+      });
+      nativePools.set(`${record.objectId}#${record.pageNumber}`, entries);
     }
   }
 }
 
-function corroborated(pageKey, text) {
+function boxesOverlap(a, b) {
+  if (!a || !b) return false;
+  return Math.min(a[2], b[2]) > Math.max(a[0], b[0]) && Math.min(a[3], b[3]) > Math.max(a[1], b[1]);
+}
+
+// Position-aware, occurrence-consuming: each native occurrence corroborates
+// at most one proposal, and only where the boxes overlap — a duplicate or
+// mislocated proposal cannot borrow support from elsewhere on the page.
+function corroborated(pageKey, text, proposalBox) {
   const pool = nativePools.get(pageKey);
   if (!pool) return false;
   const needle = criticalTokens(text);
   if (!needle.length) return false;
-  const available = [...pool];
-  return needle.every((token) => {
-    const index = available.indexOf(token);
-    if (index < 0) return false;
-    available.splice(index, 1);
-    return true;
-  });
+  const taken = [];
+  for (const token of needle) {
+    const index = pool.findIndex((entry) =>
+      criticalTokensCompatible(entry.token, token) && boxesOverlap(entry.box, proposalBox));
+    if (index < 0) {
+      pool.push(...taken);
+      return false;
+    }
+    taken.push(pool.splice(index, 1)[0]);
+  }
+  return true;
 }
 
 const escapeHtml = (value) => String(value ?? '')
@@ -74,7 +94,7 @@ const pagesHtml = proposals.map((page, pageIndex) => {
   const imageBase64 = readFileSync(page.image).toString('base64');
   const tokens = (page.proposal.criticalTokens ?? []).map((token) => ({
     ...token,
-    auto: corroborated(pageKey, token.text)
+    auto: corroborated(pageKey, token.text, token.box_2d)
   }));
   const boxes = tokens.map((token, tokenIndex) => {
     const [y0, x0, y1, x1] = token.box_2d ?? [0, 0, 0, 0];
@@ -84,7 +104,7 @@ const pagesHtml = proposals.map((page, pageIndex) => {
     <tr data-page="${pageIndex}" data-token="${tokenIndex}" onmouseover="hl(${pageIndex},${tokenIndex},1)" onmouseout="hl(${pageIndex},${tokenIndex},0)">
       <td>${tokenIndex}</td>
       <td class="text" contenteditable="true">${escapeHtml(token.text)}</td>
-      <td><label><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="${token.auto ? 'auto' : 'correct'}" checked>${token.auto ? 'auto' : 'ok'}</label>
+      <td><label><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="${token.auto ? 'auto' : 'correct'}"${token.auto ? ' checked' : ''}>${token.auto ? 'auto' : 'ok'}</label>
           <label><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="wrong">wrong</label>
           <label><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="edited">edited</label></td>
     </tr>`;
@@ -96,14 +116,16 @@ const pagesHtml = proposals.map((page, pageIndex) => {
       <table>${autoRows}</table></details></td></tr>` : '');
   const chartRows = (page.proposal.chartRelations ?? []).map((relation, relationIndex) => `
     <tr><td>${relationIndex}</td><td>${escapeHtml(relation.series)}</td><td>${escapeHtml(relation.category)}</td>
-        <td class="text" contenteditable="true">${escapeHtml(relation.value)}</td><td>${escapeHtml(relation.unit)}</td>
-        <td><label><input type="radio" name="c-${pageIndex}-${relationIndex}" value="correct" checked>ok</label>
+        <td class="text" id="cv-${pageIndex}-${relationIndex}" contenteditable="true">${escapeHtml(relation.value)}</td><td>${escapeHtml(relation.unit)}</td>
+        <td><label><input type="radio" name="c-${pageIndex}-${relationIndex}" value="correct">ok</label>
+            <label><input type="radio" name="c-${pageIndex}-${relationIndex}" value="edited">edited</label>
             <label><input type="radio" name="c-${pageIndex}-${relationIndex}" value="wrong">wrong</label></td></tr>`).join('');
   const conflictRows = (page.conflictAdjudications ?? []).map((conflict, conflictIndex) => `
     <tr><td>${conflictIndex}</td>
         <td>native: <code>${escapeHtml(conflict.nativeText)}</code><br>ocr: <code>${escapeHtml(conflict.ocrText)}</code></td>
         <td>${escapeHtml(conflict.proposal?.verdict)} — <code>${escapeHtml(conflict.proposal?.inkText)}</code><br><small>${escapeHtml(conflict.proposal?.reason)}</small></td>
         <td><select name="v-${pageIndex}-${conflictIndex}">
+          <option value="unreviewed" selected>— review —</option>
           <option value="confirm">confirm proposal</option>
           <option value="native">native right</option>
           <option value="ocr">ocr right</option>
@@ -114,7 +136,7 @@ const pagesHtml = proposals.map((page, pageIndex) => {
   return `
   <section class="page" id="page-${pageIndex}">
     <h2>${pageIndex + 1}. ${escapeHtml(page.objectId)} — page ${page.pageNumber}
-      <small>${escapeHtml((page.labels ?? []).join(', '))} · escalated: ${page.escalatedInRun}</small></h2>
+      <small>${escapeHtml((page.labels ?? []).join(', '))}</small></h2>
     <p class="notes">${escapeHtml(page.proposal.notes)}</p>
     <div class="layout">
       <div class="imgwrap"><img src="data:image/png;base64,${imageBase64}">${boxes}</div>
@@ -123,6 +145,7 @@ const pagesHtml = proposals.map((page, pageIndex) => {
         <table>${tokenRows}</table>
         <textarea id="missed-${pageIndex}" placeholder="Missed tokens, one per line, verbatim"></textarea>
         ${chartRows ? `<h3>Chart relations</h3><table><tr><th></th><th>series</th><th>category</th><th>value</th><th>unit</th><th></th></tr>${chartRows}</table>` : ''}
+        <textarea id="missed-charts-${pageIndex}" placeholder="Missed chart tuples, one per line: category | value | unit"></textarea>
         ${conflictRows ? `<h3>Conflict adjudications</h3><table><tr><th></th><th>readings</th><th>machine proposal</th><th>your verdict</th></tr>${conflictRows}</table>` : ''}
       </div>
     </div>
@@ -157,7 +180,7 @@ const PROPOSALS = ${JSON.stringify(proposals.map((page) => ({
   tokenCount: (page.proposal.criticalTokens ?? []).length,
   chartCount: (page.proposal.chartRelations ?? []).length,
   conflictIds: (page.conflictAdjudications ?? []).map((conflict) => conflict.id)
-})))};
+}))).replaceAll('<', '\\u003c')};
 function hl(pageIndex, tokenIndex, on){
   const box = document.getElementById('box-' + pageIndex + '-' + tokenIndex);
   if (box) box.classList.toggle('hot', Boolean(on));
@@ -175,8 +198,12 @@ function exportVerdicts(){
     missedTokens: document.getElementById('missed-' + pageIndex).value.split('\\n').map(s => s.trim()).filter(Boolean),
     charts: Array.from({length: page.chartCount}, (_, relationIndex) => ({
       index: relationIndex,
-      verdict: document.querySelector('input[name="c-' + pageIndex + '-' + relationIndex + '"]:checked')?.value
+      verdict: document.querySelector('input[name="c-' + pageIndex + '-' + relationIndex + '"]:checked')?.value,
+      value: document.getElementById('cv-' + pageIndex + '-' + relationIndex)?.textContent.trim()
     })),
+    missedCharts: (document.getElementById('missed-charts-' + pageIndex)?.value ?? '').split('\n')
+      .map(line => line.trim()).filter(Boolean)
+      .map(line => { const [category, value, unit] = line.split('|').map(part => part.trim()); return {category, value, unit: unit || null}; }),
     conflicts: page.conflictIds.map((id, conflictIndex) => ({
       id, verdict: document.querySelector('select[name="v-' + pageIndex + '-' + conflictIndex + '"]')?.value
     }))

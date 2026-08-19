@@ -1,15 +1,107 @@
 {
- "goldPilotMetricsVersion": "gold-pilot-metrics-v1",
- "createdAt": "2026-08-19T19:07:26.489Z",
- "runRoot": ".evaluation/runs/dev-v8-critical-ink-2026-08-19",
+ "goldPilotMetricsVersion": "gold-pilot-metrics-v2",
+ "createdAt": "2026-08-19T20:19:12.863Z",
+ "runRoot": ".evaluation/runs/dev-v9-two-channel-tokens-2026-08-19",
  "goldVerifiedAt": "2026-08-19T18:31:27.725Z",
  "pages": 16,
+ "validatedInputs": [
+  {
+   "objectId": "legistar:seattle:2159:v0:attachment:3326",
+   "pageNumber": 1,
+   "sha256": "baeffd849ffe8505faeec8f844eefe29148fde8d210c9bde8bc0387210012840"
+  },
+  {
+   "objectId": "osf:file:64a59e4ea2a2f4140943711a:v1",
+   "pageNumber": 2,
+   "sha256": "a06ddba529ff277a72a639928808860c6fe3b27bf759e5f2070408dfd4d2dbad"
+  },
+  {
+   "objectId": "legistar:seattle:1859:v0:attachment:3318",
+   "pageNumber": 7,
+   "sha256": "725f4b428d49a365184b8993146e14c2ebd37fdeb3bb774a801c95fc6c7f9fa8"
+  },
+  {
+   "objectId": "legistar:seattle:1794:v0:attachment:3283",
+   "pageNumber": 27,
+   "sha256": "68d3c15e51bc52bc805d43a4b592c9945ae059463b6f18808715d007116e3b29"
+  },
+  {
+   "objectId": "legistar:seattle:1794:v0:attachment:3283",
+   "pageNumber": 1,
+   "sha256": "68d3c15e51bc52bc805d43a4b592c9945ae059463b6f18808715d007116e3b29"
+  },
+  {
+   "objectId": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+   "pageNumber": 1,
+   "sha256": "96f5a05d2aaa27c96fcb45513dac3488731a67169ef57f6856fc07d76c678356"
+  },
+  {
+   "objectId": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+   "pageNumber": 2,
+   "sha256": "96f5a05d2aaa27c96fcb45513dac3488731a67169ef57f6856fc07d76c678356"
+  },
+  {
+   "objectId": "public-comps:asseco-poland:2025-fy:001",
+   "pageNumber": 14,
+   "sha256": "7f84c3668bc57c89b2ce30427abc26c59dd4849451f6d33f71d9d5deb730a5d0"
+  },
+  {
+   "objectId": "public-comps:asseco-poland:2025-fy:001",
+   "pageNumber": 15,
+   "sha256": "7f84c3668bc57c89b2ce30427abc26c59dd4849451f6d33f71d9d5deb730a5d0"
+  },
+  {
+   "objectId": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+   "pageNumber": 3,
+   "sha256": "96f5a05d2aaa27c96fcb45513dac3488731a67169ef57f6856fc07d76c678356"
+  },
+  {
+   "objectId": "world-bank:P178566:document:34223652",
+   "pageNumber": 1,
+   "sha256": "1d77e1f0480d1e8aa2c76741ca06d491b0b8ae57d6ed5521d647a81ef7084795"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 12,
+   "sha256": "909b4674e9e82d58dd6db43b74a59f6aa8481fb8e0d7d7b6d4cac8805df3033b"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:004",
+   "pageNumber": 64,
+   "sha256": "909b4674e9e82d58dd6db43b74a59f6aa8481fb8e0d7d7b6d4cac8805df3033b"
+  },
+  {
+   "objectId": "pa-sers:2024-09-24:llr-vii:consultant-memo",
+   "pageNumber": 1,
+   "sha256": "1f026cc0d68e9abcc5177935d3244b654b77e1611060aadd15ffb4741411dcb0"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 12,
+   "sha256": "9d8bf861e43cdb9315651c9fbda1369ab621811a439ff42fe70397f98a7c621b"
+  },
+  {
+   "objectId": "public-comps:monotaro:2025-fy:003",
+   "pageNumber": 61,
+   "sha256": "9d8bf861e43cdb9315651c9fbda1369ab621811a439ff42fe70397f98a7c621b"
+  }
+ ],
  "criticalTokenRecall": {
-  "goldTokens": 325,
-  "native": 0.28,
-  "ocr": 0.4185,
-  "union": 0.4615,
-  "missedByBoth": 175
+  "humanVerified": {
+   "goldTokens": 339,
+   "native": 0.3687,
+   "ocr": 0.6313,
+   "union": 0.6372,
+   "missedByBoth": 123
+  },
+  "silverNativeCorroborated": {
+   "goldTokens": 0,
+   "native": null,
+   "ocr": null,
+   "union": null,
+   "missedByBoth": 0,
+   "note": "Silver labels were auto-accepted because native text agreed; native/union rates on this tier are tautological by construction and must not be quoted as independent recall."
+  }
  },
  "conflictComposition": {
   "ocr": 6,
@@ -19,147 +111,311 @@
  "chartRelations": {
   "goldTuples": 25,
   "detectedRelations": 0,
-  "recall": 0
+  "recall": 0,
+  "precision": null
  },
  "escalation": {
   "escalatedPages": 9,
-  "escalatedWithConfirmedError": 6,
+  "escalatedBlockingPages": 6,
+  "escalatedBlockingWithConfirmedError": 6,
+  "escalatedAdvisoryOnlyPages": 3,
   "cleanPages": 7,
-  "cleanWithMissedGoldToken": 4
+  "cleanWithHumanGoldMissedByBoth": 3
  },
  "perPage": [
   {
    "objectId": "legistar:seattle:2159:v0:attachment:3326",
    "pageNumber": 1,
-   "gold": 23,
-   "native": 1,
-   "ocr": 9,
-   "neither": 14
+   "human": {
+    "gold": 23,
+    "native": 1,
+    "ocr": 22,
+    "union": 22,
+    "neither": 1
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   },
   {
    "objectId": "osf:file:64a59e4ea2a2f4140943711a:v1",
    "pageNumber": 2,
-   "gold": 25,
-   "native": 23,
-   "ocr": 23,
-   "neither": 2
+   "human": {
+    "gold": 28,
+    "native": 28,
+    "ocr": 28,
+    "union": 28,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   },
   {
    "objectId": "legistar:seattle:1859:v0:attachment:3318",
    "pageNumber": 7,
-   "gold": 42,
-   "native": 0,
-   "ocr": 35,
-   "neither": 7
+   "human": {
+    "gold": 44,
+    "native": 0,
+    "ocr": 39,
+    "union": 39,
+    "neither": 5
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   },
   {
    "objectId": "legistar:seattle:1794:v0:attachment:3283",
    "pageNumber": 27,
-   "gold": 28,
-   "native": 0,
-   "ocr": 11,
-   "neither": 17
+   "human": {
+    "gold": 30,
+    "native": 0,
+    "ocr": 22,
+    "union": 22,
+    "neither": 8
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   },
   {
    "objectId": "legistar:seattle:1794:v0:attachment:3283",
    "pageNumber": 1,
-   "gold": 7,
-   "native": 0,
-   "ocr": 1,
-   "neither": 6
+   "human": {
+    "gold": 7,
+    "native": 0,
+    "ocr": 5,
+    "union": 5,
+    "neither": 2
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   },
   {
    "objectId": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
    "pageNumber": 1,
-   "gold": 1,
-   "native": 0,
-   "ocr": 1,
-   "neither": 0
+   "human": {
+    "gold": 1,
+    "native": 0,
+    "ocr": 1,
+    "union": 1,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   },
   {
    "objectId": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
    "pageNumber": 2,
-   "gold": 5,
-   "native": 2,
-   "ocr": 3,
-   "neither": 2
+   "human": {
+    "gold": 5,
+    "native": 5,
+    "ocr": 5,
+    "union": 5,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:asseco-poland:2025-fy:001",
    "pageNumber": 14,
-   "gold": 11,
-   "native": 6,
-   "ocr": 4,
-   "neither": 5
+   "human": {
+    "gold": 14,
+    "native": 13,
+    "ocr": 14,
+    "union": 14,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:asseco-poland:2025-fy:001",
    "pageNumber": 15,
-   "gold": 23,
-   "native": 13,
-   "ocr": 5,
-   "neither": 10
+   "human": {
+    "gold": 25,
+    "native": 22,
+    "ocr": 22,
+    "union": 24,
+    "neither": 1
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   },
   {
    "objectId": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
    "pageNumber": 3,
-   "gold": 36,
-   "native": 34,
-   "ocr": 31,
-   "neither": 2
+   "human": {
+    "gold": 36,
+    "native": 35,
+    "ocr": 35,
+    "union": 35,
+    "neither": 1
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   },
   {
    "objectId": "world-bank:P178566:document:34223652",
    "pageNumber": 1,
-   "gold": 12,
-   "native": 7,
-   "ocr": 7,
-   "neither": 4
+   "human": {
+    "gold": 13,
+    "native": 13,
+    "ocr": 13,
+    "union": 13,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:004",
    "pageNumber": 12,
-   "gold": 1,
-   "native": 1,
-   "ocr": 1,
-   "neither": 0
+   "human": {
+    "gold": 1,
+    "native": 1,
+    "ocr": 1,
+    "union": 1,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:004",
    "pageNumber": 64,
-   "gold": 1,
-   "native": 0,
-   "ocr": 0,
-   "neither": 1
+   "human": {
+    "gold": 1,
+    "native": 1,
+    "ocr": 1,
+    "union": 1,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   },
   {
    "objectId": "pa-sers:2024-09-24:llr-vii:consultant-memo",
    "pageNumber": 1,
-   "gold": 3,
-   "native": 2,
-   "ocr": 3,
-   "neither": 0
+   "human": {
+    "gold": 4,
+    "native": 4,
+    "ocr": 4,
+    "union": 4,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:003",
    "pageNumber": 12,
-   "gold": 1,
-   "native": 1,
-   "ocr": 1,
-   "neither": 0
+   "human": {
+    "gold": 1,
+    "native": 1,
+    "ocr": 1,
+    "union": 1,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   },
   {
    "objectId": "public-comps:monotaro:2025-fy:003",
    "pageNumber": 61,
-   "gold": 106,
-   "native": 1,
-   "ocr": 1,
-   "neither": 105
+   "human": {
+    "gold": 106,
+    "native": 1,
+    "ocr": 1,
+    "union": 1,
+    "neither": 105
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
   }
  ],
  "caveats": [
-  "Pilot-scale: 16 stratified pages, not the full corpus.",
-  "Recall is text-containment under the same-ink canonicalization; box agreement is not yet scored.",
-  "Gold source: machine pre-labels verified by one human annotator; no second annotator or adjudication yet."
+  "Pilot-scale: 16 pages, not the full corpus.",
+  "Recall is occurrence-consuming token containment under the same-ink canonicalization; box agreement is not yet scored.",
+  "Human-tier gold: machine pre-labels verified by one annotator; no second annotator or adjudication yet. Silver tier is not independent of the native engine.",
+  "Chart precision counts detections matched by any gold tuple; unmatched detections may be correct tuples the gold set does not cover."
  ]
 }

@@ -111,37 +111,26 @@ There is no server GPU OCR adapter yet. The existing `OcrAdapter` boundary is th
 | PDF Inspector Markdown on the dense table | All values were present, but one section label and one total were attached to the wrong row | Markdown is useful but cannot be treated as correct table structure |
 | Heuristic audit: scale/locale hardening rerun (dev-v7) | Identical parser-controlled numbers to dev-v6 after moving pixel constants to point-space and fixing locale-dependent lowercasing | Adopted; constants live in `src/tuning.ts`. See [audit and redesign trial](trials/2026-08-19-heuristic-audit-and-critical-ink-redesign.md) |
 | Critical-token "same ink" redesign (dev-v8) | 10 old conflicts were presentation heals; 215 new conflicts surfaced, including real OCR misreads the unit-whitelist regex missed | Adopted; conflict counts before/after are not comparable. Same trial report |
-| Gold pilot: 30 human-verified pages vs dev-v8 | First accuracy numbers: EN chart pages miss 8% of gold tokens, JA siblings 29%; confirmed a confidently-wrong CJK page that never escalated; conflict adjudications split OCR-right 23 / native-right 17 / both-wrong 6; chart detector matched 0/132 gold tuples | Adopted as P0 pilot; details in [gold pilot trial](trials/2026-08-19-gold-pilot-first-accuracy.md) |
+| Gold pilot: 30 human-verified pages vs dev-v8 | Headline numbers later partially retracted (measurement defects); the CJK/chart gap, the false-confidence page, and the conflict split survived with corrected magnitudes | Retracted in part; see the banner in [gold pilot trial](trials/2026-08-19-gold-pilot-first-accuracy.md) |
+| Four-review adversarial pass over the audit/gold branch (dev-v9) | Chart detector is 25% recall / 96% precision, not dead; gold auto-accept was circular; word-glue made tokens segmentation-dependent; 36 of 663 conflicts were glue artifacts; blocking escalations were 14/14 confirmed real | Adopted: two-channel tokens, tiered gold metrics, hash-bound evaluator, schema 0.2.0. See [adversarial review fixes](trials/2026-08-19-adversarial-review-fixes.md) and issue #8 |
 
 The browser trial also retained three tooling failures: Paddle worker prebundling, ORT `?import` handling, and a stale Vite process. These are solved in the current smoke harness and documented in the trial. They were integration failures, not accuracy results.
 
 ## Current empirical evidence
 
-The current reference aggregate is [`evaluation/baselines/dev-v8-critical-ink-2026-08-19.summary.json`](../evaluation/baselines/dev-v8-critical-ink-2026-08-19.summary.json). The superseded [dev-v6](../evaluation/baselines/dev-v6-2026-08-19.summary.json) and the behavior-preserving [dev-v7](../evaluation/baselines/dev-v7-scale-locale-2026-08-19.summary.json) validation run are retained as history; the [audit and redesign trial](trials/2026-08-19-heuristic-audit-and-critical-ink-redesign.md) explains the lineage.
+The current reference aggregate is [`evaluation/baselines/dev-v9-two-channel-tokens-2026-08-19.summary.json`](../evaluation/baselines/dev-v9-two-channel-tokens-2026-08-19.summary.json). Superseded aggregates ([dev-v6](../evaluation/baselines/dev-v6-2026-08-19.summary.json), [dev-v7](../evaluation/baselines/dev-v7-scale-locale-2026-08-19.summary.json), [dev-v8](../evaluation/baselines/dev-v8-critical-ink-2026-08-19.summary.json)) are retained as history; the [audit trial](trials/2026-08-19-heuristic-audit-and-critical-ink-redesign.md) and the [adversarial review fixes trial](trials/2026-08-19-adversarial-review-fixes.md) explain the lineage.
 
-dev-v8 records:
+dev-v9 records (23 PDFs, 162 pages, schema 0.2.0, two-channel critical tokens):
 
-- 23 development PDFs;
-- 162 nominated pages;
-- 162 OCR-completed pages;
-- 162 schema-valid PageSpatial records; 0 failed closed;
-- 17,051 native observations;
-- 14,797 OCR observations;
-- 11,040 native/OCR source matches;
-- 663 critical conflicts under the "same ink" token definition;
-- 103 pages requiring escalation (78 pages with token conflicts, 44 with token omissions, 43 with low-confidence OCR, 7 with ambiguous relations; 12 escalate on advisory reasons only);
-- Markdown source per page: 136 pdf-inspector, 12 pdfjs-deduplicated, 14 native-lines.
+- 162 OCR-completed, 162 schema-valid, 0 failed closed;
+- 17,051 native observations; 14,797 OCR observations; 11,072 source matches;
+- 627 critical conflicts; 102 pages requiring escalation.
 
-The median native/OCR association coverage was 84.8%; the mean was 68.3%. This is matcher coverage, not parser accuracy or OCR recall. Conflict counts are not comparable with dev-v6 because the conflict definition changed.
+Gold evidence (30 labelled pages, tiered): human-verified union recall 64% on mixed pages; on the EN/JA sibling pages the human tier (tokens the native layer missed, mostly chart-embedded) is missed-by-both 3% in English vs 75% in Japanese; blocking escalations 14/14 confirmed real errors; conflict adjudications OCR-right 23 / native-right 17 / both-wrong 6; chart detector 25% recall at 96% precision. Text-free aggregates: [`evaluation/gold/`](../evaluation/gold/).
+
+The median native/OCR association coverage was 85.2%; the mean was 68.6%. This is matcher coverage, not parser accuracy or OCR recall. Conflict counts are comparable only within one token-definition era (dev-v8/dev-v9 differ from dev-v6, and from each other by the two-channel change).
 
 The public aggregate authenticates the private invocation, 23 document summaries, and 162 immutable page attempts by content hash. Runtime PDFs, OCR output, and logs are private and are not committed or packed.
-
-Important interpretation:
-
-- `162/162 schema-valid` means the records satisfy identity, provenance, reference, diagnostic, and geometry invariants.
-- It does not prove the text, reading order, table relationships, chart relationships, or escalation decision is correct.
-- The 449 conflicts and 98 escalated pages are unresolved evaluation inputs, not automatically parser defects.
-- Gold-dependent metrics remain `not_evaluated`.
 
 ## Private corpus and reproducibility
 

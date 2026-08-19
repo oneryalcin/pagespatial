@@ -120,7 +120,7 @@ const provenanceSchema = z.object({
 });
 
 const pageSpatialBaseSchema = z.object({
-  schemaVersion: z.literal('0.1.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
+  schemaVersion: z.literal('0.2.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
   pageId: z.string(), pageNumber: z.number().int().positive(), geometry: pageGeometrySchema,
   nativeObservations: z.array(nativeObservationSchema), ocrObservations: z.array(ocrObservationSchema),
   nativeLines: z.array(nativeLineSchema), sourceMatches: z.array(sourceMatchSchema), conflicts: z.array(conflictSchema),
@@ -361,7 +361,7 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
     }
     if (actual[0] && (actual[0].count !== expected.count
       || actual[0].severity !== expected.severity
-      || actual[0].share !== expected.share
+      || !closeEnough(actual[0].share, expected.share)
       || JSON.stringify([...actual[0].sourceIds].sort()) !== JSON.stringify([...expected.sourceIds].sort()))) {
       issue(context, ['diagnostics', 'escalationReasons'], `${type} escalation details do not match source evidence.`);
     }
@@ -369,7 +369,7 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
 });
 
 const pageSpatialDocumentBaseSchema = z.object({
-  schemaVersion: z.literal('0.1.0'),
+  schemaVersion: z.literal('0.2.0'),
   document: documentIdentitySchema,
   pages: z.array(pageSpatialSchema),
   diagnostics: z.object({
