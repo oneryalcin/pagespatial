@@ -1,8 +1,10 @@
 # PageSpatial
 
-**Every number your search index serves should be traceable to actual ink on an actual page — and when the extraction might be wrong, the record should say so instead of bluffing.**
+A TypeScript library (browser and Node) that extracts text from PDFs *and tells you which parts to trust*.
 
-PageSpatial reads every PDF page twice: once through the PDF's own embedded text, once through OCR looking at the rendered page like a human would. Then it compares, ink against ink:
+PDF extraction fails silently. Broken font maps make a page render perfectly and copy-paste as garbage. OCR reads `O` as `0` and reports 90% confidence. Numbers drawn inside charts don't exist in the text layer at all. Every extractor hands you a clean-looking string with no indication of which parts are lies — and if that string feeds a search index or an LLM, the lies get served as answers.
+
+PageSpatial's premise: an extracted value is only trustworthy if you can trace it to actual ink on an actual page — and when the extraction might be wrong, the record should say so instead of bluffing. So it reads every page twice — once through the PDF's own embedded text, once through OCR looking at the rendered page like a human would — and compares:
 
 - **The two readings agree** → that text is corroborated. Trust it.
 - **They disagree** → that's a recorded conflict. Nobody wins by default — on real documents, each reader turns out to be the wrong one about half the time.
