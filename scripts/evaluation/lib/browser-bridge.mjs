@@ -63,9 +63,15 @@ export async function startBrowserBridge(options) {
   const pageErrors = [];
   try {
     const serverDeadline = Date.now() + 20_000;
-    while (!/Local:/u.test(serverOutput)) {
+    while (true) {
       if (vite.exitCode !== null) throw new Error(`Corpus Vite server exited early: ${serverOutput}`);
       if (Date.now() > serverDeadline) throw new Error(`Corpus Vite server did not start: ${serverOutput}`);
+      try {
+        const ready = await fetch(`http://127.0.0.1:${port}/`);
+        if (ready.ok) break;
+      } catch {
+        // The loopback listener is not ready yet.
+      }
       await delay(50);
     }
     const executablePath = resolve(options.chromePath ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');

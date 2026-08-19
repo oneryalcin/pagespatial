@@ -239,9 +239,15 @@ test('evaluation Vite server cannot expose repository or private files through /
   child.stderr.on('data', (chunk) => { output += chunk; });
   try {
     const deadline = Date.now() + 10_000;
-    while (!/Local:/u.test(output)) {
+    while (true) {
       if (child.exitCode !== null) throw new Error(`Vite exited: ${output}`);
       if (Date.now() > deadline) throw new Error(`Vite did not start: ${output}`);
+      try {
+        const ready = await fetch(`http://127.0.0.1:${port}/`);
+        if (ready.ok) break;
+      } catch {
+        // The loopback listener is not ready yet.
+      }
       await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
     }
     const response = await fetch(`http://127.0.0.1:${port}/@fs/${join(root, 'evaluation/corpus.v1.json')}`);
