@@ -1,0 +1,81 @@
+/**
+ * Central registry for heuristic constants.
+ *
+ * Spatial constants are expressed in PDF points and multiplied by the page's
+ * rendered pixels-per-point at use time, so heuristics behave identically at
+ * any render scale. The dev-v6 baseline was recorded at render scale 1.6;
+ * every point value below equals the original pixel constant divided by 1.6,
+ * so behavior at the default scale is unchanged.
+ *
+ * None of these values are validated against independent gold labels yet
+ * (handoff P0). Do not retune them without gold evidence; record the change
+ * rationale here when gold exists.
+ */
+
+/** Render scale the heuristics were originally tuned at (dev-v6 baseline). */
+export const REFERENCE_RENDER_SCALE = 1.6;
+
+/*
+ * Coupled pair, reason about together when gold arrives:
+ * the browser OCR adapter admits observations down to its recognition
+ * threshold (0.25 in src/browser/ppocr.ts), while diagnostics escalate any
+ * observation below lowOcrConfidence (0.5 in src/diagnostics.ts). Every
+ * observation in the 0.25–0.5 band is therefore a guaranteed page escalation
+ * by construction. The adapter records its resolved admission policy in
+ * provenance (ocrAdapterConfiguration) so the band's effect is measurable.
+ */
+
+/** Vertical spatial-index bucket for native/OCR candidate lookup (was 64px @1.6). */
+export const ASSOCIATION_BUCKET_PT = 40;
+
+/**
+ * Association score blends text and geometry. Text dominates because OCR boxes
+ * are loose polygons while text agreement is the actual evidence of identity.
+ * Untuned against gold; the split is a dev-corpus judgment call.
+ */
+export const ASSOCIATION_TEXT_WEIGHT = 0.78;
+export const ASSOCIATION_GEOMETRY_WEIGHT = 0.22;
+
+/** Minimum similarity/overlap for accepting a native/OCR match. */
+export const ASSOCIATION_MIN_TEXT_SIMILARITY = 0.72;
+export const ASSOCIATION_MIN_GEOMETRY_OVERLAP = 0.12;
+
+/**
+ * Looser gates for the conflict check: a weakly similar but colocated pair is
+ * still evidence of the same visible region, and disagreement there must
+ * surface as a conflict instead of silently failing to match.
+ */
+export const CONFLICT_MIN_TEXT_SIMILARITY = 0.5;
+export const CONFLICT_MIN_GEOMETRY_OVERLAP = 0.45;
+
+/** Floor for same-line vertical tolerance in reading order (was 8px @1.6). */
+export const LINE_TOLERANCE_MIN_PT = 5;
+
+/** Same-line tolerance as a fraction of the smaller item height. */
+export const LINE_TOLERANCE_HEIGHT_RATIO = 0.65;
+
+/** Line/row grouping window as a fraction of the taller member's height. */
+export const GROUP_HEIGHT_RATIO = 0.55;
+
+/** Minimum height attributed to an OCR row when grouping (was 8px @1.6). */
+export const SPATIAL_ROW_MIN_HEIGHT_PT = 5;
+
+/** Year tokens on one visual axis row cluster within this tolerance (was 24px @1.6). */
+export const RELATION_ROW_TOLERANCE_PT = 15;
+
+/** Fallback column gap when fewer than two year gaps exist (was 80px @1.6). */
+export const RELATION_FALLBACK_GAP_PT = 50;
+
+/** Values are searched at most max(this, 4 column gaps) above the year row (was 160px @1.6). */
+export const RELATION_VALUE_WINDOW_MIN_PT = 100;
+
+/** Values must sit above the year row by at least this margin (was 2px @1.6). */
+export const RELATION_VALUE_ABOVE_MARGIN_PT = 1.25;
+
+/** A value belongs to the year column within this fraction of the column gap. */
+export const RELATION_ASSIGN_RADIUS_RATIO = 0.48;
+
+/** Derived-relation confidence: base + margin bonus, hard-capped as a derived hypothesis. */
+export const RELATION_CONFIDENCE_BASE = 0.55;
+export const RELATION_CONFIDENCE_MARGIN_BONUS = 0.3;
+export const RELATION_CONFIDENCE_CAP = 0.85;

@@ -1,6 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assertPageGeometry, pointBoxToRenderedBox } from '../dist/index.js';
+import { pdfJsTextItemPointBox } from '../dist/pdfjs-text.js';
+
+// A zero-length axis vector previously fabricated a 1pt height (or an assumed
+// left-to-right direction) instead of failing closed.
+test('singular PDF.js text transforms are rejected, not repaired', () => {
+  const singular = { transform: [0, 0, 0, 0, 100, 200], width: 40, height: 0 };
+  assert.throws(() => pdfJsTextItemPointBox(singular), /singular text transform/);
+  const degenerateVertical = { transform: [12, 0, 0, 0, 100, 200], width: 40, height: 0 };
+  assert.throws(() => pdfJsTextItemPointBox(degenerateVertical), /singular text transform/);
+  const rotated = { transform: [0, 12, -12, 0, 100, 200], width: 40, height: 12 };
+  const box = pdfJsTextItemPointBox(rotated);
+  assert.ok(box[2] > box[0] && box[3] > box[1]);
+});
 
 test('transforms all four point-box corners with the PDF viewport matrix', () => {
   const result = pointBoxToRenderedBox([10, 20, 40, 30], {

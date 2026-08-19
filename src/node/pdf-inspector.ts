@@ -126,7 +126,9 @@ export function createPdfInspectorNativeAdapter(options: PdfInspectorAdapterOpti
       const visualKeys = observations.map((observation) => `${observation.text.normalize('NFKC')}|${observation.pointBox.join(',')}`);
       const hasCoincidentOverlay = new Set(visualKeys).size !== visualKeys.length;
       const inspectorMarkdown = extraction.markdownPages.find((candidate) => candidate.page === pageNumber - 1)?.markdown ?? '';
-      const markdown = hasCoincidentOverlay || !inspectorMarkdown.trim() ? pdfJsPageMarkdown(items) : inspectorMarkdown;
+      const useInspector = !hasCoincidentOverlay && Boolean(inspectorMarkdown.trim());
+      const markdown = useInspector ? inspectorMarkdown : pdfJsPageMarkdown(items);
+      const markdownSource = useInspector ? 'pdf-inspector' : 'pdfjs-deduplicated';
       return {
         pageNumber,
         geometry: {
@@ -136,7 +138,8 @@ export function createPdfInspectorNativeAdapter(options: PdfInspectorAdapterOpti
           rotation: viewport.rotation
         },
         observations,
-        markdown
+        markdown,
+        markdownSource
       };
     }
   };

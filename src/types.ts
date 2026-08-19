@@ -146,10 +146,21 @@ export type EscalationReasonType =
   | 'ambiguous-derived-relation'
   | 'low-ocr-confidence';
 
+/**
+ * Derived from the reason type, never from a threshold: contradictory evidence
+ * (critical-token reasons) blocks; individually weak evidence (low confidence,
+ * ambiguous relations) advises. Lets a downstream router adopt "blocking only"
+ * without PageSpatial choosing for it.
+ */
+export type EscalationSeverity = 'blocking' | 'advisory';
+
 export interface EscalationReason {
   type: EscalationReasonType;
+  severity: EscalationSeverity;
   sourceIds: string[];
   count: number;
+  /** count over its denominator (OCR observations, or derived relations for ambiguity), 0..1. */
+  share: number;
 }
 
 export interface PageDiagnostics {
@@ -187,10 +198,17 @@ export interface PageProjection {
   format: 'pagespatial-markdown-v1';
   trust: 'untrusted-document-content';
   derived: true;
+  /**
+   * Which extractor produced the native-structure section, e.g.
+   * 'pdf-inspector' or 'pdfjs-deduplicated'. 'pagespatial-native-lines' means
+   * no adapter markdown was available and native lines were rendered instead.
+   * Recorded so adapter-fallback rates are measurable per page.
+   */
+  markdownSource: string;
 }
 
 export interface PageSpatial {
-  schemaVersion: '0.1.0';
+  schemaVersion: '0.2.0';
   documentId: string;
   revisionId: string;
   documentSha256: string;
@@ -222,7 +240,7 @@ export interface DocumentDiagnostics {
 }
 
 export interface PageSpatialDocument {
-  schemaVersion: '0.1.0';
+  schemaVersion: '0.2.0';
   document: DocumentIdentity;
   pages: PageSpatial[];
   diagnostics: DocumentDiagnostics;
@@ -234,6 +252,8 @@ export interface NativePageResult {
   geometry: Partial<PageGeometry>;
   observations: Array<NativeObservationInput | NativePointObservationInput>;
   markdown?: string;
+  /** Which extractor produced `markdown` (e.g. 'pdf-inspector', 'pdfjs-deduplicated'). */
+  markdownSource?: string;
 }
 
 export interface NativeDocumentResult {

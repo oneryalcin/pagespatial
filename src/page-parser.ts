@@ -1,5 +1,5 @@
 import { buildDiagnostics, type DiagnosticOptions } from './diagnostics.js';
-import { assertBoxWithin, assertPageGeometry, pointBounds, pointBoxToRenderedBox, roundBox } from './geometry.js';
+import { assertBoxWithin, assertPageGeometry, pointBounds, pointBoxToRenderedBox, renderedPixelsPerPoint, roundBox } from './geometry.js';
 import { createObservationId, createPageId } from './ids.js';
 import { associateNativeAndOcr, type AssociationOptions } from './merge.js';
 import { projectMarkdown } from './projection.js';
@@ -28,6 +28,7 @@ export interface BuildPageSpatialInput {
   nativeObservations: Array<NativeObservationInput | NativePointObservationInput>;
   ocrObservations: OcrObservationInput[];
   nativeMarkdown?: string;
+  nativeMarkdownSource?: string;
   provenance: ExtractionProvenance;
   association?: AssociationOptions;
   diagnostics?: DiagnosticOptions;
@@ -185,9 +186,13 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
   const nativeObservations = normalizeNative(input.document, input.pageNumber, input.geometry, input.nativeObservations);
   const ocrObservations = normalizeOcr(input.document, input.pageNumber, input.ocrObservations);
   validateNormalizedGeometry(input.geometry, nativeObservations, ocrObservations);
-  const association = associateNativeAndOcr(nativeObservations, ocrObservations, input.association);
-  const spatialRows = buildSpatialRows(ocrObservations);
-  const derivedRelations = inferSimpleYearValueRelations(pageId, ocrObservations);
+  const pixelsPerPoint = renderedPixelsPerPoint(input.geometry);
+  const association = associateNativeAndOcr(nativeObservations, ocrObservations, {
+    pixelsPerPoint,
+    ...input.association
+  });
+  const spatialRows = buildSpatialRows(ocrObservations, pixelsPerPoint);
+  const derivedRelations = inferSimpleYearValueRelations(pageId, ocrObservations, pixelsPerPoint);
   const diagnostics = buildDiagnostics({
     nativeObservations,
     ocrObservations,
@@ -204,11 +209,13 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
     sourceMatches: association.sourceMatches,
     spatialRows,
     derivedRelations,
-    nativeMarkdown: input.nativeMarkdown
+    nativeMarkdown: input.nativeMarkdown,
+    nativeMarkdownSource: input.nativeMarkdownSource,
+    pixelsPerPoint
   });
 
   const page: PageSpatial = {
-    schemaVersion: '0.1.0',
+    schemaVersion: '0.2.0',
     documentId: input.document.documentId,
     revisionId: input.document.revisionId,
     documentSha256: input.document.sha256,
@@ -325,6 +332,7 @@ export function assemblePageSpatial(input: AssemblePageSpatialInput): PageSpatia
     nativeObservations: input.nativePage.observations,
     ocrObservations: input.ocrPage.observations,
     nativeMarkdown: input.nativePage.markdown,
+    nativeMarkdownSource: input.nativePage.markdownSource,
     provenance,
     association: input.association,
     diagnostics: input.diagnostics

@@ -120,7 +120,8 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
                   configuration: {
                     renderScale,
                     concurrency,
-                    diagnosticPolicy: resolveDiagnosticOptions(options.diagnostics)
+                    diagnosticPolicy: resolveDiagnosticOptions(options.diagnostics),
+                    ...(adapters.ocr.configuration ? { ocrAdapterConfiguration: adapters.ocr.configuration } : {})
                   },
                   association: options.association,
                   diagnostics: options.diagnostics
@@ -151,11 +152,12 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
           configuration: {
             renderScale,
             concurrency,
-            diagnosticPolicy: resolveDiagnosticOptions(options.diagnostics)
+            diagnosticPolicy: resolveDiagnosticOptions(options.diagnostics),
+            ...(adapters.ocr.configuration ? { ocrAdapterConfiguration: adapters.ocr.configuration } : {})
           }
         };
         const result: PageSpatialDocument = {
-          schemaVersion: '0.1.0',
+          schemaVersion: '0.2.0',
           document,
           pages: completed,
           diagnostics: documentDiagnostics(completed),

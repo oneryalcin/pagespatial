@@ -217,3 +217,26 @@ test('public Markdown projection remains source-compatible without nativeLines',
   });
   assert.match(projection.markdown, /No text observations/);
 });
+
+test('projection records which extractor produced the markdown', () => {
+  const withAdapterMarkdown = publicApi.projectMarkdown({
+    pageNumber: 1,
+    nativeObservations: [],
+    ocrObservations: [],
+    sourceMatches: [],
+    spatialRows: [],
+    derivedRelations: [],
+    nativeMarkdown: '# Heading',
+    nativeMarkdownSource: 'pdf-inspector'
+  });
+  assert.equal(withAdapterMarkdown.markdownSource, 'pdf-inspector');
+  const withoutAdapterMarkdown = publicApi.projectMarkdown({
+    pageNumber: 1,
+    nativeObservations: [],
+    ocrObservations: [],
+    sourceMatches: [],
+    spatialRows: [],
+    derivedRelations: []
+  });
+  assert.equal(withoutAdapterMarkdown.markdownSource, 'pagespatial-native-lines');
+});

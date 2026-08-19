@@ -21,6 +21,12 @@ export interface PageRenderer<TSource = unknown, TRaster = unknown> {
 export interface OcrAdapter<TRaster = unknown> {
   readonly name: string;
   readonly version: string;
+  /**
+   * Resolved admission policy and runtime settings (e.g. recognition threshold,
+   * detector limit). Recorded in provenance so downstream evaluation can
+   * account for what the adapter admitted, not just what it produced.
+   */
+  readonly configuration?: Record<string, unknown>;
   recognize(page: RenderedPage<TRaster>, options?: { signal?: AbortSignal }): Promise<OcrPageResult>;
 }
 

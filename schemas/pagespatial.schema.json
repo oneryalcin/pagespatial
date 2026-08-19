@@ -4,7 +4,7 @@
   "properties": {
     "schemaVersion": {
       "type": "string",
-      "const": "0.1.0"
+      "const": "0.2.0"
     },
     "document": {
       "type": "object",
@@ -45,7 +45,7 @@
         "properties": {
           "schemaVersion": {
             "type": "string",
-            "const": "0.1.0"
+            "const": "0.2.0"
           },
           "documentId": {
             "type": "string"
@@ -802,6 +802,13 @@
                         "low-ocr-confidence"
                       ]
                     },
+                    "severity": {
+                      "type": "string",
+                      "enum": [
+                        "blocking",
+                        "advisory"
+                      ]
+                    },
                     "sourceIds": {
                       "type": "array",
                       "items": {
@@ -812,12 +819,19 @@
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
+                    },
+                    "share": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
                     }
                   },
                   "required": [
                     "type",
+                    "severity",
                     "sourceIds",
-                    "count"
+                    "count",
+                    "share"
                   ],
                   "additionalProperties": false
                 }
@@ -855,13 +869,18 @@
               "derived": {
                 "type": "boolean",
                 "const": true
+              },
+              "markdownSource": {
+                "type": "string",
+                "minLength": 1
               }
             },
             "required": [
               "markdown",
               "format",
               "trust",
-              "derived"
+              "derived",
+              "markdownSource"
             ],
             "additionalProperties": false
           },

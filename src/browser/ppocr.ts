@@ -240,6 +240,13 @@ export function createPpOcrV6BrowserAdapter(options: PpOcrBrowserOptions): PpOcr
   return {
     name: 'ppocrv6-tiny-browser',
     version: '0.4.2',
+    configuration: {
+      requestedBackend: options.backend ?? 'auto',
+      recognitionThreshold,
+      detectorLimit,
+      recognitionBatchSize,
+      localOnly
+    },
     recognize(page, recognizeOptions) {
       return enqueue(() => predict(page, recognizeOptions?.signal));
     },

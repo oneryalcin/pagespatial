@@ -1,6 +1,16 @@
 import { overlapOverSmaller } from './geometry.js';
 import { buildNativeLines } from './reading-order.js';
-import { criticalTokens, sameTokenMultiset, textSimilarity } from './text.js';
+import { criticalTokens, criticalTokensAgree, textSimilarity } from './text.js';
+import {
+  ASSOCIATION_BUCKET_PT,
+  ASSOCIATION_GEOMETRY_WEIGHT,
+  ASSOCIATION_MIN_GEOMETRY_OVERLAP,
+  ASSOCIATION_MIN_TEXT_SIMILARITY,
+  ASSOCIATION_TEXT_WEIGHT,
+  CONFLICT_MIN_GEOMETRY_OVERLAP,
+  CONFLICT_MIN_TEXT_SIMILARITY,
+  REFERENCE_RENDER_SCALE
+} from './tuning.js';
 import type {
   Box,
   EvidenceConflict,
@@ -20,6 +30,8 @@ interface Candidate {
 }
 
 export interface AssociationOptions {
+  /** Rendered pixels per PDF point; spatial defaults scale with it. Explicit bucketSize wins. */
+  pixelsPerPoint?: number;
   bucketSize?: number;
   minimumTextSimilarity?: number;
   minimumGeometryOverlap?: number;
@@ -43,11 +55,15 @@ export function associateNativeAndOcr(
   ocrObservations: readonly OcrObservation[],
   options: AssociationOptions = {}
 ): AssociationResult {
-  const bucketSize = options.bucketSize ?? 64;
-  const minimumText = options.minimumTextSimilarity ?? 0.72;
-  const minimumGeometry = options.minimumGeometryOverlap ?? 0.12;
-  const criticalText = options.criticalCandidateTextSimilarity ?? 0.5;
-  const criticalGeometry = options.criticalCandidateGeometryOverlap ?? 0.45;
+  const pixelsPerPoint = options.pixelsPerPoint ?? REFERENCE_RENDER_SCALE;
+  if (!Number.isFinite(pixelsPerPoint) || pixelsPerPoint <= 0) {
+    throw new Error('pixelsPerPoint must be a positive finite number.');
+  }
+  const bucketSize = options.bucketSize ?? ASSOCIATION_BUCKET_PT * pixelsPerPoint;
+  const minimumText = options.minimumTextSimilarity ?? ASSOCIATION_MIN_TEXT_SIMILARITY;
+  const minimumGeometry = options.minimumGeometryOverlap ?? ASSOCIATION_MIN_GEOMETRY_OVERLAP;
+  const criticalText = options.criticalCandidateTextSimilarity ?? CONFLICT_MIN_TEXT_SIMILARITY;
+  const criticalGeometry = options.criticalCandidateGeometryOverlap ?? CONFLICT_MIN_GEOMETRY_OVERLAP;
   if (!Number.isFinite(bucketSize) || bucketSize < 1 || bucketSize > 4096) {
     throw new Error('Association bucketSize must be between 1 and 4096.');
   }
@@ -59,14 +75,15 @@ export function associateNativeAndOcr(
   ] as const) {
     if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`${label} must be between 0 and 1.`);
   }
-  const nativeLines = buildNativeLines(nativeObservations);
+  const nativeLines = buildNativeLines(nativeObservations, pixelsPerPoint);
+  const boxById = new Map(nativeObservations.map((item) => [item.id, item.box]));
   const candidates: Candidate[] = [
     ...nativeLines.map((line) => ({
       id: line.id,
       text: line.text,
       sourceIds: line.sourceIds,
       box: line.box,
-      memberBoxes: line.sourceIds.map((id) => nativeObservations.find((item) => item.id === id)!.box),
+      memberBoxes: line.sourceIds.map((id) => boxById.get(id)!),
       type: 'line' as const
     })),
     ...nativeObservations.map((item) => ({
@@ -105,7 +122,12 @@ export function associateNativeAndOcr(
     const scored = [...nearby.values()].map((native) => {
       const textual = textSimilarity(native.text, ocr.text);
       const geometric = geometryOverlap(native, ocr.box);
-      return { native, textual, geometric, score: textual * 0.78 + geometric * 0.22 };
+      return {
+        native,
+        textual,
+        geometric,
+        score: textual * ASSOCIATION_TEXT_WEIGHT + geometric * ASSOCIATION_GEOMETRY_WEIGHT
+      };
     });
     const best = scored.sort((left, right) => right.score - left.score)[0];
     const criticalLocal = scored
@@ -115,7 +137,7 @@ export function associateNativeAndOcr(
     if (criticalLocal) {
       const nativeCritical = criticalTokens(criticalLocal.native.text);
       const ocrCritical = criticalTokens(ocr.text);
-      if ((nativeCritical.length || ocrCritical.length) && !sameTokenMultiset(nativeCritical, ocrCritical)) {
+      if ((nativeCritical.length || ocrCritical.length) && !criticalTokensAgree(nativeCritical, ocrCritical)) {
         conflicts.push({
           id: `conflict:${ocr.id}`,
           pageNumber: ocr.pageNumber,

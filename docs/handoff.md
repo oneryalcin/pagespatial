@@ -8,6 +8,8 @@ PageSpatial is an experimental PDF ingestion library. It creates a durable evide
 
 This document tells the next engineer what exists, why the current design was chosen, what was tested, what remains unproven, and what to do next. API examples and detailed contracts stay in the linked files rather than being copied here.
 
+The project's standing commitments live in [principles](principles.md) — read it first; when a proposed change conflicts with a principle, the principle wins until deliberately revisited. The two most often at risk of drift: the library feeds an index and its value is per-chunk trust metadata, not text; and humans belong to the evaluation loop only — escalation is a routing signal for automated tiers, never a production review queue.
+
 Start with:
 
 1. [README](../README.md) — supported package surfaces and usage.
@@ -27,7 +29,7 @@ Current facts:
 - Distribution: private repository; no public npm release has been qualified.
 - Node support: Node 25 or newer.
 - CI command: `npm run check`.
-- Current CI: 73 tests, typecheck, build, schema freshness, package-boundary checks, and Vite filesystem-containment checks pass.
+- Current CI: 101 tests, typecheck, build, schema freshness, package-boundary checks, and Vite filesystem-containment checks pass.
 - Browser native path: one shared PDF.js session.
 - Browser OCR path: PP-OCRv6 Tiny using WebGPU when verified, with sticky WASM fallback.
 - Node native path: PDF Inspector for preferred Markdown and unambiguous metadata; PDF.js for native text and geometry.
@@ -109,37 +111,28 @@ There is no server GPU OCR adapter yet. The existing `OcrAdapter` boundary is th
 | Geometry-normalized 162-page rerun | All 162 pages produced schema-valid PageSpatial records; no page was forced through by clipping | Adopted; details in [dev-v6 follow-up](trials/2026-08-19-geometry-normalization-follow-up.md) |
 | Dense financial table comparison | An initial 47.54% figure was invalid because it scored PDF font fragments as complete values. Correct reconstruction recovered all 39 independently checked values in both Inspector and OCR | Keep fragment reconstruction; score value preservation and table relationships separately. See [dense table trial](trials/2026-08-19-dense-financial-table-recovery.md) |
 | PDF Inspector Markdown on the dense table | All values were present, but one section label and one total were attached to the wrong row | Markdown is useful but cannot be treated as correct table structure |
+| Heuristic audit: scale/locale hardening rerun (dev-v7) | Identical parser-controlled numbers to dev-v6 after moving pixel constants to point-space and fixing locale-dependent lowercasing | Adopted; constants live in `src/tuning.ts`. See [audit and redesign trial](trials/2026-08-19-heuristic-audit-and-critical-ink-redesign.md) |
+| Critical-token "same ink" redesign (dev-v8) | 10 old conflicts were presentation heals; 215 new conflicts surfaced, including real OCR misreads the unit-whitelist regex missed | Adopted; conflict counts before/after are not comparable. Same trial report |
+| Gold pilot: 30 human-verified pages vs dev-v8 | Headline numbers later partially retracted (measurement defects); the CJK/chart gap, the false-confidence page, and the conflict split survived with corrected magnitudes | Retracted in part; see the banner in [gold pilot trial](trials/2026-08-19-gold-pilot-first-accuracy.md) |
+| Four-review adversarial pass over the audit/gold branch (dev-v9) | Chart detector is 25% recall / 96% precision, not dead; gold auto-accept was circular; word-glue made tokens segmentation-dependent; 36 of 663 conflicts were glue artifacts; blocking escalations were 14/14 confirmed real | Adopted: two-channel tokens, tiered gold metrics, hash-bound evaluator, schema 0.2.0. See [adversarial review fixes](trials/2026-08-19-adversarial-review-fixes.md) and issue #8 |
 
 The browser trial also retained three tooling failures: Paddle worker prebundling, ORT `?import` handling, and a stale Vite process. These are solved in the current smoke harness and documented in the trial. They were integration failures, not accuracy results.
 
 ## Current empirical evidence
 
-The latest authenticated development aggregate is [`evaluation/baselines/dev-v6-2026-08-19.summary.json`](../evaluation/baselines/dev-v6-2026-08-19.summary.json).
+The current reference aggregate is [`evaluation/baselines/dev-v9-two-channel-tokens-2026-08-19.summary.json`](../evaluation/baselines/dev-v9-two-channel-tokens-2026-08-19.summary.json). Superseded aggregates ([dev-v6](../evaluation/baselines/dev-v6-2026-08-19.summary.json), [dev-v7](../evaluation/baselines/dev-v7-scale-locale-2026-08-19.summary.json), [dev-v8](../evaluation/baselines/dev-v8-critical-ink-2026-08-19.summary.json)) are retained as history; the [audit trial](trials/2026-08-19-heuristic-audit-and-critical-ink-redesign.md) and the [adversarial review fixes trial](trials/2026-08-19-adversarial-review-fixes.md) explain the lineage.
 
-It records:
+dev-v9 records (23 PDFs, 162 pages, schema 0.2.0, two-channel critical tokens):
 
-- 23 development PDFs;
-- 162 nominated pages;
-- 162 OCR-completed pages;
-- 162 schema-valid PageSpatial records;
-- 17,051 native observations;
-- 14,796 OCR observations;
-- 11,245 native/OCR source matches;
-- 449 critical conflicts;
-- 98 pages requiring escalation;
-- 89.8 seconds total OCR time;
-- 156.9 seconds total run time on the recorded Apple M4 Max and Chrome WebGPU environment.
+- 162 OCR-completed, 162 schema-valid, 0 failed closed;
+- 17,051 native observations; 14,797 OCR observations; 11,072 source matches;
+- 627 critical conflicts; 102 pages requiring escalation.
 
-The median native/OCR association coverage was 86.2%; the mean was 69.1%. This is matcher coverage, not parser accuracy or OCR recall.
+Gold evidence (30 labelled pages, tiered): human-verified union recall 64% on mixed pages; on the EN/JA sibling pages the human tier (tokens the native layer missed, mostly chart-embedded) is missed-by-both 3% in English vs 75% in Japanese; blocking escalations 14/14 confirmed real errors; conflict adjudications OCR-right 23 / native-right 17 / both-wrong 6; chart detector 25% recall at 96% precision. Text-free aggregates: [`evaluation/gold/`](../evaluation/gold/).
 
-The run was made from clean parser commit `e8213730f0da7c3d2c8ecf379f49aebba0f629bf`. The public aggregate authenticates the private invocation, 23 document summaries, and 162 immutable page attempts by content hash. Runtime PDFs, OCR output, and logs are private and are not committed or packed.
+The median native/OCR association coverage was 85.2%; the mean was 68.6%. This is matcher coverage, not parser accuracy or OCR recall. Conflict counts are comparable only within one token-definition era (dev-v8/dev-v9 differ from dev-v6, and from each other by the two-channel change).
 
-Important interpretation:
-
-- `162/162 schema-valid` means the records satisfy identity, provenance, reference, diagnostic, and geometry invariants.
-- It does not prove the text, reading order, table relationships, chart relationships, or escalation decision is correct.
-- The 449 conflicts and 98 escalated pages are unresolved evaluation inputs, not automatically parser defects.
-- Gold-dependent metrics remain `not_evaluated`.
+The public aggregate authenticates the private invocation, 23 document summaries, and 162 immutable page attempts by content hash. Runtime PDFs, OCR output, and logs are private and are not committed or packed.
 
 ## Private corpus and reproducibility
 
@@ -184,8 +177,8 @@ Use a fixed `--backend wasm` or `--backend webgpu` for reproducible resume. `--b
 
 These are real gaps, not implied future features:
 
-1. No independent gold labels exist for the development corpus.
-2. OCR recall, geometry precision/recall, reading order, table structure, chart relationships, retrieval quality, answer grounding, escalation precision/recall, and false-confidence rate are unmeasured.
+1. Gold labels exist only for a 30-page pilot ([gold pilot trial](trials/2026-08-19-gold-pilot-first-accuracy.md)); the remaining 132 development pages are unlabelled and the pilot used one annotator without adjudication.
+2. Geometry precision/recall, reading order, table structure, retrieval quality, and answer grounding remain unmeasured. Token recall, conflict composition, chart-relation recall, and one false-confidence instance are now measured at pilot scale only.
 3. The current relation detector is deliberately narrow: single-series year/category/value candidates only.
 4. General table reconstruction is not implemented.
 5. A server GPU OCR adapter and server throughput benchmark are not implemented.
@@ -194,6 +187,7 @@ These are real gaps, not implied future features:
 8. Browser and Node output equivalence is covered by fixtures, not a large independently labelled equivalence set.
 9. No production persistence, revision store, ACL enforcement, deletion propagation, or tenant boundary exists in this library.
 10. The package is not integrated into Evidence Search.
+11. Vertical CJK writing mode is unvalidated: PDF.js swaps width/height roles for vertical fonts, so `pdfJsTextItemPointBox` would produce transposed, undersized boxes. No vertical-text page exists in the development corpus yet.
 
 ## Next work, in order
 

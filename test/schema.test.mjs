@@ -89,7 +89,7 @@ test('runtime schema cannot hide a critical conflict by clearing escalation', ()
   tampered.diagnostics.requiresEscalation = false;
   tampered.diagnostics.escalationReasons = [];
   assert.equal(pageSpatialDocumentSchema.safeParse({
-    schemaVersion: '0.1.0',
+    schemaVersion: '0.2.0',
     document: identity,
     pages: [tampered],
     diagnostics: {

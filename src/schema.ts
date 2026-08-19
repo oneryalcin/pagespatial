@@ -95,7 +95,9 @@ const relationSchema = z.object({
 
 const escalationReasonSchema = z.object({
   type: z.enum(['critical-token-conflict', 'critical-token-omission', 'ambiguous-derived-relation', 'low-ocr-confidence']),
-  sourceIds: z.array(z.string()), count: z.number().int().nonnegative()
+  severity: z.enum(['blocking', 'advisory']),
+  sourceIds: z.array(z.string()), count: z.number().int().nonnegative(),
+  share: z.number().min(0).max(1)
 });
 
 const diagnosticsSchema = z.object({
@@ -118,12 +120,12 @@ const provenanceSchema = z.object({
 });
 
 const pageSpatialBaseSchema = z.object({
-  schemaVersion: z.literal('0.1.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
+  schemaVersion: z.literal('0.2.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
   pageId: z.string(), pageNumber: z.number().int().positive(), geometry: pageGeometrySchema,
   nativeObservations: z.array(nativeObservationSchema), ocrObservations: z.array(ocrObservationSchema),
   nativeLines: z.array(nativeLineSchema), sourceMatches: z.array(sourceMatchSchema), conflicts: z.array(conflictSchema),
   spatialRows: z.array(spatialRowSchema), derivedRelations: z.array(relationSchema), diagnostics: diagnosticsSchema,
-  projection: z.object({ markdown: z.string(), format: z.literal('pagespatial-markdown-v1'), trust: z.literal('untrusted-document-content'), derived: z.literal(true) }),
+  projection: z.object({ markdown: z.string(), format: z.literal('pagespatial-markdown-v1'), trust: z.literal('untrusted-document-content'), derived: z.literal(true), markdownSource: z.string().min(1) }),
   provenance: provenanceSchema
 });
 
@@ -331,16 +333,21 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
       relation.confidence < page.diagnostics.thresholds.minimumRelationConfidence
       || relation.ambiguity > page.diagnostics.thresholds.maximumRelationAmbiguity)
     .flatMap((relation) => relation.sourceIds);
-  const expectedReasons = new Map<string, { count: number; sourceIds: string[] }>([
-    ['critical-token-conflict', { count: conflictCount, sourceIds: [...new Set(criticalConflictIds)] }],
-    ['critical-token-omission', { count: omissionCount, sourceIds: [...new Set(criticalOmissionIds)] }],
+  const ambiguousCount = page.derivedRelations.filter((relation) =>
+    relation.confidence < page.diagnostics.thresholds.minimumRelationConfidence
+    || relation.ambiguity > page.diagnostics.thresholds.maximumRelationAmbiguity).length;
+  const ocrCount = page.ocrObservations.length;
+  const ocrShare = (count: number): number => ocrCount ? count / ocrCount : 0;
+  const expectedReasons = new Map<string, { severity: 'blocking' | 'advisory'; count: number; share: number; sourceIds: string[] }>([
+    ['critical-token-conflict', { severity: 'blocking', count: conflictCount, share: ocrShare(conflictCount), sourceIds: [...new Set(criticalConflictIds)] }],
+    ['critical-token-omission', { severity: 'blocking', count: omissionCount, share: ocrShare(omissionCount), sourceIds: [...new Set(criticalOmissionIds)] }],
     ['ambiguous-derived-relation', {
-      count: page.derivedRelations.filter((relation) =>
-        relation.confidence < page.diagnostics.thresholds.minimumRelationConfidence
-        || relation.ambiguity > page.diagnostics.thresholds.maximumRelationAmbiguity).length,
+      severity: 'advisory',
+      count: ambiguousCount,
+      share: page.derivedRelations.length ? ambiguousCount / page.derivedRelations.length : 0,
       sourceIds: [...new Set(ambiguousRelationIds)]
     }],
-    ['low-ocr-confidence', { count: lowConfidenceIds.length, sourceIds: lowConfidenceIds }]
+    ['low-ocr-confidence', { severity: 'advisory', count: lowConfidenceIds.length, share: ocrShare(lowConfidenceIds.length), sourceIds: lowConfidenceIds }]
   ]);
   for (const [type, expected] of expectedReasons) {
     const actual = page.diagnostics.escalationReasons.filter((reason) => reason.type === type);
@@ -353,6 +360,8 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
       continue;
     }
     if (actual[0] && (actual[0].count !== expected.count
+      || actual[0].severity !== expected.severity
+      || !closeEnough(actual[0].share, expected.share)
       || JSON.stringify([...actual[0].sourceIds].sort()) !== JSON.stringify([...expected.sourceIds].sort()))) {
       issue(context, ['diagnostics', 'escalationReasons'], `${type} escalation details do not match source evidence.`);
     }
@@ -360,7 +369,7 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
 });
 
 const pageSpatialDocumentBaseSchema = z.object({
-  schemaVersion: z.literal('0.1.0'),
+  schemaVersion: z.literal('0.2.0'),
   document: documentIdentitySchema,
   pages: z.array(pageSpatialSchema),
   diagnostics: z.object({

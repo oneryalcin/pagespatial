@@ -1,27 +1,43 @@
 import { unionBoxes } from './geometry.js';
+import {
+  GROUP_HEIGHT_RATIO,
+  LINE_TOLERANCE_HEIGHT_RATIO,
+  LINE_TOLERANCE_MIN_PT,
+  REFERENCE_RENDER_SCALE,
+  SPATIAL_ROW_MIN_HEIGHT_PT
+} from './tuning.js';
 import type { NativeLine, NativeObservation, OcrObservation, SpatialRow } from './types.js';
 
 function average(values: readonly number[]): number | null {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 }
 
-export function readingOrder<T extends { box: readonly [number, number, number, number] }>(items: readonly T[]): T[] {
+export function readingOrder<T extends { box: readonly [number, number, number, number] }>(
+  items: readonly T[],
+  pixelsPerPoint: number = REFERENCE_RENDER_SCALE
+): T[] {
   return [...items].sort((left, right) => {
     const leftHeight = Math.max(1, left.box[3] - left.box[1]);
     const rightHeight = Math.max(1, right.box[3] - right.box[1]);
-    const tolerance = Math.max(8, Math.min(leftHeight, rightHeight) * 0.65);
+    const tolerance = Math.max(
+      LINE_TOLERANCE_MIN_PT * pixelsPerPoint,
+      Math.min(leftHeight, rightHeight) * LINE_TOLERANCE_HEIGHT_RATIO
+    );
     return Math.abs(left.box[1] - right.box[1]) > tolerance
       ? left.box[1] - right.box[1]
       : left.box[0] - right.box[0];
   });
 }
 
-export function buildNativeLines(observations: readonly NativeObservation[]): NativeLine[] {
+export function buildNativeLines(
+  observations: readonly NativeObservation[],
+  pixelsPerPoint: number = REFERENCE_RENDER_SCALE
+): NativeLine[] {
   const groups: Array<{ centerY: number; height: number; items: NativeObservation[] }> = [];
-  for (const observation of readingOrder(observations.filter((item) => item.text.trim()))) {
+  for (const observation of readingOrder(observations.filter((item) => item.text.trim()), pixelsPerPoint)) {
     const height = Math.max(1, observation.box[3] - observation.box[1]);
     const centerY = (observation.box[1] + observation.box[3]) / 2;
-    const group = groups.findLast((candidate) => Math.abs(candidate.centerY - centerY) <= Math.max(candidate.height, height) * 0.55);
+    const group = groups.findLast((candidate) => Math.abs(candidate.centerY - centerY) <= Math.max(candidate.height, height) * GROUP_HEIGHT_RATIO);
     if (group) {
       group.items.push(observation);
       group.centerY = average(group.items.map((item) => (item.box[1] + item.box[3]) / 2)) ?? centerY;
@@ -53,12 +69,15 @@ export function buildNativeLines(observations: readonly NativeObservation[]): Na
   });
 }
 
-export function buildSpatialRows(observations: readonly OcrObservation[]): SpatialRow[] {
+export function buildSpatialRows(
+  observations: readonly OcrObservation[],
+  pixelsPerPoint: number = REFERENCE_RENDER_SCALE
+): SpatialRow[] {
   const groups: Array<{ centerY: number; height: number; items: OcrObservation[] }> = [];
-  for (const observation of readingOrder(observations.filter((item) => item.text.trim()))) {
-    const height = Math.max(8, observation.box[3] - observation.box[1]);
+  for (const observation of readingOrder(observations.filter((item) => item.text.trim()), pixelsPerPoint)) {
+    const height = Math.max(SPATIAL_ROW_MIN_HEIGHT_PT * pixelsPerPoint, observation.box[3] - observation.box[1]);
     const centerY = (observation.box[1] + observation.box[3]) / 2;
-    const group = groups.findLast((candidate) => Math.abs(candidate.centerY - centerY) <= Math.max(candidate.height, height) * 0.55);
+    const group = groups.findLast((candidate) => Math.abs(candidate.centerY - centerY) <= Math.max(candidate.height, height) * GROUP_HEIGHT_RATIO);
     if (group) {
       group.items.push(observation);
       group.centerY = average(group.items.map((item) => (item.box[1] + item.box[3]) / 2)) ?? centerY;
