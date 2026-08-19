@@ -221,27 +221,10 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
       else options.signal?.addEventListener('abort', forwardAbort, { once: true });
       try {
         abortIfNeeded(controller.signal);
-        const native = await adapters.native.extract(source, { signal: controller.signal });
-        if (native.pageCount !== document.pageCount) {
-          throw new Error(`Native adapter returned ${native.pageCount} pages for a ${document.pageCount}-page document.`);
-        }
-        const nativePageNumbers = native.pages.map((page) => page.pageNumber);
-        if (new Set(nativePageNumbers).size !== nativePageNumbers.length) {
-          throw new Error('Native adapter returned duplicate page records.');
-        }
-        for (const page of native.pages) {
-          if (page.pageNumber < 1 || page.pageNumber > document.pageCount) {
-            throw new Error(`Native adapter returned out-of-range page ${page.pageNumber}.`);
-          }
-          for (const observation of page.observations) {
-            if (observation.pageNumber !== page.pageNumber) {
-              throw new Error(`Native page ${page.pageNumber} contains an observation for page ${observation.pageNumber}.`);
-            }
-          }
-        }
-        const byPage = new Map(native.pages.map((page) => [page.pageNumber, page]));
         const pages = new Array<PageSpatial>(document.pageCount);
         const concurrency = Math.max(1, Math.min(document.pageCount, Math.floor(options.concurrency ?? 1)));
+        const renderScale = options.renderScale ?? 1.6;
+        if (!Number.isFinite(renderScale) || renderScale <= 0) throw new Error('renderScale must be a positive finite number.');
         const runId = options.runId ?? `run:${Date.now().toString(36)}`;
         let nextPage = 1;
         let firstError: unknown;
@@ -257,11 +240,29 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
               const pageNumber = nextPage;
               nextPage += 1;
               if (pageNumber > document.pageCount) return;
-              const rendered = await adapters.renderer.render(source, pageNumber, {
-                signal: controller.signal,
-                scale: options.renderScale
-              });
+              const [nativeResult, renderedResult] = await Promise.allSettled([
+                adapters.native.extractPage(source, pageNumber, { signal: controller.signal }),
+                adapters.renderer.render(source, pageNumber, {
+                  signal: controller.signal,
+                  scale: renderScale
+                })
+              ]);
+              if (nativeResult.status === 'rejected') {
+                if (renderedResult.status === 'fulfilled') await renderedResult.value.release?.();
+                throw nativeResult.reason;
+              }
+              if (renderedResult.status === 'rejected') throw renderedResult.reason;
+              const nativePage = nativeResult.value;
+              const rendered = renderedResult.value;
               try {
+                if (nativePage.pageNumber !== pageNumber) {
+                  throw new Error(`Native adapter returned page ${nativePage.pageNumber} while parsing page ${pageNumber}.`);
+                }
+                for (const observation of nativePage.observations) {
+                  if (observation.pageNumber !== pageNumber) {
+                    throw new Error(`Native page ${pageNumber} contains an observation for page ${observation.pageNumber}.`);
+                  }
+                }
                 if (rendered.pageNumber !== pageNumber) {
                   throw new Error(`Renderer returned page ${rendered.pageNumber} while parsing page ${pageNumber}.`);
                 }
@@ -275,7 +276,6 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
                   }
                 }
                 abortIfNeeded(controller.signal);
-                const nativePage = byPage.get(pageNumber);
                 const provenance: ExtractionProvenance = {
                   parserName: 'pagespatial',
                   parserVersion: '0.1.0',
@@ -286,7 +286,7 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
                   ocrAdapter: `${adapters.ocr.name}@${adapters.ocr.version}`,
                   backend: ocr.backend,
                   configuration: {
-                    renderScale: options.renderScale,
+                    renderScale,
                     concurrency,
                     diagnosticPolicy: resolveDiagnosticOptions(options.diagnostics)
                   }
@@ -295,9 +295,9 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
                   document,
                   pageNumber,
                   geometry: mergeGeometry(nativePage, rendered.geometry),
-                  nativeObservations: nativePage?.observations ?? [],
+                  nativeObservations: nativePage.observations,
                   ocrObservations: ocr.observations,
-                  nativeMarkdown: nativePage?.markdown,
+                  nativeMarkdown: nativePage.markdown,
                   provenance,
                   association: options.association,
                   diagnostics: options.diagnostics
@@ -326,7 +326,7 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
           renderer: `${adapters.renderer.name}@${adapters.renderer.version}`,
           ocrAdapter: `${adapters.ocr.name}@${adapters.ocr.version}`,
           configuration: {
-            renderScale: options.renderScale,
+            renderScale,
             concurrency,
             diagnosticPolicy: resolveDiagnosticOptions(options.diagnostics)
           }

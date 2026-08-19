@@ -12,14 +12,11 @@ export async function createValidDocument() {
     native: {
       name: 'fixture-native',
       version: '1',
-      async extract() {
+      async extractPage() {
         return {
-          pageCount: 1,
-          pages: [{
-            pageNumber: 1,
-            geometry: { pointWidth: 100, pointHeight: 100 },
-            observations: [{ pageNumber: 1, text: 'Revenue 100', pointBox: [10, 80, 50, 90] }]
-          }]
+          pageNumber: 1,
+          geometry: { pointWidth: 100, pointHeight: 100 },
+          observations: [{ pageNumber: 1, text: 'Revenue 100', pointBox: [10, 80, 50, 90] }]
         };
       }
     },

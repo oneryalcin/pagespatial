@@ -1,8 +1,8 @@
 node_modules/
 dist/
 coverage/
+public/ocr-assets/
 .DS_Store
 .env
 .env.*
 !.env.example
-

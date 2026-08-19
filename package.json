@@ -12,11 +12,22 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./browser": {
+      "types": "./dist/browser/index.d.ts",
+      "import": "./dist/browser/index.js"
+    },
+    "./node/pdf-inspector": {
+      "types": "./dist/node/pdf-inspector.d.ts",
+      "import": "./dist/node/pdf-inspector.js"
+    },
     "./schema.json": "./schemas/pagespatial.schema.json"
   },
   "files": [
     "dist",
+    "src",
     "schemas",
+    "assets",
+    "scripts/prepare-ppocr-assets.mjs",
     "docs",
     "SECURITY.md",
     "README.md"
@@ -26,14 +37,45 @@
     "verify:schema": "node scripts/generate-schema.mjs --check",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test test/*.test.mjs",
+    "test:browser:wasm": "npm run build && node test/browser-smoke/run.mjs wasm",
+    "test:browser:webgpu": "npm run build && node test/browser-smoke/run.mjs webgpu",
     "check": "npm run typecheck && npm test && npm run verify:schema",
-    "example": "npm run build && node examples/merge-page.mjs"
+    "example": "npm run build && node examples/merge-page.mjs",
+    "prepare:ocr-assets": "node scripts/prepare-ppocr-assets.mjs"
   },
   "dependencies": {
     "zod": "4.4.3"
   },
+  "peerDependencies": {
+    "@firecrawl/pdf-inspector": "1.14.2",
+    "@paddleocr/paddleocr-js": "0.4.2",
+    "onnxruntime-web": "1.24.3",
+    "pdfjs-dist": "5.5.207"
+  },
+  "peerDependenciesMeta": {
+    "@firecrawl/pdf-inspector": {
+      "optional": true
+    },
+    "@paddleocr/paddleocr-js": {
+      "optional": true
+    },
+    "onnxruntime-web": {
+      "optional": true
+    },
+    "pdfjs-dist": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@firecrawl/pdf-inspector": "1.14.2",
+    "@paddleocr/paddleocr-js": "0.4.2",
+    "@types/node": "24.10.13",
     "ajv": "8.20.0",
-    "typescript": "7.0.2"
+    "onnxruntime-web": "1.24.3",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "5.5.207",
+    "playwright-core": "1.58.2",
+    "typescript": "7.0.2",
+    "vite": "7.3.6"
   }
 }

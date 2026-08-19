@@ -12,14 +12,11 @@ function adapters(runtime) {
     value: {
       native: {
         name: 'native-mock', version: '1',
-        async extract() {
+        async extractPage(_source, pageNumber) {
           return {
-            pageCount: 2,
-            pages: [1, 2].map((pageNumber) => ({
-              pageNumber,
-              geometry: { pointWidth: 100, pointHeight: 100 },
-              observations: [{ pageNumber, text: `Page ${pageNumber}`, pointBox: [10, 80, 50, 90] }]
-            }))
+            pageNumber,
+            geometry: { pointWidth: 100, pointHeight: 100 },
+            observations: [{ pageNumber, text: `Page ${pageNumber}`, pointBox: [10, 80, 50, 90] }]
           };
         }
       },
@@ -61,6 +58,8 @@ test('browser and server adapters produce equivalent evidence semantics', async 
 
   pageSpatialDocumentSchema.parse(browserResult);
   pageSpatialDocumentSchema.parse(serverResult);
+  assert.equal(browserResult.provenance.configuration.renderScale, 1.6);
+  assert.ok(browserResult.pages.every((page) => page.provenance.configuration.renderScale === 1.6));
   assert.deepEqual([...completed].sort(), [1, 2]);
   assert.deepEqual([...browser.released].sort(), [1, 2]);
   assert.deepEqual([...server.released].sort(), [1, 2]);
@@ -78,19 +77,19 @@ test('browser and server adapters produce equivalent evidence semantics', async 
   );
 });
 
-test('parser rejects a native page-count mismatch', async () => {
+test('parser rejects a cross-page native result', async () => {
   const invalid = adapters('webgpu').value;
-  invalid.native.extract = async () => ({ pageCount: 1, pages: [] });
-  await assert.rejects(() => createParser(invalid).parse(source), /returned 1 pages/);
+  invalid.native.extractPage = async (_source, pageNumber) => ({ pageNumber: pageNumber + 1, geometry: {}, observations: [] });
+  await assert.rejects(() => createParser(invalid).parse(source), /Native adapter returned page 2/);
 });
 
 test('parser validates source identity before calling adapters', async () => {
   const invalidSource = { ...source, identity: { ...document, sha256: 'not-a-sha256' } };
   const candidate = adapters('webgpu').value;
   let called = false;
-  candidate.native.extract = async () => {
+  candidate.native.extractPage = async () => {
     called = true;
-    return { pageCount: 2, pages: [] };
+    return { pageNumber: 1, geometry: {}, observations: [] };
   };
   await assert.rejects(() => createParser(candidate).parse(invalidSource), /SHA-256/);
   assert.equal(called, false);
@@ -102,6 +101,16 @@ test('parser releases rendered resources when OCR fails', async () => {
     throw new Error('inference failed');
   };
   await assert.rejects(() => createParser(candidate.value).parse(source), /inference failed/);
+  assert.deepEqual(candidate.released, [1]);
+});
+
+test('parser releases rendered resources when parallel native extraction fails', async () => {
+  const candidate = adapters('webgpu');
+  candidate.value.native.extractPage = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    throw new Error('native extraction failed');
+  };
+  await assert.rejects(() => createParser(candidate.value).parse(source), /native extraction failed/);
   assert.deepEqual(candidate.released, [1]);
 });
 

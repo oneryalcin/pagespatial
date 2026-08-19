@@ -1,10 +1,13 @@
-import type { DocumentSource, NativeDocumentResult, OcrPageResult, RenderedPage } from './types.js';
+import type { DocumentSource, NativePageResult, OcrPageResult, RenderedPage } from './types.js';
 
-export interface NativeAdapter<TSource = unknown> {
+export interface NativePageAdapter<TSource = unknown> {
   readonly name: string;
   readonly version: string;
-  extract(source: DocumentSource<TSource>, options?: { signal?: AbortSignal }): Promise<NativeDocumentResult>;
+  extractPage(source: DocumentSource<TSource>, pageNumber: number, options?: { signal?: AbortSignal }): Promise<NativePageResult>;
 }
+
+/** @deprecated Use NativePageAdapter. Kept as a source-compatible type alias for 0.1 adopters. */
+export type NativeAdapter<TSource = unknown> = NativePageAdapter<TSource>;
 
 export interface PageRenderer<TSource = unknown, TRaster = unknown> {
   readonly name: string;
@@ -22,7 +25,7 @@ export interface OcrAdapter<TRaster = unknown> {
 }
 
 export interface ParserAdapters<TSource = unknown, TRaster = unknown> {
-  native: NativeAdapter<TSource>;
+  native: NativePageAdapter<TSource>;
   renderer: PageRenderer<TSource, TRaster>;
   ocr: OcrAdapter<TRaster>;
 }

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "packages": {
+    "@paddleocr/paddleocr-js": "0.4.2",
+    "onnxruntime-web": "1.24.3",
+    "pdfjs-dist": "5.5.207"
+  },
+  "artifacts": [
+    {
+      "kind": "runtime",
+      "path": "ort/ort-wasm-simd-threaded.jsep.mjs",
+      "source": "node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs",
+      "bytes": 46595,
+      "sha256": "9a99acd12acc495184c9ea4d458ac9424f8180aacfbc7b8371ed64f9351e4a81"
+    },
+    {
+      "kind": "runtime",
+      "path": "ort/ort-wasm-simd-threaded.jsep.wasm",
+      "source": "node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm",
+      "bytes": 25014754,
+      "sha256": "2e0a3d0e3f6b7c13ecfaba38c13691fd19c9ed470e72f9d7d8416ca59ab6dbcd"
+    },
+    {
+      "kind": "model",
+      "path": "models/PP-OCRv6_tiny_det_onnx_infer.tar",
+      "source": "https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/PP-OCRv6_tiny_det_onnx_infer.tar",
+      "directory": "PP-OCRv6_tiny_det_onnx_infer",
+      "bytes": 1792000,
+      "sha256": "ff6ab415b0a6e0c488550f2fb5d5046f1719848df220b2dc21b56402a65bc05d"
+    },
+    {
+      "kind": "model",
+      "path": "models/PP-OCRv6_tiny_rec_onnx_infer.tar",
+      "source": "https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/PP-OCRv6_tiny_rec_onnx_infer.tar",
+      "directory": "PP-OCRv6_tiny_rec_onnx_infer",
+      "bytes": 4526080,
+      "sha256": "1e13b22717b1edd89d4cde4fda272b6c17d5b505c97c2baea99da1a3a2d54b29"
+    }
+  ]
+}

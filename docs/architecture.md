@@ -2,7 +2,7 @@
 
 ## Boundary
 
-PageSpatial converts normalized native and OCR observations into a canonical, source-preserving page record. PDF decoding, rasterization, OCR inference, persistence, retrieval, and answer generation remain replaceable adapters or downstream consumers.
+PageSpatial converts normalized native and OCR observations into a canonical, source-preserving page record. PDF decoding, rasterization, OCR inference, persistence, retrieval, and answer generation remain explicit adapters or downstream consumers. Integrations are named imports and normal TypeScript objects. There is no plugin registry or runtime discovery.
 
 ## Three execution planes
 
@@ -25,7 +25,7 @@ OCR and document-vision inference remain behind adapters. Browser adapters may u
 
 ```text
 source PDF
-  ├─ native adapter ── native observations and structure
+  ├─ page-native adapter ─ native observations and structure
   ├─ renderer ─────── canonical page geometry and raster handle
   └─ OCR adapter ──── OCR text, confidence and polygons
                               │
@@ -65,3 +65,24 @@ The TypeScript Zod validator enforces semantic invariants that JSON Schema canno
 - Vision-model output must be labelled as model-derived and mapped back to source observations where possible.
 
 Downstream authorization, deletion state, document canonicality, and revision selection remain outside parser relevance and confidence scores.
+
+## Official integration boundary
+
+The supported browser preset owns one lazy PP-OCR runtime. The caller owns one PDF.js session. Native extraction and rendering share its cached page proxies. Page-native extraction and rendering may overlap; OCR predictions are serialized through one model instance because the current Paddle browser pipeline is not proven safe or memory-efficient under concurrent inference.
+
+Backend policy is explicit:
+
+1. Try WebGPU when `backend: "auto"`.
+2. Accept it only when both detector and recognizer report the WebGPU provider.
+3. On initialization mismatch or the first prediction failure, dispose it and retry once with WASM.
+4. Keep WASM sticky for that adapter lifetime.
+
+The Node PDF Inspector adapter is optional. It is the PDF engine used by AnyDoc and provides page Markdown, positioned text, and tagged structure roles. `openNodePdfSession()` provides bytes, identity, page geometry, and cached page proxies; rendering and OCR remain caller-selected adapters. PDF Inspector currently extracts the full native document once, so it is not the default browser path and must be benchmarked on large documents. Its native geometry rejects rotated, cropped, and shifted pages until retained real fixtures prove each coordinate convention; use another native adapter for those pages.
+
+## Resource ownership
+
+- `openPdfJsSession()` owns and destroys one `PDFDocumentProxy`.
+- The PDF.js session caches at most one promise per loaded page.
+- A rendered canvas is owned by `RenderedPage` until `release()`; the parser calls it on success and failure.
+- `createBrowserParser()` owns the PP-OCR engine and exposes `dispose()`.
+- OCR model and ORT assets are owned and hosted by the consuming application.
