@@ -40,8 +40,36 @@ export interface EnrichmentProposal {
   corroboration: ProposalCorroboration;
 }
 
+/**
+ * A model verdict on one recorded conflict. Opinion, not resolution: the
+ * conflict stays on the canonical page (escalate-don't-vote); downstream
+ * ranking may weight by the verdict, carrying its model provenance.
+ */
+export interface ConflictAdjudication {
+  /** Must reference a conflict id present on the base page (fail-closed). */
+  conflictId: string;
+  verdict: 'native' | 'ocr' | 'both-wrong' | 'unsure';
+  /**
+   * Present when the verdict was DEFAULTED (the model declined, answered
+   * ambiguously, or answered malformed) rather than actually judged. A run
+   * whose adjudications silently collapsed must be visible in the record.
+   */
+  unanswered?: true;
+  /** Model transcription of the disputed ink, verbatim. */
+  inkText?: string;
+}
+
+export interface OperationProvenance {
+  adapter: string;
+  model: string;
+  mediaResolution: string;
+  promptRevision: string;
+  /** Model thinking budget (0 = disabled) — extractor config, so provenance. */
+  thinkingBudget: number;
+}
+
 export interface EscalatedOcrEnrichment {
-  enrichmentSchemaVersion: 'enrichment-0.1.0';
+  enrichmentSchemaVersion: 'enrichment-0.2.0';
   documentId: string;
   revisionId: string;
   documentSha256: string;
@@ -57,15 +85,19 @@ export interface EscalatedOcrEnrichment {
   createdAt: string;
   /** Why this page was routed to the escalated tier (blocking reasons at parse time). */
   trigger: { blockingReasons: string[] };
+  /**
+   * Per-operation provenance: proposals come from `transcription`,
+   * adjudications from `adjudication`. A record carries exactly the
+   * provenance of the operations that ran — attributing one operation's
+   * output to another's extractor config is false provenance.
+   */
   provenance: {
-    adapter: string;
-    model: string;
-    mediaResolution: string;
-    promptRevision: string;
-    /** Model thinking budget (0 = disabled) — extractor config, so provenance. */
-    thinkingBudget: number;
+    transcription?: OperationProvenance;
+    adjudication?: OperationProvenance;
   };
   proposals: EnrichmentProposal[];
+  /** Verdicts on the base page's recorded conflicts (may be empty). */
+  adjudications: ConflictAdjudication[];
   /** Measured cost/latency telemetry for the economics ledger. */
   telemetry: { promptTokens: number; outputTokens: number; latencyMs: number };
   trust: 'untrusted-document-content';
@@ -73,8 +105,16 @@ export interface EscalatedOcrEnrichment {
 
 const boxHintSchema = z.tuple([z.number(), z.number(), z.number(), z.number()]);
 
+const operationProvenanceSchema = z.object({
+  adapter: z.string().min(1),
+  model: z.string().min(1),
+  mediaResolution: z.string().min(1),
+  promptRevision: z.string().min(1),
+  thinkingBudget: z.number().int().nonnegative()
+}).strict();
+
 export const escalatedOcrEnrichmentSchema = z.object({
-  enrichmentSchemaVersion: z.literal('enrichment-0.1.0'),
+  enrichmentSchemaVersion: z.literal('enrichment-0.2.0'),
   documentId: z.string().min(1),
   revisionId: z.string().min(1),
   documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
@@ -84,11 +124,8 @@ export const escalatedOcrEnrichmentSchema = z.object({
   createdAt: z.string().min(1),
   trigger: z.object({ blockingReasons: z.array(z.string().min(1)).min(1) }).strict(),
   provenance: z.object({
-    adapter: z.string().min(1),
-    model: z.string().min(1),
-    mediaResolution: z.string().min(1),
-    promptRevision: z.string().min(1),
-    thinkingBudget: z.number().int().nonnegative()
+    transcription: operationProvenanceSchema.optional(),
+    adjudication: operationProvenanceSchema.optional()
   }).strict(),
   // Strict everywhere: a smuggled key on a proposal (e.g. evidenceBox,
   // trust) would contradict the text-only invariant while surviving a
@@ -97,6 +134,12 @@ export const escalatedOcrEnrichmentSchema = z.object({
     text: z.string().min(1),
     modelBoxHint: boxHintSchema.optional(),
     corroboration: z.enum(['corroborated-both', 'corroborated-native', 'corroborated-ocr', 'novel'])
+  }).strict()),
+  adjudications: z.array(z.object({
+    conflictId: z.string().min(1),
+    verdict: z.enum(['native', 'ocr', 'both-wrong', 'unsure']),
+    unanswered: z.literal(true).optional(),
+    inkText: z.string().min(1).optional()
   }).strict()),
   telemetry: z.object({
     promptTokens: z.number().int().nonnegative(),
@@ -242,6 +285,7 @@ export function deriveCorroboration(
 export interface BuildEnrichmentInput {
   page: PageSpatial;
   proposals: readonly { text: string; modelBoxHint?: [number, number, number, number] }[];
+  adjudications?: readonly ConflictAdjudication[];
   provenance: EscalatedOcrEnrichment['provenance'];
   telemetry: EscalatedOcrEnrichment['telemetry'];
   createdAt?: string;
@@ -252,8 +296,17 @@ export async function buildEscalatedOcrEnrichment(input: BuildEnrichmentInput): 
   if (!reasons.length) {
     throw new Error('Enrichment is escalated-tier only: the page carries no blocking escalation reason.');
   }
+  if (input.proposals.length && !input.provenance.transcription) {
+    throw new Error('Proposals require transcription provenance.');
+  }
+  if ((input.adjudications ?? []).length && !input.provenance.adjudication) {
+    throw new Error('Adjudications require adjudication provenance.');
+  }
+  if (!input.provenance.transcription && !input.provenance.adjudication) {
+    throw new Error('Enrichment provenance must name at least one operation.');
+  }
   const record: EscalatedOcrEnrichment = {
-    enrichmentSchemaVersion: 'enrichment-0.1.0',
+    enrichmentSchemaVersion: 'enrichment-0.2.0',
     documentId: input.page.documentId,
     revisionId: input.page.revisionId,
     documentSha256: input.page.documentSha256,
@@ -264,10 +317,34 @@ export async function buildEscalatedOcrEnrichment(input: BuildEnrichmentInput): 
     trigger: { blockingReasons: reasons },
     provenance: input.provenance,
     proposals: deriveCorroboration(input.proposals, input.page),
+    adjudications: validateAdjudications(input.adjudications ?? [], input.page),
     telemetry: input.telemetry,
     trust: 'untrusted-document-content'
   };
   return escalatedOcrEnrichmentSchema.parse(record) as EscalatedOcrEnrichment;
+}
+
+/**
+ * Every adjudication must reference a distinct conflict recorded on the
+ * base page — a verdict on a conflict that does not exist is fabricated
+ * evidence and fails closed.
+ */
+function validateAdjudications(
+  adjudications: readonly ConflictAdjudication[],
+  page: Pick<PageSpatial, 'conflicts'>
+): ConflictAdjudication[] {
+  const known = new Set(page.conflicts.map((conflict) => conflict.id));
+  const seen = new Set<string>();
+  for (const adjudication of adjudications) {
+    if (!known.has(adjudication.conflictId)) {
+      throw new Error(`Adjudication references unknown conflict ${adjudication.conflictId}.`);
+    }
+    if (seen.has(adjudication.conflictId)) {
+      throw new Error(`Duplicate adjudication for conflict ${adjudication.conflictId}.`);
+    }
+    seen.add(adjudication.conflictId);
+  }
+  return [...adjudications];
 }
 
 /**
@@ -276,11 +353,14 @@ export async function buildEscalatedOcrEnrichment(input: BuildEnrichmentInput): 
  * status are re-derived.
  *
  * Honest scope: this guards STALENESS (digest of the base page) and
- * INTERNAL CONSISTENCY (every stored corroboration label re-derives from
- * the record). It does NOT authenticate proposal content — the library
- * holds no signing key, so an editor with write access to the enrichment
- * store can inject proposals that self-consistently validate. Content
- * authenticity is a deployment concern (sign or ACL the store).
+ * INTERNAL CONSISTENCY (corroboration labels re-derive; adjudication
+ * conflictIds must reference recorded conflicts, uniquely). It does NOT
+ * authenticate content: proposals, adjudication VERDICTS and inkText,
+ * provenance, and telemetry are all un-derivable from the page and can be
+ * rewritten without failing validation — a flipped verdict is the most
+ * consequential such edit, since it blesses one side of a conflict. The
+ * library holds no signing key; content authenticity is a deployment
+ * concern (sign or ACL the enrichment store).
  *
  * Returns the schema-parsed record: consumers must use `record`, not the
  * input object, so smuggled unknown keys cannot survive into downstream
@@ -316,5 +396,10 @@ export async function validateEnrichmentAgainstPage(
       issues.push(`Proposal ${index} corroboration must be ${derived[index]!.corroboration}.`);
     }
   });
+  try {
+    validateAdjudications(enrichment.adjudications, page);
+  } catch (error) {
+    issues.push(String(error instanceof Error ? error.message : error));
+  }
   return { valid: issues.length === 0, issues, ...(issues.length === 0 ? { record } : {}) };
 }

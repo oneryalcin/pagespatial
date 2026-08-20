@@ -19,7 +19,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildEscalatedOcrEnrichment, pageQualifiesForEscalatedEnrichment, validateEnrichmentAgainstPage } from '../../dist/index.js';
-import { transcribePageImage } from '../../dist/node/flash-ocr.js';
+import { adjudicatePageConflicts, transcribePageImage } from '../../dist/node/flash-ocr.js';
 
 function arg(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -95,6 +95,16 @@ async function worker() {
     const target = selected[cursor];
     cursor += 1;
     const name = `${target.page.pageId.replaceAll(':', '_')}.json`;
+    // Escalation ladder (issue #17), measured decision:
+    // - conflict/omission reasons -> page-batched adjudication (~$0.0023)
+    // - starved/residue reasons  -> full-page transcription at HIGH (~$0.0085)
+    // A page carrying both reason kinds gets both calls; telemetry sums.
+    const reasons = new Set(target.page.diagnostics.escalationReasons
+      .filter((reason) => reason.severity === 'blocking')
+      .map((reason) => reason.type));
+    const needsAdjudication = reasons.has('critical-token-conflict') || reasons.has('critical-token-omission');
+    const needsTranscription = reasons.has('uncorroborated-ocr') || reasons.has('unread-ink-region');
+    let partialTelemetry;
     try {
       if (skipExisting && existsSync(join(outputDir, name))) {
         const stored = JSON.parse(readFileSync(join(outputDir, name), 'utf8'));
@@ -108,19 +118,70 @@ async function worker() {
       }
       assertPdfMatchesRecord(target.pdfPath, target.page.documentSha256);
       const png = renderPng(target.pdfPath, target.pageNumber);
-      const transcription = await transcribePageImage({ apiKey, png: new Uint8Array(png) });
+      let proposals = [];
+      let adjudications = [];
+      const provenance = {};
+      const telemetry = { promptTokens: 0, outputTokens: 0, latencyMs: 0 };
+      if (needsTranscription) {
+        const transcription = await transcribePageImage({ apiKey, png: new Uint8Array(png) });
+        proposals = transcription.proposals;
+        provenance.transcription = transcription.provenance;
+        telemetry.promptTokens += transcription.telemetry.promptTokens;
+        telemetry.outputTokens += transcription.telemetry.outputTokens;
+        telemetry.latencyMs += transcription.telemetry.latencyMs;
+      }
+      if (needsAdjudication && target.page.conflicts.length) {
+        const { width, height } = target.page.geometry;
+        const obsBox = new Map(target.page.ocrObservations.map((observation) => [observation.id, observation.box]));
+        const conflicts = target.page.conflicts.map((conflict) => {
+          const box = obsBox.get(conflict.ocrId);
+          return {
+            conflictId: conflict.id,
+            nativeText: conflict.nativeText,
+            ocrText: conflict.ocrText,
+            normalizedBox: [
+              Math.round((box[1] / height) * 1000), Math.round((box[0] / width) * 1000),
+              Math.round((box[3] / height) * 1000), Math.round((box[2] / width) * 1000)
+            ]
+          };
+        });
+        // Partial-spend honesty: if this second rung fails, the outer
+        // catch records the telemetry already accumulated — spend is never
+        // invisible just because a later rung failed.
+        const adjudication = await adjudicatePageConflicts({ apiKey, png: new Uint8Array(png), conflicts });
+        adjudications = adjudication.verdicts;
+        provenance.adjudication = adjudication.provenance;
+        telemetry.promptTokens += adjudication.telemetry.promptTokens;
+        telemetry.outputTokens += adjudication.telemetry.outputTokens;
+        telemetry.latencyMs += adjudication.telemetry.latencyMs;
+      }
+      partialTelemetry = telemetry;
       const enrichment = await buildEscalatedOcrEnrichment({
         page: target.page,
-        proposals: transcription.proposals,
-        provenance: transcription.provenance,
-        telemetry: transcription.telemetry
+        proposals,
+        adjudications,
+        provenance,
+        telemetry
       });
       writeFileSync(join(outputDir, name), JSON.stringify(enrichment, null, 1));
       results.push(enrichment);
       const novel = enrichment.proposals.filter((proposal) => proposal.corroboration === 'novel').length;
-      console.log(`${target.page.pageId}: ${enrichment.proposals.length} proposals (${novel} novel) ${enrichment.telemetry.latencyMs}ms`);
+      console.log(`${target.page.pageId}: ${enrichment.proposals.length} proposals (${novel} novel), ${enrichment.adjudications.length} adjudications, ${enrichment.telemetry.latencyMs}ms`);
     } catch (error) {
-      failures.push({ pageId: target.page.pageId, error: String(error).slice(0, 200) });
+      // Failed pages still carry their spend into the ledger — both the
+      // rungs that completed and the attempts of the call that failed
+      // (the adapter attaches attempt telemetry to its terminal error).
+      const errorTelemetry = error?.telemetry ?? { promptTokens: 0, outputTokens: 0, latencyMs: 0 };
+      const spent = {
+        promptTokens: (partialTelemetry?.promptTokens ?? 0) + errorTelemetry.promptTokens,
+        outputTokens: (partialTelemetry?.outputTokens ?? 0) + errorTelemetry.outputTokens,
+        latencyMs: (partialTelemetry?.latencyMs ?? 0) + errorTelemetry.latencyMs
+      };
+      failures.push({
+        pageId: target.page.pageId,
+        error: String(error).slice(0, 200),
+        ...(spent.promptTokens || spent.outputTokens ? { telemetry: spent } : {})
+      });
       console.warn(`${target.page.pageId}: FAILED ${String(error).slice(0, 120)}`);
     }
   }
@@ -128,20 +189,29 @@ async function worker() {
 await Promise.all(Array.from({ length: Math.max(1, concurrency) }, () => worker()));
 
 const byStatus = { 'corroborated-both': 0, 'corroborated-native': 0, 'corroborated-ocr': 0, novel: 0 };
+const byVerdict = { native: 0, ocr: 0, 'both-wrong': 0, unsure: 0, unanswered: 0 };
 let promptTokens = 0;
 let outputTokens = 0;
 const latencies = [];
 for (const enrichment of results) {
   for (const proposal of enrichment.proposals) byStatus[proposal.corroboration] += 1;
+  for (const adjudication of enrichment.adjudications) {
+    if (adjudication.unanswered) byVerdict.unanswered += 1;
+    else byVerdict[adjudication.verdict] += 1;
+  }
   promptTokens += enrichment.telemetry.promptTokens;
   outputTokens += enrichment.telemetry.outputTokens;
   latencies.push(enrichment.telemetry.latencyMs);
+}
+for (const failure of failures) {
+  promptTokens += failure.telemetry?.promptTokens ?? 0;
+  outputTokens += failure.telemetry?.outputTokens ?? 0;
 }
 latencies.sort((a, b) => a - b);
 const quantile = (q) => latencies.length ? latencies[Math.min(latencies.length - 1, Math.floor(q * latencies.length))] : 0;
 const costUsd = (promptTokens * 0.75 + outputTokens * 3.75) / 1e6;
 const aggregate = {
-  enrichmentRunVersion: 'flash-enrichment-run-v1',
+  enrichmentRunVersion: 'flash-enrichment-run-v2-ladder',
   createdAt: new Date().toISOString(),
   runRoot,
   pagesEnriched: results.length,
@@ -152,6 +222,7 @@ const aggregate = {
   reusedFromDisk: reused,
   failures,
   proposals: byStatus,
+  adjudicationVerdicts: byVerdict,
   telemetry: {
     promptTokens,
     outputTokens,
