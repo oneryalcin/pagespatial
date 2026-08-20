@@ -128,12 +128,20 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
                   ];
                   unreadInkRegions = await adapters.regionRecovery.analyze(
                     rendered, readEvidence.map((item) => item.box), { signal: controller.signal });
-                  for (const region of unreadInkRegions) {
-                    if (region.kind !== 'structured') continue;
-                    abortIfNeeded(controller.signal);
-                    const recovered = await adapters.regionRecovery.recover(
-                      source, pageNumber, region, pageGeometry, readEvidence, { signal: controller.signal });
-                    region.recoveredObservationCount = recovered.length;
+                  const structured = unreadInkRegions.filter((region) => region.kind === 'structured');
+                  if (structured.length) {
+                    const recovered = await adapters.regionRecovery.recoverPage(
+                      source, pageNumber, structured, pageGeometry, readEvidence, { signal: controller.signal });
+                    // Attribute recoveries to regions by centre containment so
+                    // residue (structured region with nothing recovered) stays
+                    // measurable per region.
+                    for (const observation of recovered) {
+                      const cx = (observation.box[0] + observation.box[2]) / 2;
+                      const cy = (observation.box[1] + observation.box[3]) / 2;
+                      const home = structured.find((region) =>
+                        cx >= region.box[0] && cx <= region.box[2] && cy >= region.box[1] && cy <= region.box[3]);
+                      if (home) home.recoveredObservationCount += 1;
+                    }
                     ocrObservations = [...ocrObservations, ...recovered];
                   }
                 }

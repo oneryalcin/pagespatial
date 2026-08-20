@@ -105,8 +105,8 @@ test('parser records regions, tags recovered observations, and keeps starvation 
   const document = await parserWith({
     name: 'fixture-recovery', version: '1',
     async analyze() { return [structuredRegion(), pictorialRegion()]; },
-    async recover(source, pageNumber, region) {
-      recoverCalls.push(region.kind);
+    async recoverPage(source, pageNumber, regions) {
+      recoverCalls.push(...regions.map((region) => region.kind));
       return Array.from({ length: 9 }, (_, index) => ({
         pageNumber: 1,
         text: `${100 + index}`,
@@ -134,7 +134,7 @@ test('structured regions that recovery cannot read escalate as unread-ink residu
   const document = await parserWith({
     name: 'fixture-recovery', version: '1',
     async analyze() { return [structuredRegion(), pictorialRegion()]; },
-    async recover() { return []; }
+    async recoverPage() { return []; }
   });
   const page = document.pages[0];
   const reason = page.diagnostics.escalationReasons.find((item) => item.type === 'unread-ink-region');

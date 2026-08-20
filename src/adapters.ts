@@ -42,7 +42,14 @@ export interface RegionRecoveryAdapter<TSource = unknown, TRaster = unknown> {
   readonly name: string;
   readonly version: string;
   analyze(rendered: RenderedPage<TRaster>, readBoxes: readonly Box[], options?: { signal?: AbortSignal }): Promise<UnreadInkRegion[]>;
-  recover(source: DocumentSource<TSource>, pageNumber: number, region: UnreadInkRegion, firstGeometry: PageGeometry, readEvidence: readonly { box: Box; text: string }[], options?: { signal?: AbortSignal }): Promise<OcrObservationInput[]>;
+  /**
+   * One tiled second pass over the page (executed only when structured
+   * regions exist). Page-level rather than per-region: surgical region crops
+   * proved brittle — faint digits neighbouring dense ink fall outside
+   * detected regions, and the validated experiment shape is a page grid.
+   * Returns observations in first-render pixels with recoveryMethod set.
+   */
+  recoverPage(source: DocumentSource<TSource>, pageNumber: number, regions: readonly UnreadInkRegion[], firstGeometry: PageGeometry, readEvidence: readonly { box: Box; text: string }[], options?: { signal?: AbortSignal }): Promise<OcrObservationInput[]>;
 }
 
 export interface ParserAdapters<TSource = unknown, TRaster = unknown> {

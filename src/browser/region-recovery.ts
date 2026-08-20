@@ -43,7 +43,7 @@ export function createZoomRetryRecovery(options: ZoomRetryRecoveryOptions): Regi
     async analyze(rendered, readBoxes) {
       return findUnreadInkRegions(canvasRaster(rendered.data), readBoxes, renderedPixelsPerPoint(rendered.geometry));
     },
-    async recover(source, pageNumber, region, firstGeometry, readEvidence, recoverOptions) {
+    async recoverPage(source, pageNumber, regions, firstGeometry, readEvidence, recoverOptions) {
       const firstScale = renderedPixelsPerPoint(firstGeometry);
       const pointWidth = firstGeometry.width / firstScale;
       const pointHeight = firstGeometry.height / firstScale;
@@ -62,27 +62,30 @@ export function createZoomRetryRecovery(options: ZoomRetryRecoveryOptions): Regi
         signal: recoverOptions?.signal
       });
       try {
-        const sx = Math.max(0, Math.floor((region.box[0] - margin) * zoomRatio));
-        const sy = Math.max(0, Math.floor((region.box[1] - margin) * zoomRatio));
-        const sw = Math.min(zoomed.data.width - sx, Math.ceil((region.box[2] - region.box[0] + 2 * margin) * zoomRatio));
-        const sh = Math.min(zoomed.data.height - sy, Math.ceil((region.box[3] - region.box[1] + 2 * margin) * zoomRatio));
-        if (sw < 8 || sh < 8) return [];
-
-        // Tile the zoomed crop so no OCR input exceeds the detector's cap —
-        // otherwise the detector's internal downscale silently undoes the
-        // zoom, which is exactly how the first acceptance run failed.
-        const tileCols = Math.max(1, Math.ceil(sw / RECOVERY_TILE_MAX_PX));
-        const tileRows = Math.max(1, Math.ceil(sh / RECOVERY_TILE_MAX_PX));
+        // Page grid at the detector's input cap (with overlap), the shape the
+        // standalone experiment validated. Tiles that touch no structured
+        // region (expanded by the margin) are skipped for cost.
+        const tileCols = Math.max(1, Math.ceil(zoomed.data.width / RECOVERY_TILE_MAX_PX));
+        const tileRows = Math.max(1, Math.ceil(zoomed.data.height / RECOVERY_TILE_MAX_PX));
         const overlap = Math.round(0.06 * RECOVERY_TILE_MAX_PX);
+        const targets = regions.map((region) => [
+          (region.box[0] - margin) * zoomRatio,
+          (region.box[1] - margin) * zoomRatio,
+          (region.box[2] + margin) * zoomRatio,
+          (region.box[3] + margin) * zoomRatio
+        ] as Box);
         const recovered: OcrObservationInput[] = [];
         let sequence = 0;
         for (let tileRow = 0; tileRow < tileRows; tileRow += 1) {
           for (let tileCol = 0; tileCol < tileCols; tileCol += 1) {
-            const tx = sx + Math.max(0, Math.floor((tileCol * sw) / tileCols) - (tileCol ? overlap : 0));
-            const ty = sy + Math.max(0, Math.floor((tileRow * sh) / tileRows) - (tileRow ? overlap : 0));
-            const tw = Math.min(sx + sw - tx, Math.ceil(sw / tileCols) + overlap * 2);
-            const th = Math.min(sy + sh - ty, Math.ceil(sh / tileRows) + overlap * 2);
+            const tx = Math.max(0, Math.floor((tileCol * zoomed.data.width) / tileCols) - (tileCol ? overlap : 0));
+            const ty = Math.max(0, Math.floor((tileRow * zoomed.data.height) / tileRows) - (tileRow ? overlap : 0));
+            const tw = Math.min(zoomed.data.width - tx, Math.ceil(zoomed.data.width / tileCols) + overlap * 2);
+            const th = Math.min(zoomed.data.height - ty, Math.ceil(zoomed.data.height / tileRows) + overlap * 2);
             if (tw < 8 || th < 8) continue;
+            const tile: Box = [tx, ty, tx + tw, ty + th];
+            if (!targets.some((target) =>
+              tile[0] < target[2] && target[0] < tile[2] && tile[1] < target[3] && target[1] < tile[3])) continue;
             const crop = document.createElement('canvas');
             crop.width = tw;
             crop.height = th;
@@ -102,11 +105,11 @@ export function createZoomRetryRecovery(options: ZoomRetryRecoveryOptions): Regi
                 const box = mapRecoveredBox(observation.box, origin, zoomRatio) as Box;
                 if (duplicatesFirstPass(box, observation.text, readEvidence)) continue;
                 // Tile overlaps re-read boundary text: dedupe against what
-                // this recovery already produced, same-text same-place.
+                // this pass already produced, same-text same-place.
                 if (duplicatesFirstPass(box, observation.text, recovered)) continue;
                 recovered.push({
                   ...observation,
-                  id: `${METHOD}:${pageNumber}:${Math.round(region.box[0])}x${Math.round(region.box[1])}:${sequence++}`,
+                  id: `${METHOD}:${pageNumber}:${sequence++}`,
                   pageNumber,
                   box,
                   polygon: observation.polygon?.map((point) =>

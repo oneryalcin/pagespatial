@@ -117,11 +117,17 @@ globalThis.pagespatialCorpus = {
         const recoveryStarted = performance.now();
         const readEvidence = result.observations.map((observation) => ({ box: observation.box, text: observation.text }));
         unreadInkRegions = await regionRecovery.analyze(rendered, readEvidence.map((item) => item.box));
-        for (const region of unreadInkRegions) {
-          if (region.kind !== 'structured') continue;
-          const recovered = await regionRecovery.recover(
-            session.source, pageNumber, region, rendered.geometry, readEvidence);
-          region.recoveredObservationCount = recovered.length;
+        const structured = unreadInkRegions.filter((region) => region.kind === 'structured');
+        if (structured.length) {
+          const recovered = await regionRecovery.recoverPage(
+            session.source, pageNumber, structured, rendered.geometry, readEvidence);
+          for (const observation of recovered) {
+            const cx = (observation.box[0] + observation.box[2]) / 2;
+            const cy = (observation.box[1] + observation.box[3]) / 2;
+            const home = structured.find((region) =>
+              cx >= region.box[0] && cx <= region.box[2] && cy >= region.box[1] && cy <= region.box[3]);
+            if (home) home.recoveredObservationCount += 1;
+          }
           observations = [...observations, ...recovered];
         }
         recoveryMs = performance.now() - recoveryStarted;
