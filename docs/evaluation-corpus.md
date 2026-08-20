@@ -78,6 +78,52 @@ The browser can request only loopback URLs. The route map exposes only selected 
 
 The private dataset identifier and pinned revision in this document are intentionally publishable provenance. Corpus files, runtime outputs, route maps, and OCR caches are excluded from Git and the npm package.
 
+## Gold labeling loop
+
+One batch of issue #1, end to end. Roughly 15 minutes of human time and
+~$0.15 of Gemini spend per 15 pages. `<batch-id>` is a fresh directory name
+(`batch3-v1`, …); everything stays under the gitignored `.evaluation/` tree
+except the final text-free metrics aggregate.
+
+```sh
+# 1. Select the next batch by debt leverage and render its page images.
+#    Pages labeled in any prior batch are excluded automatically.
+#    Add --dry-run to see the selection before rendering anything.
+node scripts/evaluation/build-gold-sample.mjs \
+  --run-root .evaluation/runs/<runId> \
+  --output .evaluation/gold/<batch-id>
+
+# 2. Flash proposes tokens, chart relations, and conflict adjudications.
+#    Sends page images of the private corpus to a remote API.
+GEMINI_API_KEY=... node scripts/evaluation/prelabel-gold-pilot.mjs \
+  --sample .evaluation/gold/<batch-id>/pilot-sample.json \
+  --run-root .evaluation/runs/<runId> \
+  --output .evaluation/gold/<batch-id>
+
+# 3. Build the review UI. --run-root is what earns the silver auto-accept
+#    tier (native-text corroboration); without it every row needs a human.
+node scripts/evaluation/build-gold-review.mjs \
+  --proposals .evaluation/gold/<batch-id>/proposals.json \
+  --run-root .evaluation/runs/<runId> \
+  --output .evaluation/gold/<batch-id>/review.html
+
+# 4. Open review.html, judge every uncorroborated row, click "Export
+#    verdicts", save the download as the batch's gold-verdicts.json — then:
+node scripts/evaluation/evaluate-gold-pilot.mjs \
+  --gold-dir .evaluation/gold/<batch-id> \
+  --run-root .evaluation/runs/<runId> \
+  --output .evaluation/gold/<batch-id>/metrics.json
+```
+
+Selection tiers mirror [evaluation debts](evaluation-debts.md): starved scan
+pages (rows 1, 1b), conflict-carrying pages (rows 2, 4, 8), and pages with
+pictorial regions (row 6). Per-document and per-family caps keep one family
+from dominating a batch the way Monotaro dominated the pilot. After a batch
+lands, re-score the affected rows — that is the point of collecting it.
+
+Only `metrics.json` is safe to commit (copy it to `evaluation/gold/`); the
+verdicts, proposals, sample, and rendered images all carry corpus text.
+
 ## Interpreting results
 
 The baseline records parser evidence, timings, sampled memory, actual OCR backend/fallback, conflicts, and escalation signals. It does not create gold truth. These production gates remain `not_evaluated` until independently labelled references exist:
