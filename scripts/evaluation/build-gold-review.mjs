@@ -201,7 +201,11 @@ function exportVerdicts(){
       verdict: document.querySelector('input[name="c-' + pageIndex + '-' + relationIndex + '"]:checked')?.value,
       value: document.getElementById('cv-' + pageIndex + '-' + relationIndex)?.textContent.trim()
     })),
-    missedCharts: (document.getElementById('missed-charts-' + pageIndex)?.value ?? '').split('\n')
+    // The newline escape here must survive into the generated page: this
+    // template literal is the page source, so an unescaped escape becomes a
+    // real line break inside a JS string literal and kills the whole inline
+    // script — hover highlighting and Export verdicts included.
+    missedCharts: (document.getElementById('missed-charts-' + pageIndex)?.value ?? '').split('\\n')
       .map(line => line.trim()).filter(Boolean)
       .map(line => { const [category, value, unit] = line.split('|').map(part => part.trim()); return {category, value, unit: unit || null}; }),
     conflicts: page.conflictIds.map((id, conflictIndex) => ({
@@ -215,6 +219,19 @@ function exportVerdicts(){
   link.click();
 }
 </script>`;
+
+// Fail closed on a page whose script does not parse. A single bad character
+// in the emitted JS takes down the whole inline script — and the failure is
+// SILENT: the page still renders, the rows still list, but hover highlighting
+// stops working and "Export verdicts" does nothing. A reviewer can lose an
+// entire batch of judgements before noticing. Parse, never execute.
+const inlineScript = /<script>([\s\S]*?)<\/script>/u.exec(html)?.[1];
+if (!inlineScript) throw new Error('Generated page has no inline script — refusing to write.');
+try {
+  new Function(inlineScript);
+} catch (error) {
+  throw new Error(`Generated page script does not parse (${error.message}). Refusing to write a review UI whose export button is dead.`);
+}
 
 writeFileSync(outputPath, html);
 console.log(`Wrote ${outputPath} (${(html.length / 1e6).toFixed(1)} MB, ${proposals.length} pages).`);
