@@ -1,6 +1,24 @@
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/types/src/display/api.js';
 import type { DocumentIdentity, DocumentSource } from '../types.js';
+
+/**
+ * pdf.js needs its bundled CID CMaps to translate fonts that reference a
+ * predefined CMap (e.g. Adobe-Japan1, common in CJK documents). Without
+ * them it fails font translation and SILENTLY drops those glyphs from both
+ * text extraction and rendering — the issue #10 root cause. In Node the
+ * bundled directory is resolvable, so the default is the fixed behaviour.
+ */
+function defaultCMapUrl(): string | undefined {
+  try {
+    const require = createRequire(import.meta.url);
+    return join(dirname(require.resolve('pdfjs-dist/package.json')), 'cmaps') + '/';
+  } catch {
+    return undefined;
+  }
+}
 
 export interface NodePdfSessionOptions {
   documentId?: string;
@@ -37,7 +55,11 @@ export async function openNodePdfSession(input: Uint8Array | ArrayBuffer, option
   bytes.set(view);
   if (bytes.byteLength > maxBytes) throw new Error(`PDF is ${bytes.byteLength} bytes; limit is ${maxBytes}.`);
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const loadingTask = pdfjs.getDocument({ data: bytes.slice() });
+  const cMapUrl = defaultCMapUrl();
+  const loadingTask = pdfjs.getDocument({
+    data: bytes.slice(),
+    ...(cMapUrl ? { cMapUrl, cMapPacked: true } : {})
+  });
   let pdf: PDFDocumentProxy;
   try {
     pdf = await loadingTask.promise;

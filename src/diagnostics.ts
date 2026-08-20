@@ -1,3 +1,4 @@
+import { countRecoveredObservations } from './ink.js';
 import { UNCORROBORATED_OCR_MAXIMUM_COVERAGE, UNCORROBORATED_OCR_MINIMUM_COUNT } from './tuning.js';
 import type {
   DerivedRelation,
@@ -112,18 +113,29 @@ export function buildDiagnostics(input: {
   }
   // Residue: structured unread-ink regions that recovery could not read are
   // evidence deserts with no witness at all — blocking. Pictorial regions
-  // are recorded on the page but never alarm.
+  // are recorded on the page but never alarm. Residue is DERIVED from the
+  // retained recovered observations (never from the regions' self-declared
+  // counts) so editing a count cannot silently clear the escalation.
   const regions = input.unreadInkRegions ?? [];
-  const residue = regions.filter((region) => region.kind === 'structured' && region.recoveredObservationCount === 0);
+  const derivedCounts = countRecoveredObservations(regions, input.ocrObservations);
+  const residue = regions.filter((region, index) => region.kind === 'structured' && derivedCounts[index] === 0);
+  const structuredCount = regions.filter((region) => region.kind === 'structured').length;
   if (residue.length) {
     escalationReasons.push({
       type: 'unread-ink-region',
       severity: 'blocking',
       sourceIds: [],
       count: residue.length,
-      share: regions.length ? residue.length / regions.length : 0
+      // Fraction of structured regions still unread; pictorial regions are
+      // not recoverable by design and stay out of the denominator.
+      share: structuredCount ? residue.length / structuredCount : 0
     });
   }
+
+  const recoveredIds = new Set(input.ocrObservations
+    .filter((observation) => observation.recoveryMethod)
+    .map((observation) => observation.id));
+  const corroboratableCount = input.ocrObservations.length - recoveredIds.size;
 
   return {
     thresholds: {
@@ -134,10 +146,13 @@ export function buildDiagnostics(input: {
       uncorroboratedOcrMaximumCoverage: policy.uncorroboratedOcrMaximumCoverage
     },
     ocrObservationCount: input.ocrObservations.length,
+    recoveredObservationCount: recoveredIds.size,
     nativeObservationCount: input.nativeObservations.length,
     sourceMatchCount: input.sourceMatches.length,
-    nativeOcrAssociationCoverage: input.ocrObservations.length
-      ? input.sourceMatches.length / input.ocrObservations.length
+    // Coverage over first-pass observations only: recoveries are
+    // single-witness by construction and sit outside the ratio entirely.
+    nativeOcrAssociationCoverage: corroboratableCount
+      ? input.sourceMatches.filter((match) => !recoveredIds.has(match.ocrId)).length / corroboratableCount
       : 0,
     sourceUnmatchedOcrCount: sourceUnmatched.length,
     criticalConflictCount: criticalConflicts.length,

@@ -54,10 +54,13 @@ export function createZoomRetryRecovery(options: ZoomRetryRecoveryOptions): Regi
       const pointWidth = firstGeometry.width / firstScale;
       const pointHeight = firstGeometry.height / firstScale;
       // Clamp the zoom so the full-page re-render stays inside canvas limits.
+      // The renderer measures ceil(width) * ceil(height); budgeting for one
+      // extra pixel per side keeps the exact-budget clamp from tripping the
+      // renderer's own safety check (A3-and-larger pages bind this clamp).
       const zoomScale = Math.min(
         firstScale * zoomFactor,
-        maxSide / Math.max(pointWidth, pointHeight),
-        Math.sqrt(maxPixels / (pointWidth * pointHeight))
+        maxSide / (Math.max(pointWidth, pointHeight) + 1),
+        Math.sqrt(maxPixels / ((pointWidth + 1) * (pointHeight + 1)))
       );
       if (zoomScale <= firstScale) return [];
       const zoomRatio = zoomScale / firstScale;
@@ -68,12 +71,16 @@ export function createZoomRetryRecovery(options: ZoomRetryRecoveryOptions): Regi
         signal: recoverOptions?.signal
       });
       try {
-        // Page grid at the detector's input cap (with overlap), the shape the
-        // standalone experiment validated. Tiles that touch no structured
-        // region (expanded by the margin) are skipped for cost.
-        const tileCols = Math.max(1, Math.ceil(zoomed.data.width / RECOVERY_TILE_MAX_PX));
-        const tileRows = Math.max(1, Math.ceil(zoomed.data.height / RECOVERY_TILE_MAX_PX));
+        // Page grid under the detector's input cap (with overlap), the shape
+        // the standalone experiment validated. Core size leaves room for the
+        // overlap on both sides so the FINAL crop never exceeds the cap —
+        // an oversized crop would be silently downscaled by the detector,
+        // recreating the exact failure this pass exists to fix. Tiles that
+        // touch no structured region (expanded by the margin) are skipped.
         const overlap = Math.round(0.06 * RECOVERY_TILE_MAX_PX);
+        const core = RECOVERY_TILE_MAX_PX - 2 * overlap;
+        const tileCols = Math.max(1, Math.ceil(zoomed.data.width / core));
+        const tileRows = Math.max(1, Math.ceil(zoomed.data.height / core));
         const targets = regions.map((region) => [
           (region.box[0] - margin) * zoomRatio,
           (region.box[1] - margin) * zoomRatio,
@@ -84,10 +91,10 @@ export function createZoomRetryRecovery(options: ZoomRetryRecoveryOptions): Regi
         let sequence = 0;
         for (let tileRow = 0; tileRow < tileRows; tileRow += 1) {
           for (let tileCol = 0; tileCol < tileCols; tileCol += 1) {
-            const tx = Math.max(0, Math.floor((tileCol * zoomed.data.width) / tileCols) - (tileCol ? overlap : 0));
-            const ty = Math.max(0, Math.floor((tileRow * zoomed.data.height) / tileRows) - (tileRow ? overlap : 0));
-            const tw = Math.min(zoomed.data.width - tx, Math.ceil(zoomed.data.width / tileCols) + overlap * 2);
-            const th = Math.min(zoomed.data.height - ty, Math.ceil(zoomed.data.height / tileRows) + overlap * 2);
+            const tx = Math.max(0, tileCol * core - overlap);
+            const ty = Math.max(0, tileRow * core - overlap);
+            const tw = Math.min(zoomed.data.width - tx, core + overlap * 2);
+            const th = Math.min(zoomed.data.height - ty, core + overlap * 2);
             if (tw < 8 || th < 8) continue;
             const tile: Box = [tx, ty, tx + tw, ty + th];
             if (!targets.some((target) =>

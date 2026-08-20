@@ -134,7 +134,13 @@ export function associateNativeAndOcr(
       .filter((candidate) => candidate.geometric >= criticalGeometry && candidate.textual >= criticalText)
       .sort((left, right) => right.textual - left.textual || right.geometric - left.geometric)[0];
 
-    if (criticalLocal) {
+    // Second-pass recoveries never generate conflicts: tiles can fragment
+    // a line the first pass read whole, and a fragment overlapping native
+    // text would manufacture a critical-token conflict against a value both
+    // engines had right. Recoveries are single-witness by construction —
+    // they contribute evidence, they do not vote against the native layer.
+    // They may still source-match (a whole-line re-read that agrees).
+    if (criticalLocal && !ocr.recoveryMethod) {
       const nativeCritical = criticalTokens(criticalLocal.native.text);
       const ocrCritical = criticalTokens(ocr.text);
       if ((nativeCritical.length || ocrCritical.length) && !criticalTokensAgree(nativeCritical, ocrCritical)) {

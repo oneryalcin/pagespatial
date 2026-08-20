@@ -184,8 +184,14 @@ export interface PageDiagnostics {
     uncorroboratedOcrMaximumCoverage: number;
   };
   ocrObservationCount: number;
+  /** Second-pass observations (recoveryMethod set) within ocrObservationCount. */
+  recoveredObservationCount: number;
   nativeObservationCount: number;
   sourceMatchCount: number;
+  /**
+   * sourceMatches over first-pass OCR observations only: recoveries are
+   * single-witness by construction and sit outside this ratio entirely.
+   */
   nativeOcrAssociationCoverage: number;
   sourceUnmatchedOcrCount: number;
   criticalConflictCount: number;
@@ -202,6 +208,7 @@ export interface ExtractionProvenance {
   createdAt: string;
   nativeAdapter?: string;
   ocrAdapter?: string;
+  regionRecoveryAdapter?: string;
   renderer?: string;
   backend?: string;
   configuration?: Record<string, unknown>;
@@ -251,7 +258,12 @@ export interface PageSpatial {
   conflicts: EvidenceConflict[];
   spatialRows: SpatialRow[];
   derivedRelations: DerivedRelation[];
-  unreadInkRegions: UnreadInkRegion[];
+  /**
+   * Present when unread-ink analysis ran (a region-recovery adapter was
+   * installed); absent means the analysis never happened. An empty array is
+   * a positive claim — the page was analyzed and no unread ink was found.
+   */
+  unreadInkRegions?: UnreadInkRegion[];
   diagnostics: PageDiagnostics;
   projection: PageProjection;
   provenance: ExtractionProvenance;
@@ -262,8 +274,14 @@ export interface DocumentDiagnostics {
   pagesParsed: number;
   pagesRequiringEscalation: number[];
   ocrObservationCount: number;
+  /** Second-pass observations (recoveryMethod set) within ocrObservationCount. */
+  recoveredObservationCount: number;
   nativeObservationCount: number;
   sourceMatchCount: number;
+  /**
+   * sourceMatches over first-pass OCR observations only: recoveries are
+   * single-witness by construction and sit outside this ratio entirely.
+   */
   nativeOcrAssociationCoverage: number;
   criticalConflictCount: number;
   criticalOmissionCount: number;

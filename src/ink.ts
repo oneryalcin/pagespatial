@@ -195,6 +195,37 @@ export function findUnreadInkRegions(
   return merged.filter((region) => boxArea(region.box) >= minAreaPx);
 }
 
+/**
+ * Derive per-region recovered counts from retained observations: each
+ * non-blank recovered observation (recoveryMethod set) is attributed to the
+ * structured region it overlaps most. This is the single source of truth —
+ * the parser stamps `recoveredObservationCount` with it and the schema
+ * re-derives it from the record, so the stored count can never silently
+ * disagree with the evidence (a self-declared count could otherwise clear a
+ * blocking unread-ink-region escalation).
+ */
+export function countRecoveredObservations(
+  regions: readonly UnreadInkRegion[],
+  observations: readonly { box: Box; text: string; recoveryMethod?: string }[]
+): number[] {
+  const counts = regions.map(() => 0);
+  for (const observation of observations) {
+    if (!observation.recoveryMethod || !observation.text.trim()) continue;
+    let home = -1;
+    let best = 0;
+    regions.forEach((region, index) => {
+      if (region.kind !== 'structured') return;
+      const overlap = intersectionArea(observation.box, region.box);
+      if (overlap > best) {
+        best = overlap;
+        home = index;
+      }
+    });
+    if (home >= 0) counts[home]! += 1;
+  }
+  return counts;
+}
+
 /** Map a box from recovery-crop pixel space back onto the first render. */
 export function mapRecoveredBox(box: Box, regionOrigin: readonly [number, number], zoomRatio: number): Box {
   return [

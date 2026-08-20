@@ -4,7 +4,8 @@ import {
   createParser,
   duplicatesFirstPass,
   findUnreadInkRegions,
-  mapRecoveredBox
+  mapRecoveredBox,
+  pageSpatialSchema
 } from '../dist/index.js';
 
 // Build an RGBA raster: white page with painted rectangles.
@@ -130,6 +131,57 @@ test('parser records regions, tags recovered observations, and keeps starvation 
   assert.equal(page.diagnostics.escalationReasons.some((reason) => reason.type === 'unread-ink-region'), false);
 });
 
+test('forging recoveredObservationCount cannot clear the blocking residue escalation', async () => {
+  const document = await parserWith({
+    name: 'fixture-recovery', version: '1',
+    async analyze() { return [structuredRegion()]; },
+    async recoverPage() { return []; }
+  });
+  const honest = document.pages[0];
+  assert.equal(pageSpatialSchema.safeParse(honest).success, true);
+  // The forgery: bump the count, drop the escalation. Every field is
+  // self-consistent except that no recoveryMethod observation backs it.
+  const forged = structuredClone(honest);
+  forged.unreadInkRegions[0].recoveredObservationCount = 1;
+  forged.diagnostics.escalationReasons = forged.diagnostics.escalationReasons
+    .filter((reason) => reason.type !== 'unread-ink-region');
+  forged.diagnostics.requiresEscalation = forged.diagnostics.escalationReasons.length > 0;
+  const result = pageSpatialSchema.safeParse(forged);
+  assert.equal(result.success, false);
+});
+
+test('a recovery adapter failure degrades to residue instead of losing the document', async () => {
+  const document = await parserWith({
+    name: 'fixture-recovery', version: '1',
+    async analyze() { return [structuredRegion()]; },
+    async recoverPage() { throw new Error('Rendered page exceeds the canvas safety limit.'); }
+  });
+  const page = document.pages[0];
+  assert.equal(page.unreadInkRegions.length, 1);
+  const reason = page.diagnostics.escalationReasons.find((item) => item.type === 'unread-ink-region');
+  assert.equal(reason.severity, 'blocking');
+});
+
+test('recovered tile fragments do not manufacture critical-token conflicts against native', async () => {
+  const document = await parserWith({
+    name: 'fixture-recovery', version: '1',
+    async analyze() { return [structuredRegion()]; },
+    async recoverPage() {
+      // A fragment of the native "Heading 2024" line: overlapping geometry,
+      // truncated critical token. As a first-pass observation this would be
+      // a critical-token conflict; as a recovery it must not vote.
+      return [{
+        pageNumber: 1, text: 'Heading 202', box: [16, 256, 160, 288],
+        confidence: 0.95, recoveryMethod: 'zoom-retry-v1'
+      }];
+    }
+  });
+  const page = document.pages[0];
+  assert.equal(page.conflicts.length, 0);
+  assert.equal(page.diagnostics.escalationReasons.some((reason) =>
+    reason.type === 'critical-token-conflict' || reason.type === 'critical-token-omission'), false);
+});
+
 test('structured regions that recovery cannot read escalate as unread-ink residue', async () => {
   const document = await parserWith({
     name: 'fixture-recovery', version: '1',
@@ -140,6 +192,8 @@ test('structured regions that recovery cannot read escalate as unread-ink residu
   const reason = page.diagnostics.escalationReasons.find((item) => item.type === 'unread-ink-region');
   assert.equal(reason.severity, 'blocking');
   assert.equal(reason.count, 1);
-  assert.equal(reason.share, 0.5);
+  // Share is the fraction of STRUCTURED regions still unread; the pictorial
+  // region is not recoverable by design and stays out of the denominator.
+  assert.equal(reason.share, 1);
   assert.equal(page.diagnostics.requiresEscalation, true);
 });

@@ -5,6 +5,7 @@ import {
   createZoomRetryRecovery,
   openPdfJsSession
 } from '../../dist/browser/index.js';
+import { countRecoveredObservations, pointBoxToRenderedBox } from '../../dist/index.js';
 
 let session;
 let ocr;
@@ -116,7 +117,7 @@ globalThis.pagespatialCorpus = {
     if (session.source.identity.pageCount !== identity.pageCount) throw new Error('Browser PDF page count differs from the verified source.');
     return { openMs: performance.now() - started, identity: session.source.identity };
   },
-  async ocrPage(pageNumber, scale) {
+  async ocrPage(pageNumber, scale, nativeEvidence = []) {
     if (!session || !ocr || !renderer) throw new Error('Corpus OCR bridge is not ready.');
     const started = performance.now();
     const renderStarted = performance.now();
@@ -126,36 +127,36 @@ globalThis.pagespatialCorpus = {
       const ocrStarted = performance.now();
       const result = await ocr.recognize(rendered);
       const ocrMs = performance.now() - ocrStarted;
-      // Harness recovery approximates read boxes with the OCR set only (the
-      // native set lives on the Node side); native-read areas that get
-      // re-read produce corroborating duplicates that associate normally.
-      let unreadInkRegions = [];
+      // undefined = analysis never ran (recovery disabled); an empty array
+      // is a positive claim that the page was analyzed and clean.
+      let unreadInkRegions;
       let observations = result.observations;
       let recoveryMs = 0;
       if (regionRecovery) {
         const recoveryStarted = performance.now();
-        const readEvidence = result.observations.map((observation) => ({ box: observation.box, text: observation.text }));
+        // Both witnesses, like createParser: native point boxes are mapped
+        // into rendered pixels so native-read areas never count as unread.
+        const readEvidence = [
+          ...nativeEvidence.map((observation) => ({
+            box: pointBoxToRenderedBox(observation.pointBox, rendered.geometry).box,
+            text: observation.text
+          })),
+          ...result.observations.map((observation) => ({ box: observation.box, text: observation.text }))
+        ];
         unreadInkRegions = await regionRecovery.analyze(rendered, readEvidence.map((item) => item.box));
         const structured = unreadInkRegions.filter((region) => region.kind === 'structured');
         if (structured.length) {
-          const recovered = await regionRecovery.recoverPage(
-            session.source, pageNumber, structured, rendered.geometry, readEvidence);
-          // Attribute by overlap, not center containment: page-level tiles
-          // recover observations that straddle region edges, and a center
-          // just outside the box must still count as that region's recovery.
-          for (const observation of recovered) {
-            let home;
-            let best = 0;
-            for (const region of structured) {
-              const w = Math.min(observation.box[2], region.box[2]) - Math.max(observation.box[0], region.box[0]);
-              const h = Math.min(observation.box[3], region.box[3]) - Math.max(observation.box[1], region.box[1]);
-              const area = w > 0 && h > 0 ? w * h : 0;
-              if (area > best) { best = area; home = region; }
-            }
-            if (home) home.recoveredObservationCount += 1;
-          }
+          const recovered = (await regionRecovery.recoverPage(
+            session.source, pageNumber, structured, rendered.geometry, readEvidence))
+            .filter((observation) => observation.text.trim().length > 0);
           observations = [...observations, ...recovered];
         }
+        // Stamp counts with the schema's own derivation (largest overlap,
+        // non-blank recoveryMethod observations) so validation reconciles.
+        const counts = countRecoveredObservations(unreadInkRegions, observations);
+        unreadInkRegions.forEach((region, index) => {
+          region.recoveredObservationCount = counts[index];
+        });
         recoveryMs = performance.now() - recoveryStarted;
       }
       return {

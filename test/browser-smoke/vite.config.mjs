@@ -39,6 +39,15 @@ export default defineConfig({
       server.middlewares.use((request, response, next) => {
         const pathname = new URL(request.url, 'http://localhost').pathname;
         if (pathname === '/fixture.pdf') return sendFile(fixturePath, response);
+        if (pathname.startsWith('/pdfjs-assets/')) {
+          const pdfjsRoot = resolve(fileURLToPath(import.meta.resolve('pdfjs-dist/package.json')), '..');
+          const asset = resolve(pdfjsRoot, pathname.slice('/pdfjs-assets/'.length));
+          if (!asset.startsWith(`${pdfjsRoot}${sep}`) || !statSync(asset).isFile()) {
+            response.statusCode = 404;
+            return response.end();
+          }
+          return sendFile(asset, response);
+        }
         if (!pathname.startsWith('/ocr/')) return next();
         const candidate = resolve(assetRoot, pathname.slice('/ocr/'.length));
         if (!candidate.startsWith(`${resolve(assetRoot)}${sep}`) || !statSync(candidate).isFile()) {

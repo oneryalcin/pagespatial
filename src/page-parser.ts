@@ -196,7 +196,7 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
   });
   const spatialRows = buildSpatialRows(ocrObservations, pixelsPerPoint);
   const derivedRelations = inferSimpleYearValueRelations(pageId, ocrObservations, pixelsPerPoint);
-  const unreadInkRegions = input.unreadInkRegions ?? [];
+  const unreadInkRegions = input.unreadInkRegions;
   const diagnostics = buildDiagnostics({
     nativeObservations,
     ocrObservations,

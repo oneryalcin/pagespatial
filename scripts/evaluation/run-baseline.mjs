@@ -418,7 +418,16 @@ try {
         try {
           const remaining = deadline - Date.now();
           if (remaining <= 0) throw new DOMException(`Document exceeded ${documentTimeoutMs} ms.`, 'TimeoutError');
-          browserPage = await browserBridge.call('ocrPage', [pageNumber, renderScale], Math.min(pageTimeoutMs, remaining));
+          // Native read evidence crosses the bridge so recovery sees BOTH
+          // witnesses, exactly like createParser: without it the browser
+          // treats native-only text as unread ink and re-reads it.
+          const nativeForRecovery = inspector.pages.find((page) => page.pageNumber === pageNumber);
+          const nativeEvidence = nativeForRecovery?.status === 'succeeded'
+            ? (nativeForRecovery.nativePage?.observations ?? [])
+                .filter((observation) => observation.pointBox)
+                .map((observation) => ({ pointBox: observation.pointBox, text: observation.text }))
+            : [];
+          browserPage = await browserBridge.call('ocrPage', [pageNumber, renderScale, nativeEvidence], Math.min(pageTimeoutMs, remaining));
           if (browserBridge.getExternalRequests().length) throw new Error('Browser attempted a non-loopback request.');
           stage = 'page-assembly';
           nativeRecord = inspector.pages.find((page) => page.pageNumber === pageNumber);
