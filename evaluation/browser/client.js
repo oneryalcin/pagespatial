@@ -5,7 +5,7 @@ import {
   createZoomRetryRecovery,
   openPdfJsSession
 } from '../../dist/browser/index.js';
-import { attributeConfirmations, countRecoveredObservations, pointBoxToRenderedBox } from '../../dist/index.js';
+import { attributeConfirmations, countRecoveredObservations, pointBoxToRenderedBox, pruneConfirmations } from '../../dist/index.js';
 
 let session;
 let ocr;
@@ -156,6 +156,7 @@ globalThis.pagespatialCorpus = {
           attributeConfirmations(unreadInkRegions, confirmations).forEach((regionIndex, index) => {
             if (regionIndex >= 0) unreadInkRegions[regionIndex].confirmations.push(confirmations[index]);
           });
+          pruneConfirmations(unreadInkRegions, readEvidence);
         }
         // Stamp counts with the schema's own derivation (largest overlap,
         // non-blank recoveryMethod observations) so validation reconciles.

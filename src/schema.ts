@@ -419,6 +419,12 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
       issue(context, ['unreadInkRegions', index, 'recoveredObservationCount'],
         `Expected recoveredObservationCount ${derivedRecoveredCounts[index]} derived from recovery observations.`);
     }
+    region.confirmations.forEach((confirmation, confirmationIndex) => {
+      if (!validBox(confirmation.box, page.geometry.width, page.geometry.height)) {
+        issue(context, ['unreadInkRegions', index, 'confirmations', confirmationIndex, 'box'],
+          'Confirmation box must be ordered and within page pixel geometry.');
+      }
+    });
     if (region.kind === 'structured' && confirmedCounts[index] !== region.confirmations.length) {
       issue(context, ['unreadInkRegions', index, 'confirmations'],
         'Every confirmation must duplicate a retained observation (same place, same reading).');

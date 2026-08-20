@@ -2,7 +2,7 @@ import type { ParserAdapters } from './adapters.js';
 import { resolveDiagnosticOptions, type DiagnosticOptions } from './diagnostics.js';
 import type { AssociationOptions } from './merge.js';
 import { pointBoxToRenderedBox, roundBox } from './geometry.js';
-import { attributeConfirmations, countRecoveredObservations } from './ink.js';
+import { attributeConfirmations, countRecoveredObservations, pruneConfirmations } from './ink.js';
 import { assemblePageSpatial, validateNativePageGeometry } from './page-parser.js';
 import { documentIdentitySchema, pageSpatialDocumentSchema } from './schema.js';
 import type {
@@ -166,13 +166,18 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
                     // Blank readings are not evidence; drop them before they
                     // can count against a region's residue.
                     recovered = recovered.filter((observation) => observation.text.trim().length > 0);
-                    confirmations = confirmations.filter((confirmation) => confirmation.text.trim().length > 0);
+                    confirmations = confirmations
+                      .filter((confirmation) => confirmation.text.trim().length > 0)
+                      .map((confirmation) => ({ ...confirmation, box: roundBox(confirmation.box) }));
                     ocrObservations = [...ocrObservations, ...recovered];
                     // Attach confirmation receipts to the region each
                     // overlaps most; validity is derived downstream.
                     attributeConfirmations(unreadInkRegions, confirmations).forEach((regionIndex, index) => {
                       if (regionIndex >= 0) unreadInkRegions![regionIndex]!.confirmations.push(confirmations[index]!);
                     });
+                    // Keep exactly the receipts validation will count, so a
+                    // misbehaving adapter cannot produce an invalid record.
+                    pruneConfirmations(unreadInkRegions, readEvidence);
                   }
                   // Stamp counts with the same derivation the schema uses, so
                   // stored counts always reconcile with retained evidence.

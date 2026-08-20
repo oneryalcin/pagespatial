@@ -1,5 +1,5 @@
 import { countConfirmedRegions, countRecoveredObservations, regionEligibleForResidue } from './ink.js';
-import { UNCORROBORATED_OCR_MAXIMUM_COVERAGE, UNCORROBORATED_OCR_MINIMUM_COUNT } from './tuning.js';
+import { REFERENCE_RENDER_SCALE, UNCORROBORATED_OCR_MAXIMUM_COVERAGE, UNCORROBORATED_OCR_MINIMUM_COUNT } from './tuning.js';
 import type {
   DerivedRelation,
   EvidenceConflict,
@@ -130,7 +130,7 @@ export function buildDiagnostics(input: {
   ]);
   const residue = regions.filter((region, index) =>
     region.kind === 'structured'
-    && regionEligibleForResidue(region, input.pixelsPerPoint ?? 1.6)
+    && regionEligibleForResidue(region, input.pixelsPerPoint ?? REFERENCE_RENDER_SCALE)
     && derivedCounts[index] === 0 && confirmedCounts[index] === 0);
   const structuredCount = regions.filter((region) => region.kind === 'structured').length;
   if (residue.length) {

@@ -1,5 +1,5 @@
 import { boxArea, intersectionArea, unionBoxes } from './geometry.js';
-import { textSimilarity } from './text.js';
+import { criticalTokens, criticalTokensAgree, textSimilarity } from './text.js';
 import {
   INK_CELL_MIN_FRACTION,
   INK_CLOSE_RADIUS_CELLS,
@@ -182,7 +182,7 @@ export function findUnreadInkRegions(
     for (const region of merged) {
       const partner = next.find((candidate) => candidate.kind === region.kind && near(candidate.box, region.box));
       if (!partner) {
-        next.push({ ...region });
+        next.push({ ...region, confirmations: [...region.confirmations] });
         continue;
       }
       const areaA = boxArea(partner.box);
@@ -277,14 +277,54 @@ export function countConfirmedRegions(
   retainedEvidence: readonly { box: Box; text: string }[]
 ): number[] {
   const counts = regions.map(() => 0);
+  const consumed = new Set<number>();
   regions.forEach((region, index) => {
     if (region.kind !== 'structured') return;
     for (const confirmation of region.confirmations) {
       if (!confirmation.text.trim()) continue;
-      if (duplicatesFirstPass(confirmation.box, confirmation.text, retainedEvidence)) counts[index]! += 1;
+      // A degenerate box is a drop signal in the recovery loop but must
+      // never validate here — opposite safety polarity.
+      if (boxArea(confirmation.box) <= 0) continue;
+      // Re-derive attribution: the receipt must belong to THIS region by
+      // the same largest-overlap rule the parser used. Without this, a
+      // receipt copied from anywhere on the page would clear any region.
+      if (attributeConfirmations(regions, [confirmation])[0] !== index) continue;
+      // Each retained observation backs at most one receipt (occurrence
+      // consumption), so confirmation counts stay meaningful.
+      const matched = findDuplicateIndex(confirmation.box, confirmation.text, retainedEvidence, consumed);
+      if (matched < 0) continue;
+      consumed.add(matched);
+      counts[index]! += 1;
     }
   });
   return counts;
+}
+
+/**
+ * Prune each region's confirmations to exactly the subset
+ * countConfirmedRegions will count (attribution, positive area, distinct
+ * consumed evidence). The parser runs this before assembly so a
+ * misbehaving recovery adapter (duplicate or misplaced receipts) can never
+ * make the parser emit a record its own schema rejects.
+ */
+export function pruneConfirmations(
+  regions: readonly UnreadInkRegion[],
+  retainedEvidence: readonly { box: Box; text: string }[]
+): void {
+  const consumed = new Set<number>();
+  for (let index = 0; index < regions.length; index += 1) {
+    const region = regions[index]!;
+    region.confirmations = region.confirmations.filter((confirmation) => {
+      if (region.kind !== 'structured') return false;
+      if (!confirmation.text.trim()) return false;
+      if (boxArea(confirmation.box) <= 0) return false;
+      if (attributeConfirmations(regions, [confirmation])[0] !== index) return false;
+      const matched = findDuplicateIndex(confirmation.box, confirmation.text, retainedEvidence, consumed);
+      if (matched < 0) return false;
+      consumed.add(matched);
+      return true;
+    });
+  }
 }
 
 /** Map a box from recovery-crop pixel space back onto the first render. */
@@ -310,7 +350,24 @@ export function duplicatesFirstPass(
 ): boolean {
   const area = boxArea(box);
   if (area <= 0) return true;
-  return readEvidence.some((read) =>
-    intersectionArea(box, read.box) / area >= RECOVERY_DUPLICATE_OVERLAP
-    && textSimilarity(text, read.text) >= 0.72);
+  return findDuplicateIndex(box, text, readEvidence) >= 0;
+}
+
+/** Index of the first evidence entry the reading duplicates, or -1. */
+function findDuplicateIndex(
+  box: Box,
+  text: string,
+  readEvidence: readonly { box: Box; text: string }[],
+  skip?: ReadonlySet<number>
+): number {
+  const area = boxArea(box);
+  if (area <= 0) return -1;
+  return readEvidence.findIndex((read, index) =>
+    !skip?.has(index)
+    && intersectionArea(box, read.box) / area >= RECOVERY_DUPLICATE_OVERLAP
+    && textSimilarity(text, read.text) >= 0.72
+    // General similarity does not protect numbers: a long line differing in
+    // one digit still clears 0.72. A reading that disagrees on critical
+    // tokens is new evidence (kept as an observation), never a duplicate.
+    && criticalTokensAgree(criticalTokens(text), criticalTokens(read.text)));
 }

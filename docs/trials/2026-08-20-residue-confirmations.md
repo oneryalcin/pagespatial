@@ -27,12 +27,24 @@ already knew.
 
 Design: recovery now returns **confirmation receipts** — the `{box, text}`
 of readings it dropped as duplicates of existing evidence. Receipts attach
-to the region each overlaps most and are **self-verifying**: a confirmation
-only counts when it actually duplicates a retained first-pass observation
-(same place, same reading — the `duplicatesFirstPass` rule). A forged
-receipt must therefore match real evidence at that location, which would
-make the region genuinely corroborated; a receipt matching nothing fails
-schema validation outright. The forgery-proof invariant survives intact.
+to the region each overlaps most and are **self-verifying**: validation
+re-derives, from the record alone, that each receipt (a) has a positive,
+in-page box, (b) attributes to the region it is stored on by the same
+largest-overlap rule the parser used, (c) duplicates a retained first-pass
+observation — same place, same reading, AND agreeing critical tokens (a
+re-read differing in one digit is new evidence, never a confirmation), and
+(d) consumes a distinct retained observation (one observation backs at
+most one receipt). The parser prunes receipts through the identical
+derivation before assembly, so a misbehaving adapter cannot produce an
+invalid record. Two independent adversarial reviews attacked this property
+(copied-from-elsewhere receipts, zero-area boxes, receipt reuse,
+critical-token near-misses); each attack is now a regression test.
+
+Honest scope note: this guards the record's *internal consistency* — you
+cannot clear the alarm while leaving the region honestly recorded. An
+editor willing to delete or relabel the region itself is out of scope:
+regions derive from a raster that is not in the record, so nothing can
+re-derive their existence.
 
 A structured region with zero recoveries but valid confirmations is
 corroborated (typically fill around read text) and does not escalate.
@@ -73,6 +85,13 @@ entirely. blackstone p17's header bars now carry their receipts
 - Blocking residue = structured ∧ narrow side ≥ 8pt ∧ zero recoveries ∧
   zero valid confirmations.
 - Pictorial regions may not carry confirmations.
+
+## Geometry contract hardening
+
+The reviews also surfaced that every point-denominated heuristic assumes
+one scalar pixels-per-point. `assertPageGeometry` now rejects anisotropic
+and sheared viewport transforms outright (conformal-only), rather than
+letting physical-size gates silently skew on one axis.
 
 ## What stays open (issue #14)
 

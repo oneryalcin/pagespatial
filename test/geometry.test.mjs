@@ -85,7 +85,8 @@ test('rejects non-finite, singular, inconsistent, and out-of-bounds geometry', (
     pointHeight: 200
   };
   assert.throws(() => assertPageGeometry({ ...base, viewportTransform: [1, 0, 0, 1, Number.NaN, 0] }), /finite/);
-  assert.throws(() => assertPageGeometry({ ...base, viewportTransform: [1, 2, 2, 4, 0, 0] }), /invertible/);
+  assert.throws(() => assertPageGeometry({ ...base, viewportTransform: [1, 2, 2, 4, 0, 0] }), /conformal/);
+  assert.throws(() => assertPageGeometry({ ...base, viewportTransform: [2, 0, 0, -1, 0, 200] }), /conformal/);
   assert.throws(() => assertPageGeometry({ ...base, viewportTransform: [1, 0, 0, -1, 10, 200] }), /does not map/);
   assert.throws(
     () => pointBoxToRenderedBox([-1, 20, 40, 40], { ...base, viewportTransform: [1, 0, 0, -1, 0, 200] }),

@@ -228,6 +228,92 @@ test('a forged confirmation that matches no retained evidence fails validation',
   assert.equal(pageSpatialSchema.safeParse(forged).success, false);
 });
 
+test('a receipt copied from unrelated evidence elsewhere on the page cannot clear a region', async () => {
+  const document = await parserWith({
+    name: 'fixture-recovery', version: '1',
+    async analyze() { return [structuredRegion()]; },
+    async recoverPage() { return { observations: [], confirmations: [] }; }
+  });
+  const forged = structuredClone(document.pages[0]);
+  // The OCR observation at [16,256,192,288] is real retained evidence — but
+  // it is nowhere near the region. Copying it as a receipt must not count.
+  forged.unreadInkRegions[0].confirmations.push({ box: [16, 256, 192, 288], text: 'Heading 2024' });
+  forged.diagnostics.escalationReasons = forged.diagnostics.escalationReasons
+    .filter((reason) => reason.type !== 'unread-ink-region');
+  forged.diagnostics.requiresEscalation = forged.diagnostics.escalationReasons.length > 0;
+  assert.equal(pageSpatialSchema.safeParse(forged).success, false);
+});
+
+test('degenerate receipt boxes (zero-area, inverted, off-page) never validate', async () => {
+  const document = await parserWith({
+    name: 'fixture-recovery', version: '1',
+    async analyze() { return [structuredRegion()]; },
+    async recoverPage() { return { observations: [], confirmations: [] }; }
+  });
+  for (const box of [[100, 100, 100, 100], [200, 200, 100, 100], [-9, -9, -1, -1]]) {
+    const forged = structuredClone(document.pages[0]);
+    forged.unreadInkRegions[0].confirmations.push({ box, text: 'anything' });
+    forged.diagnostics.escalationReasons = forged.diagnostics.escalationReasons
+      .filter((reason) => reason.type !== 'unread-ink-region');
+    forged.diagnostics.requiresEscalation = forged.diagnostics.escalationReasons.length > 0;
+    assert.equal(pageSpatialSchema.safeParse(forged).success, false, JSON.stringify(box));
+  }
+});
+
+test('a re-read disagreeing on a critical token is new evidence, never a confirmation', () => {
+  // Long line differing in one digit clears 0.72 general similarity — the
+  // critical-token rule must catch it.
+  const read = [{ box: [0, 0, 200, 20], text: 'Total revenue for the period 1,234' }];
+  assert.equal(duplicatesFirstPass([0, 0, 200, 20], 'Total revenue for the period 1,294', read), false);
+  assert.equal(duplicatesFirstPass([0, 0, 200, 20], 'Total revenue for the period 1,234', read), true);
+});
+
+test('one retained observation backs at most one receipt (occurrence consumption)', async () => {
+  const document = await parserWith({
+    name: 'fixture-recovery', version: '1',
+    async analyze() { return [structuredRegion()]; },
+    async recoverPage() {
+      return {
+        observations: [],
+        confirmations: [
+          { box: [20, 20, 190, 46], text: 'Heading 2024' },
+          { box: [20, 20, 190, 46], text: 'Heading 2024' }
+        ]
+      };
+    }
+  });
+  // The parser prunes to the consumable subset: one receipt survives and
+  // the record validates. Re-forging the duplicate by hand then fails.
+  const page = document.pages[0];
+  assert.equal(page.unreadInkRegions[0].confirmations.length, 1);
+  assert.equal(pageSpatialSchema.safeParse(page).success, true);
+  const forged = structuredClone(page);
+  forged.unreadInkRegions[0].confirmations.push({ box: [20, 20, 190, 46], text: 'Heading 2024' });
+  assert.equal(pageSpatialSchema.safeParse(forged).success, false);
+});
+
+test('anisotropic viewport transforms are rejected at the geometry gate', async () => {
+  await assert.rejects(createParser({
+    native: {
+      name: 'fixture-native', version: '1',
+      async extractPage() {
+        return { pageNumber: 1, geometry: { pointWidth: 250, pointHeight: 250 }, observations: [] };
+      }
+    },
+    renderer: {
+      name: 'fixture-renderer', version: '1',
+      async render() {
+        return {
+          pageNumber: 1,
+          geometry: { width: 500, height: 250, pointWidth: 250, pointHeight: 250, viewportTransform: [2, 0, 0, -1, 0, 250] },
+          data: new Uint8Array([1])
+        };
+      }
+    },
+    ocr: { name: 'fixture-ocr', version: '1', async recognize() { return { pageNumber: 1, observations: [] }; } }
+  }).parse({ identity, data: new Uint8Array([1]) }, { runId: 'aniso' }), /conformal/u);
+});
+
 test('sub-text-height strips (divider rules) never fire the residue alarm', async () => {
   // A 300x10px strip at 1.6 ppp is 6.25pt tall — a drawn line, not a
   // possible text container. Detected, re-read, recorded; never blocking.
