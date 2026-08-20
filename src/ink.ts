@@ -9,6 +9,7 @@ import {
   INK_PICTORIAL_MIDTONE_MIN,
   INK_READ_DILATE_PT,
   INK_REGION_MIN_AREA_PT2,
+  INK_RESIDUE_MIN_SIDE_PT,
   RECOVERY_DUPLICATE_OVERLAP,
   REFERENCE_RENDER_SCALE
 } from './tuning.js';
@@ -225,6 +226,19 @@ export function countRecoveredObservations(
     if (home >= 0) counts[home]! += 1;
   }
   return counts;
+}
+
+/**
+ * True when a structured region is geometrically capable of holding legible
+ * text: its narrow side is at least INK_RESIDUE_MIN_SIDE_PT. Sub-text-height
+ * strips (divider rules, underlines) are drawn strokes — their ink is
+ * explained, and a nothing-found second pass over them is not an evidence
+ * desert. Shared by diagnostics and the schema so the residue rule cannot
+ * drift between them.
+ */
+export function regionEligibleForResidue(region: UnreadInkRegion, pixelsPerPoint: number): boolean {
+  const minSidePx = INK_RESIDUE_MIN_SIDE_PT * pixelsPerPoint;
+  return Math.min(region.box[2] - region.box[0], region.box[3] - region.box[1]) >= minSidePx;
 }
 
 /**

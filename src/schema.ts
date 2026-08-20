@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { assertPageGeometry, pointBounds, pointBoxToRenderedBox } from './geometry.js';
-import { countConfirmedRegions, countRecoveredObservations } from './ink.js';
+import { assertPageGeometry, pointBounds, pointBoxToRenderedBox, renderedPixelsPerPoint } from './geometry.js';
+import { countConfirmedRegions, countRecoveredObservations, regionEligibleForResidue } from './ink.js';
 
 const boxSchema = z.tuple([z.number(), z.number(), z.number(), z.number()]);
 const pointSchema = z.tuple([z.number(), z.number()]);
@@ -427,8 +427,11 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
       issue(context, ['unreadInkRegions', index, 'confirmations'], 'Pictorial regions carry no recovery confirmations.');
     }
   });
+  const pagePixelsPerPoint = renderedPixelsPerPoint(page.geometry);
   const residueRegions = inkRegions.filter((region, index) =>
-    region.kind === 'structured' && derivedRecoveredCounts[index] === 0 && confirmedCounts[index] === 0);
+    region.kind === 'structured'
+    && regionEligibleForResidue(region, pagePixelsPerPoint)
+    && derivedRecoveredCounts[index] === 0 && confirmedCounts[index] === 0);
   const structuredRegionCount = inkRegions.filter((region) => region.kind === 'structured').length;
   expectedReasons.set('unread-ink-region', {
     severity: 'blocking',

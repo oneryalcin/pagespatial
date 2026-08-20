@@ -64,6 +64,15 @@ export const INK_CELL_MIN_FRACTION = 0.08;
 export const INK_READ_DILATE_PT = 2;
 /** Minimum unread-ink region area, in square points (~45x35pt). */
 export const INK_REGION_MIN_AREA_PT2 = 1600;
+/**
+ * Minimum narrow-side height/width (points) for a structured region to fire
+ * the blocking unread-ink residue alarm. A thinner region cannot hold
+ * legible text — its ink is explained by a drawn stroke (divider rules,
+ * underlines). Such regions are still detected and re-read (real tiny text
+ * gets its zoomed second look, and any recovery or confirmation records
+ * normally); only the nothing-found alarm requires text-capable geometry.
+ */
+export const INK_RESIDUE_MIN_SIDE_PT = 8;
 /** Midtone fraction at or above which a region is pictorial, not structured. */
 export const INK_PICTORIAL_MIDTONE_MIN = 0.3;
 /** Target magnification of the recovery re-render relative to the first render. */

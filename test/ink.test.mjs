@@ -228,6 +228,26 @@ test('a forged confirmation that matches no retained evidence fails validation',
   assert.equal(pageSpatialSchema.safeParse(forged).success, false);
 });
 
+test('sub-text-height strips (divider rules) never fire the residue alarm', async () => {
+  // A 300x10px strip at 1.6 ppp is 6.25pt tall — a drawn line, not a
+  // possible text container. Detected, re-read, recorded; never blocking.
+  const document = await parserWith({
+    name: 'fixture-recovery', version: '1',
+    async analyze() {
+      return [{
+        box: [40, 100, 340, 110], kind: 'structured',
+        inkDensity: 0.2, midToneFraction: 0.05,
+        recoveredObservationCount: 0, confirmations: []
+      }];
+    },
+    async recoverPage() { return { observations: [], confirmations: [] }; }
+  });
+  const page = document.pages[0];
+  assert.equal(page.unreadInkRegions.length, 1);
+  assert.equal(page.diagnostics.escalationReasons.some((reason) => reason.type === 'unread-ink-region'), false);
+  assert.equal(pageSpatialSchema.safeParse(page).success, true);
+});
+
 test('structured regions that recovery cannot read escalate as unread-ink residue', async () => {
   const document = await parserWith({
     name: 'fixture-recovery', version: '1',

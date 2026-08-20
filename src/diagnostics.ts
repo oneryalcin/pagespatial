@@ -1,4 +1,4 @@
-import { countConfirmedRegions, countRecoveredObservations } from './ink.js';
+import { countConfirmedRegions, countRecoveredObservations, regionEligibleForResidue } from './ink.js';
 import { UNCORROBORATED_OCR_MAXIMUM_COVERAGE, UNCORROBORATED_OCR_MINIMUM_COUNT } from './tuning.js';
 import type {
   DerivedRelation,
@@ -39,6 +39,8 @@ export function buildDiagnostics(input: {
   conflicts: readonly EvidenceConflict[];
   derivedRelations: readonly DerivedRelation[];
   unreadInkRegions?: readonly UnreadInkRegion[];
+  /** Rendered pixels per PDF point, for geometric residue eligibility. */
+  pixelsPerPoint?: number;
   options?: DiagnosticOptions;
 }): PageDiagnostics {
   const policy = resolveDiagnosticOptions(input.options);
@@ -127,7 +129,9 @@ export function buildDiagnostics(input: {
       .map((observation) => ({ box: observation.box, text: observation.text }))
   ]);
   const residue = regions.filter((region, index) =>
-    region.kind === 'structured' && derivedCounts[index] === 0 && confirmedCounts[index] === 0);
+    region.kind === 'structured'
+    && regionEligibleForResidue(region, input.pixelsPerPoint ?? 1.6)
+    && derivedCounts[index] === 0 && confirmedCounts[index] === 0);
   const structuredCount = regions.filter((region) => region.kind === 'structured').length;
   if (residue.length) {
     escalationReasons.push({

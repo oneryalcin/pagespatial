@@ -204,6 +204,7 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
     conflicts: association.conflicts,
     derivedRelations,
     unreadInkRegions,
+    pixelsPerPoint,
     options: input.diagnostics
   });
   const projection = projectMarkdown({
