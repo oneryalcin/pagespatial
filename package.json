@@ -20,6 +20,10 @@
       "types": "./dist/node/pdf-inspector.d.ts",
       "import": "./dist/node/pdf-inspector.js"
     },
+    "./node/flash-ocr": {
+      "types": "./dist/node/flash-ocr.d.ts",
+      "import": "./dist/node/flash-ocr.js"
+    },
     "./schema.json": "./schemas/pagespatial.schema.json"
   },
   "files": [
