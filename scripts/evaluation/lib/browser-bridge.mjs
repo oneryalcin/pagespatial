@@ -128,6 +128,8 @@ export async function startBrowserBridge(options) {
     initialization = await call('initialize', [{
       backend: options.backend ?? 'wasm',
       ocrVariant: options.ocrVariant ?? 'tiny',
+      regionRecovery: options.regionRecovery ?? false,
+      dumpRecoveryTiles: options.dumpRecoveryTiles ?? false,
       detectorLimit: options.detectorLimit ?? 960,
       recognitionThreshold: options.recognitionThreshold ?? 0.25,
       recognitionBatchSize: options.recognitionBatchSize ?? 6,

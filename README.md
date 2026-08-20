@@ -113,6 +113,13 @@ const session = await openPdfJsSession(file, {
   documentId: 'report-42',
   revisionId: 'upload-7',
   workerSrc: pdfWorkerUrl,
+  // REQUIRED for CJK and other CID-keyed fonts: serve pdfjs-dist's cmaps/
+  // and standard_fonts/ directories and point pdf.js at them. Without
+  // cMapUrl, pdf.js SILENTLY drops every glyph whose font references a
+  // predefined CMap (Adobe-Japan1 etc.) — from text extraction AND
+  // rendering — so both witnesses go blind to that content.
+  cMapUrl: '/pdfjs-assets/cmaps/',
+  standardFontDataUrl: '/pdfjs-assets/standard_fonts/',
   maxBytes: 100 * 1024 * 1024,
   maxPages: 500
 });

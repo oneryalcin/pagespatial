@@ -4,7 +4,7 @@
   "properties": {
     "schemaVersion": {
       "type": "string",
-      "const": "0.3.0"
+      "const": "0.4.0"
     },
     "document": {
       "type": "object",
@@ -45,7 +45,7 @@
         "properties": {
           "schemaVersion": {
             "type": "string",
-            "const": "0.3.0"
+            "const": "0.4.0"
           },
           "documentId": {
             "type": "string"
@@ -338,6 +338,10 @@
                 },
                 "model": {
                   "type": "string"
+                },
+                "recoveryMethod": {
+                  "type": "string",
+                  "minLength": 1
                 }
               },
               "required": [
@@ -716,6 +720,64 @@
               "additionalProperties": false
             }
           },
+          "unreadInkRegions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "box": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "items": false
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "structured",
+                    "pictorial"
+                  ]
+                },
+                "inkDensity": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "midToneFraction": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "recoveredObservationCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "box",
+                "kind",
+                "inkDensity",
+                "midToneFraction",
+                "recoveredObservationCount"
+              ],
+              "additionalProperties": false
+            }
+          },
           "diagnostics": {
             "type": "object",
             "properties": {
@@ -758,6 +820,11 @@
                 "additionalProperties": false
               },
               "ocrObservationCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "recoveredObservationCount": {
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
@@ -812,7 +879,8 @@
                         "critical-token-omission",
                         "ambiguous-derived-relation",
                         "low-ocr-confidence",
-                        "uncorroborated-ocr"
+                        "uncorroborated-ocr",
+                        "unread-ink-region"
                       ]
                     },
                     "severity": {
@@ -853,6 +921,7 @@
             "required": [
               "thresholds",
               "ocrObservationCount",
+              "recoveredObservationCount",
               "nativeObservationCount",
               "sourceMatchCount",
               "nativeOcrAssociationCoverage",
@@ -916,6 +985,9 @@
                 "type": "string"
               },
               "ocrAdapter": {
+                "type": "string"
+              },
+              "regionRecoveryAdapter": {
                 "type": "string"
               },
               "renderer": {
@@ -999,6 +1071,11 @@
           "minimum": 0,
           "maximum": 9007199254740991
         },
+        "recoveredObservationCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
         "nativeOcrAssociationCoverage": {
           "type": "number",
           "minimum": 0,
@@ -1022,6 +1099,7 @@
         "ocrObservationCount",
         "nativeObservationCount",
         "sourceMatchCount",
+        "recoveredObservationCount",
         "nativeOcrAssociationCoverage",
         "criticalConflictCount",
         "criticalOmissionCount"
@@ -1047,6 +1125,9 @@
           "type": "string"
         },
         "ocrAdapter": {
+          "type": "string"
+        },
+        "regionRecoveryAdapter": {
           "type": "string"
         },
         "renderer": {

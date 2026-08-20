@@ -103,6 +103,18 @@ export default defineConfig({
             return response.end();
           }
         }
+        if (pathname.startsWith('/pdfjs-assets/')) {
+          // CID CMaps + standard fonts pdf.js needs to paint text whose font
+          // uses a predefined CMap (e.g. Adobe-Japan1). Without them those
+          // glyphs silently never render (issue #10 root cause).
+          const pdfjsRoot = realpathSync(resolve(import.meta.dirname, '../../node_modules/pdfjs-dist'));
+          try {
+            return serve(containedFile(pdfjsRoot, resolve(pdfjsRoot, pathname.slice('/pdfjs-assets/'.length))), response);
+          } catch {
+            response.statusCode = 404;
+            return response.end();
+          }
+        }
         if (!pathname.startsWith('/ocr/')) return next();
         try {
           return serve(containedFile(resolvedAssets, resolve(resolvedAssets, pathname.slice('/ocr/'.length))), response);

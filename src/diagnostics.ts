@@ -1,3 +1,4 @@
+import { countRecoveredObservations } from './ink.js';
 import { UNCORROBORATED_OCR_MAXIMUM_COVERAGE, UNCORROBORATED_OCR_MINIMUM_COUNT } from './tuning.js';
 import type {
   DerivedRelation,
@@ -5,7 +6,8 @@ import type {
   NativeObservation,
   OcrObservation,
   PageDiagnostics,
-  SourceMatch
+  SourceMatch,
+  UnreadInkRegion
 } from './types.js';
 
 export interface DiagnosticOptions {
@@ -36,6 +38,7 @@ export function buildDiagnostics(input: {
   sourceMatches: readonly SourceMatch[];
   conflicts: readonly EvidenceConflict[];
   derivedRelations: readonly DerivedRelation[];
+  unreadInkRegions?: readonly UnreadInkRegion[];
   options?: DiagnosticOptions;
 }): PageDiagnostics {
   const policy = resolveDiagnosticOptions(input.options);
@@ -87,7 +90,11 @@ export function buildDiagnostics(input: {
   // caught a confidently-wrong reading, so the page escalates as
   // unverifiable-by-construction (blocking).
   const engaged = new Set([...matched, ...conflictIds]);
-  const confident = input.ocrObservations.filter((observation) => observation.confidence >= lowThreshold);
+  // Second-pass recoveries (recoveryMethod set) are deliberately extracted
+  // from regions known to be single-witness; counting them here would let
+  // successful recovery re-trigger the very alarm it answers.
+  const confident = input.ocrObservations.filter((observation) =>
+    observation.confidence >= lowThreshold && !observation.recoveryMethod);
   const uncorroborated = confident.filter((observation) => !engaged.has(observation.id));
   const engagedCoverage = confident.length ? (confident.length - uncorroborated.length) / confident.length : 1;
   if (confident.length >= policy.uncorroboratedOcrMinimumCount
@@ -104,6 +111,31 @@ export function buildDiagnostics(input: {
       share: ocrShare(uncorroborated.length)
     });
   }
+  // Residue: structured unread-ink regions that recovery could not read are
+  // evidence deserts with no witness at all — blocking. Pictorial regions
+  // are recorded on the page but never alarm. Residue is DERIVED from the
+  // retained recovered observations (never from the regions' self-declared
+  // counts) so editing a count cannot silently clear the escalation.
+  const regions = input.unreadInkRegions ?? [];
+  const derivedCounts = countRecoveredObservations(regions, input.ocrObservations);
+  const residue = regions.filter((region, index) => region.kind === 'structured' && derivedCounts[index] === 0);
+  const structuredCount = regions.filter((region) => region.kind === 'structured').length;
+  if (residue.length) {
+    escalationReasons.push({
+      type: 'unread-ink-region',
+      severity: 'blocking',
+      sourceIds: [],
+      count: residue.length,
+      // Fraction of structured regions still unread; pictorial regions are
+      // not recoverable by design and stay out of the denominator.
+      share: structuredCount ? residue.length / structuredCount : 0
+    });
+  }
+
+  const recoveredIds = new Set(input.ocrObservations
+    .filter((observation) => observation.recoveryMethod)
+    .map((observation) => observation.id));
+  const corroboratableCount = input.ocrObservations.length - recoveredIds.size;
 
   return {
     thresholds: {
@@ -114,10 +146,13 @@ export function buildDiagnostics(input: {
       uncorroboratedOcrMaximumCoverage: policy.uncorroboratedOcrMaximumCoverage
     },
     ocrObservationCount: input.ocrObservations.length,
+    recoveredObservationCount: recoveredIds.size,
     nativeObservationCount: input.nativeObservations.length,
     sourceMatchCount: input.sourceMatches.length,
-    nativeOcrAssociationCoverage: input.ocrObservations.length
-      ? input.sourceMatches.length / input.ocrObservations.length
+    // Coverage over first-pass observations only: recoveries are
+    // single-witness by construction and sit outside the ratio entirely.
+    nativeOcrAssociationCoverage: corroboratableCount
+      ? input.sourceMatches.filter((match) => !recoveredIds.has(match.ocrId)).length / corroboratableCount
       : 0,
     sourceUnmatchedOcrCount: sourceUnmatched.length,
     criticalConflictCount: criticalConflicts.length,

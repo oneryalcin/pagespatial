@@ -18,7 +18,8 @@ import type {
   OcrPageResult,
   PageGeometry,
   PageSpatial,
-  RenderedPage
+  RenderedPage,
+  UnreadInkRegion
 } from './types.js';
 
 export interface BuildPageSpatialInput {
@@ -29,6 +30,7 @@ export interface BuildPageSpatialInput {
   ocrObservations: OcrObservationInput[];
   nativeMarkdown?: string;
   nativeMarkdownSource?: string;
+  unreadInkRegions?: UnreadInkRegion[];
   provenance: ExtractionProvenance;
   association?: AssociationOptions;
   diagnostics?: DiagnosticOptions;
@@ -55,6 +57,7 @@ export interface AssemblePageSpatialInput {
   createdAt?: string;
   association?: AssociationOptions;
   diagnostics?: DiagnosticOptions;
+  unreadInkRegions?: UnreadInkRegion[];
 }
 
 function normalizeNative(
@@ -193,12 +196,14 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
   });
   const spatialRows = buildSpatialRows(ocrObservations, pixelsPerPoint);
   const derivedRelations = inferSimpleYearValueRelations(pageId, ocrObservations, pixelsPerPoint);
+  const unreadInkRegions = input.unreadInkRegions;
   const diagnostics = buildDiagnostics({
     nativeObservations,
     ocrObservations,
     sourceMatches: association.sourceMatches,
     conflicts: association.conflicts,
     derivedRelations,
+    unreadInkRegions,
     options: input.diagnostics
   });
   const projection = projectMarkdown({
@@ -215,7 +220,7 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
   });
 
   const page: PageSpatial = {
-    schemaVersion: '0.3.0',
+    schemaVersion: '0.4.0',
     documentId: input.document.documentId,
     revisionId: input.document.revisionId,
     documentSha256: input.document.sha256,
@@ -229,6 +234,7 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
     conflicts: association.conflicts,
     spatialRows,
     derivedRelations,
+    unreadInkRegions,
     diagnostics,
     projection,
     provenance: input.provenance
@@ -333,6 +339,7 @@ export function assemblePageSpatial(input: AssemblePageSpatialInput): PageSpatia
     ocrObservations: input.ocrPage.observations,
     nativeMarkdown: input.nativePage.markdown,
     nativeMarkdownSource: input.nativePage.markdownSource,
+    unreadInkRegions: input.unreadInkRegions,
     provenance,
     association: input.association,
     diagnostics: input.diagnostics

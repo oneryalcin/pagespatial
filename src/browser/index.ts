@@ -18,3 +18,5 @@ export {
   type PpOcrEngine
 } from './ppocr.js';
 export { createBrowserParser, type BrowserParserOptions } from './preset.js';
+export { createZoomRetryRecovery } from './region-recovery.js';
+export type { ZoomRetryRecoveryOptions } from './region-recovery.js';

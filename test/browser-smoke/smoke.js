@@ -8,7 +8,7 @@ let browser;
 try {
   const response = await fetch('/fixture.pdf');
   if (!response.ok) throw new Error(`Fixture request failed: ${response.status}`);
-  session = await openPdfJsSession(await response.arrayBuffer(), { workerSrc: pdfWorkerUrl, maxPages: 1 });
+  session = await openPdfJsSession(await response.arrayBuffer(), { workerSrc: pdfWorkerUrl, cMapUrl: '/pdfjs-assets/cmaps/', standardFontDataUrl: '/pdfjs-assets/standard_fonts/', maxPages: 1 });
   browser = createBrowserParser({
     ocr: {
       detectionModelUrl: '/ocr/models/PP-OCRv6_tiny_det_onnx_infer.tar',

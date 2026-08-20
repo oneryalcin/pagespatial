@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { assertPageGeometry, pointBounds, pointBoxToRenderedBox } from './geometry.js';
+import { countRecoveredObservations } from './ink.js';
 
 const boxSchema = z.tuple([z.number(), z.number(), z.number(), z.number()]);
 const pointSchema = z.tuple([z.number(), z.number()]);
@@ -55,7 +56,8 @@ export const ocrObservationSchema = z.object({
   ...observationBase,
   adapterId: z.string().optional(),
   confidence: z.number().min(0).max(1),
-  model: z.string().optional()
+  model: z.string().optional(),
+  recoveryMethod: z.string().min(1).optional()
 });
 
 const nativeLineSchema = z.object({
@@ -94,7 +96,7 @@ const relationSchema = z.object({
 });
 
 const escalationReasonSchema = z.object({
-  type: z.enum(['critical-token-conflict', 'critical-token-omission', 'ambiguous-derived-relation', 'low-ocr-confidence', 'uncorroborated-ocr']),
+  type: z.enum(['critical-token-conflict', 'critical-token-omission', 'ambiguous-derived-relation', 'low-ocr-confidence', 'uncorroborated-ocr', 'unread-ink-region']),
   severity: z.enum(['blocking', 'advisory']),
   sourceIds: z.array(z.string()), count: z.number().int().nonnegative(),
   share: z.number().min(0).max(1)
@@ -108,7 +110,8 @@ const diagnosticsSchema = z.object({
     uncorroboratedOcrMinimumCount: z.number().int().positive(),
     uncorroboratedOcrMaximumCoverage: z.number().min(0).max(1)
   }),
-  ocrObservationCount: z.number().int().nonnegative(), nativeObservationCount: z.number().int().nonnegative(),
+  ocrObservationCount: z.number().int().nonnegative(), recoveredObservationCount: z.number().int().nonnegative(),
+  nativeObservationCount: z.number().int().nonnegative(),
   sourceMatchCount: z.number().int().nonnegative(), nativeOcrAssociationCoverage: z.number().min(0).max(1),
   sourceUnmatchedOcrCount: z.number().int().nonnegative(), criticalConflictCount: z.number().int().nonnegative(),
   criticalOmissionCount: z.number().int().nonnegative(), lowConfidenceOcrCount: z.number().int().nonnegative(),
@@ -117,16 +120,26 @@ const diagnosticsSchema = z.object({
 
 const provenanceSchema = z.object({
   parserName: z.string(), parserVersion: z.string(), runId: z.string(), createdAt: z.string(),
-  nativeAdapter: z.string().optional(), ocrAdapter: z.string().optional(), renderer: z.string().optional(),
+  nativeAdapter: z.string().optional(), ocrAdapter: z.string().optional(),
+  regionRecoveryAdapter: z.string().optional(), renderer: z.string().optional(),
   backend: z.string().optional(), configuration: z.record(z.string(), z.unknown()).optional()
 });
 
+const unreadInkRegionSchema = z.object({
+  box: boxSchema,
+  kind: z.enum(['structured', 'pictorial']),
+  inkDensity: z.number().min(0).max(1),
+  midToneFraction: z.number().min(0).max(1),
+  recoveredObservationCount: z.number().int().nonnegative()
+});
+
 const pageSpatialBaseSchema = z.object({
-  schemaVersion: z.literal('0.3.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
+  schemaVersion: z.literal('0.4.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
   pageId: z.string(), pageNumber: z.number().int().positive(), geometry: pageGeometrySchema,
   nativeObservations: z.array(nativeObservationSchema), ocrObservations: z.array(ocrObservationSchema),
   nativeLines: z.array(nativeLineSchema), sourceMatches: z.array(sourceMatchSchema), conflicts: z.array(conflictSchema),
-  spatialRows: z.array(spatialRowSchema), derivedRelations: z.array(relationSchema), diagnostics: diagnosticsSchema,
+  spatialRows: z.array(spatialRowSchema), derivedRelations: z.array(relationSchema),
+  unreadInkRegions: z.array(unreadInkRegionSchema).optional(), diagnostics: diagnosticsSchema,
   projection: z.object({ markdown: z.string(), format: z.literal('pagespatial-markdown-v1'), trust: z.literal('untrusted-document-content'), derived: z.literal(true), markdownSource: z.string().min(1) }),
   provenance: provenanceSchema
 });
@@ -279,6 +292,9 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
     });
   });
   page.diagnostics.escalationReasons.forEach((reason, index) => {
+    // unread-ink-region references page areas where no observation exists,
+    // so an empty source list is its correct state, not a broken reference.
+    if (reason.type === 'unread-ink-region' && reason.sourceIds.length === 0) return;
     validateSourceIds(reason.sourceIds, allIdSet, ['diagnostics', 'escalationReasons', index, 'sourceIds']);
   });
 
@@ -297,9 +313,15 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
     !matchedOcrIds.has(observation.id) && !conflictedOcrIds.has(observation.id)).length;
   const conflictCount = page.conflicts.filter((conflict) => conflict.reason === 'critical-token-disagreement').length;
   const omissionCount = page.conflicts.filter((conflict) => conflict.reason === 'critical-token-omission').length;
-  const expectedCoverage = page.ocrObservations.length ? page.sourceMatches.length / page.ocrObservations.length : 0;
+  const recoveredOcrIds = new Set(page.ocrObservations
+    .filter((observation) => observation.recoveryMethod)
+    .map((observation) => observation.id));
+  const corroboratableCount = page.ocrObservations.length - recoveredOcrIds.size;
+  const corroboratableMatches = page.sourceMatches.filter((match) => !recoveredOcrIds.has(match.ocrId)).length;
+  const expectedCoverage = corroboratableCount ? corroboratableMatches / corroboratableCount : 0;
   const expectedDiagnostics = {
     ocrObservationCount: page.ocrObservations.length,
+    recoveredObservationCount: recoveredOcrIds.size,
     nativeObservationCount: page.nativeObservations.length,
     sourceMatchCount: page.sourceMatches.length,
     sourceUnmatchedOcrCount: unmatchedCount,
@@ -352,8 +374,10 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
     ['low-ocr-confidence', { severity: 'advisory', count: lowConfidenceIds.length, share: ocrShare(lowConfidenceIds.length), sourceIds: lowConfidenceIds }]
   ]);
   const engagedOcrIds = new Set([...matchedOcrIds, ...conflictedOcrIds]);
+  // Second-pass recoveries are known single-witness by construction and are
+  // excluded from the starvation denominator (mirrors diagnostics.ts).
   const confidentOcr = page.ocrObservations.filter((observation) =>
-    observation.confidence >= page.diagnostics.thresholds.lowOcrConfidence);
+    observation.confidence >= page.diagnostics.thresholds.lowOcrConfidence && !observation.recoveryMethod);
   const uncorroboratedOcr = confidentOcr.filter((observation) => !engagedOcrIds.has(observation.id));
   const engagedCoverage = confidentOcr.length
     ? (confidentOcr.length - uncorroboratedOcr.length) / confidentOcr.length
@@ -365,6 +389,29 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
     count: starvationFires ? uncorroboratedOcr.length : 0,
     share: starvationFires ? ocrShare(uncorroboratedOcr.length) : 0,
     sourceIds: starvationFires ? uncorroboratedOcr.map((observation) => observation.id) : []
+  });
+  // Residue is DERIVED from retained recovered observations, never from the
+  // regions' self-declared counts — a record cannot clear this blocking
+  // reason by editing an integer (mirrors diagnostics.ts).
+  const inkRegions = page.unreadInkRegions ?? [];
+  const derivedRecoveredCounts = countRecoveredObservations(inkRegions, page.ocrObservations);
+  inkRegions.forEach((region, index) => {
+    if (!validBox(region.box, page.geometry.width, page.geometry.height)) {
+      issue(context, ['unreadInkRegions', index, 'box'], 'Unread-ink region box must be ordered and within page pixel geometry.');
+    }
+    if (region.recoveredObservationCount !== derivedRecoveredCounts[index]) {
+      issue(context, ['unreadInkRegions', index, 'recoveredObservationCount'],
+        `Expected recoveredObservationCount ${derivedRecoveredCounts[index]} derived from recovery observations.`);
+    }
+  });
+  const residueRegions = inkRegions.filter((region, index) =>
+    region.kind === 'structured' && derivedRecoveredCounts[index] === 0);
+  const structuredRegionCount = inkRegions.filter((region) => region.kind === 'structured').length;
+  expectedReasons.set('unread-ink-region', {
+    severity: 'blocking',
+    count: residueRegions.length,
+    share: structuredRegionCount ? residueRegions.length / structuredRegionCount : 0,
+    sourceIds: []
   });
   for (const [type, expected] of expectedReasons) {
     const actual = page.diagnostics.escalationReasons.filter((reason) => reason.type === type);
@@ -386,13 +433,14 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
 });
 
 const pageSpatialDocumentBaseSchema = z.object({
-  schemaVersion: z.literal('0.3.0'),
+  schemaVersion: z.literal('0.4.0'),
   document: documentIdentitySchema,
   pages: z.array(pageSpatialSchema),
   diagnostics: z.object({
     pageCount: z.number().int().nonnegative(), pagesParsed: z.number().int().nonnegative(),
     pagesRequiringEscalation: z.array(z.number().int().positive()), ocrObservationCount: z.number().int().nonnegative(),
     nativeObservationCount: z.number().int().nonnegative(), sourceMatchCount: z.number().int().nonnegative(),
+    recoveredObservationCount: z.number().int().nonnegative(),
     nativeOcrAssociationCoverage: z.number().min(0).max(1), criticalConflictCount: z.number().int().nonnegative(),
     criticalOmissionCount: z.number().int().nonnegative()
   }),
@@ -420,16 +468,26 @@ export const pageSpatialDocumentSchema = pageSpatialDocumentBaseSchema.superRefi
   const ocrObservationCount = document.pages.reduce((sum, page) => sum + page.ocrObservations.length, 0);
   const nativeObservationCount = document.pages.reduce((sum, page) => sum + page.nativeObservations.length, 0);
   const sourceMatchCount = document.pages.reduce((sum, page) => sum + page.sourceMatches.length, 0);
+  const recoveredObservationCount = document.pages.reduce(
+    (sum, page) => sum + page.diagnostics.recoveredObservationCount, 0);
+  const corroboratableMatchCount = document.pages.reduce((sum, page) => {
+    const recovered = new Set(page.ocrObservations
+      .filter((observation) => observation.recoveryMethod)
+      .map((observation) => observation.id));
+    return sum + page.sourceMatches.filter((match) => !recovered.has(match.ocrId)).length;
+  }, 0);
   const criticalConflictCount = document.pages.reduce((sum, page) => sum + page.diagnostics.criticalConflictCount, 0);
   const criticalOmissionCount = document.pages.reduce((sum, page) => sum + page.diagnostics.criticalOmissionCount, 0);
   const pagesRequiringEscalation = document.pages
     .filter((page) => page.diagnostics.requiresEscalation)
     .map((page) => page.pageNumber);
-  const expectedCoverage = ocrObservationCount ? sourceMatchCount / ocrObservationCount : 0;
+  const corroboratable = ocrObservationCount - recoveredObservationCount;
+  const expectedCoverage = corroboratable ? corroboratableMatchCount / corroboratable : 0;
   const expectedDiagnostics = {
     pageCount: document.document.pageCount,
     pagesParsed: document.pages.length,
     ocrObservationCount,
+    recoveredObservationCount,
     nativeObservationCount,
     sourceMatchCount,
     criticalConflictCount,

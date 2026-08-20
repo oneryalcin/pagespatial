@@ -68,6 +68,13 @@ export interface NativeObservation extends ObservationBase {
 export interface OcrObservationInput extends ObservationBase {
   confidence: number;
   model?: string;
+  /**
+   * Set when the observation came from a deliberate second extraction pass
+   * (e.g. 'zoom-retry-v1' over an unread-ink region). Second-pass evidence is
+   * known single-witness by construction and is excluded from the
+   * coverage-starvation denominator.
+   */
+  recoveryMethod?: string;
 }
 
 export interface OcrObservation extends OcrObservationInput {
@@ -145,7 +152,8 @@ export type EscalationReasonType =
   | 'critical-token-omission'
   | 'ambiguous-derived-relation'
   | 'low-ocr-confidence'
-  | 'uncorroborated-ocr';
+  | 'uncorroborated-ocr'
+  | 'unread-ink-region';
 
 /**
  * Derived from the reason type, never from a threshold: contradictory
@@ -176,8 +184,14 @@ export interface PageDiagnostics {
     uncorroboratedOcrMaximumCoverage: number;
   };
   ocrObservationCount: number;
+  /** Second-pass observations (recoveryMethod set) within ocrObservationCount. */
+  recoveredObservationCount: number;
   nativeObservationCount: number;
   sourceMatchCount: number;
+  /**
+   * sourceMatches over first-pass OCR observations only: recoveries are
+   * single-witness by construction and sit outside this ratio entirely.
+   */
   nativeOcrAssociationCoverage: number;
   sourceUnmatchedOcrCount: number;
   criticalConflictCount: number;
@@ -194,6 +208,7 @@ export interface ExtractionProvenance {
   createdAt: string;
   nativeAdapter?: string;
   ocrAdapter?: string;
+  regionRecoveryAdapter?: string;
   renderer?: string;
   backend?: string;
   configuration?: Record<string, unknown>;
@@ -213,8 +228,23 @@ export interface PageProjection {
   markdownSource: string;
 }
 
+/**
+ * A page area that carries ink but no observations from either engine — an
+ * evidence desert. Structured regions (bimodal print) are candidates for
+ * second-pass recovery; pictorial regions (continuous-tone) are recorded but
+ * not re-read.
+ */
+export interface UnreadInkRegion {
+  /** Region bounds in rendered pixels. */
+  box: Box;
+  kind: 'structured' | 'pictorial';
+  inkDensity: number;
+  midToneFraction: number;
+  recoveredObservationCount: number;
+}
+
 export interface PageSpatial {
-  schemaVersion: '0.3.0';
+  schemaVersion: '0.4.0';
   documentId: string;
   revisionId: string;
   documentSha256: string;
@@ -228,6 +258,12 @@ export interface PageSpatial {
   conflicts: EvidenceConflict[];
   spatialRows: SpatialRow[];
   derivedRelations: DerivedRelation[];
+  /**
+   * Present when unread-ink analysis ran (a region-recovery adapter was
+   * installed); absent means the analysis never happened. An empty array is
+   * a positive claim — the page was analyzed and no unread ink was found.
+   */
+  unreadInkRegions?: UnreadInkRegion[];
   diagnostics: PageDiagnostics;
   projection: PageProjection;
   provenance: ExtractionProvenance;
@@ -238,15 +274,21 @@ export interface DocumentDiagnostics {
   pagesParsed: number;
   pagesRequiringEscalation: number[];
   ocrObservationCount: number;
+  /** Second-pass observations (recoveryMethod set) within ocrObservationCount. */
+  recoveredObservationCount: number;
   nativeObservationCount: number;
   sourceMatchCount: number;
+  /**
+   * sourceMatches over first-pass OCR observations only: recoveries are
+   * single-witness by construction and sit outside this ratio entirely.
+   */
   nativeOcrAssociationCoverage: number;
   criticalConflictCount: number;
   criticalOmissionCount: number;
 }
 
 export interface PageSpatialDocument {
-  schemaVersion: '0.3.0';
+  schemaVersion: '0.4.0';
   document: DocumentIdentity;
   pages: PageSpatial[];
   diagnostics: DocumentDiagnostics;
