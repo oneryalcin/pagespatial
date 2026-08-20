@@ -11,6 +11,7 @@ let ocr;
 let renderer;
 let regionRecovery;
 let backendEvents = [];
+let recoveryTiles = [];
 
 function memorySample() {
   const memory = performance.memory;
@@ -68,7 +69,23 @@ globalThis.pagespatialCorpus = {
           renderer,
           ocr,
           maxCanvasSide: options.maxCanvasSide,
-          maxCanvasPixels: options.maxCanvasPixels
+          maxCanvasPixels: options.maxCanvasPixels,
+          // Debug: capture the exact OCR input tiles for differential
+          // experiments (issue #10). toDataURL must happen synchronously —
+          // the recovery pass zeroes each tile canvas after use.
+          onTile: options.dumpRecoveryTiles
+            ? (tile) => {
+                recoveryTiles.push({
+                  box: tile.box,
+                  dataUrl: tile.canvas.toDataURL('image/png'),
+                  observations: tile.observations.map((observation) => ({
+                    text: observation.text,
+                    box: observation.box,
+                    confidence: observation.confidence
+                  }))
+                });
+              }
+            : undefined
         })
       : undefined;
     const started = performance.now();
@@ -90,6 +107,8 @@ globalThis.pagespatialCorpus = {
       revisionId: identity.revisionId,
       sourceUri: identity.sourceUri,
       workerSrc: pdfWorkerUrl,
+      cMapUrl: '/pdfjs-assets/cmaps/',
+      standardFontDataUrl: '/pdfjs-assets/standard_fonts/',
       maxBytes: limits.maxBytes,
       maxPages: limits.maxPages
     });
@@ -121,11 +140,18 @@ globalThis.pagespatialCorpus = {
         if (structured.length) {
           const recovered = await regionRecovery.recoverPage(
             session.source, pageNumber, structured, rendered.geometry, readEvidence);
+          // Attribute by overlap, not center containment: page-level tiles
+          // recover observations that straddle region edges, and a center
+          // just outside the box must still count as that region's recovery.
           for (const observation of recovered) {
-            const cx = (observation.box[0] + observation.box[2]) / 2;
-            const cy = (observation.box[1] + observation.box[3]) / 2;
-            const home = structured.find((region) =>
-              cx >= region.box[0] && cx <= region.box[2] && cy >= region.box[1] && cy <= region.box[3]);
+            let home;
+            let best = 0;
+            for (const region of structured) {
+              const w = Math.min(observation.box[2], region.box[2]) - Math.max(observation.box[0], region.box[0]);
+              const h = Math.min(observation.box[3], region.box[3]) - Math.max(observation.box[1], region.box[1]);
+              const area = w > 0 && h > 0 ? w * h : 0;
+              if (area > best) { best = area; home = region; }
+            }
             if (home) home.recoveredObservationCount += 1;
           }
           observations = [...observations, ...recovered];
@@ -147,6 +173,11 @@ globalThis.pagespatialCorpus = {
     } finally {
       await rendered.release?.();
     }
+  },
+  drainRecoveryTiles() {
+    const tiles = recoveryTiles;
+    recoveryTiles = [];
+    return tiles;
   },
   closeDocument,
   async dispose() {

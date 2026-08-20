@@ -1,7 +1,7 @@
 import type { ParserAdapters } from './adapters.js';
 import { resolveDiagnosticOptions, type DiagnosticOptions } from './diagnostics.js';
 import type { AssociationOptions } from './merge.js';
-import { pointBoxToRenderedBox, roundBox } from './geometry.js';
+import { intersectionArea, pointBoxToRenderedBox, roundBox } from './geometry.js';
 import { assemblePageSpatial, validateNativePageGeometry } from './page-parser.js';
 import { documentIdentitySchema, pageSpatialDocumentSchema } from './schema.js';
 import type {
@@ -132,14 +132,20 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
                   if (structured.length) {
                     const recovered = await adapters.regionRecovery.recoverPage(
                       source, pageNumber, structured, pageGeometry, readEvidence, { signal: controller.signal });
-                    // Attribute recoveries to regions by centre containment so
-                    // residue (structured region with nothing recovered) stays
-                    // measurable per region.
+                    // Attribute each recovery to the region it overlaps most.
+                    // Overlap, not centre containment: page-level tiles
+                    // recover observations that straddle region edges, and
+                    // those must still count against that region's residue.
                     for (const observation of recovered) {
-                      const cx = (observation.box[0] + observation.box[2]) / 2;
-                      const cy = (observation.box[1] + observation.box[3]) / 2;
-                      const home = structured.find((region) =>
-                        cx >= region.box[0] && cx <= region.box[2] && cy >= region.box[1] && cy <= region.box[3]);
+                      let home;
+                      let best = 0;
+                      for (const region of structured) {
+                        const overlap = intersectionArea(observation.box, region.box);
+                        if (overlap > best) {
+                          best = overlap;
+                          home = region;
+                        }
+                      }
                       if (home) home.recoveredObservationCount += 1;
                     }
                     ocrObservations = [...ocrObservations, ...recovered];

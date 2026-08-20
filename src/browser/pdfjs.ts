@@ -22,6 +22,15 @@ export interface PdfJsSessionOptions {
   revisionId?: string;
   sourceUri?: string;
   workerSrc?: string;
+  /**
+   * Base URL of pdf.js's bundled CID CMaps (the pdfjs-dist `cmaps/`
+   * directory). Required to paint text whose font references a predefined
+   * CMap (e.g. Adobe-Japan1, common in CJK documents); without it pdf.js
+   * fails font translation and silently renders nothing for those glyphs.
+   */
+  cMapUrl?: string;
+  /** Base URL of pdf.js's bundled standard fonts (`standard_fonts/`). */
+  standardFontDataUrl?: string;
   maxBytes?: number;
   maxPages?: number;
 }
@@ -68,7 +77,11 @@ export async function openPdfJsSession(input: PdfInput, options: PdfJsSessionOpt
   if (options.workerSrc) GlobalWorkerOptions.workerSrc = options.workerSrc;
 
   const hash = await sha256Hex(bytes);
-  const loadingTask = getDocument({ data: bytes.slice() });
+  const loadingTask = getDocument({
+    data: bytes.slice(),
+    ...(options.cMapUrl ? { cMapUrl: options.cMapUrl, cMapPacked: true } : {}),
+    ...(options.standardFontDataUrl ? { standardFontDataUrl: options.standardFontDataUrl } : {})
+  });
   let pdf: PDFDocumentProxy;
   try {
     pdf = await loadingTask.promise;

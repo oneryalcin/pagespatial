@@ -12,6 +12,12 @@ export interface ZoomRetryRecoveryOptions {
   maxCanvasSide?: number;
   maxCanvasPixels?: number;
   zoomFactor?: number;
+  /**
+   * Debug sink: called with every tile actually fed to the OCR adapter and
+   * the raw observations it returned, before mapping/dedup. Lets a harness
+   * dump the exact OCR inputs for differential experiments (issue #10).
+   */
+  onTile?: (tile: { canvas: PdfJsCanvas; box: Box; observations: readonly OcrObservationInput[] }) => void;
 }
 
 const METHOD = 'zoom-retry-v1';
@@ -100,6 +106,7 @@ export function createZoomRetryRecovery(options: ZoomRetryRecoveryOptions): Regi
                 mimeType: 'image/x-canvas'
               };
               const result = await options.ocr.recognize(cropPage, { signal: recoverOptions?.signal });
+              options.onTile?.({ canvas: crop, box: tile, observations: result.observations });
               const origin: readonly [number, number] = [tx / zoomRatio, ty / zoomRatio];
               for (const observation of result.observations) {
                 const box = mapRecoveredBox(observation.box, origin, zoomRatio) as Box;
