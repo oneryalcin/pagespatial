@@ -67,6 +67,8 @@ export interface OperationProvenance {
   promptRevision: string;
   /** Model thinking budget (0 = disabled) — extractor config, so provenance. */
   thinkingBudget: number;
+  /** 'batch' records share their telemetry.latencyMs (batch wall-clock). */
+  transport?: 'interactive' | 'batch';
 }
 
 export interface EscalatedOcrEnrichment {
@@ -111,7 +113,13 @@ const operationProvenanceSchema = z.object({
   model: z.string().min(1),
   mediaResolution: z.string().min(1),
   promptRevision: z.string().min(1),
-  thinkingBudget: z.number().int().nonnegative()
+  thinkingBudget: z.number().int().nonnegative(),
+  /**
+   * How the call was made. A batch record's telemetry.latencyMs is the
+   * SHARED batch wall-clock, not a per-page measurement — consumers must
+   * interpret it through this field.
+   */
+  transport: z.enum(['interactive', 'batch']).optional()
 }).strict();
 
 export const escalatedOcrEnrichmentSchema = z.object({

@@ -247,7 +247,7 @@ interface GeminiPayload {
  * path and the batch path (one source of truth — request shape drifting
  * between modes would make their outputs incomparable).
  */
-export function buildTranscriptionRequest(pngs: readonly Uint8Array[], options?: { mediaResolution?: string; promptRevision?: string; prompt?: string }): Record<string, unknown> {
+export function buildTranscriptionRequest(pngs: readonly Uint8Array[], options?: { mediaResolution?: string; promptRevision?: string; prompt?: string; responseSchema?: Record<string, unknown> }): Record<string, unknown> {
   const resolution = options?.mediaResolution ?? DEFAULT_RESOLUTION;
   return {
     contents: [{ parts: [
@@ -260,7 +260,7 @@ export function buildTranscriptionRequest(pngs: readonly Uint8Array[], options?:
     ] }],
     generationConfig: {
       responseMimeType: 'application/json',
-      responseSchema: TRANSCRIPTION_SCHEMA,
+      responseSchema: options?.responseSchema ?? TRANSCRIPTION_SCHEMA,
       maxOutputTokens: 32_768,
       thinkingConfig: { thinkingBudget: 0 }
     }
@@ -319,8 +319,22 @@ const RESIDUE_CROPS_PROMPT = `Each image is a cropped region of a PDF page conta
 }
 Rules: transcribe EXACTLY what is printed — keep commas, periods, currency symbols, signs and unit words verbatim; never normalize, convert, or translate. Do not include prose sentences; only values and their attached units/labels.`;
 
+const CROPS_SCHEMA = {
+  type: 'object',
+  properties: {
+    tokens: {
+      type: 'array',
+      items: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] }
+    }
+  },
+  required: ['tokens']
+};
+
 export function buildResidueCropsRequest(pngs: readonly Uint8Array[]): Record<string, unknown> {
-  return buildTranscriptionRequest(pngs, { prompt: RESIDUE_CROPS_PROMPT });
+  // Schema forbids box_2d: crop-relative hints would land in the record
+  // indistinguishable from page-normalized ones. Enforced by the response
+  // schema, not just prompt wording (prompt-only guarantees fail open).
+  return buildTranscriptionRequest(pngs, { prompt: RESIDUE_CROPS_PROMPT, responseSchema: CROPS_SCHEMA });
 }
 
 export function transcriptionProvenance(model = DEFAULT_MODEL, promptRevision = PROMPT_REVISION, mediaResolution = DEFAULT_RESOLUTION): FlashTranscription['provenance'] {
@@ -435,6 +449,9 @@ export async function runFlashBatch(options: {
   onSubmitted?: (operationName: string) => void;
 }): Promise<FlashBatchResult> {
   if (!options.entries.length) return { payloads: new Map(), errors: new Map(), wallMs: 0 };
+  if (new Set(options.entries.map((entry) => entry.key)).size !== options.entries.length) {
+    throw new Error('Batch entry keys must be unique.');
+  }
   const model = options.model ?? DEFAULT_MODEL;
   const fetchImpl = options.fetchImpl ?? fetch;
   const started = Date.now();
@@ -488,7 +505,14 @@ export async function awaitFlashBatch(options: {
       headers: { 'x-goog-api-key': options.apiKey },
       signal: options.signal ?? null
     });
-    if (!poll.ok) continue; // transient poll failure: keep waiting
+    if (!poll.ok) {
+      // Auth/permission failures will never heal; only transient statuses
+      // keep waiting.
+      if ([401, 403, 404].includes(poll.status)) {
+        throw new Error(`Batch poll failed terminally: ${poll.status}`);
+      }
+      continue;
+    }
     const status = await poll.json() as {
       done?: boolean;
       error?: { message?: string };
@@ -508,11 +532,21 @@ export async function awaitFlashBatch(options: {
       : Array.isArray((raw as { inlinedResponses?: unknown })?.inlinedResponses)
         ? (raw as { inlinedResponses: InlinedItem[] }).inlinedResponses
         : [];
+    // Join by metadata key. Positional fallback is only safe when NO item
+    // carries metadata AND the counts match exactly — with any gap, order
+    // joins page C's payload to page B (for adjudications that writes
+    // another page's verdicts under valid provenance: the disqualifying
+    // failure). Fail closed instead.
+    const anyMetadata = inlined.some((item) => item.metadata?.key);
+    const positionalSafe = !anyMetadata && inlined.length === options.entries.length;
     inlined.forEach((item, index) => {
-      // Responses arrive in request order; metadata.key is the primary
-      // join, order the fallback.
-      const key = item.metadata?.key ?? options.entries[index]?.key;
+      const key = item.metadata?.key ?? (positionalSafe ? options.entries[index]?.key : undefined);
       if (!key) return;
+      if (payloads.has(key) || errors.has(key)) {
+        errors.set(key, 'duplicate batch response for key');
+        payloads.delete(key);
+        return;
+      }
       if (item.error) errors.set(key, item.error.message ?? 'batch item error');
       else if (item.response) payloads.set(key, item.response);
       else errors.set(key, 'batch item returned neither response nor error');
@@ -577,7 +611,10 @@ export async function transcribeResidueCrops(options: {
       outputTokens += payload.usageMetadata?.candidatesTokenCount ?? 0;
       const parsed = parseTranscriptionPayload(payload);
       return {
-        proposals: parsed.proposals,
+        // The text-only guarantee lives WHERE THE TYPE PROMISES IT: even if
+        // the model smuggles box_2d past the schema, no crop-relative hint
+        // leaves this adapter.
+        proposals: parsed.proposals.map(({ text }) => ({ text })),
         provenance: transcriptionProvenance(model, RESIDUE_CROPS_PROMPT_REVISION),
         telemetry: { promptTokens, outputTokens, latencyMs: Date.now() - started }
       };

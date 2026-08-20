@@ -58,6 +58,10 @@ const batchMode = process.argv.includes('--batch') || process.argv.includes('--b
 // the results of an already-submitted batch — a crashed client must be
 // able to collect paid-for results without resubmitting.
 const batchResume = arg('--batch-resume', '');
+if (process.argv.includes('--batch-resume') && (!batchResume || batchResume.startsWith('--'))) {
+  // A missing value must never silently submit a NEW batch at full price.
+  throw new Error('--batch-resume requires an operation name or "auto".');
+}
 const renderDpi = 150;
 mkdirSync(outputDir, { recursive: true });
 
@@ -170,6 +174,7 @@ const results = [];
 const failures = [];
 const prepared = [];
 let reused = 0;
+let residueWithoutCrops = 0;
 let cursor = 0;
 async function worker() {
   while (cursor < selected.length) {
@@ -204,19 +209,32 @@ async function worker() {
       assertPdfMatchesRecord(target.pdfPath, target.page.documentSha256);
       const png = renderPng(target.pdfPath, target.pageNumber);
       if (batchMode) {
-        // Phase A: build requests ONLY — no synchronous adapter may run in
-        // batch mode (running one would transmit and bill the page twice
-        // and leave the interactive spend off the batch ledger).
+        // Phase A: build requests ONLY, then continue — no synchronous
+        // adapter may run in batch mode (it would transmit and bill the
+        // page twice and leave interactive spend off the batch ledger).
+        // test/enrichment-runner.test.mjs asserts zero generateContent
+        // calls fire under --batch.
         const entry = { target, name, requests: {}, conflicts: undefined };
-        if (needsFullTranscription) entry.requests.full = buildTranscriptionRequest([new Uint8Array(png)]);
-        else if (needsCrops) {
+        if (needsFullTranscription) {
+          entry.requests.full = buildTranscriptionRequest([new Uint8Array(png)]);
+        } else if (needsCrops) {
           const regions = residueRegions(target.page);
           if (regions.length) {
             const pngs = regions.map((region) => new Uint8Array(renderCrop(target.pdfPath, target.pageNumber, target.page, region.box)));
             entry.requests.crops = buildResidueCropsRequest(pngs);
+          } else {
+            console.warn(`${target.page.pageId}: unread-ink alarm fired but no crop-eligible regions; residue goes unanswered.`);
+            residueWithoutCrops += 1;
           }
         }
-        let proposals = [];
+        if (needsAdjudication && target.page.conflicts.length) {
+          entry.conflicts = conflictInputs(target.page);
+          entry.requests.adj = buildAdjudicationRequest(new Uint8Array(png), entry.conflicts);
+        }
+        prepared.push(entry);
+        continue;
+      }
+      let proposals = [];
       let adjudications = [];
       const provenance = {};
       const telemetry = { promptTokens: 0, outputTokens: 0, latencyMs: 0 };
@@ -232,19 +250,16 @@ async function worker() {
         if (regions.length) {
           const pngs = regions.map((region) => new Uint8Array(renderCrop(target.pdfPath, target.pageNumber, target.page, region.box)));
           const transcription = await transcribeResidueCrops({ apiKey, pngs });
-          proposals = transcription.proposals;
+          // Crops are text-only by schema; strip any hint defensively.
+          proposals = transcription.proposals.map(({ text }) => ({ text }));
           provenance.transcription = transcription.provenance;
           telemetry.promptTokens += transcription.telemetry.promptTokens;
           telemetry.outputTokens += transcription.telemetry.outputTokens;
           telemetry.latencyMs += transcription.telemetry.latencyMs;
+        } else {
+          console.warn(`${target.page.pageId}: unread-ink alarm fired but no crop-eligible regions; residue goes unanswered.`);
+          residueWithoutCrops += 1;
         }
-      }
-      if (needsAdjudication && target.page.conflicts.length) {
-          entry.conflicts = conflictInputs(target.page);
-          entry.requests.adj = buildAdjudicationRequest(new Uint8Array(png), entry.conflicts);
-        }
-        prepared.push(entry);
-        continue;
       }
       if (needsAdjudication && target.page.conflicts.length) {
         const conflicts = conflictInputs(target.page);
@@ -357,16 +372,17 @@ if (batchMode && prepared.length) {
       if (item.requests.full) {
         const parsed = parseTranscriptionPayload(take('full'));
         proposals = parsed.proposals;
-        provenance.transcription = transcriptionProvenance();
+        provenance.transcription = { ...transcriptionProvenance(), transport: 'batch' };
       } else if (item.requests.crops) {
         const parsed = parseTranscriptionPayload(take('crops'));
-        proposals = parsed.proposals;
-        provenance.transcription = transcriptionProvenance(undefined, RESIDUE_CROPS_PROMPT_REVISION);
+        // Crops are text-only by schema; strip any hint defensively.
+        proposals = parsed.proposals.map(({ text }) => ({ text }));
+        provenance.transcription = { ...transcriptionProvenance(undefined, RESIDUE_CROPS_PROMPT_REVISION), transport: 'batch' };
       }
       if (item.requests.adj) {
         const parsed = parseAdjudicationPayload(take('adj'), item.conflicts);
         adjudications = parsed.verdicts;
-        provenance.adjudication = adjudicationProvenance();
+        provenance.adjudication = { ...adjudicationProvenance(), transport: 'batch' };
       }
       const enrichment = await buildEscalatedOcrEnrichment({
         page: item.target.page, proposals, adjudications, provenance, telemetry
@@ -389,6 +405,8 @@ if (batchMode && prepared.length) {
 }
 
 const byStatus = { 'corroborated-both': 0, 'corroborated-native': 0, 'corroborated-ocr': 0, novel: 0 };
+let batchPromptTokens = 0;
+let batchOutputTokens = 0;
 const byVerdict = { native: 0, ocr: 0, 'both-wrong': 0, unsure: 0, unanswered: 0 };
 let promptTokens = 0;
 let outputTokens = 0;
@@ -398,6 +416,10 @@ for (const enrichment of results) {
   for (const adjudication of enrichment.adjudications) {
     if (adjudication.unanswered) byVerdict.unanswered += 1;
     else byVerdict[adjudication.verdict] += 1;
+  }
+  if (enrichment.provenance.transcription?.transport === 'batch' || enrichment.provenance.adjudication?.transport === 'batch') {
+    batchPromptTokens += enrichment.telemetry.promptTokens;
+    batchOutputTokens += enrichment.telemetry.outputTokens;
   }
   promptTokens += enrichment.telemetry.promptTokens;
   outputTokens += enrichment.telemetry.outputTokens;
@@ -409,9 +431,12 @@ for (const failure of failures) {
 }
 latencies.sort((a, b) => a - b);
 const quantile = (q) => latencies.length ? latencies[Math.min(latencies.length - 1, Math.floor(q * latencies.length))] : 0;
-// Batch API bills at 50% of interactive pricing.
-const priceMultiplier = batchMode ? 0.5 : 1;
-const costUsd = ((promptTokens * 0.75 + outputTokens * 3.75) / 1e6) * priceMultiplier;
+// Batch API bills at 50% of interactive pricing. Price per source: in
+// batch mode any interactive spend that reaches the ledger (failed sync
+// rungs) must not ride the discount.
+const batchCost = ((batchPromptTokens * 0.75 + batchOutputTokens * 3.75) / 1e6) * 0.5;
+const interactiveCost = ((promptTokens - batchPromptTokens) * 0.75 + (outputTokens - batchOutputTokens) * 3.75) / 1e6;
+const costUsd = batchCost + interactiveCost;
 const aggregate = {
   enrichmentRunVersion: batchMode ? 'flash-enrichment-run-v3-batch' : 'flash-enrichment-run-v2-ladder',
   batchMode,
@@ -423,6 +448,7 @@ const aggregate = {
   // spend; this run's marginal spend is pagesEnriched - reusedFromDisk
   // pages' worth. Prices below are for the default model only.
   reusedFromDisk: reused,
+  residuePagesWithoutCropRequests: residueWithoutCrops,
   failures,
   proposals: byStatus,
   adjudicationVerdicts: byVerdict,

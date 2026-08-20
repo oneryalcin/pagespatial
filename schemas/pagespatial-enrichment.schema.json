@@ -78,6 +78,13 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 9007199254740991
+            },
+            "transport": {
+              "type": "string",
+              "enum": [
+                "interactive",
+                "batch"
+              ]
             }
           },
           "required": [
@@ -112,6 +119,13 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 9007199254740991
+            },
+            "transport": {
+              "type": "string",
+              "enum": [
+                "interactive",
+                "batch"
+              ]
             }
           },
           "required": [
