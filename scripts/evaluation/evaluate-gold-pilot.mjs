@@ -104,6 +104,7 @@ const silver = makeTierCounter();
 // independent human gold nor native-corroborated silver. Kept separate so a
 // fast batch can never inflate the independent denominator.
 const bulk = makeTierCounter();
+let nonScoringProposals = 0;
 const conflictComposition = {};
 const relationTotals = { goldTuples: 0, detectedRelations: 0, matchedGoldTuples: 0, matchedDetections: 0 };
 const escalation = {
@@ -149,7 +150,11 @@ for (const page of verdicts.pages) {
   ].filter(Boolean);
   const silverTexts = page.tokens.filter((token) => token.verdict === 'auto').map(tokenText).filter(Boolean);
   const bulkTexts = page.tokens.filter((token) => token.verdict === 'bulk').map(tokenText).filter(Boolean);
-  const unreviewed = page.tokens.filter((token) => !['correct', 'edited', 'auto', 'wrong', 'bulk'].includes(token.verdict));
+  // 'noise': a proposal that tokenizes to nothing, dropped by the review UI
+  // before a human ever saw it. Present so verdict indices still line up with
+  // proposals; scored in no tier, because it could never have been gold.
+  nonScoringProposals += page.tokens.filter((token) => token.verdict === 'noise').length;
+  const unreviewed = page.tokens.filter((token) => !['correct', 'edited', 'auto', 'wrong', 'bulk', 'noise'].includes(token.verdict));
   if (unreviewed.length) throw new Error(`${key} has ${unreviewed.length} unreviewed token verdicts; finish the review before evaluating.`);
 
   const pageHuman = makeTierCounter();
@@ -267,6 +272,7 @@ const metrics = {
       note: 'Accepted with the review UI page-level button: a person accepted these without reading them individually. Not independent gold — report separately and never fold into the human tier.'
     }
   },
+  nonScoringProposals,
   conflictComposition,
   chartRelations: {
     goldTuples: relationTotals.goldTuples,

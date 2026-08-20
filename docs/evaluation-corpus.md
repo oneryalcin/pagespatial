@@ -115,6 +115,19 @@ node scripts/evaluation/evaluate-gold-pilot.mjs \
   --output .evaluation/gold/<batch-id>/metrics.json
 ```
 
+To audit a finished batch — worth doing whenever a pass comes back with no
+disagreements at all, since a verdict file cannot tell a token that was read
+from one that was clicked past:
+
+```sh
+node scripts/evaluation/build-gold-spotcheck.mjs \
+  --gold-dir .evaluation/gold/<batch-id> \
+  --output .evaluation/gold/<batch-id>/spotcheck.html [--size 30] [--seed 1]
+```
+
+It samples scoring human-tier tokens only, shows each magnified with its own
+box, and is seeded so the same slice can be regenerated and disputed.
+
 Tokens land in one of three tiers, and the evaluator keeps them apart:
 **human** (read and marked one by one — the only independent gold),
 **silver** (auto-accepted because the native text layer agreed — not

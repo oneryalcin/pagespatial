@@ -94,6 +94,12 @@ const pagesHtml = proposals.map((page, pageIndex) => {
   const imageBase64 = readFileSync(page.image).toString('base64');
   const tokens = (page.proposal.criticalTokens ?? []).map((token) => ({
     ...token,
+    // A proposal that tokenizes to nothing can never become gold — the
+    // evaluator scores criticalTokens(text), so '$' or 'twelve month'
+    // contributes zero either way. Asking a human to confirm one buys
+    // nothing and costs a click: batch 3 spent 52 of them, 45 on bare
+    // dollar signs from a single dense table.
+    noise: criticalTokens(token.text ?? '').length === 0,
     auto: corroborated(pageKey, token.text, token.box_2d)
   }));
   const boxes = tokens.map((token, tokenIndex) => {
@@ -109,9 +115,17 @@ const pagesHtml = proposals.map((page, pageIndex) => {
           <label><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="edited">edited</label>
           <label class="bulk"><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="bulk">bulk</label></td>
     </tr>`;
-  const reviewRows = tokens.map((token, tokenIndex) => token.auto ? '' : row(token, tokenIndex)).join('');
-  const autoRows = tokens.map((token, tokenIndex) => token.auto ? row(token, tokenIndex) : '').join('');
-  const autoCount = tokens.filter((token) => token.auto).length;
+  // Index alignment is load-bearing: the evaluator joins verdicts to
+  // proposals by index, so a dropped row still exports a verdict. It carries
+  // a checked hidden radio reading 'noise' — present in the record, absent
+  // from the reviewer's work.
+  const noiseInput = (token, tokenIndex) =>
+    `<input type="radio" name="t-${pageIndex}-${tokenIndex}" value="noise" checked hidden>`;
+  const reviewRows = tokens.map((token, tokenIndex) =>
+    token.noise ? noiseInput(token, tokenIndex) : (token.auto ? '' : row(token, tokenIndex))).join('');
+  const autoRows = tokens.map((token, tokenIndex) => (token.auto && !token.noise) ? row(token, tokenIndex) : '').join('');
+  const autoCount = tokens.filter((token) => token.auto && !token.noise).length;
+  const noiseCount = tokens.filter((token) => token.noise).length;
   const tokenRows = `${reviewRows}` + (autoCount ? `
     <tr><td colspan="3"><details><summary>${autoCount} corroborated by the native text layer — auto-accepted (open to override)</summary>
       <table>${autoRows}</table></details></td></tr>` : '');
@@ -142,7 +156,7 @@ const pagesHtml = proposals.map((page, pageIndex) => {
     <div class="layout">
       <div class="imgwrap"><img src="data:image/png;base64,${imageBase64}">${boxes}</div>
       <div class="panel">
-        <h3>Critical tokens: ${tokens.length - autoCount} need review, ${autoCount} auto-accepted — add missed ones below</h3>
+        <h3>Critical tokens: ${tokens.length - autoCount - noiseCount} need review, ${autoCount} auto-accepted${noiseCount ? `, ${noiseCount} dropped as non-scoring` : ''} — add missed ones below</h3>
         <table>${tokenRows}</table>
         <p class="bulkbar"><button type="button" onclick="acceptRemaining(${pageIndex})">Accept all remaining on this page</button>
           <span id="bulkcount-${pageIndex}"></span></p>
