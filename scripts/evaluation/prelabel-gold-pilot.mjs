@@ -60,10 +60,10 @@ function parseModelJson(text) {
   return JSON.parse(stripped);
 }
 
-async function gemini(parts, level, attempt = 0) {
+async function gemini(parts, level, schema, attempt = 0) {
   const body = {
     contents: [{ parts }],
-    generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 32768 }
+    generationConfig: { responseMimeType: 'application/json', responseSchema: schema, maxOutputTokens: 32768 }
   };
   // ultra_high is only accepted per content item, so resolution always rides
   // on the image part rather than generationConfig.
@@ -84,9 +84,71 @@ async function gemini(parts, level, attempt = 0) {
   } catch (error) {
     if (attempt >= 1) throw new Error(`Unparseable model output after retry: ${String(error).slice(0, 200)}`);
     console.warn('  retrying page: model output was not valid JSON');
-    return gemini(parts, level, attempt + 1);
+    return gemini(parts, level, schema, attempt + 1);
   }
 }
+
+// Response schemas are enforced by the API, not requested in prose. A dense
+// repetitive page (200-row procurement tables) makes the model drift mid-array
+// and emit a doubled key — `"label": "text": "0.00"` — which is unparseable;
+// one page failed ~50% of attempts, and one degenerate run burned the entire
+// 32k output cap to produce four characters. Retrying cannot fix a systematic
+// drift, and repairing the JSON by hand would be worse: this output is an
+// answer key, and a salvaged token is a token nobody read off the page.
+const LABEL_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    criticalTokens: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: { text: { type: 'STRING' }, box_2d: { type: 'ARRAY', items: { type: 'INTEGER' } } },
+        required: ['text', 'box_2d'],
+        propertyOrdering: ['text', 'box_2d']
+      }
+    },
+    chartRelations: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          series: { type: 'STRING', nullable: true },
+          category: { type: 'STRING' },
+          value: { type: 'STRING' },
+          unit: { type: 'STRING', nullable: true }
+        },
+        required: ['category', 'value'],
+        propertyOrdering: ['series', 'category', 'value', 'unit']
+      }
+    },
+    hasTable: { type: 'BOOLEAN' },
+    notes: { type: 'STRING' }
+  },
+  required: ['criticalTokens', 'chartRelations', 'hasTable', 'notes'],
+  propertyOrdering: ['criticalTokens', 'chartRelations', 'hasTable', 'notes']
+};
+
+const ADJUDICATION_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    verdicts: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          index: { type: 'INTEGER' },
+          verdict: { type: 'STRING', enum: ['native', 'ocr', 'both-wrong', 'different-regions', 'unsure'] },
+          inkText: { type: 'STRING' },
+          reason: { type: 'STRING' }
+        },
+        required: ['index', 'verdict', 'inkText'],
+        propertyOrdering: ['index', 'verdict', 'inkText', 'reason']
+      }
+    }
+  },
+  required: ['verdicts'],
+  propertyOrdering: ['verdicts']
+};
 
 const LABEL_PROMPT = `You are pre-labeling a PDF page image for a gold evaluation dataset. Return STRICT JSON:
 {
@@ -125,7 +187,7 @@ for (const [index, page] of sample.entries()) {
     ? 'MEDIA_RESOLUTION_ULTRA_HIGH'
     : 'MEDIA_RESOLUTION_HIGH';
 
-  const label = await gemini([structuredClone(imagePart), { text: LABEL_PROMPT }], resolution);
+  const label = await gemini([structuredClone(imagePart), { text: LABEL_PROMPT }], resolution, LABEL_SCHEMA);
   totalPromptTokens += label.usage?.promptTokenCount ?? 0;
   totalOutputTokens += label.usage?.candidatesTokenCount ?? 0;
 
@@ -155,7 +217,8 @@ for (const [index, page] of sample.entries()) {
   if (conflicts.length) {
     const response = await gemini(
       [structuredClone(imagePart), { text: adjudicationPrompt(conflicts) }],
-      'MEDIA_RESOLUTION_ULTRA_HIGH'
+      'MEDIA_RESOLUTION_ULTRA_HIGH',
+      ADJUDICATION_SCHEMA
     );
     totalPromptTokens += response.usage?.promptTokenCount ?? 0;
     totalOutputTokens += response.usage?.candidatesTokenCount ?? 0;
