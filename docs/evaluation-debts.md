@@ -29,9 +29,13 @@ without their sample-size caveat until re-measured.
   401 silver, 184 conflict adjudications. One annotator, no second
   annotator yet. The pass returned **zero disagreements** across 400
   scoring rows, so it was audited: a seeded 30-row re-read
-  (`build-gold-spotcheck.mjs --seed 1`) returned 29 agree, 0 disagree, 1
-  skipped. That rules out gross rubber-stamping — contamination of 10% or
-  more would have surfaced ~95% of the time — but a 30-row sample cannot
+  (`build-gold-spotcheck.mjs --seed 1`) returned **30 agree, 0 disagree**.
+  The exported artifact `gold-spotcheck.json` records 29 agree and one
+  unreviewed row (`legistar:seattle:2159:v0:attachment:3326` p24 token 75);
+  the annotator confirmed that row as agreeing after exporting, so the
+  count here is 30 and the file is one click behind. That rules out gross
+  rubber-stamping — contamination of 10% or more would have surfaced ~96%
+  of the time — but a 30-row sample cannot
   distinguish a 0% error rate from ~5%, and does not by itself confirm the
   98.5% pre-labeler precision figure. Quote batch-3 numbers with that
   bound, not as a clean bill of health.
