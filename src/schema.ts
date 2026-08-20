@@ -390,7 +390,7 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
     ['low-ocr-confidence', { severity: 'advisory', count: lowConfidenceIds.length, share: ocrShare(lowConfidenceIds.length), sourceIds: lowConfidenceIds }]
   ]);
   const engagedOcrIds = new Set([...matchedOcrIds, ...conflictedOcrIds]);
-  for (const id of crossEngineEngagedIds(page.ocrObservations, page.secondOpinion)) engagedOcrIds.add(id);
+  for (const id of crossEngineEngagedIds(page.ocrObservations, page.secondOpinion, page.diagnostics.thresholds.lowOcrConfidence)) engagedOcrIds.add(id);
   (page.secondOpinion?.readings ?? []).forEach((reading, index) => {
     if (!validBox(reading.box, page.geometry.width, page.geometry.height)) {
       issue(context, ['secondOpinion', 'readings', index, 'box'], 'Second-opinion reading box must be ordered and within page pixel geometry.');

@@ -77,11 +77,15 @@ export function createTesseractAdapter(options: TesseractAdapterOptions = {}): O
           const confidence = Number(conf);
           const box: Box = [Number(left), Number(top), Number(left) + Number(width), Number(top) + Number(height)];
           if (!box.every(Number.isFinite) || box[2] <= box[0] || box[3] <= box[1]) continue;
+          // Tesseract's conf -1 means "not reported": a reading whose
+          // reliability cannot be assessed is not usable as a witness —
+          // dropped, never given a fabricated number.
+          if (!Number.isFinite(confidence) || confidence < 0) continue;
           observations.push({
             pageNumber: page.pageNumber,
             text: text.trim(),
             box,
-            confidence: Number.isFinite(confidence) && confidence >= 0 ? confidence / 100 : 0
+            confidence: confidence / 100
           });
         }
         return { pageNumber: page.pageNumber, observations };

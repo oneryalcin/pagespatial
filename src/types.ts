@@ -276,6 +276,16 @@ export interface SecondOpinionReading {
 export interface SecondOpinionPass {
   /** Engine identity, name@version — provenance is part of the witness. */
   adapter: string;
+  /**
+   * Honest scope: these readings are UNAUTHENTICATED content, like
+   * enrichment proposals — the library holds no signing key, so an editor
+   * with write access can fabricate readings that self-consistently clear
+   * the starvation alarm (e.g. by copying the page's own OCR texts).
+   * Validation guards the derivation (engagement always recomputes from
+   * what is stored) and the reverse direction (stripping the pass while
+   * keeping the cleared alarm fails); it cannot guard reading authenticity.
+   * That is a deployment concern: sign or ACL the record store.
+   */
   readings: SecondOpinionReading[];
 }
 

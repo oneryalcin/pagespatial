@@ -68,6 +68,12 @@ function abortIfNeeded(signal: AbortSignal | undefined): void {
 export function createParser<TSource = unknown, TRaster = unknown>(adapters: ParserAdapters<TSource, TRaster>): {
   parse(source: DocumentSource<TSource>, options?: ParseOptions): Promise<PageSpatialDocument>;
 } {
+  if (adapters.secondOpinion && adapters.secondOpinion.name === adapters.ocr.name) {
+    // §5: two witnesses that share failure modes corroborate nothing. The
+    // adapter name is the engine-family identity; the same family reading
+    // twice is self-corroboration and is rejected outright.
+    throw new Error('secondOpinion must be a different engine family than the primary OCR adapter.');
+  }
   return {
     async parse(source, options = {}) {
       const document = documentIdentitySchema.parse(source.identity) as DocumentIdentity;
@@ -225,17 +231,38 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
                   let readings: SecondOpinionPass['readings'] = [];
                   try {
                     const second = await adapters.secondOpinion.recognize(rendered, { signal: controller.signal });
+                    // Adapter-boundary validation INSIDE the best-effort
+                    // scope: a stale cross-page result or malformed reading
+                    // must degrade to the standing alarm, never clear it and
+                    // never fail the document.
+                    if (second.pageNumber !== pageNumber) throw new Error('Second opinion returned a different page.');
                     readings = second.observations
-                      .filter((observation) => observation.text.trim().length > 0)
+                      .filter((observation) =>
+                        observation.pageNumber === pageNumber
+                        && observation.text.trim().length > 0
+                        && Array.isArray(observation.box)
+                        && observation.box.every(Number.isFinite)
+                        && observation.box[2] > observation.box[0]
+                        && observation.box[3] > observation.box[1]
+                        && observation.box[0] >= 0 && observation.box[1] >= 0
+                        && observation.box[2] <= rendered.geometry.width
+                        && observation.box[3] <= rendered.geometry.height
+                        && (observation.confidence === undefined
+                          || (Number.isFinite(observation.confidence) && observation.confidence >= 0 && observation.confidence <= 1)))
                       .map((observation) => ({
                         box: roundBox(observation.box),
                         text: observation.text,
                         ...(observation.confidence !== undefined ? { confidence: observation.confidence } : {})
-                      }));
+                      }))
+                      // Re-check ordering AFTER rounding: a sub-hundredth-
+                      // pixel box passes the raw filter and collapses to
+                      // degenerate under 2dp rounding — same crash class.
+                      .filter((reading) => reading.box[2] > reading.box[0] && reading.box[3] > reading.box[1]);
                   } catch {
                     abortIfNeeded(controller.signal);
                     // Second opinion is best-effort: its failure leaves the
                     // starvation escalation standing — honest degradation.
+                    readings = [];
                   }
                   if (readings.length) {
                     page = assemble({

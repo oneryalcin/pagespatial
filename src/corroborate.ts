@@ -22,6 +22,8 @@ interface PoolEntry {
 export interface CorroborationPool {
   tokens: Map<string, PoolEntry[]>;
   blob: string;
+  /** Remaining containment occurrences per needle (consume-once). */
+  containment: Map<string, number>;
 }
 
 export function buildCorroborationPool(texts: readonly string[]): CorroborationPool {
@@ -36,7 +38,7 @@ export function buildCorroborationPool(texts: readonly string[]): CorroborationP
       tokens.set(core, entries);
     }
   }
-  return { tokens, blob: normalizeEvidenceText(texts.join(' ')) };
+  return { tokens, blob: normalizeEvidenceText(texts.join(' ')), containment: new Map() };
 }
 
 function consumeToken(token: string, pool: Map<string, PoolEntry[]>): boolean {
@@ -68,6 +70,21 @@ export function poolCorroborates(text: string, pool: CorroborationPool): boolean
     for (const [core, entries] of snapshot) pool.tokens.set(core, entries);
     return true;
   }
+  // Containment consumes occurrences too: one reading of "Grand Total"
+  // must not corroborate unlimited "Total" observations. Non-overlapping
+  // occurrence counting is approximate across different needles sharing
+  // spans, but bounds every needle by what the pool actually contains.
   const needle = normalizeEvidenceText(text);
-  return needle.length >= 2 && pool.blob.includes(needle);
+  if (needle.length < 2) return false;
+  let remaining = pool.containment.get(needle);
+  if (remaining === undefined) {
+    remaining = 0;
+    for (let at = pool.blob.indexOf(needle); at >= 0; at = pool.blob.indexOf(needle, at + needle.length)) remaining += 1;
+  }
+  if (remaining <= 0) {
+    pool.containment.set(needle, remaining);
+    return false;
+  }
+  pool.containment.set(needle, remaining - 1);
+  return true;
 }

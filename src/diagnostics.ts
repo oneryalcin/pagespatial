@@ -44,10 +44,17 @@ function uniqueIds(ids: readonly string[]): string[] {
  */
 export function crossEngineEngagedIds(
   ocrObservations: readonly OcrObservation[],
-  secondOpinion: SecondOpinionPass | undefined
+  secondOpinion: SecondOpinionPass | undefined,
+  lowConfidenceThreshold = 0.5
 ): string[] {
   if (!secondOpinion || !secondOpinion.readings.length) return [];
-  const pool = buildCorroborationPool(secondOpinion.readings.map((reading) => reading.text));
+  // The corroborating side gets the same confidence floor as the primary
+  // side's starvation denominator: a garbage reading at confidence 0.05
+  // must not be a full-strength witness. Readings without a reported
+  // confidence participate (absence of a number is not evidence of junk).
+  const pool = buildCorroborationPool(secondOpinion.readings
+    .filter((reading) => reading.confidence === undefined || reading.confidence >= lowConfidenceThreshold)
+    .map((reading) => reading.text));
   return ocrObservations
     .filter((observation) => !observation.recoveryMethod && poolCorroborates(observation.text, pool))
     .map((observation) => observation.id);
@@ -120,7 +127,7 @@ export function buildDiagnostics(input: {
   // by the schema — never stored as a count. Measured basis: 24/27 starved
   // pages clear; agreement precision 71/72 on gold (1 shared-failure
   // misread of a degraded glyph — see the evaluation-debts ledger).
-  const secondOpinionEngaged = crossEngineEngagedIds(input.ocrObservations, input.secondOpinion);
+  const secondOpinionEngaged = crossEngineEngagedIds(input.ocrObservations, input.secondOpinion, lowThreshold);
   for (const id of secondOpinionEngaged) engaged.add(id);
   // Second-pass recoveries (recoveryMethod set) are deliberately extracted
   // from regions known to be single-witness; counting them here would let

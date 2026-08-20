@@ -26,6 +26,17 @@ Measured before building (27 starved pages, 4 with gold):
   wrong on a small sample (evaluation-debts ledger row 1); for calibration
   Flash's measured precision is ~98.5% and it read that glyph correctly.
 
+**Path split (adversarial-review correction):** engagement has two paths —
+critical-token consumption (numbers) and normalized-containment (prose,
+token-free). Recomputed over the shipped run: 967 engagements = 389 token
++ **578 containment**; token-path alone would clear only ~2 of the 23
+cleared pages. The 71/72 precision claim covers the TOKEN path only;
+containment-path precision is an unmeasured debt (ledger row 1b). The
+containment needles are mostly long real prose (median 18 normalized
+chars), and containment is now occurrence-consuming with the same
+low-confidence floor as the primary side — but the number stays a debt
+until gold measures it.
+
 ## What shipped (schema 0.6.0)
 
 - `PageSpatial.secondOpinion?: { adapter, readings: [{box, text,
@@ -47,7 +58,7 @@ Measured before building (27 starved pages, 4 with gold):
   segment differently (line vs word boxes), and page-pool matching is the
   shape the experiment validated.
 
-## Measured (`exp-second-opinion-2026-08-20`, 162 pages, 0 failures)
+## Measured (`exp-second-opinion-d-2026-08-20`, 162 pages, 0 failures)
 
 | | before | after |
 |---|---|---|

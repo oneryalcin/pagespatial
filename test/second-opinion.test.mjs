@@ -91,6 +91,55 @@ test('a disagreeing second engine leaves the alarm standing', async () => {
   assert.equal(page.diagnostics.escalationReasons.some((reason) => reason.type === 'uncorroborated-ocr'), true);
 });
 
+test('malformed second-opinion output degrades, never destroys the page', async () => {
+  // Out-of-page and degenerate boxes, wrong page numbers, junk confidence:
+  // all filtered at the adapter boundary; the page survives with its alarm.
+  const page = (await parserWith({
+    name: 'fixture-tesseract', version: 'eng/psm3',
+    async recognize() {
+      return {
+        pageNumber: 1,
+        observations: [
+          { pageNumber: 1, text: 'Total 1,234', box: [10, 10, 4000, 4000], confidence: 0.9 },
+          { pageNumber: 1, text: 'Fee 55%', box: [10, 10, 10, 40], confidence: 0.9 },
+          { pageNumber: 2, text: 'Net 9,876', box: [10, 10, 100, 40], confidence: 0.9 },
+          { pageNumber: 1, text: 'Cap 4,321', box: [10, 10, 100, 40], confidence: 7 },
+          // Passes raw bounds, collapses to degenerate under 2dp rounding.
+          { pageNumber: 1, text: 'Sum 777', box: [10.001, 5, 10.004, 9], confidence: 0.9 }
+        ]
+      };
+    }
+  })).pages[0];
+  assert.equal(page.secondOpinion, undefined);
+  assert.equal(page.diagnostics.escalationReasons.some((reason) => reason.type === 'uncorroborated-ocr'), true);
+});
+
+test('low-confidence second-opinion readings are not witnesses', async () => {
+  const page = (await parserWith({
+    name: 'fixture-tesseract', version: 'eng/psm3',
+    async recognize() {
+      // Every text reproduced — but at garbage confidence.
+      return {
+        pageNumber: 1,
+        observations: ocrTexts.map((text, index) => ({
+          pageNumber: 1, text, box: [12, 12 + index * 40, 198, 38 + index * 40], confidence: 0.05
+        }))
+      };
+    }
+  })).pages[0];
+  assert.ok(page.secondOpinion);
+  assert.equal(page.diagnostics.escalationReasons.some((reason) => reason.type === 'uncorroborated-ocr'), true);
+});
+
+test('same-family second opinion is rejected outright', async () => {
+  assert.throws(() => createParser({
+    native: { name: 'n', version: '1', async extractPage() { return { pageNumber: 1, geometry: { pointWidth: 1, pointHeight: 1 }, observations: [] }; } },
+    renderer: { name: 'r', version: '1', async render() { return { pageNumber: 1, geometry: { width: 1, height: 1 }, data: 0 }; } },
+    ocr: { name: 'ppocr', version: '1', async recognize() { return { pageNumber: 1, observations: [] }; } },
+    secondOpinion: { name: 'ppocr', version: '2', async recognize() { return { pageNumber: 1, observations: [] }; } }
+  }), /different engine family/u);
+});
+
 test('second-opinion failure degrades to the standing alarm, never loses the page', async () => {
   const page = (await parserWith({
     name: 'fixture-tesseract', version: 'eng/psm3',
