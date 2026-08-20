@@ -2,7 +2,7 @@ import type { OcrAdapter, PageRenderer, RegionRecoveryAdapter } from '../adapter
 import { renderedPixelsPerPoint } from '../geometry.js';
 import { duplicatesFirstPass, findUnreadInkRegions, mapRecoveredBox } from '../ink.js';
 import { RECOVERY_REGION_MARGIN_PT, RECOVERY_TILE_MAX_PX, RECOVERY_ZOOM_FACTOR } from '../tuning.js';
-import type { Box, OcrObservationInput, PageGeometry, RenderedPage, UnreadInkRegion } from '../types.js';
+import type { Box, OcrObservationInput, PageGeometry, RecoveryConfirmation, RenderedPage, UnreadInkRegion } from '../types.js';
 import type { PdfJsCanvas, PdfJsSession } from './pdfjs.js';
 
 export interface ZoomRetryRecoveryOptions {
@@ -62,7 +62,7 @@ export function createZoomRetryRecovery(options: ZoomRetryRecoveryOptions): Regi
         maxSide / (Math.max(pointWidth, pointHeight) + 1),
         Math.sqrt(maxPixels / ((pointWidth + 1) * (pointHeight + 1)))
       );
-      if (zoomScale <= firstScale) return [];
+      if (zoomScale <= firstScale) return { observations: [], confirmations: [] };
       const zoomRatio = zoomScale / firstScale;
       const margin = RECOVERY_REGION_MARGIN_PT * firstScale;
 
@@ -88,6 +88,7 @@ export function createZoomRetryRecovery(options: ZoomRetryRecoveryOptions): Regi
           (region.box[3] + margin) * zoomRatio
         ] as Box);
         const recovered: OcrObservationInput[] = [];
+        const confirmations: RecoveryConfirmation[] = [];
         let sequence = 0;
         for (let tileRow = 0; tileRow < tileRows; tileRow += 1) {
           for (let tileCol = 0; tileCol < tileCols; tileCol += 1) {
@@ -117,7 +118,15 @@ export function createZoomRetryRecovery(options: ZoomRetryRecoveryOptions): Regi
               const origin: readonly [number, number] = [tx / zoomRatio, ty / zoomRatio];
               for (const observation of result.observations) {
                 const box = mapRecoveredBox(observation.box, origin, zoomRatio) as Box;
-                if (duplicatesFirstPass(box, observation.text, readEvidence)) continue;
+                if (duplicatesFirstPass(box, observation.text, readEvidence)) {
+                  // A re-read that matches existing evidence is not a new
+                  // observation, but it proves the ink is corroborated:
+                  // keep the receipt (deduped across overlapping tiles).
+                  if (!duplicatesFirstPass(box, observation.text, confirmations)) {
+                    confirmations.push({ box, text: observation.text });
+                  }
+                  continue;
+                }
                 // Tile overlaps re-read boundary text: dedupe against what
                 // this pass already produced, same-text same-place.
                 if (duplicatesFirstPass(box, observation.text, recovered)) continue;
@@ -137,7 +146,7 @@ export function createZoomRetryRecovery(options: ZoomRetryRecoveryOptions): Regi
             }
           }
         }
-        return recovered;
+        return { observations: recovered, confirmations };
       } finally {
         await zoomed.release?.();
       }

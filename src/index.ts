@@ -11,7 +11,7 @@ export { buildNativeLines, buildSpatialRows, readingOrder } from './reading-orde
 export { associateNativeAndOcr } from './merge.js';
 export { inferSimpleYearValueRelations } from './relations.js';
 export { buildDiagnostics, resolveDiagnosticOptions } from './diagnostics.js';
-export { countRecoveredObservations, duplicatesFirstPass, findUnreadInkRegions, mapRecoveredBox } from './ink.js';
+export { attributeConfirmations, countConfirmedRegions, countRecoveredObservations, duplicatesFirstPass, findUnreadInkRegions, mapRecoveredBox } from './ink.js';
 export type { RasterData } from './ink.js';
 export { projectMarkdown } from './projection.js';
 export { buildPageSpatial, createParser } from './parser.js';

@@ -2,7 +2,7 @@ import type { ParserAdapters } from './adapters.js';
 import { resolveDiagnosticOptions, type DiagnosticOptions } from './diagnostics.js';
 import type { AssociationOptions } from './merge.js';
 import { pointBoxToRenderedBox, roundBox } from './geometry.js';
-import { countRecoveredObservations } from './ink.js';
+import { attributeConfirmations, countRecoveredObservations } from './ink.js';
 import { assemblePageSpatial, validateNativePageGeometry } from './page-parser.js';
 import { documentIdentitySchema, pageSpatialDocumentSchema } from './schema.js';
 import type {
@@ -12,6 +12,7 @@ import type {
   OcrObservationInput,
   PageSpatial,
   PageSpatialDocument,
+  RecoveryConfirmation,
   UnreadInkRegion
 } from './types.js';
 
@@ -153,17 +154,25 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
                     // never a reason to lose the page. An abort still
                     // propagates — that is the caller's own cancellation.
                     let recovered: OcrObservationInput[] = [];
+                    let confirmations: RecoveryConfirmation[] = [];
                     try {
-                      recovered = await adapters.regionRecovery.recoverPage(
+                      const result = await adapters.regionRecovery.recoverPage(
                         source, pageNumber, structured, pageGeometry, readEvidence, { signal: controller.signal });
+                      recovered = result.observations;
+                      confirmations = result.confirmations;
                     } catch (error) {
                       abortIfNeeded(controller.signal);
-                      recovered = [];
                     }
                     // Blank readings are not evidence; drop them before they
                     // can count against a region's residue.
                     recovered = recovered.filter((observation) => observation.text.trim().length > 0);
+                    confirmations = confirmations.filter((confirmation) => confirmation.text.trim().length > 0);
                     ocrObservations = [...ocrObservations, ...recovered];
+                    // Attach confirmation receipts to the region each
+                    // overlaps most; validity is derived downstream.
+                    attributeConfirmations(unreadInkRegions, confirmations).forEach((regionIndex, index) => {
+                      if (regionIndex >= 0) unreadInkRegions![regionIndex]!.confirmations.push(confirmations[index]!);
+                    });
                   }
                   // Stamp counts with the same derivation the schema uses, so
                   // stored counts always reconcile with retained evidence.
@@ -233,7 +242,7 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
           }
         };
         const result: PageSpatialDocument = {
-          schemaVersion: '0.4.0',
+          schemaVersion: '0.5.0',
           document,
           pages: completed,
           diagnostics: documentDiagnostics(completed),

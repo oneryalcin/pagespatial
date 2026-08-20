@@ -1,4 +1,4 @@
-import type { Box, DocumentSource, NativePageResult, OcrObservationInput, OcrPageResult, PageGeometry, RenderedPage, UnreadInkRegion } from './types.js';
+import type { Box, DocumentSource, NativePageResult, OcrObservationInput, OcrPageResult, PageGeometry, RecoveryConfirmation, RenderedPage, UnreadInkRegion } from './types.js';
 
 export interface NativePageAdapter<TSource = unknown> {
   readonly name: string;
@@ -47,9 +47,17 @@ export interface RegionRecoveryAdapter<TSource = unknown, TRaster = unknown> {
    * regions exist). Page-level rather than per-region: surgical region crops
    * proved brittle — faint digits neighbouring dense ink fall outside
    * detected regions, and the validated experiment shape is a page grid.
-   * Returns observations in first-render pixels with recoveryMethod set.
+   * Returns new observations in first-render pixels with recoveryMethod
+   * set, plus confirmation receipts for readings that duplicated
+   * readEvidence (same place, same text): those are dropped as
+   * observations but prove the region is corroborated, not unread.
    */
-  recoverPage(source: DocumentSource<TSource>, pageNumber: number, regions: readonly UnreadInkRegion[], firstGeometry: PageGeometry, readEvidence: readonly { box: Box; text: string }[], options?: { signal?: AbortSignal }): Promise<OcrObservationInput[]>;
+  recoverPage(source: DocumentSource<TSource>, pageNumber: number, regions: readonly UnreadInkRegion[], firstGeometry: PageGeometry, readEvidence: readonly { box: Box; text: string }[], options?: { signal?: AbortSignal }): Promise<RegionRecoveryResult>;
+}
+
+export interface RegionRecoveryResult {
+  observations: OcrObservationInput[];
+  confirmations: RecoveryConfirmation[];
 }
 
 export interface ParserAdapters<TSource = unknown, TRaster = unknown> {

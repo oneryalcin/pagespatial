@@ -234,6 +234,21 @@ export interface PageProjection {
  * second-pass recovery; pictorial regions (continuous-tone) are recorded but
  * not re-read.
  */
+/**
+ * A recovery reading that duplicated evidence the record already holds
+ * (same place, similar text). The duplicate itself is not persisted as an
+ * observation — this receipt is what remains, and it is self-verifying:
+ * a confirmation is only valid when it actually duplicates a retained
+ * observation, so a forged receipt would have to match real evidence at
+ * that location, which would make the region genuinely corroborated.
+ */
+export interface RecoveryConfirmation {
+  /** Where the duplicate reading landed, in rendered pixels. */
+  box: Box;
+  /** What the second pass read there. */
+  text: string;
+}
+
 export interface UnreadInkRegion {
   /** Region bounds in rendered pixels. */
   box: Box;
@@ -241,10 +256,18 @@ export interface UnreadInkRegion {
   inkDensity: number;
   midToneFraction: number;
   recoveredObservationCount: number;
+  /**
+   * Receipts for recovery output that duplicated existing evidence.
+   * A structured region with zero recoveries but valid confirmations is
+   * corroborated (typically a filled background around read text) and does
+   * not escalate; a structured region with neither is an evidence desert
+   * and escalates as blocking unread-ink residue.
+   */
+  confirmations: RecoveryConfirmation[];
 }
 
 export interface PageSpatial {
-  schemaVersion: '0.4.0';
+  schemaVersion: '0.5.0';
   documentId: string;
   revisionId: string;
   documentSha256: string;
@@ -288,7 +311,7 @@ export interface DocumentDiagnostics {
 }
 
 export interface PageSpatialDocument {
-  schemaVersion: '0.4.0';
+  schemaVersion: '0.5.0';
   document: DocumentIdentity;
   pages: PageSpatial[];
   diagnostics: DocumentDiagnostics;

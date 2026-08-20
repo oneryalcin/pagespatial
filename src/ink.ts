@@ -12,7 +12,7 @@ import {
   RECOVERY_DUPLICATE_OVERLAP,
   REFERENCE_RENDER_SCALE
 } from './tuning.js';
-import type { Box, UnreadInkRegion } from './types.js';
+import type { Box, RecoveryConfirmation, UnreadInkRegion } from './types.js';
 
 /**
  * Unread-ink region analysis (issue #10): find page areas that carry ink but
@@ -164,7 +164,8 @@ export function findUnreadInkRegions(
       kind: midToneFraction >= INK_PICTORIAL_MIDTONE_MIN ? 'pictorial' : 'structured',
       inkDensity: Math.round(inkDensity * 1000) / 1000,
       midToneFraction: Math.round(midToneFraction * 1000) / 1000,
-      recoveredObservationCount: 0
+      recoveredObservationCount: 0,
+      confirmations: []
     });
   }
 
@@ -223,6 +224,52 @@ export function countRecoveredObservations(
     });
     if (home >= 0) counts[home]! += 1;
   }
+  return counts;
+}
+
+/**
+ * Attribute recovery confirmations to the structured region each overlaps
+ * most (same rule as recoveries). Returns the region index per confirmation,
+ * -1 for confirmations that land on no structured region.
+ */
+export function attributeConfirmations(
+  regions: readonly UnreadInkRegion[],
+  confirmations: readonly RecoveryConfirmation[]
+): number[] {
+  return confirmations.map((confirmation) => {
+    let home = -1;
+    let best = 0;
+    regions.forEach((region, index) => {
+      if (region.kind !== 'structured') return;
+      const overlap = intersectionArea(confirmation.box, region.box);
+      if (overlap > best) {
+        best = overlap;
+        home = index;
+      }
+    });
+    return home;
+  });
+}
+
+/**
+ * Count VALID confirmations per region: a confirmation only counts when it
+ * genuinely duplicates retained evidence (same place AND same reading, the
+ * duplicatesFirstPass rule) — the property that makes the receipt
+ * self-verifying and the residue escalation forgery-proof. Blank readings
+ * never count. Used identically by the parser, diagnostics, and the schema.
+ */
+export function countConfirmedRegions(
+  regions: readonly UnreadInkRegion[],
+  retainedEvidence: readonly { box: Box; text: string }[]
+): number[] {
+  const counts = regions.map(() => 0);
+  regions.forEach((region, index) => {
+    if (region.kind !== 'structured') return;
+    for (const confirmation of region.confirmations) {
+      if (!confirmation.text.trim()) continue;
+      if (duplicatesFirstPass(confirmation.box, confirmation.text, retainedEvidence)) counts[index]! += 1;
+    }
+  });
   return counts;
 }
 

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { assertPageGeometry, pointBounds, pointBoxToRenderedBox } from './geometry.js';
-import { countRecoveredObservations } from './ink.js';
+import { countConfirmedRegions, countRecoveredObservations } from './ink.js';
 
 const boxSchema = z.tuple([z.number(), z.number(), z.number(), z.number()]);
 const pointSchema = z.tuple([z.number(), z.number()]);
@@ -125,16 +125,22 @@ const provenanceSchema = z.object({
   backend: z.string().optional(), configuration: z.record(z.string(), z.unknown()).optional()
 });
 
+const recoveryConfirmationSchema = z.object({
+  box: boxSchema,
+  text: z.string().min(1)
+});
+
 const unreadInkRegionSchema = z.object({
   box: boxSchema,
   kind: z.enum(['structured', 'pictorial']),
   inkDensity: z.number().min(0).max(1),
   midToneFraction: z.number().min(0).max(1),
-  recoveredObservationCount: z.number().int().nonnegative()
+  recoveredObservationCount: z.number().int().nonnegative(),
+  confirmations: z.array(recoveryConfirmationSchema)
 });
 
 const pageSpatialBaseSchema = z.object({
-  schemaVersion: z.literal('0.4.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
+  schemaVersion: z.literal('0.5.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
   pageId: z.string(), pageNumber: z.number().int().positive(), geometry: pageGeometrySchema,
   nativeObservations: z.array(nativeObservationSchema), ocrObservations: z.array(ocrObservationSchema),
   nativeLines: z.array(nativeLineSchema), sourceMatches: z.array(sourceMatchSchema), conflicts: z.array(conflictSchema),
@@ -395,6 +401,16 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
   // reason by editing an integer (mirrors diagnostics.ts).
   const inkRegions = page.unreadInkRegions ?? [];
   const derivedRecoveredCounts = countRecoveredObservations(inkRegions, page.ocrObservations);
+  // Confirmations are self-verifying receipts: each must actually duplicate
+  // a retained first-pass observation (same place, similar text). A receipt
+  // that matches nothing is a forgery attempt and fails validation.
+  const retainedEvidence = [
+    ...page.nativeObservations.map((observation) => ({ box: observation.box, text: observation.text })),
+    ...page.ocrObservations
+      .filter((observation) => !observation.recoveryMethod)
+      .map((observation) => ({ box: observation.box, text: observation.text }))
+  ];
+  const confirmedCounts = countConfirmedRegions(inkRegions, retainedEvidence);
   inkRegions.forEach((region, index) => {
     if (!validBox(region.box, page.geometry.width, page.geometry.height)) {
       issue(context, ['unreadInkRegions', index, 'box'], 'Unread-ink region box must be ordered and within page pixel geometry.');
@@ -403,9 +419,16 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
       issue(context, ['unreadInkRegions', index, 'recoveredObservationCount'],
         `Expected recoveredObservationCount ${derivedRecoveredCounts[index]} derived from recovery observations.`);
     }
+    if (region.kind === 'structured' && confirmedCounts[index] !== region.confirmations.length) {
+      issue(context, ['unreadInkRegions', index, 'confirmations'],
+        'Every confirmation must duplicate a retained observation (same place, same reading).');
+    }
+    if (region.kind === 'pictorial' && region.confirmations.length) {
+      issue(context, ['unreadInkRegions', index, 'confirmations'], 'Pictorial regions carry no recovery confirmations.');
+    }
   });
   const residueRegions = inkRegions.filter((region, index) =>
-    region.kind === 'structured' && derivedRecoveredCounts[index] === 0);
+    region.kind === 'structured' && derivedRecoveredCounts[index] === 0 && confirmedCounts[index] === 0);
   const structuredRegionCount = inkRegions.filter((region) => region.kind === 'structured').length;
   expectedReasons.set('unread-ink-region', {
     severity: 'blocking',
@@ -433,7 +456,7 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
 });
 
 const pageSpatialDocumentBaseSchema = z.object({
-  schemaVersion: z.literal('0.4.0'),
+  schemaVersion: z.literal('0.5.0'),
   document: documentIdentitySchema,
   pages: z.array(pageSpatialSchema),
   diagnostics: z.object({
