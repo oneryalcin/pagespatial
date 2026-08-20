@@ -55,6 +55,21 @@ export function assertPageGeometry(geometry: PageGeometry): void {
   if (geometry.rotation !== undefined && !Number.isFinite(geometry.rotation)) {
     throw new Error('Page rotation must be finite when declared.');
   }
+  if (viewportTransform) {
+    // Every point-denominated heuristic in tuning.ts assumes one scalar
+    // pixels-per-point. An anisotropic or sheared transform would make
+    // that scalar wrong on one axis and silently skew physical-size gates
+    // (e.g. residue eligibility), so it is rejected, not approximated.
+    const xScale = Math.hypot(viewportTransform[0], viewportTransform[1]);
+    const yScale = Math.hypot(viewportTransform[2], viewportTransform[3]);
+    const shear = viewportTransform[0] * viewportTransform[2] + viewportTransform[1] * viewportTransform[3];
+    if (!Number.isFinite(xScale) || !Number.isFinite(yScale) || xScale <= 0 || yScale <= 0) {
+      throw new Error('Viewport transform must have positive finite axis scales.');
+    }
+    if (Math.abs(xScale - yScale) > 1e-6 * Math.max(xScale, yScale) || Math.abs(shear) > 1e-6 * xScale * yScale) {
+      throw new Error('Viewport transform must be conformal (uniform scale, no shear): point-denominated heuristics assume one pixels-per-point scalar.');
+    }
+  }
   const bounds = pointBounds(geometry);
   if (bounds) {
     assertBox(bounds);

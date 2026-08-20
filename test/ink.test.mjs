@@ -95,10 +95,10 @@ function parserWith(recovery) {
 }
 
 const structuredRegion = () => ({
-  box: [40, 40, 240, 200], kind: 'structured', inkDensity: 0.12, midToneFraction: 0.05, recoveredObservationCount: 0
+  box: [40, 40, 240, 200], kind: 'structured', inkDensity: 0.12, midToneFraction: 0.05, recoveredObservationCount: 0, confirmations: []
 });
 const pictorialRegion = () => ({
-  box: [250, 40, 390, 200], kind: 'pictorial', inkDensity: 0.66, midToneFraction: 0.44, recoveredObservationCount: 0
+  box: [250, 40, 390, 200], kind: 'pictorial', inkDensity: 0.66, midToneFraction: 0.44, recoveredObservationCount: 0, confirmations: []
 });
 
 test('parser records regions, tags recovered observations, and keeps starvation honest', async () => {
@@ -108,13 +108,16 @@ test('parser records regions, tags recovered observations, and keeps starvation 
     async analyze() { return [structuredRegion(), pictorialRegion()]; },
     async recoverPage(source, pageNumber, regions) {
       recoverCalls.push(...regions.map((region) => region.kind));
-      return Array.from({ length: 9 }, (_, index) => ({
-        pageNumber: 1,
-        text: `${100 + index}`,
-        box: [50 + index * 20, 60, 64 + index * 20, 76],
-        confidence: 0.9,
-        recoveryMethod: 'zoom-retry-v1'
-      }));
+      return {
+        observations: Array.from({ length: 9 }, (_, index) => ({
+          pageNumber: 1,
+          text: `${100 + index}`,
+          box: [50 + index * 20, 60, 64 + index * 20, 76],
+          confidence: 0.9,
+          recoveryMethod: 'zoom-retry-v1'
+        })),
+        confirmations: []
+      };
     }
   });
   const page = document.pages[0];
@@ -135,7 +138,7 @@ test('forging recoveredObservationCount cannot clear the blocking residue escala
   const document = await parserWith({
     name: 'fixture-recovery', version: '1',
     async analyze() { return [structuredRegion()]; },
-    async recoverPage() { return []; }
+    async recoverPage() { return { observations: [], confirmations: [] }; }
   });
   const honest = document.pages[0];
   assert.equal(pageSpatialSchema.safeParse(honest).success, true);
@@ -170,10 +173,13 @@ test('recovered tile fragments do not manufacture critical-token conflicts again
       // A fragment of the native "Heading 2024" line: overlapping geometry,
       // truncated critical token. As a first-pass observation this would be
       // a critical-token conflict; as a recovery it must not vote.
-      return [{
-        pageNumber: 1, text: 'Heading 202', box: [16, 256, 160, 288],
-        confidence: 0.95, recoveryMethod: 'zoom-retry-v1'
-      }];
+      return {
+        observations: [{
+          pageNumber: 1, text: 'Heading 202', box: [16, 256, 160, 288],
+          confidence: 0.95, recoveryMethod: 'zoom-retry-v1'
+        }],
+        confirmations: []
+      };
     }
   });
   const page = document.pages[0];
@@ -182,11 +188,157 @@ test('recovered tile fragments do not manufacture critical-token conflicts again
     reason.type === 'critical-token-conflict' || reason.type === 'critical-token-omission'), false);
 });
 
+test('duplicate-confirmed regions are corroborated: receipts recorded, no escalation', async () => {
+  // Recovery re-reads the filled header bar and gets exactly what the OCR
+  // first pass already read — a confirmation receipt, not new evidence.
+  const document = await parserWith({
+    name: 'fixture-recovery', version: '1',
+    async analyze() { return [structuredRegion()]; },
+    async recoverPage() {
+      // Same place and reading as the native observation (rendered box
+      // [16,16,192,48]), overlapping the region's top edge.
+      return {
+        observations: [],
+        confirmations: [{ box: [20, 20, 190, 46], text: 'Heading 2024' }]
+      };
+    }
+  });
+  const page = document.pages[0];
+  const region = page.unreadInkRegions[0];
+  assert.equal(region.confirmations.length, 1);
+  assert.equal(region.recoveredObservationCount, 0);
+  assert.equal(page.diagnostics.escalationReasons.some((reason) => reason.type === 'unread-ink-region'), false);
+  assert.equal(pageSpatialSchema.safeParse(page).success, true);
+});
+
+test('a forged confirmation that matches no retained evidence fails validation', async () => {
+  const document = await parserWith({
+    name: 'fixture-recovery', version: '1',
+    async analyze() { return [structuredRegion()]; },
+    async recoverPage() { return { observations: [], confirmations: [] }; }
+  });
+  const honest = document.pages[0];
+  // The forgery: invent a receipt in the region and drop the escalation.
+  // No retained observation reads "999,999" anywhere near that box.
+  const forged = structuredClone(honest);
+  forged.unreadInkRegions[0].confirmations.push({ box: [60, 60, 200, 100], text: '999,999' });
+  forged.diagnostics.escalationReasons = forged.diagnostics.escalationReasons
+    .filter((reason) => reason.type !== 'unread-ink-region');
+  forged.diagnostics.requiresEscalation = forged.diagnostics.escalationReasons.length > 0;
+  assert.equal(pageSpatialSchema.safeParse(forged).success, false);
+});
+
+test('a receipt copied from unrelated evidence elsewhere on the page cannot clear a region', async () => {
+  const document = await parserWith({
+    name: 'fixture-recovery', version: '1',
+    async analyze() { return [structuredRegion()]; },
+    async recoverPage() { return { observations: [], confirmations: [] }; }
+  });
+  const forged = structuredClone(document.pages[0]);
+  // The OCR observation at [16,256,192,288] is real retained evidence — but
+  // it is nowhere near the region. Copying it as a receipt must not count.
+  forged.unreadInkRegions[0].confirmations.push({ box: [16, 256, 192, 288], text: 'Heading 2024' });
+  forged.diagnostics.escalationReasons = forged.diagnostics.escalationReasons
+    .filter((reason) => reason.type !== 'unread-ink-region');
+  forged.diagnostics.requiresEscalation = forged.diagnostics.escalationReasons.length > 0;
+  assert.equal(pageSpatialSchema.safeParse(forged).success, false);
+});
+
+test('degenerate receipt boxes (zero-area, inverted, off-page) never validate', async () => {
+  const document = await parserWith({
+    name: 'fixture-recovery', version: '1',
+    async analyze() { return [structuredRegion()]; },
+    async recoverPage() { return { observations: [], confirmations: [] }; }
+  });
+  for (const box of [[100, 100, 100, 100], [200, 200, 100, 100], [-9, -9, -1, -1]]) {
+    const forged = structuredClone(document.pages[0]);
+    forged.unreadInkRegions[0].confirmations.push({ box, text: 'anything' });
+    forged.diagnostics.escalationReasons = forged.diagnostics.escalationReasons
+      .filter((reason) => reason.type !== 'unread-ink-region');
+    forged.diagnostics.requiresEscalation = forged.diagnostics.escalationReasons.length > 0;
+    assert.equal(pageSpatialSchema.safeParse(forged).success, false, JSON.stringify(box));
+  }
+});
+
+test('a re-read disagreeing on a critical token is new evidence, never a confirmation', () => {
+  // Long line differing in one digit clears 0.72 general similarity — the
+  // critical-token rule must catch it.
+  const read = [{ box: [0, 0, 200, 20], text: 'Total revenue for the period 1,234' }];
+  assert.equal(duplicatesFirstPass([0, 0, 200, 20], 'Total revenue for the period 1,294', read), false);
+  assert.equal(duplicatesFirstPass([0, 0, 200, 20], 'Total revenue for the period 1,234', read), true);
+});
+
+test('one retained observation backs at most one receipt (occurrence consumption)', async () => {
+  const document = await parserWith({
+    name: 'fixture-recovery', version: '1',
+    async analyze() { return [structuredRegion()]; },
+    async recoverPage() {
+      return {
+        observations: [],
+        confirmations: [
+          { box: [20, 20, 190, 46], text: 'Heading 2024' },
+          { box: [20, 20, 190, 46], text: 'Heading 2024' }
+        ]
+      };
+    }
+  });
+  // The parser prunes to the consumable subset: one receipt survives and
+  // the record validates. Re-forging the duplicate by hand then fails.
+  const page = document.pages[0];
+  assert.equal(page.unreadInkRegions[0].confirmations.length, 1);
+  assert.equal(pageSpatialSchema.safeParse(page).success, true);
+  const forged = structuredClone(page);
+  forged.unreadInkRegions[0].confirmations.push({ box: [20, 20, 190, 46], text: 'Heading 2024' });
+  assert.equal(pageSpatialSchema.safeParse(forged).success, false);
+});
+
+test('anisotropic viewport transforms are rejected at the geometry gate', async () => {
+  await assert.rejects(createParser({
+    native: {
+      name: 'fixture-native', version: '1',
+      async extractPage() {
+        return { pageNumber: 1, geometry: { pointWidth: 250, pointHeight: 250 }, observations: [] };
+      }
+    },
+    renderer: {
+      name: 'fixture-renderer', version: '1',
+      async render() {
+        return {
+          pageNumber: 1,
+          geometry: { width: 500, height: 250, pointWidth: 250, pointHeight: 250, viewportTransform: [2, 0, 0, -1, 0, 250] },
+          data: new Uint8Array([1])
+        };
+      }
+    },
+    ocr: { name: 'fixture-ocr', version: '1', async recognize() { return { pageNumber: 1, observations: [] }; } }
+  }).parse({ identity, data: new Uint8Array([1]) }, { runId: 'aniso' }), /conformal/u);
+});
+
+test('sub-text-height strips (divider rules) never fire the residue alarm', async () => {
+  // A 300x10px strip at 1.6 ppp is 6.25pt tall — a drawn line, not a
+  // possible text container. Detected, re-read, recorded; never blocking.
+  const document = await parserWith({
+    name: 'fixture-recovery', version: '1',
+    async analyze() {
+      return [{
+        box: [40, 100, 340, 110], kind: 'structured',
+        inkDensity: 0.2, midToneFraction: 0.05,
+        recoveredObservationCount: 0, confirmations: []
+      }];
+    },
+    async recoverPage() { return { observations: [], confirmations: [] }; }
+  });
+  const page = document.pages[0];
+  assert.equal(page.unreadInkRegions.length, 1);
+  assert.equal(page.diagnostics.escalationReasons.some((reason) => reason.type === 'unread-ink-region'), false);
+  assert.equal(pageSpatialSchema.safeParse(page).success, true);
+});
+
 test('structured regions that recovery cannot read escalate as unread-ink residue', async () => {
   const document = await parserWith({
     name: 'fixture-recovery', version: '1',
     async analyze() { return [structuredRegion(), pictorialRegion()]; },
-    async recoverPage() { return []; }
+    async recoverPage() { return { observations: [], confirmations: [] }; }
   });
   const page = document.pages[0];
   const reason = page.diagnostics.escalationReasons.find((item) => item.type === 'unread-ink-region');

@@ -5,7 +5,7 @@ import {
   createZoomRetryRecovery,
   openPdfJsSession
 } from '../../dist/browser/index.js';
-import { countRecoveredObservations, pointBoxToRenderedBox } from '../../dist/index.js';
+import { attributeConfirmations, countRecoveredObservations, pointBoxToRenderedBox, pruneConfirmations } from '../../dist/index.js';
 
 let session;
 let ocr;
@@ -146,10 +146,17 @@ globalThis.pagespatialCorpus = {
         unreadInkRegions = await regionRecovery.analyze(rendered, readEvidence.map((item) => item.box));
         const structured = unreadInkRegions.filter((region) => region.kind === 'structured');
         if (structured.length) {
-          const recovered = (await regionRecovery.recoverPage(
-            session.source, pageNumber, structured, rendered.geometry, readEvidence))
-            .filter((observation) => observation.text.trim().length > 0);
+          const result2 = await regionRecovery.recoverPage(
+            session.source, pageNumber, structured, rendered.geometry, readEvidence);
+          const recovered = result2.observations.filter((observation) => observation.text.trim().length > 0);
           observations = [...observations, ...recovered];
+          // Attach confirmation receipts to the region each overlaps most,
+          // mirroring createParser.
+          const confirmations = result2.confirmations.filter((confirmation) => confirmation.text.trim().length > 0);
+          attributeConfirmations(unreadInkRegions, confirmations).forEach((regionIndex, index) => {
+            if (regionIndex >= 0) unreadInkRegions[regionIndex].confirmations.push(confirmations[index]);
+          });
+          pruneConfirmations(unreadInkRegions, readEvidence);
         }
         // Stamp counts with the schema's own derivation (largest overlap,
         // non-blank recoveryMethod observations) so validation reconciles.

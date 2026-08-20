@@ -1,5 +1,5 @@
-import { countRecoveredObservations } from './ink.js';
-import { UNCORROBORATED_OCR_MAXIMUM_COVERAGE, UNCORROBORATED_OCR_MINIMUM_COUNT } from './tuning.js';
+import { countConfirmedRegions, countRecoveredObservations, regionEligibleForResidue } from './ink.js';
+import { REFERENCE_RENDER_SCALE, UNCORROBORATED_OCR_MAXIMUM_COVERAGE, UNCORROBORATED_OCR_MINIMUM_COUNT } from './tuning.js';
 import type {
   DerivedRelation,
   EvidenceConflict,
@@ -39,6 +39,8 @@ export function buildDiagnostics(input: {
   conflicts: readonly EvidenceConflict[];
   derivedRelations: readonly DerivedRelation[];
   unreadInkRegions?: readonly UnreadInkRegion[];
+  /** Rendered pixels per PDF point, for geometric residue eligibility. */
+  pixelsPerPoint?: number;
   options?: DiagnosticOptions;
 }): PageDiagnostics {
   const policy = resolveDiagnosticOptions(input.options);
@@ -118,7 +120,18 @@ export function buildDiagnostics(input: {
   // counts) so editing a count cannot silently clear the escalation.
   const regions = input.unreadInkRegions ?? [];
   const derivedCounts = countRecoveredObservations(regions, input.ocrObservations);
-  const residue = regions.filter((region, index) => region.kind === 'structured' && derivedCounts[index] === 0);
+  // A region whose recovery output all duplicated existing evidence is
+  // corroborated, not unread: valid confirmation receipts clear residue.
+  const confirmedCounts = countConfirmedRegions(regions, [
+    ...input.nativeObservations.map((observation) => ({ box: observation.box, text: observation.text })),
+    ...input.ocrObservations
+      .filter((observation) => !observation.recoveryMethod)
+      .map((observation) => ({ box: observation.box, text: observation.text }))
+  ]);
+  const residue = regions.filter((region, index) =>
+    region.kind === 'structured'
+    && regionEligibleForResidue(region, input.pixelsPerPoint ?? REFERENCE_RENDER_SCALE)
+    && derivedCounts[index] === 0 && confirmedCounts[index] === 0);
   const structuredCount = regions.filter((region) => region.kind === 'structured').length;
   if (residue.length) {
     escalationReasons.push({
