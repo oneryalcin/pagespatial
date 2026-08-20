@@ -1,3 +1,4 @@
+import { buildCorroborationPool, poolCorroborates } from './corroborate.js';
 import { countConfirmedRegions, countRecoveredObservations, regionEligibleForResidue } from './ink.js';
 import { REFERENCE_RENDER_SCALE, UNCORROBORATED_OCR_MAXIMUM_COVERAGE, UNCORROBORATED_OCR_MINIMUM_COUNT } from './tuning.js';
 import type {
@@ -6,6 +7,7 @@ import type {
   NativeObservation,
   OcrObservation,
   PageDiagnostics,
+  SecondOpinionPass,
   SourceMatch,
   UnreadInkRegion
 } from './types.js';
@@ -32,6 +34,32 @@ function uniqueIds(ids: readonly string[]): string[] {
   return [...new Set(ids)];
 }
 
+/**
+ * OCR observation ids the second-opinion pass corroborates: all of the
+ * observation's critical tokens consume from the second engine's pool
+ * (tail-compatible, consume-once), or token-free text is contained.
+ * Geometry is deliberately not used yet: the two engines segment
+ * differently (line vs word boxes), so this is page-pool matching — the
+ * shape the starved-page experiment validated.
+ */
+export function crossEngineEngagedIds(
+  ocrObservations: readonly OcrObservation[],
+  secondOpinion: SecondOpinionPass | undefined,
+  lowConfidenceThreshold = 0.5
+): string[] {
+  if (!secondOpinion || !secondOpinion.readings.length) return [];
+  // The corroborating side gets the same confidence floor as the primary
+  // side's starvation denominator: a garbage reading at confidence 0.05
+  // must not be a full-strength witness. Readings without a reported
+  // confidence participate (absence of a number is not evidence of junk).
+  const pool = buildCorroborationPool(secondOpinion.readings
+    .filter((reading) => reading.confidence === undefined || reading.confidence >= lowConfidenceThreshold)
+    .map((reading) => reading.text));
+  return ocrObservations
+    .filter((observation) => !observation.recoveryMethod && poolCorroborates(observation.text, pool))
+    .map((observation) => observation.id);
+}
+
 export function buildDiagnostics(input: {
   nativeObservations: readonly NativeObservation[];
   ocrObservations: readonly OcrObservation[];
@@ -39,6 +67,7 @@ export function buildDiagnostics(input: {
   conflicts: readonly EvidenceConflict[];
   derivedRelations: readonly DerivedRelation[];
   unreadInkRegions?: readonly UnreadInkRegion[];
+  secondOpinion?: SecondOpinionPass;
   /** Rendered pixels per PDF point, for geometric residue eligibility. */
   pixelsPerPoint?: number;
   options?: DiagnosticOptions;
@@ -92,6 +121,14 @@ export function buildDiagnostics(input: {
   // caught a confidently-wrong reading, so the page escalates as
   // unverifiable-by-construction (blocking).
   const engaged = new Set([...matched, ...conflictIds]);
+  // Cross-family second opinion (issue #17): an observation a mechanically
+  // different OCR engine independently reproduced (same-ink token match) is
+  // corroborated evidence, not single-witness. Derived here and re-derived
+  // by the schema — never stored as a count. Measured basis: 24/27 starved
+  // pages clear; agreement precision 71/72 on gold (1 shared-failure
+  // misread of a degraded glyph — see the evaluation-debts ledger).
+  const secondOpinionEngaged = crossEngineEngagedIds(input.ocrObservations, input.secondOpinion, lowThreshold);
+  for (const id of secondOpinionEngaged) engaged.add(id);
   // Second-pass recoveries (recoveryMethod set) are deliberately extracted
   // from regions known to be single-witness; counting them here would let
   // successful recovery re-trigger the very alarm it answers.

@@ -7,6 +7,7 @@ import { buildSpatialRows } from './reading-order.js';
 import { inferSimpleYearValueRelations } from './relations.js';
 import { documentIdentitySchema, pageSpatialSchema } from './schema.js';
 import type {
+  SecondOpinionPass,
   DocumentIdentity,
   ExtractionProvenance,
   NativeObservation,
@@ -31,6 +32,7 @@ export interface BuildPageSpatialInput {
   nativeMarkdown?: string;
   nativeMarkdownSource?: string;
   unreadInkRegions?: UnreadInkRegion[];
+  secondOpinion?: SecondOpinionPass;
   provenance: ExtractionProvenance;
   association?: AssociationOptions;
   diagnostics?: DiagnosticOptions;
@@ -58,6 +60,7 @@ export interface AssemblePageSpatialInput {
   association?: AssociationOptions;
   diagnostics?: DiagnosticOptions;
   unreadInkRegions?: UnreadInkRegion[];
+  secondOpinion?: SecondOpinionPass;
 }
 
 function normalizeNative(
@@ -197,6 +200,7 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
   const spatialRows = buildSpatialRows(ocrObservations, pixelsPerPoint);
   const derivedRelations = inferSimpleYearValueRelations(pageId, ocrObservations, pixelsPerPoint);
   const unreadInkRegions = input.unreadInkRegions;
+  const secondOpinion = input.secondOpinion;
   const diagnostics = buildDiagnostics({
     nativeObservations,
     ocrObservations,
@@ -204,6 +208,7 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
     conflicts: association.conflicts,
     derivedRelations,
     unreadInkRegions,
+    secondOpinion,
     pixelsPerPoint,
     options: input.diagnostics
   });
@@ -221,7 +226,7 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
   });
 
   const page: PageSpatial = {
-    schemaVersion: '0.5.0',
+    schemaVersion: '0.6.0',
     documentId: input.document.documentId,
     revisionId: input.document.revisionId,
     documentSha256: input.document.sha256,
@@ -236,6 +241,7 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
     spatialRows,
     derivedRelations,
     unreadInkRegions,
+    ...(secondOpinion ? { secondOpinion } : {}),
     diagnostics,
     projection,
     provenance: input.provenance
@@ -341,6 +347,7 @@ export function assemblePageSpatial(input: AssemblePageSpatialInput): PageSpatia
     nativeMarkdown: input.nativePage.markdown,
     nativeMarkdownSource: input.nativePage.markdownSource,
     unreadInkRegions: input.unreadInkRegions,
+    secondOpinion: input.secondOpinion,
     provenance,
     association: input.association,
     diagnostics: input.diagnostics

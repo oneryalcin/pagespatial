@@ -10,6 +10,14 @@ This document tells the next engineer what exists, why the current design was ch
 
 The project's standing commitments live in [principles](principles.md) — read it first; when a proposed change conflicts with a principle, the principle wins until deliberately revisited. The two most often at risk of drift: the library feeds an index and its value is per-chunk trust metadata, not text; and humans belong to the evaluation loop only — escalation is a routing signal for automated tiers, never a production review queue.
 
+**Current work map**: [workstreams](workstreams.md) — the living board of
+active/free/blocked streams with owners; edit it when you pick up or ship a
+stream. Note this handoff is a point-in-time document (2026-08-19); the
+2026-08-20 wave (CMap root-cause fix, unread-ink recovery, residue honesty,
+Flash escalated tier, escalation-economics ladder, cross-family second
+opinion) is documented in docs/trials/2026-08-20-*.md and reflected in the
+workstreams snapshot.
+
 Start with:
 
 1. [README](../README.md) — supported package surfaces and usage.

@@ -65,4 +65,12 @@ export interface ParserAdapters<TSource = unknown, TRaster = unknown> {
   renderer: PageRenderer<TSource, TRaster>;
   ocr: OcrAdapter<TRaster>;
   regionRecovery?: RegionRecoveryAdapter<TSource, TRaster>;
+  /**
+   * Cross-family second-opinion engine (issue #17): a MECHANICALLY
+   * DIFFERENT OCR family (different architecture and training — two
+   * similar vision models corroborate nothing, principles §5). Invoked
+   * only when a page would otherwise escalate as coverage-starved; its
+   * raw readings land on the record and engagement is derived from them.
+   */
+  secondOpinion?: OcrAdapter<TRaster>;
 }

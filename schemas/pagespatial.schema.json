@@ -4,7 +4,7 @@
   "properties": {
     "schemaVersion": {
       "type": "string",
-      "const": "0.5.0"
+      "const": "0.6.0"
     },
     "document": {
       "type": "object",
@@ -45,7 +45,7 @@
         "properties": {
           "schemaVersion": {
             "type": "string",
-            "const": "0.5.0"
+            "const": "0.6.0"
           },
           "documentId": {
             "type": "string"
@@ -815,6 +815,62 @@
               ],
               "additionalProperties": false
             }
+          },
+          "secondOpinion": {
+            "type": "object",
+            "properties": {
+              "adapter": {
+                "type": "string",
+                "minLength": 1
+              },
+              "readings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "box": {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ],
+                      "minItems": 4,
+                      "maxItems": 4,
+                      "items": false
+                    },
+                    "text": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "confidence": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "box",
+                    "text"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "adapter",
+              "readings"
+            ],
+            "additionalProperties": false
           },
           "diagnostics": {
             "type": "object",

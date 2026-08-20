@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { assertPageGeometry, pointBounds, pointBoxToRenderedBox, renderedPixelsPerPoint } from './geometry.js';
+import { crossEngineEngagedIds } from './diagnostics.js';
 import { countConfirmedRegions, countRecoveredObservations, regionEligibleForResidue } from './ink.js';
 
 const boxSchema = z.tuple([z.number(), z.number(), z.number(), z.number()]);
@@ -140,12 +141,21 @@ const unreadInkRegionSchema = z.object({
 });
 
 const pageSpatialBaseSchema = z.object({
-  schemaVersion: z.literal('0.5.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
+  schemaVersion: z.literal('0.6.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
   pageId: z.string(), pageNumber: z.number().int().positive(), geometry: pageGeometrySchema,
   nativeObservations: z.array(nativeObservationSchema), ocrObservations: z.array(ocrObservationSchema),
   nativeLines: z.array(nativeLineSchema), sourceMatches: z.array(sourceMatchSchema), conflicts: z.array(conflictSchema),
   spatialRows: z.array(spatialRowSchema), derivedRelations: z.array(relationSchema),
-  unreadInkRegions: z.array(unreadInkRegionSchema).optional(), diagnostics: diagnosticsSchema,
+  unreadInkRegions: z.array(unreadInkRegionSchema).optional(),
+  secondOpinion: z.object({
+    adapter: z.string().min(1),
+    readings: z.array(z.object({
+      box: boxSchema,
+      text: z.string().min(1),
+      confidence: z.number().min(0).max(1).optional()
+    }).strict())
+  }).strict().optional(),
+  diagnostics: diagnosticsSchema,
   projection: z.object({ markdown: z.string(), format: z.literal('pagespatial-markdown-v1'), trust: z.literal('untrusted-document-content'), derived: z.literal(true), markdownSource: z.string().min(1) }),
   provenance: provenanceSchema
 });
@@ -380,6 +390,12 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
     ['low-ocr-confidence', { severity: 'advisory', count: lowConfidenceIds.length, share: ocrShare(lowConfidenceIds.length), sourceIds: lowConfidenceIds }]
   ]);
   const engagedOcrIds = new Set([...matchedOcrIds, ...conflictedOcrIds]);
+  for (const id of crossEngineEngagedIds(page.ocrObservations, page.secondOpinion, page.diagnostics.thresholds.lowOcrConfidence)) engagedOcrIds.add(id);
+  (page.secondOpinion?.readings ?? []).forEach((reading, index) => {
+    if (!validBox(reading.box, page.geometry.width, page.geometry.height)) {
+      issue(context, ['secondOpinion', 'readings', index, 'box'], 'Second-opinion reading box must be ordered and within page pixel geometry.');
+    }
+  });
   // Second-pass recoveries are known single-witness by construction and are
   // excluded from the starvation denominator (mirrors diagnostics.ts).
   const confidentOcr = page.ocrObservations.filter((observation) =>
@@ -465,7 +481,7 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
 });
 
 const pageSpatialDocumentBaseSchema = z.object({
-  schemaVersion: z.literal('0.5.0'),
+  schemaVersion: z.literal('0.6.0'),
   document: documentIdentitySchema,
   pages: z.array(pageSpatialSchema),
   diagnostics: z.object({
