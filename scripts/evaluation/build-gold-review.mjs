@@ -106,7 +106,8 @@ const pagesHtml = proposals.map((page, pageIndex) => {
       <td class="text" contenteditable="true">${escapeHtml(token.text)}</td>
       <td><label><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="${token.auto ? 'auto' : 'correct'}"${token.auto ? ' checked' : ''}>${token.auto ? 'auto' : 'ok'}</label>
           <label><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="wrong">wrong</label>
-          <label><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="edited">edited</label></td>
+          <label><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="edited">edited</label>
+          <label class="bulk"><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="bulk">bulk</label></td>
     </tr>`;
   const reviewRows = tokens.map((token, tokenIndex) => token.auto ? '' : row(token, tokenIndex)).join('');
   const autoRows = tokens.map((token, tokenIndex) => token.auto ? row(token, tokenIndex) : '').join('');
@@ -143,6 +144,8 @@ const pagesHtml = proposals.map((page, pageIndex) => {
       <div class="panel">
         <h3>Critical tokens: ${tokens.length - autoCount} need review, ${autoCount} auto-accepted — add missed ones below</h3>
         <table>${tokenRows}</table>
+        <p class="bulkbar"><button type="button" onclick="acceptRemaining(${pageIndex})">Accept all remaining on this page</button>
+          <span id="bulkcount-${pageIndex}"></span></p>
         <textarea id="missed-${pageIndex}" placeholder="Missed tokens, one per line, verbatim"></textarea>
         ${chartRows ? `<h3>Chart relations</h3><table><tr><th></th><th>series</th><th>category</th><th>value</th><th>unit</th><th></th></tr>${chartRows}</table>` : ''}
         <textarea id="missed-charts-${pageIndex}" placeholder="Missed chart tuples, one per line: category | value | unit"></textarea>
@@ -163,6 +166,13 @@ body{font:14px/1.5 -apple-system,sans-serif;margin:0;padding:1rem;background:#fa
 .box.auto{border-color:rgba(30,160,60,.55);border-style:dashed}
 .box span{position:absolute;top:-1.1em;left:0;font-size:10px;color:#c22;background:#fff8}
 .box.hot{border-color:#06c;border-width:3px;background:rgba(0,102,204,.12)}
+/* The bulk radio is never clicked directly — it is the record that a row was
+   page-accepted rather than read, so it must be settable only by the button. */
+label.bulk{display:none}
+tr.bulked{background:#fff6df}
+tr.bulked td:first-child::after{content:' bulk';color:#a86400;font-size:11px}
+.bulkbar{margin:.4rem 0 0;font-size:12px;color:#666}
+.bulkbar button{font-size:12px;padding:.25rem .5rem}
 .panel{flex:1;max-height:90vh;overflow:auto}
 table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #eee;padding:2px 6px;text-align:left;vertical-align:top}
 .text{font-family:ui-monospace,monospace;background:#f6f6f6}
@@ -184,6 +194,26 @@ const PROPOSALS = ${JSON.stringify(proposals.map((page) => ({
 function hl(pageIndex, tokenIndex, on){
   const box = document.getElementById('box-' + pageIndex + '-' + tokenIndex);
   if (box) box.classList.toggle('hot', Boolean(on));
+}
+// Page-level accept for the common case where every proposal is right. It
+// records "bulk", NOT "correct": the evaluator scores that as its own tier,
+// so a token a person actually read is never mixed with one accepted in a
+// batch of forty. Rows already marked by hand are left exactly as they are.
+function acceptRemaining(pageIndex){
+  const rows = document.querySelectorAll('tr[data-page="' + pageIndex + '"]');
+  let accepted = 0;
+  rows.forEach(row => {
+    const tokenIndex = row.getAttribute('data-token');
+    const name = 't-' + pageIndex + '-' + tokenIndex;
+    if (document.querySelector('input[name="' + name + '"]:checked')) return;
+    const bulk = document.querySelector('input[name="' + name + '"][value="bulk"]');
+    if (!bulk) return;
+    bulk.checked = true;
+    row.classList.add('bulked');
+    accepted += 1;
+  });
+  document.getElementById('bulkcount-' + pageIndex).textContent =
+    accepted ? accepted + ' rows accepted in bulk — recorded as a separate tier, not as read-and-verified.' : 'nothing left to accept.';
 }
 function exportVerdicts(){
   const pages = PROPOSALS.map((page, pageIndex) => ({

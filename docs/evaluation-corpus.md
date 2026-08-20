@@ -115,6 +115,15 @@ node scripts/evaluation/evaluate-gold-pilot.mjs \
   --output .evaluation/gold/<batch-id>/metrics.json
 ```
 
+Tokens land in one of three tiers, and the evaluator keeps them apart:
+**human** (read and marked one by one — the only independent gold),
+**silver** (auto-accepted because the native text layer agreed — not
+independent of the native engine), and **bulk** (accepted with a page's
+"Accept all remaining" button — a person chose to accept them but did not
+read them individually). Use bulk freely on pages where the proposals are
+plainly right; just never quote a bulk-inflated number as verified recall.
+A claim that needs independent gold needs the human tier.
+
 Selection tiers mirror [evaluation debts](evaluation-debts.md): starved scan
 pages (rows 1, 1b), conflict-carrying pages (rows 2, 4, 8), and pages with
 pictorial regions (row 6). Per-document and per-family caps keep one family
