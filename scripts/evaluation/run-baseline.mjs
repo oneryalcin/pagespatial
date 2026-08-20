@@ -17,7 +17,7 @@ import { attemptEnvelopeSchema, documentSummarySchema, runInvocationSchema } fro
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const exec = promisify(execFile);
 const valueFlags = new Set([
-  '--data-root', '--ocr-assets', '--document-id', '--page', '--backend', '--render-scale',
+  '--data-root', '--ocr-assets', '--document-id', '--page', '--backend', '--ocr-variant', '--render-scale',
   '--page-timeout-ms', '--document-timeout-ms', '--run-id', '--browser-executable'
 ]);
 for (let index = 2; index < process.argv.length; index += 2) {
@@ -46,6 +46,8 @@ const manifestPath = join(root, 'evaluation/corpus.v1.json');
 const requestedObjectId = flag('--document-id');
 const requestedPage = flag('--page') === undefined ? undefined : positiveNumber('--page');
 const backend = flag('--backend', 'wasm');
+const ocrVariant = flag('--ocr-variant', 'tiny');
+if (!['tiny', 'small'].includes(ocrVariant)) throw new Error('--ocr-variant must be tiny or small.');
 if (!['wasm', 'webgpu', 'auto'].includes(backend)) throw new Error('--backend must be wasm, webgpu, or auto.');
 const renderScale = positiveNumber('--render-scale', 1.6);
 const pageTimeoutMs = positiveNumber('--page-timeout-ms', 120_000);
@@ -81,7 +83,7 @@ let lock;
 const implementation = await workspaceIdentity(root);
 const packageMetadata = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 const lockfileHash = await sha256File(join(root, 'package-lock.json'));
-await exec(process.execPath, [join(root, 'scripts/prepare-ppocr-assets.mjs'), '--verify', '--output', ocrAssets], {
+await exec(process.execPath, [join(root, 'scripts/prepare-ppocr-assets.mjs'), '--verify', '--manifest', join(root, 'assets', `ppocrv6-${ocrVariant}.manifest.json`), '--output', ocrAssets], {
   cwd: root,
   maxBuffer: 4 * 1024 * 1024
 });
@@ -94,6 +96,7 @@ const profile = {
   nativeAdapter: nativeAdapterIdentity,
   renderer: 'pdfjs-dist@5.5.207',
   ocrAdapter: '@paddleocr/paddleocr-js@0.4.2',
+  ocrVariant,
   backendPolicy: backend,
   renderScale,
   detectorLimit: 960,
@@ -378,6 +381,7 @@ try {
           routeMapPath,
           ocrAssets,
           backend,
+          ocrVariant,
           pageTimeoutMs,
           warmupTimeoutMs: Math.max(pageTimeoutMs, 180_000),
           chromePath: browserExecutable
