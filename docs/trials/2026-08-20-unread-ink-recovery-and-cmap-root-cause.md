@@ -90,6 +90,48 @@ No gold page regressed. The corpus-wide observation shift is modest because
 only documents whose fonts use predefined CMaps are affected — but on those
 documents the change is transformative (monotaro p30: 13/61 → 50/61).
 
+## Three-reviewer pass and the fixes it forced
+
+Codex adversarial, Codex native, and an Opus reviewer (every claim verified
+by running probes) reviewed the branch. All Tier 1/2 findings were fixed in
+one commit; the re-run (`exp-review-fixes-2026-08-20`, 162 pages, 0
+failures) measured the effect:
+
+| | cmap run | review-fixes run |
+|---|---|---|
+| gold recall (28 verified pages) | 451/468 | **461/468 (98.5%)** |
+| conflicts | 895 | 470 |
+| recovered (second-pass) observations | 2,642 | 1,656 |
+| unread-ink residue pages | 81 | 82 |
+
+Key fixes: A3-and-larger pages no longer crash the whole document (zoom
+clamp budgeted for the renderer's ceil; recovery failure degrades to
+residue); `recoveredObservationCount` is derived everywhere from retained
+non-blank `recoveryMethod` observations, so forging the integer cannot
+clear the blocking escalation; recovered observations no longer generate
+critical-token conflicts (tile fragments manufactured blocking conflicts
+against values both engines had right — the 895→470 conflict drop is those
+fakes dying); tiles never exceed the detector cap; the NATIVE witness was
+also CMap-blind (p61: 62 items/9 digits → 412 items/600 digits) and Node
+sessions now default to the bundled CMaps; the harness passes native read
+evidence into recovery so the evaluated configuration is the shipped one;
+`unreadInkRegions` absent means analysis never ran; recovery adapter
+identity is in provenance; association coverage excludes recoveries.
+
+## The residue surprise
+
+Residue pages did NOT collapse after the false-positive fixes (81→82) —
+and inspection shows why: the remaining residue regions are predominantly
+**solid filled table-header bars whose white text both witnesses already
+read**. The ink mask flags the fill extending past the text's read boxes;
+recovery re-reads it, produces the same text, and dedup correctly discards
+the duplicate — count 0, blocking alarm. The alarm fires exactly when the
+system re-confirmed what it already knew. A blocking reason on half of all
+pages devalues the escalation surface; the design question
+(duplicate-confirmed regions are corroborated, not unread) is tracked on
+issue #14 with candidate directions. Cost bounding (per-page tile budget)
+is issue #13.
+
 ## Blast radius and lineage
 
 The CMap fix changes renders for every document whose fonts use predefined
