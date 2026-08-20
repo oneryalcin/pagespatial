@@ -6,9 +6,19 @@ export type { BuildPageSpatialInput, ParseOptions } from './parser.js';
 
 export { assertBox, assertBoxWithin, assertPageGeometry, boxArea, intersectionArea, overlapOverSmaller, pointBounds, pointBoxToRenderedBox, renderedPixelsPerPoint, roundBox, transformPoint, unionBoxes } from './geometry.js';
 export { createDerivedId, createObservationId, createPageId } from './ids.js';
-export { criticalTokens, criticalTokensAgree, criticalTokensCompatible, normalizeEvidenceText, sameTokenMultiset, textSimilarity } from './text.js';
+export { criticalTokens, criticalTokensAgree, criticalTokensCompatible, normalizeEvidenceText, sameTokenMultiset, splitCriticalToken, textSimilarity } from './text.js';
 export { buildNativeLines, buildSpatialRows, readingOrder } from './reading-order.js';
 export { associateNativeAndOcr } from './merge.js';
+export {
+  blockingReasons,
+  buildEscalatedOcrEnrichment,
+  deriveCorroboration,
+  escalatedOcrEnrichmentSchema,
+  pageDigest,
+  pageQualifiesForEscalatedEnrichment,
+  validateEnrichmentAgainstPage
+} from './enrichment.js';
+export type { EnrichmentProposal, EscalatedOcrEnrichment, ProposalCorroboration } from './enrichment.js';
 export { inferSimpleYearValueRelations } from './relations.js';
 export { buildDiagnostics, resolveDiagnosticOptions } from './diagnostics.js';
 export { attributeConfirmations, countConfirmedRegions, countRecoveredObservations, duplicatesFirstPass, findUnreadInkRegions, mapRecoveredBox, pruneConfirmations } from './ink.js';

@@ -83,7 +83,7 @@ function wordTokens(value: string): string[] {
 
 const TAIL_SEPARATOR = '|';
 
-function splitCriticalToken(token: string): { core: string; tail: string | null } {
+export function splitCriticalToken(token: string): { core: string; tail: string | null } {
   const index = token.indexOf(TAIL_SEPARATOR);
   return index < 0
     ? { core: token, tail: null }
