@@ -72,6 +72,31 @@ All 27 previously-starved pages carry their second-opinion readings
 (8,314) on the record; the 4 that stay starved (one badly degraded scan,
 dense slides) still route to Flash — honest residual.
 
+## Resource footprint (measured 2026-08-20, Apple M4 Max)
+
+Per would-starve page, at the harness's 300 dpi render (letter-size
+2550×3300 px and 3000×2250 px slide pages from the corpus):
+
+| stage | latency | peak RSS | CPU |
+|---|---|---|---|
+| pdftoppm render (300 dpi) | ~0.5 s | ~66 MB | 1 core |
+| tesseract (TSV, psm 3, eng) | 0.5–0.6 s | 137–162 MB | ~1 core (brief OMP ≤4 threads) |
+| whole pass, serial | ~1.1 s | ~160 MB transient (subprocess exits per page) | |
+
+Same weight class as the deterministic parse (~1 s/page); replaces a ~7 s
+remote call. Fires only on would-starve pages (27/162 = 17% on this
+scan-heavy corpus). Scale budgeting (issue #22): ~1 extra core-second and
+~160 MB transient per scanned page; embarrassingly parallel subprocesses.
+Known headroom at millions of pages: the ~15 MB eng model loads per
+invocation (included in the 0.6 s) — a long-lived worker or the library
+API would shave that startup cost.
+
+Measurement method (repeat when hardware or settings change):
+`pdftoppm -f <p> -l <p> -r 300 -png <pdf> out` then
+`/usr/bin/time -l tesseract out-<p>.png stdout --psm 3 tsv` — `real` for
+latency, `maximum resident set size` for peak RSS; run on real corpus
+scan pages, not synthetic images.
+
 ## Economics scoreboard (issue #17, from the $0.0093 start)
 
 $0.0093 → $0.0036 (ladder) → **$0.00307 (cross-family)** — 3.0× measured,
