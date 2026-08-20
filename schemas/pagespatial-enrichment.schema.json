@@ -4,7 +4,7 @@
   "properties": {
     "enrichmentSchemaVersion": {
       "type": "string",
-      "const": "enrichment-0.1.0"
+      "const": "enrichment-0.2.0"
     },
     "documentId": {
       "type": "string",
@@ -132,6 +132,36 @@
         "additionalProperties": false
       }
     },
+    "adjudications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "conflictId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "native",
+              "ocr",
+              "both-wrong",
+              "unsure"
+            ]
+          },
+          "inkText": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "conflictId",
+          "verdict"
+        ],
+        "additionalProperties": false
+      }
+    },
     "telemetry": {
       "type": "object",
       "properties": {
@@ -174,6 +204,7 @@
     "trigger",
     "provenance",
     "proposals",
+    "adjudications",
     "telemetry",
     "trust"
   ],

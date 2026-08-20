@@ -40,8 +40,21 @@ export interface EnrichmentProposal {
   corroboration: ProposalCorroboration;
 }
 
+/**
+ * A model verdict on one recorded conflict. Opinion, not resolution: the
+ * conflict stays on the canonical page (escalate-don't-vote); downstream
+ * ranking may weight by the verdict, carrying its model provenance.
+ */
+export interface ConflictAdjudication {
+  /** Must reference a conflict id present on the base page (fail-closed). */
+  conflictId: string;
+  verdict: 'native' | 'ocr' | 'both-wrong' | 'unsure';
+  /** Model transcription of the disputed ink, verbatim. */
+  inkText?: string;
+}
+
 export interface EscalatedOcrEnrichment {
-  enrichmentSchemaVersion: 'enrichment-0.1.0';
+  enrichmentSchemaVersion: 'enrichment-0.2.0';
   documentId: string;
   revisionId: string;
   documentSha256: string;
@@ -66,6 +79,8 @@ export interface EscalatedOcrEnrichment {
     thinkingBudget: number;
   };
   proposals: EnrichmentProposal[];
+  /** Verdicts on the base page's recorded conflicts (may be empty). */
+  adjudications: ConflictAdjudication[];
   /** Measured cost/latency telemetry for the economics ledger. */
   telemetry: { promptTokens: number; outputTokens: number; latencyMs: number };
   trust: 'untrusted-document-content';
@@ -74,7 +89,7 @@ export interface EscalatedOcrEnrichment {
 const boxHintSchema = z.tuple([z.number(), z.number(), z.number(), z.number()]);
 
 export const escalatedOcrEnrichmentSchema = z.object({
-  enrichmentSchemaVersion: z.literal('enrichment-0.1.0'),
+  enrichmentSchemaVersion: z.literal('enrichment-0.2.0'),
   documentId: z.string().min(1),
   revisionId: z.string().min(1),
   documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
@@ -97,6 +112,11 @@ export const escalatedOcrEnrichmentSchema = z.object({
     text: z.string().min(1),
     modelBoxHint: boxHintSchema.optional(),
     corroboration: z.enum(['corroborated-both', 'corroborated-native', 'corroborated-ocr', 'novel'])
+  }).strict()),
+  adjudications: z.array(z.object({
+    conflictId: z.string().min(1),
+    verdict: z.enum(['native', 'ocr', 'both-wrong', 'unsure']),
+    inkText: z.string().min(1).optional()
   }).strict()),
   telemetry: z.object({
     promptTokens: z.number().int().nonnegative(),
@@ -242,6 +262,7 @@ export function deriveCorroboration(
 export interface BuildEnrichmentInput {
   page: PageSpatial;
   proposals: readonly { text: string; modelBoxHint?: [number, number, number, number] }[];
+  adjudications?: readonly ConflictAdjudication[];
   provenance: EscalatedOcrEnrichment['provenance'];
   telemetry: EscalatedOcrEnrichment['telemetry'];
   createdAt?: string;
@@ -253,7 +274,7 @@ export async function buildEscalatedOcrEnrichment(input: BuildEnrichmentInput): 
     throw new Error('Enrichment is escalated-tier only: the page carries no blocking escalation reason.');
   }
   const record: EscalatedOcrEnrichment = {
-    enrichmentSchemaVersion: 'enrichment-0.1.0',
+    enrichmentSchemaVersion: 'enrichment-0.2.0',
     documentId: input.page.documentId,
     revisionId: input.page.revisionId,
     documentSha256: input.page.documentSha256,
@@ -264,10 +285,34 @@ export async function buildEscalatedOcrEnrichment(input: BuildEnrichmentInput): 
     trigger: { blockingReasons: reasons },
     provenance: input.provenance,
     proposals: deriveCorroboration(input.proposals, input.page),
+    adjudications: validateAdjudications(input.adjudications ?? [], input.page),
     telemetry: input.telemetry,
     trust: 'untrusted-document-content'
   };
   return escalatedOcrEnrichmentSchema.parse(record) as EscalatedOcrEnrichment;
+}
+
+/**
+ * Every adjudication must reference a distinct conflict recorded on the
+ * base page — a verdict on a conflict that does not exist is fabricated
+ * evidence and fails closed.
+ */
+function validateAdjudications(
+  adjudications: readonly ConflictAdjudication[],
+  page: Pick<PageSpatial, 'conflicts'>
+): ConflictAdjudication[] {
+  const known = new Set(page.conflicts.map((conflict) => conflict.id));
+  const seen = new Set<string>();
+  for (const adjudication of adjudications) {
+    if (!known.has(adjudication.conflictId)) {
+      throw new Error(`Adjudication references unknown conflict ${adjudication.conflictId}.`);
+    }
+    if (seen.has(adjudication.conflictId)) {
+      throw new Error(`Duplicate adjudication for conflict ${adjudication.conflictId}.`);
+    }
+    seen.add(adjudication.conflictId);
+  }
+  return [...adjudications];
 }
 
 /**
@@ -316,5 +361,10 @@ export async function validateEnrichmentAgainstPage(
       issues.push(`Proposal ${index} corroboration must be ${derived[index]!.corroboration}.`);
     }
   });
+  try {
+    validateAdjudications(enrichment.adjudications, page);
+  } catch (error) {
+    issues.push(String(error instanceof Error ? error.message : error));
+  }
   return { valid: issues.length === 0, issues, ...(issues.length === 0 ? { record } : {}) };
 }

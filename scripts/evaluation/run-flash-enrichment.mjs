@@ -19,7 +19,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildEscalatedOcrEnrichment, pageQualifiesForEscalatedEnrichment, validateEnrichmentAgainstPage } from '../../dist/index.js';
-import { transcribePageImage } from '../../dist/node/flash-ocr.js';
+import { adjudicatePageConflicts, transcribePageImage } from '../../dist/node/flash-ocr.js';
 
 function arg(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -95,6 +95,15 @@ async function worker() {
     const target = selected[cursor];
     cursor += 1;
     const name = `${target.page.pageId.replaceAll(':', '_')}.json`;
+    // Escalation ladder (issue #17), measured decision:
+    // - conflict/omission reasons -> page-batched adjudication (~$0.0023)
+    // - starved/residue reasons  -> full-page transcription at HIGH (~$0.0085)
+    // A page carrying both reason kinds gets both calls; telemetry sums.
+    const reasons = new Set(target.page.diagnostics.escalationReasons
+      .filter((reason) => reason.severity === 'blocking')
+      .map((reason) => reason.type));
+    const needsAdjudication = reasons.has('critical-token-conflict') || reasons.has('critical-token-omission');
+    const needsTranscription = reasons.has('uncorroborated-ocr') || reasons.has('unread-ink-region');
     try {
       if (skipExisting && existsSync(join(outputDir, name))) {
         const stored = JSON.parse(readFileSync(join(outputDir, name), 'utf8'));
@@ -108,17 +117,51 @@ async function worker() {
       }
       assertPdfMatchesRecord(target.pdfPath, target.page.documentSha256);
       const png = renderPng(target.pdfPath, target.pageNumber);
-      const transcription = await transcribePageImage({ apiKey, png: new Uint8Array(png) });
+      let proposals = [];
+      let adjudications = [];
+      let provenance;
+      const telemetry = { promptTokens: 0, outputTokens: 0, latencyMs: 0 };
+      if (needsTranscription) {
+        const transcription = await transcribePageImage({ apiKey, png: new Uint8Array(png) });
+        proposals = transcription.proposals;
+        provenance = transcription.provenance;
+        telemetry.promptTokens += transcription.telemetry.promptTokens;
+        telemetry.outputTokens += transcription.telemetry.outputTokens;
+        telemetry.latencyMs += transcription.telemetry.latencyMs;
+      }
+      if (needsAdjudication && target.page.conflicts.length) {
+        const { width, height } = target.page.geometry;
+        const obsBox = new Map(target.page.ocrObservations.map((observation) => [observation.id, observation.box]));
+        const conflicts = target.page.conflicts.map((conflict) => {
+          const box = obsBox.get(conflict.ocrId);
+          return {
+            conflictId: conflict.id,
+            nativeText: conflict.nativeText,
+            ocrText: conflict.ocrText,
+            normalizedBox: [
+              Math.round((box[1] / height) * 1000), Math.round((box[0] / width) * 1000),
+              Math.round((box[3] / height) * 1000), Math.round((box[2] / width) * 1000)
+            ]
+          };
+        });
+        const adjudication = await adjudicatePageConflicts({ apiKey, png: new Uint8Array(png), conflicts });
+        adjudications = adjudication.verdicts;
+        provenance = provenance ?? adjudication.provenance;
+        telemetry.promptTokens += adjudication.telemetry.promptTokens;
+        telemetry.outputTokens += adjudication.telemetry.outputTokens;
+        telemetry.latencyMs += adjudication.telemetry.latencyMs;
+      }
       const enrichment = await buildEscalatedOcrEnrichment({
         page: target.page,
-        proposals: transcription.proposals,
-        provenance: transcription.provenance,
-        telemetry: transcription.telemetry
+        proposals,
+        adjudications,
+        provenance,
+        telemetry
       });
       writeFileSync(join(outputDir, name), JSON.stringify(enrichment, null, 1));
       results.push(enrichment);
       const novel = enrichment.proposals.filter((proposal) => proposal.corroboration === 'novel').length;
-      console.log(`${target.page.pageId}: ${enrichment.proposals.length} proposals (${novel} novel) ${enrichment.telemetry.latencyMs}ms`);
+      console.log(`${target.page.pageId}: ${enrichment.proposals.length} proposals (${novel} novel), ${enrichment.adjudications.length} adjudications, ${enrichment.telemetry.latencyMs}ms`);
     } catch (error) {
       failures.push({ pageId: target.page.pageId, error: String(error).slice(0, 200) });
       console.warn(`${target.page.pageId}: FAILED ${String(error).slice(0, 120)}`);

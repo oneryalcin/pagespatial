@@ -171,6 +171,34 @@ test('transcriber retries transient statuses and hard-fails terminal ones', asyn
   assert.equal(terminalCalls, 1);
 });
 
+test('adjudications bind fail-closed to recorded conflicts', async () => {
+  const page = await escalatedPage();
+  const conflictId = page.conflicts[0].id;
+  const enrichment = await buildEscalatedOcrEnrichment({
+    page, provenance, telemetry, proposals: [],
+    adjudications: [{ conflictId, verdict: 'native', inkText: 'Revenue 647' }]
+  });
+  assert.equal(enrichment.adjudications.length, 1);
+  assert.equal((await validateEnrichmentAgainstPage(enrichment, page)).valid, true);
+  // Verdict on a conflict that does not exist = fabricated evidence.
+  await assert.rejects(buildEscalatedOcrEnrichment({
+    page, provenance, telemetry, proposals: [],
+    adjudications: [{ conflictId: 'conflict:nowhere', verdict: 'ocr' }]
+  }), /unknown conflict/u);
+  // Duplicate verdicts on one conflict rejected.
+  await assert.rejects(buildEscalatedOcrEnrichment({
+    page, provenance, telemetry, proposals: [],
+    adjudications: [
+      { conflictId, verdict: 'native' },
+      { conflictId, verdict: 'ocr' }
+    ]
+  }), /Duplicate/u);
+  // Forged post-hoc adjudication fails validation.
+  const forged = structuredClone(enrichment);
+  forged.adjudications.push({ conflictId: 'conflict:invented', verdict: 'ocr' });
+  assert.equal((await validateEnrichmentAgainstPage(forged, page)).valid, false);
+});
+
 test('enrichment refuses pages without blocking escalation', async () => {
   const page = await escalatedPage();
   const calm = structuredClone(page);
