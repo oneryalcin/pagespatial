@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { criticalTokens, normalizeEvidenceText } from './text.js';
+import { criticalTokens, normalizeEvidenceText, splitCriticalToken } from './text.js';
 import type { PageSpatial } from './types.js';
 
 /**
@@ -9,8 +9,10 @@ import type { PageSpatial } from './types.js';
  *
  * - The canonical PageSpatial record is NEVER mutated. Enrichment is a
  *   separate revision record, bound fail-closed to the exact page record it
- *   enriched (SHA-256 of the canonical page JSON). If the page is reparsed,
- *   stale enrichments no longer validate.
+ *   enriched (SHA-256 of the canonical page JSON). Any reparse — even of
+ *   identical input — changes the digest (provenance runId/createdAt are
+ *   deliberately inside it: conservative, at the cost of re-enriching after
+ *   identical reparses), so stale enrichments never silently reattach.
  * - Model proposals are TEXT ONLY. The model's box claims are kept as an
  *   explicitly-labelled coarse hint for highlight UX; they are never
  *   evidence geometry and never enter association (reject-don't-repair:
@@ -80,24 +82,27 @@ export const escalatedOcrEnrichmentSchema = z.object({
   pageNumber: z.number().int().positive(),
   basePageDigest: z.string().regex(/^[a-f0-9]{64}$/iu),
   createdAt: z.string().min(1),
-  trigger: z.object({ blockingReasons: z.array(z.string().min(1)).min(1) }),
+  trigger: z.object({ blockingReasons: z.array(z.string().min(1)).min(1) }).strict(),
   provenance: z.object({
     adapter: z.string().min(1),
     model: z.string().min(1),
     mediaResolution: z.string().min(1),
     promptRevision: z.string().min(1),
     thinkingBudget: z.number().int().nonnegative()
-  }),
+  }).strict(),
+  // Strict everywhere: a smuggled key on a proposal (e.g. evidenceBox,
+  // trust) would contradict the text-only invariant while surviving a
+  // top-level-only strictness check.
   proposals: z.array(z.object({
     text: z.string().min(1),
     modelBoxHint: boxHintSchema.optional(),
     corroboration: z.enum(['corroborated-both', 'corroborated-native', 'corroborated-ocr', 'novel'])
-  })),
+  }).strict()),
   telemetry: z.object({
     promptTokens: z.number().int().nonnegative(),
     outputTokens: z.number().int().nonnegative(),
     latencyMs: z.number().nonnegative()
-  }),
+  }).strict(),
   trust: z.literal('untrusted-document-content')
 }).strict();
 
@@ -136,21 +141,54 @@ export async function pageDigest(page: PageSpatial): Promise<string> {
  * observation text (same-ink canonicalization), as a consumable multiset —
  * each printed occurrence corroborates at most one proposal.
  */
-function tokenPool(texts: readonly string[]): Map<string, number> {
-  const pool = new Map<string, number>();
+interface PoolEntry {
+  tail: string | null;
+  count: number;
+}
+
+function tokenPool(texts: readonly string[]): Map<string, PoolEntry[]> {
+  const pool = new Map<string, PoolEntry[]>();
   for (const text of texts) {
-    for (const token of criticalTokens(text)) pool.set(token, (pool.get(token) ?? 0) + 1);
+    for (const token of criticalTokens(text)) {
+      const { core, tail } = splitCriticalToken(token);
+      const entries = pool.get(core) ?? [];
+      const entry = entries.find((candidate) => candidate.tail === tail);
+      if (entry) entry.count += 1;
+      else entries.push({ tail, count: 1 });
+      pool.set(core, entries);
+    }
   }
   return pool;
 }
 
-function consumeAll(tokens: readonly string[], pool: Map<string, number>): boolean {
-  const counts = new Map<string, number>();
-  for (const token of tokens) counts.set(token, (counts.get(token) ?? 0) + 1);
-  for (const [token, needed] of counts) {
-    if ((pool.get(token) ?? 0) < needed) return false;
+/**
+ * Tail-compatible consumption (same-ink §6): cores must be equal, and a
+ * missing tail on either side means that side simply covered less ink,
+ * never a disagreement. Exact-tail occurrences are consumed first so a
+ * wildcard match cannot starve a later exact one. Encoded-string equality
+ * would systematically mislabel unit-word segmentation differences
+ * ("1,234" vs "1,234 million") as novel.
+ */
+function consumeToken(token: string, pool: Map<string, PoolEntry[]>): boolean {
+  const { core, tail } = splitCriticalToken(token);
+  const entries = pool.get(core);
+  if (!entries) return false;
+  const usable = entries.filter((entry) =>
+    entry.count > 0 && (tail === null || entry.tail === null || entry.tail === tail));
+  if (!usable.length) return false;
+  const exact = usable.find((entry) => entry.tail === tail);
+  (exact ?? usable[0]!).count -= 1;
+  return true;
+}
+
+function consumeAll(tokens: readonly string[], pool: Map<string, PoolEntry[]>): boolean {
+  // All-or-nothing: probe on a snapshot of counts, mutate only on success.
+  const snapshot = new Map([...pool].map(([core, entries]) =>
+    [core, entries.map((entry) => ({ ...entry }))] as const));
+  for (const token of tokens) {
+    if (!consumeToken(token, snapshot)) return false;
   }
-  for (const [token, needed] of counts) pool.set(token, pool.get(token)! - needed);
+  for (const [core, entries] of snapshot) pool.set(core, entries);
   return true;
 }
 
@@ -180,9 +218,15 @@ export function deriveCorroboration(
       native = consumeAll(tokens, nativePool);
       ocr = consumeAll(tokens, ocrPool);
     } else {
+      // Containment fallback for digit-free proposals. Single characters
+      // would match almost any prose page, so they stay unverifiable; two
+      // normalized characters already carry real meaning in CJK labels.
+      // Containment can still bridge two adjacent observations —
+      // acceptable for digit-free labels, unacceptable for values, which
+      // always take the token path above.
       const needle = normalizeEvidenceText(proposal.text);
-      native = needle.length > 0 && nativeBlob.includes(needle);
-      ocr = needle.length > 0 && ocrBlob.includes(needle);
+      native = needle.length >= 2 && nativeBlob.includes(needle);
+      ocr = needle.length >= 2 && ocrBlob.includes(needle);
     }
     const corroboration: ProposalCorroboration = native && ocr
       ? 'corroborated-both'
@@ -229,15 +273,31 @@ export async function buildEscalatedOcrEnrichment(input: BuildEnrichmentInput): 
 /**
  * Fail-closed validation of an enrichment against the page record it claims
  * to enrich: identity fields, digest, trigger, and every corroboration
- * status are re-derived. A stale or forged enrichment is rejected, never
- * silently reattached.
+ * status are re-derived.
+ *
+ * Honest scope: this guards STALENESS (digest of the base page) and
+ * INTERNAL CONSISTENCY (every stored corroboration label re-derives from
+ * the record). It does NOT authenticate proposal content — the library
+ * holds no signing key, so an editor with write access to the enrichment
+ * store can inject proposals that self-consistently validate. Content
+ * authenticity is a deployment concern (sign or ACL the store).
+ *
+ * Returns the schema-parsed record: consumers must use `record`, not the
+ * input object, so smuggled unknown keys cannot survive into downstream
+ * reads.
  */
 export async function validateEnrichmentAgainstPage(
   enrichment: EscalatedOcrEnrichment,
   page: PageSpatial
-): Promise<{ valid: boolean; issues: string[] }> {
+): Promise<{ valid: boolean; issues: string[]; record?: EscalatedOcrEnrichment }> {
   const issues: string[] = [];
-  escalatedOcrEnrichmentSchema.parse(enrichment);
+  let record: EscalatedOcrEnrichment | undefined;
+  const parsed = escalatedOcrEnrichmentSchema.safeParse(enrichment);
+  if (!parsed.success) {
+    return { valid: false, issues: parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`) };
+  }
+  record = parsed.data as EscalatedOcrEnrichment;
+  if (enrichment.documentId !== page.documentId) issues.push('documentId does not match the page record.');
   if (enrichment.pageId !== page.pageId) issues.push('pageId does not match the page record.');
   if (enrichment.documentSha256 !== page.documentSha256) issues.push('documentSha256 does not match.');
   if (enrichment.revisionId !== page.revisionId) issues.push('revisionId does not match.');
@@ -256,5 +316,5 @@ export async function validateEnrichmentAgainstPage(
       issues.push(`Proposal ${index} corroboration must be ${derived[index]!.corroboration}.`);
     }
   });
-  return { valid: issues.length === 0, issues };
+  return { valid: issues.length === 0, issues, ...(issues.length === 0 ? { record } : {}) };
 }

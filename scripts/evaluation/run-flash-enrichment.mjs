@@ -14,10 +14,11 @@
  *     [--corpus-root .evaluation/corpus] [--concurrency 4] [--limit N]
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildEscalatedOcrEnrichment, pageQualifiesForEscalatedEnrichment } from '../../dist/index.js';
+import { buildEscalatedOcrEnrichment, pageQualifiesForEscalatedEnrichment, validateEnrichmentAgainstPage } from '../../dist/index.js';
 import { transcribePageImage } from '../../dist/node/flash-ocr.js';
 
 function arg(name, fallback) {
@@ -55,9 +56,26 @@ targets.sort((a, b) => a.page.pageId.localeCompare(b.page.pageId));
 const selected = targets.slice(0, limit);
 console.log(`Blocking pages: ${targets.length}; enriching ${selected.length} at concurrency ${concurrency}.`);
 
+const verifiedPdfSha = new Map();
+function assertPdfMatchesRecord(pdfPath, expectedSha) {
+  // The page record binds evidence to documentSha256; the bytes about to be
+  // rendered and sent to a remote API must be that same document. Fail closed
+  // on mismatch — never render, never transmit.
+  let actual = verifiedPdfSha.get(pdfPath);
+  if (!actual) {
+    actual = createHash('sha256').update(readFileSync(pdfPath)).digest('hex');
+    verifiedPdfSha.set(pdfPath, actual);
+  }
+  if (actual !== expectedSha) {
+    throw new Error(`PDF bytes at ${pdfPath} (${actual.slice(0, 12)}…) do not match the record's documentSha256.`);
+  }
+}
+
 function renderPng(pdfPath, pageNumber) {
-  const dir = join(tmpdir(), `flash-enrich-${process.pid}-${pageNumber}-${Math.floor(performance.now())}`);
-  mkdirSync(dir, { recursive: true });
+  // mkdtempSync: concurrent workers rendering the same page number of
+  // different documents must never share (or delete) each other's dir —
+  // a collision silently attaches another page's proposals.
+  const dir = mkdtempSync(join(tmpdir(), 'flash-enrich-'));
   try {
     execFileSync('pdftoppm', ['-f', String(pageNumber), '-l', String(pageNumber), '-r', String(renderDpi), '-png', pdfPath, join(dir, 'p')]);
     const file = readdirSync(dir).find((name) => name.endsWith('.png'));
@@ -70,6 +88,7 @@ function renderPng(pdfPath, pageNumber) {
 
 const results = [];
 const failures = [];
+let reused = 0;
 let cursor = 0;
 async function worker() {
   while (cursor < selected.length) {
@@ -78,9 +97,16 @@ async function worker() {
     const name = `${target.page.pageId.replaceAll(':', '_')}.json`;
     try {
       if (skipExisting && existsSync(join(outputDir, name))) {
-        results.push(JSON.parse(readFileSync(join(outputDir, name), 'utf8')));
-        continue;
+        const stored = JSON.parse(readFileSync(join(outputDir, name), 'utf8'));
+        const verdict = await validateEnrichmentAgainstPage(stored, target.page);
+        if (verdict.valid) {
+          reused += 1;
+          results.push(verdict.record);
+          continue;
+        }
+        console.warn(`${target.page.pageId}: stored enrichment stale/invalid (${verdict.issues[0]}); re-enriching.`);
       }
+      assertPdfMatchesRecord(target.pdfPath, target.page.documentSha256);
       const png = renderPng(target.pdfPath, target.pageNumber);
       const transcription = await transcribePageImage({ apiKey, png: new Uint8Array(png) });
       const enrichment = await buildEscalatedOcrEnrichment({
@@ -119,6 +145,11 @@ const aggregate = {
   createdAt: new Date().toISOString(),
   runRoot,
   pagesEnriched: results.length,
+  // Aggregate describes the output DIRECTORY. reusedFromDisk enrichments
+  // were validated against their pages but their telemetry is prior-run
+  // spend; this run's marginal spend is pagesEnriched - reusedFromDisk
+  // pages' worth. Prices below are for the default model only.
+  reusedFromDisk: reused,
   failures,
   proposals: byStatus,
   telemetry: {

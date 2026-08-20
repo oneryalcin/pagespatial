@@ -6,8 +6,10 @@
  * escalation reasons, and only in deployments where remote processing is
  * authorized. The deterministic local pipeline remains the default path.
  *
- * Measured basis (issue #2): ~92% gold-token recall on escalated pages vs
- * 4-37% for the deterministic witnesses; ~$0.006/page; 4.4s typical.
+ * Measured basis (dev-v11 blocking pages, 2026-08-20 trial doc): union
+ * gold recall on gold-blocking pages 437/440 -> 440/440; ~$0.011/page on
+ * this dense-page tier; p50 6.9s, p95 44s. Async by design — never on the
+ * time-to-searchable critical path.
  */
 
 export interface FlashTranscriptionOptions {
@@ -66,8 +68,21 @@ export async function transcribePageImage(options: FlashTranscriptionOptions): P
   ];
   const started = Date.now();
   let lastError: unknown;
+  let promptTokens = 0;
+  let outputTokens = 0;
+  let retryAfterMs = 0;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const response = await fetchImpl(endpoint, {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, Math.max(retryAfterMs, 1000 * 2 ** (attempt - 1))));
+    retryAfterMs = 0;
+    // Bounded per-attempt deadline: a stalled request must fail the
+    // attempt, never hang the whole batch. Composes with the caller's
+    // signal when provided.
+    const attemptSignal = options.signal
+      ? AbortSignal.any([options.signal, AbortSignal.timeout(120_000)])
+      : AbortSignal.timeout(120_000);
+    let response: Response;
+    try {
+      response = await fetchImpl(endpoint, {
       method: 'POST',
       headers: { 'x-goog-api-key': options.apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -99,17 +114,36 @@ export async function transcribePageImage(options: FlashTranscriptionOptions): P
           thinkingConfig: { thinkingBudget: 0 }
         }
       }),
-      signal: options.signal ?? null
-    });
-    if (!response.ok) {
-      throw new Error(`Gemini ${response.status}: ${(await response.text()).slice(0, 300)}`);
+        signal: attemptSignal
+      });
+    } catch (error) {
+      // Network errors and per-attempt timeouts are transient; a caller
+      // abort is terminal.
+      if (options.signal?.aborted) throw error;
+      lastError = error;
+      continue;
     }
-    const payload = await response.json() as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
-      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
-    };
-    const text = payload.candidates?.[0]?.content?.parts?.at(-1)?.text;
+    // Transient statuses retry with backoff; anything else is terminal.
+    if (!response.ok) {
+      const detail = `Gemini ${response.status}: ${(await response.text()).slice(0, 300)}`;
+      if ([429, 500, 502, 503, 504].includes(response.status)) {
+        const retryAfter = Number(response.headers?.get?.('retry-after'));
+        if (Number.isFinite(retryAfter) && retryAfter > 0) retryAfterMs = Math.min(retryAfter * 1000, 30_000);
+        lastError = new Error(detail);
+        continue;
+      }
+      throw new Error(detail);
+    }
     try {
+      const payload = await response.json() as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[];
+        usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+      };
+      // Cost telemetry accumulates across attempts: retried spend is real
+      // spend, and §5 treats measured cost as a first-class metric.
+      promptTokens += payload.usageMetadata?.promptTokenCount ?? 0;
+      outputTokens += payload.usageMetadata?.candidatesTokenCount ?? 0;
+      const text = payload.candidates?.[0]?.content?.parts?.at(-1)?.text;
       if (!text) throw new Error('Gemini returned no text part.');
       const parsed = parseModelJson(text) as { tokens?: { text?: unknown; box_2d?: unknown }[] };
       const proposals = (parsed.tokens ?? [])
@@ -124,8 +158,8 @@ export async function transcribePageImage(options: FlashTranscriptionOptions): P
         proposals,
         provenance: { adapter: ADAPTER, model, mediaResolution: resolution, promptRevision: PROMPT_REVISION, thinkingBudget: 0 },
         telemetry: {
-          promptTokens: payload.usageMetadata?.promptTokenCount ?? 0,
-          outputTokens: payload.usageMetadata?.candidatesTokenCount ?? 0,
+          promptTokens,
+          outputTokens,
           latencyMs: Date.now() - started
         }
       };
@@ -133,5 +167,5 @@ export async function transcribePageImage(options: FlashTranscriptionOptions): P
       lastError = error;
     }
   }
-  throw new Error(`Unparseable model output after retry: ${String(lastError).slice(0, 200)}`);
+  throw new Error(`Flash transcription failed after retries: ${String(lastError).slice(0, 200)}`);
 }
