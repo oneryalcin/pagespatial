@@ -46,10 +46,14 @@ test('ink analysis ignores read areas and sub-minimum specks', () => {
   assert.deepEqual(findUnreadInkRegions(image, [[20, 20, 200, 50]], 1.6), []);
 });
 
-test('recovered boxes map back to first-render pixels and dedupe against read boxes', () => {
+test('recovered boxes map back to first-render pixels; duplicates need same place AND same reading', () => {
   assert.deepEqual(mapRecoveredBox([40, 80, 140, 120], [100, 200], 4), [110, 220, 135, 230]);
-  assert.equal(duplicatesFirstPass([10, 10, 30, 30], [[0, 0, 25, 25]]), true);
-  assert.equal(duplicatesFirstPass([10, 10, 30, 30], [[0, 0, 12, 12]]), false);
+  const read = [{ box: [0, 0, 25, 25], text: '1,234' }];
+  assert.equal(duplicatesFirstPass([10, 10, 30, 30], '1,234', read), true);
+  // Same place, different reading: recovery correcting a garbage first pass
+  // is new evidence, not a duplicate.
+  assert.equal(duplicatesFirstPass([10, 10, 30, 30], '5,678', read), false);
+  assert.equal(duplicatesFirstPass([10, 10, 30, 30], '1,234', [{ box: [0, 0, 12, 12], text: '1,234' }]), false);
 });
 
 const identity = { documentId: 'ink-doc', revisionId: 'r', sha256: 'e'.repeat(64), pageCount: 1 };

@@ -117,18 +117,22 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
                 let unreadInkRegions: UnreadInkRegion[] = [];
                 let ocrObservations: OcrObservationInput[] = ocr.observations;
                 if (adapters.regionRecovery) {
-                  const readBoxes = [
-                    ...nativePage.observations.map((observation) => observation.pointBox
-                      ? pointBoxToRenderedBox(observation.pointBox, pageGeometry).box
-                      : roundBox(observation.box!)),
-                    ...ocr.observations.map((observation) => roundBox(observation.box))
+                  const readEvidence = [
+                    ...nativePage.observations.map((observation) => ({
+                      box: observation.pointBox
+                        ? pointBoxToRenderedBox(observation.pointBox, pageGeometry).box
+                        : roundBox(observation.box!),
+                      text: observation.text
+                    })),
+                    ...ocr.observations.map((observation) => ({ box: roundBox(observation.box), text: observation.text }))
                   ];
-                  unreadInkRegions = await adapters.regionRecovery.analyze(rendered, readBoxes, { signal: controller.signal });
+                  unreadInkRegions = await adapters.regionRecovery.analyze(
+                    rendered, readEvidence.map((item) => item.box), { signal: controller.signal });
                   for (const region of unreadInkRegions) {
                     if (region.kind !== 'structured') continue;
                     abortIfNeeded(controller.signal);
                     const recovered = await adapters.regionRecovery.recover(
-                      source, pageNumber, region, pageGeometry, readBoxes, { signal: controller.signal });
+                      source, pageNumber, region, pageGeometry, readEvidence, { signal: controller.signal });
                     region.recoveredObservationCount = recovered.length;
                     ocrObservations = [...ocrObservations, ...recovered];
                   }

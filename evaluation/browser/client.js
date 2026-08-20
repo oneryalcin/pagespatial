@@ -115,12 +115,12 @@ globalThis.pagespatialCorpus = {
       let recoveryMs = 0;
       if (regionRecovery) {
         const recoveryStarted = performance.now();
-        const readBoxes = result.observations.map((observation) => observation.box);
-        unreadInkRegions = await regionRecovery.analyze(rendered, readBoxes);
+        const readEvidence = result.observations.map((observation) => ({ box: observation.box, text: observation.text }));
+        unreadInkRegions = await regionRecovery.analyze(rendered, readEvidence.map((item) => item.box));
         for (const region of unreadInkRegions) {
           if (region.kind !== 'structured') continue;
           const recovered = await regionRecovery.recover(
-            session.source, pageNumber, region, rendered.geometry, readBoxes);
+            session.source, pageNumber, region, rendered.geometry, readEvidence);
           region.recoveredObservationCount = recovered.length;
           observations = [...observations, ...recovered];
         }

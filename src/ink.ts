@@ -1,6 +1,9 @@
-import { boxArea, intersectionArea } from './geometry.js';
+import { boxArea, intersectionArea, unionBoxes } from './geometry.js';
+import { textSimilarity } from './text.js';
 import {
   INK_CELL_MIN_FRACTION,
+  INK_CLOSE_RADIUS_CELLS,
+  INK_REGION_MERGE_GAP_PT,
   INK_GRID_CELL_PT,
   INK_LUMINANCE_MAX,
   INK_PICTORIAL_MIDTONE_MIN,
@@ -85,18 +88,39 @@ export function findUnreadInkRegions(
     }
   }
 
-  // Connected components (4-neighbour) over unread inked cells.
+  // Core cells: unread ink. Support mask: core cells dilated by a closing
+  // radius so slivers separated by read text (chart labels the first pass DID
+  // read, or garbage boxes sitting on the chart) still form one region.
+  const core = new Uint8Array(cols * rows);
+  for (let index = 0; index < cols * rows; index += 1) {
+    if (!read[index] && cells[index]!.ink >= INK_CELL_MIN_FRACTION) core[index] = 1;
+  }
+  const support = new Uint8Array(cols * rows);
+  const radius = INK_CLOSE_RADIUS_CELLS;
+  for (let index = 0; index < cols * rows; index += 1) {
+    if (!core[index]) continue;
+    const col = index % cols;
+    const row = (index - col) / cols;
+    for (let dr = -radius; dr <= radius; dr += 1) {
+      for (let dc = -radius; dc <= radius; dc += 1) {
+        const nc = col + dc;
+        const nr = row + dr;
+        if (nc >= 0 && nc < cols && nr >= 0 && nr < rows) support[nr * cols + nc] = 1;
+      }
+    }
+  }
   const label = new Int32Array(cols * rows).fill(-1);
   const regions: UnreadInkRegion[] = [];
   const minAreaPx = INK_REGION_MIN_AREA_PT2 * pixelsPerPoint * pixelsPerPoint;
+  let componentCount = 0;
   for (let start = 0; start < cols * rows; start += 1) {
-    if (label[start] !== -1 || read[start] || cells[start]!.ink < INK_CELL_MIN_FRACTION) continue;
+    if (label[start] !== -1 || !core[start]) continue;
     const queue = [start];
-    label[start] = regions.length;
+    label[start] = componentCount;
     const member: number[] = [];
     while (queue.length) {
       const index = queue.pop()!;
-      member.push(index);
+      if (core[index]) member.push(index);
       const col = index % cols;
       const row = (index - col) / cols;
       for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
@@ -104,11 +128,13 @@ export function findUnreadInkRegions(
         const nr = row + dr;
         if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) continue;
         const neighbour = nr * cols + nc;
-        if (label[neighbour] !== -1 || read[neighbour] || cells[neighbour]!.ink < INK_CELL_MIN_FRACTION) continue;
-        label[neighbour] = regions.length;
+        if (label[neighbour] !== -1 || !support[neighbour]) continue;
+        label[neighbour] = componentCount;
         queue.push(neighbour);
       }
     }
+    componentCount += 1;
+    if (!member.length) continue;
     let colMin = cols;
     let colMax = -1;
     let rowMin = rows;
@@ -131,7 +157,6 @@ export function findUnreadInkRegions(
       Math.min(raster.width, (colMax + 1) * cellPx),
       Math.min(raster.height, (rowMax + 1) * cellPx)
     ];
-    if (boxArea(box) < minAreaPx) continue;
     const inkDensity = ink / member.length;
     const midToneFraction = mid / member.length;
     regions.push({
@@ -142,7 +167,32 @@ export function findUnreadInkRegions(
       recoveredObservationCount: 0
     });
   }
-  return regions;
+
+  // Merge nearby fragments of the same kind into one block, then apply the
+  // minimum-area filter to the merged result.
+  const gap = INK_REGION_MERGE_GAP_PT * pixelsPerPoint;
+  const near = (a: Box, b: Box): boolean =>
+    a[0] - gap <= b[2] && b[0] - gap <= a[2] && a[1] - gap <= b[3] && b[1] - gap <= a[3];
+  let merged = regions;
+  for (let changed = true; changed;) {
+    changed = false;
+    const next: UnreadInkRegion[] = [];
+    for (const region of merged) {
+      const partner = next.find((candidate) => candidate.kind === region.kind && near(candidate.box, region.box));
+      if (!partner) {
+        next.push({ ...region });
+        continue;
+      }
+      const areaA = boxArea(partner.box);
+      const areaB = boxArea(region.box);
+      partner.box = unionBoxes([partner.box, region.box])!;
+      partner.inkDensity = Math.round(((partner.inkDensity * areaA + region.inkDensity * areaB) / (areaA + areaB)) * 1000) / 1000;
+      partner.midToneFraction = Math.round(((partner.midToneFraction * areaA + region.midToneFraction * areaB) / (areaA + areaB)) * 1000) / 1000;
+      changed = true;
+    }
+    merged = next;
+  }
+  return merged.filter((region) => boxArea(region.box) >= minAreaPx);
 }
 
 /** Map a box from recovery-crop pixel space back onto the first render. */
@@ -155,9 +205,20 @@ export function mapRecoveredBox(box: Box, regionOrigin: readonly [number, number
   ];
 }
 
-/** True when a recovered box mostly re-reads something a first-pass box already covered. */
-export function duplicatesFirstPass(box: Box, readBoxes: readonly Box[]): boolean {
+/**
+ * True when a recovered observation mostly re-reads something a first-pass
+ * observation already covered WITH the same reading. Overlapping a different
+ * reading is not a duplicate: recovery may legitimately re-read an area a
+ * garbage first pass claimed, and both observations stay on the record.
+ */
+export function duplicatesFirstPass(
+  box: Box,
+  text: string,
+  readEvidence: readonly { box: Box; text: string }[]
+): boolean {
   const area = boxArea(box);
   if (area <= 0) return true;
-  return readBoxes.some((read) => intersectionArea(box, read) / area >= RECOVERY_DUPLICATE_OVERLAP);
+  return readEvidence.some((read) =>
+    intersectionArea(box, read.box) / area >= RECOVERY_DUPLICATE_OVERLAP
+    && textSimilarity(text, read.text) >= 0.72);
 }

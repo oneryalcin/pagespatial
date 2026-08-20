@@ -68,8 +68,20 @@ export const INK_REGION_MIN_AREA_PT2 = 1600;
 export const INK_PICTORIAL_MIDTONE_MIN = 0.3;
 /** Target magnification of the recovery re-render relative to the first render. */
 export const RECOVERY_ZOOM_FACTOR = 4;
-/** Recovered observations overlapped this much by first-pass boxes are dropped. */
+/** Recovered observations overlapped this much by a first-pass box carrying the
+ * SAME reading are dropped; overlapping a different reading is kept — recovery
+ * may legitimately re-read an area a garbage first pass claimed. */
 export const RECOVERY_DUPLICATE_OVERLAP = 0.5;
+/** Closing radius (in grid cells) healing immediate sliver splits. Kept at 1
+ * so dissimilar neighbours (a chart beside a photo) cannot fuse before the
+ * kind-aware merge pass; longer-range consolidation belongs to the merge. */
+export const INK_CLOSE_RADIUS_CELLS = 1;
+/** Post-CC same-kind region merge distance (points). */
+export const INK_REGION_MERGE_GAP_PT = 18;
+/** Margin added around a region before the recovery crop (points). */
+export const RECOVERY_REGION_MARGIN_PT = 8;
+/** Max crop tile side (px) fed to OCR, mirroring the detector's input cap. */
+export const RECOVERY_TILE_MAX_PX = 900;
 
 /** Vertical spatial-index bucket for native/OCR candidate lookup (was 64px @1.6). */
 export const ASSOCIATION_BUCKET_PT = 40;
