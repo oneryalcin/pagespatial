@@ -193,6 +193,46 @@ async function retainAttempt(documentRoot, pageNumber, envelope) {
   return { attemptPath: relative(runRoot, path), attemptSha256: await sha256File(path) };
 }
 
+// Cross-family second opinion: system tesseract on a 300dpi poppler render,
+// word boxes scaled into the browser-rendered pixel space. Best-effort — a
+// missing binary or failure leaves the starvation escalation standing.
+async function runSecondOpinion(pdfPath, pageNumber, geometry) {
+  const { mkdtempSync, readdirSync, readFileSync: rf, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { execFileSync } = await import('node:child_process');
+  const { createTesseractAdapter } = await import('../../dist/node/tesseract-ocr.js');
+  let dir;
+  try {
+    dir = mkdtempSync(join(tmpdir(), 'so-'));
+    execFileSync('pdftoppm', ['-f', String(pageNumber), '-l', String(pageNumber), '-r', '300', '-png', pdfPath, join(dir, 'p')]);
+    const file = readdirSync(dir).find((name) => name.endsWith('.png'));
+    if (!file) return undefined;
+    const png = rf(join(dir, file));
+    // PNG width lives at bytes 16-19, big-endian.
+    const pngWidth = png.readUInt32BE(16);
+    const scale = geometry.width / pngWidth;
+    const adapter = createTesseractAdapter();
+    const result = await adapter.recognize({ pageNumber, geometry: { width: pngWidth, height: Math.round(pngWidth * geometry.height / geometry.width) }, data: new Uint8Array(png) });
+    const readings = result.observations
+      .filter((observation) => observation.text.trim().length > 0)
+      .map((observation) => ({
+        box: observation.box.map((value) => Math.min(
+          Math.max(0, Math.round(value * scale * 100) / 100),
+          Math.max(geometry.width, geometry.height))),
+        text: observation.text,
+        confidence: observation.confidence
+      }))
+      .filter((reading) => reading.box[0] < reading.box[2] && reading.box[1] < reading.box[3]
+        && reading.box[2] <= geometry.width && reading.box[3] <= geometry.height);
+    if (!readings.length) return undefined;
+    return { adapter: `${adapter.name}@${adapter.version}`, readings };
+  } catch {
+    return undefined;
+  } finally {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 function partialEvidence(pageNumber, browserPage, nativeRecord) {
   if (!browserPage && nativeRecord?.status !== 'succeeded') return undefined;
   if (browserPage) {
@@ -439,7 +479,7 @@ try {
             throw nativeError;
           }
           const createdAt = new Date().toISOString();
-          const pageSpatial = assemblePageSpatial({
+          let pageSpatial = assemblePageSpatial({
             document: {
               documentId: document.objectId,
               revisionId: `sha256:${document.sha256}`,
@@ -459,6 +499,37 @@ try {
             createdAt,
             configuration: profile
           });
+          // Cross-family second opinion (issue #17): pages that would
+          // escalate as coverage-starved get one Tesseract read; the raw
+          // readings land on the record and starvation re-derives.
+          if (pageSpatial.diagnostics.escalationReasons.some((reason) =>
+            reason.type === 'uncorroborated-ocr' && reason.severity === 'blocking')) {
+            const secondOpinion = await runSecondOpinion(
+              verifiedPaths.get(document.objectId) ?? pdfPath, pageNumber, browserPage.geometry);
+            if (secondOpinion) {
+              pageSpatial = assemblePageSpatial({
+                document: {
+                  documentId: document.objectId,
+                  revisionId: `sha256:${document.sha256}`,
+                  sha256: document.sha256,
+                  pageCount: document.pageCount,
+                  sourceUri: `hf://datasets/${manifest.dataset.repoId}@${manifest.dataset.revision}/${document.path}`
+                },
+                pageNumber,
+                nativePage: nativeRecord.nativePage,
+                renderedPage: { pageNumber: browserPage.renderedPageNumber, geometry: browserPage.geometry },
+                ocrPage: browserPage.ocr,
+                unreadInkRegions: browserPage.unreadInkRegions ?? [],
+                secondOpinion,
+                runId,
+                nativeAdapter: nativeAdapterIdentity,
+                renderer: 'pdfjs-dist@5.5.207',
+                ocrAdapter: '@paddleocr/paddleocr-js@0.4.2',
+                createdAt,
+                configuration: profile
+              });
+            }
+          }
           pageSpatialSchema.parse(pageSpatial);
           if (backend !== 'auto' && browserPage.backend !== backend) throw new Error(`Requested ${backend} but OCR reported ${browserPage.backend}.`);
           const fingerprint = pageFingerprint(document, pageNumber, browserPage.backend);

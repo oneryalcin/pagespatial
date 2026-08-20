@@ -24,6 +24,10 @@
       "types": "./dist/node/flash-ocr.d.ts",
       "import": "./dist/node/flash-ocr.js"
     },
+    "./node/tesseract-ocr": {
+      "types": "./dist/node/tesseract-ocr.d.ts",
+      "import": "./dist/node/tesseract-ocr.js"
+    },
     "./schema.json": "./schemas/pagespatial.schema.json"
   },
   "files": [

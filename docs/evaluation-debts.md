@@ -1,0 +1,36 @@
+# Evaluation debts
+
+Claims this project currently makes on **thin gold** — each shipped
+deliberately, each owing a re-measurement as the human-verified gold set
+grows (issue #1, the owner's 15-minute batches). This ledger exists so
+that when a gold batch lands, re-scoring is a checklist, not an
+archaeology dig. Add a row when a new gold-gated claim ships; strike a row
+only with the re-measured number and a link to the run.
+
+**Standing rule (principles §8):** none of these claims may be quoted
+without their sample-size caveat until re-measured.
+
+| # | Claim | Current evidence | What gold to collect | How to re-score |
+|---|---|---|---|---|
+| 1 | Cross-family (Tesseract) agreement precision ≈ 98.6%; agree-on-wrong ≈ 1.4% | 72 agreed tokens on **4** gold∩starved pages; 1 shared-failure misread (`118835` for `118335`, degraded glyph) | Verify tokens on 10+ coverage-starved scan pages (legistar + pa-sers docs are the population) | For each gold∩starved page: tokens where PP-OCR ∧ Tesseract agree, checked against verified tokens; count agree-on-wrong. Rules: tail-compatible consume-once (`src/corroborate.ts`) |
+| 2 | Escalation ladder trade: 2.6× cost for −0.9% blocking-page enrichment recall | 429 human-tier tokens on 22 blocking pages (dev-v11) | More blocking-page token verification, esp. conflict-only chart pages | Reviewer method: consume-once union recall base vs ladder vs full-page (scratchpad recall2.mjs shape); decide the #17 middle-option threshold from the measured loss profile |
+| 3 | HIGH-resolution transcription matches ultra_high (409/440 vs 402/440) | Same 20 gold blocking pages; known single digit-misread introduced (`7st` for `1st`) | Same as #2 | Per-page recall diff at both resolutions; count introduced misreads, not just net recall |
+| 4 | Flash page-batched adjudication: 45/46, zero wrong-side | **46** human-adjudicated conflicts (14 pages) | Adjudicate more conflicts during gold review (dev-v11 has 470) | Accuracy + wrong-side count vs human verdicts; wrong-side is the disqualifying metric |
+| 5 | Unread-ink residue survivors (18 pages) are genuinely missing text | Visual inspection of samples only | Label whether each surviving residue region holds real unread text | Residue precision: regions with verified missing text / regions flagged |
+| 6 | Pictorial classification threshold (midtone ≥ 0.30) does not swallow dense print | Corpus-sample photographs vs synthetic counterexamples (issue #14) | Label pages carrying pictorial regions: photo or mislabelled content? | Misclassification rate; decides threshold work vs advisory reason vs leave-as-is |
+| 7 | Silver-tier auto-accepts (native-corroborated gold) are sound | Never independently spot-checked (issue #8) | Human-verify a random silver sample | Silver error rate; if >0, silver stops being usable as denominator anywhere |
+| 8 | Blocking escalation precision at 65% rate on the dev corpus | Reason-level composition known; token-level precision not measured | Conflict triage labels (#5): real disagreement vs benign segmentation | Escalation precision/recall per reason type; feeds the routing economics directly |
+
+## Re-scoring hygiene
+
+- Every run artifact needed is committed or content-addressed: dev-v11
+  records, `enrichment/` (ladder, `flash-enrichment-run-v2-ladder`),
+  `enrichment-fullpage-v1/` (0.1.0-era baseline, fails current validation
+  by design — score via reproduction scripts, do not load).
+- Matching rules are library code, not script-local logic:
+  `src/corroborate.ts` (pools), `src/text.ts` (tokens),
+  `crossEngineEngagedIds` (engagement). Re-scoring scripts must import
+  them, never re-implement.
+- A claim's row links forward only: when re-measured, update the row with
+  the new number and run id; never overwrite the original claim silently
+  (visible-retraction rule).

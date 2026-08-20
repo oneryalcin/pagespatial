@@ -13,6 +13,7 @@ import type {
   PageSpatial,
   PageSpatialDocument,
   RecoveryConfirmation,
+  SecondOpinionPass,
   UnreadInkRegion
 } from './types.js';
 
@@ -190,13 +191,14 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
                     region.recoveredObservationCount = counts[index]!;
                   });
                 }
-                const page = assemblePageSpatial({
+                const assemble = (secondOpinion?: SecondOpinionPass): PageSpatial => assemblePageSpatial({
                   document,
                   pageNumber,
                   nativePage,
                   renderedPage: rendered,
                   ocrPage: { ...ocr, observations: ocrObservations },
                   unreadInkRegions,
+                  ...(secondOpinion ? { secondOpinion } : {}),
                   runId,
                   nativeAdapter: `${adapters.native.name}@${adapters.native.version}`,
                   renderer: `${adapters.renderer.name}@${adapters.renderer.version}`,
@@ -213,6 +215,35 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
                   association: options.association,
                   diagnostics: options.diagnostics
                 });
+                let page = assemble();
+                // Cross-family second opinion: only pages that would
+                // otherwise escalate as coverage-starved spend the second
+                // read; the pass lands on the record and the page is
+                // re-assembled so starvation derives from both engines.
+                if (adapters.secondOpinion && page.diagnostics.escalationReasons.some((reason) =>
+                  reason.type === 'uncorroborated-ocr' && reason.severity === 'blocking')) {
+                  let readings: SecondOpinionPass['readings'] = [];
+                  try {
+                    const second = await adapters.secondOpinion.recognize(rendered, { signal: controller.signal });
+                    readings = second.observations
+                      .filter((observation) => observation.text.trim().length > 0)
+                      .map((observation) => ({
+                        box: roundBox(observation.box),
+                        text: observation.text,
+                        ...(observation.confidence !== undefined ? { confidence: observation.confidence } : {})
+                      }));
+                  } catch {
+                    abortIfNeeded(controller.signal);
+                    // Second opinion is best-effort: its failure leaves the
+                    // starvation escalation standing — honest degradation.
+                  }
+                  if (readings.length) {
+                    page = assemble({
+                      adapter: `${adapters.secondOpinion.name}@${adapters.secondOpinion.version}`,
+                      readings
+                    });
+                  }
+                }
                 pages[pageNumber - 1] = page;
                 await options.onPage?.(page);
               } finally {
@@ -247,7 +278,7 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
           }
         };
         const result: PageSpatialDocument = {
-          schemaVersion: '0.5.0',
+          schemaVersion: '0.6.0',
           document,
           pages: completed,
           diagnostics: documentDiagnostics(completed),

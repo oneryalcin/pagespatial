@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { criticalTokens, normalizeEvidenceText, splitCriticalToken } from './text.js';
+import { buildCorroborationPool, poolCorroborates } from './corroborate.js';
+import { criticalTokens, normalizeEvidenceText } from './text.js';
 import type { PageSpatial } from './types.js';
 
 /**
@@ -184,56 +185,8 @@ export async function pageDigest(page: PageSpatial): Promise<string> {
  * observation text (same-ink canonicalization), as a consumable multiset —
  * each printed occurrence corroborates at most one proposal.
  */
-interface PoolEntry {
-  tail: string | null;
-  count: number;
-}
-
-function tokenPool(texts: readonly string[]): Map<string, PoolEntry[]> {
-  const pool = new Map<string, PoolEntry[]>();
-  for (const text of texts) {
-    for (const token of criticalTokens(text)) {
-      const { core, tail } = splitCriticalToken(token);
-      const entries = pool.get(core) ?? [];
-      const entry = entries.find((candidate) => candidate.tail === tail);
-      if (entry) entry.count += 1;
-      else entries.push({ tail, count: 1 });
-      pool.set(core, entries);
-    }
-  }
-  return pool;
-}
-
-/**
- * Tail-compatible consumption (same-ink §6): cores must be equal, and a
- * missing tail on either side means that side simply covered less ink,
- * never a disagreement. Exact-tail occurrences are consumed first so a
- * wildcard match cannot starve a later exact one. Encoded-string equality
- * would systematically mislabel unit-word segmentation differences
- * ("1,234" vs "1,234 million") as novel.
- */
-function consumeToken(token: string, pool: Map<string, PoolEntry[]>): boolean {
-  const { core, tail } = splitCriticalToken(token);
-  const entries = pool.get(core);
-  if (!entries) return false;
-  const usable = entries.filter((entry) =>
-    entry.count > 0 && (tail === null || entry.tail === null || entry.tail === tail));
-  if (!usable.length) return false;
-  const exact = usable.find((entry) => entry.tail === tail);
-  (exact ?? usable[0]!).count -= 1;
-  return true;
-}
-
-function consumeAll(tokens: readonly string[], pool: Map<string, PoolEntry[]>): boolean {
-  // All-or-nothing: probe on a snapshot of counts, mutate only on success.
-  const snapshot = new Map([...pool].map(([core, entries]) =>
-    [core, entries.map((entry) => ({ ...entry }))] as const));
-  for (const token of tokens) {
-    if (!consumeToken(token, snapshot)) return false;
-  }
-  for (const [core, entries] of snapshot) pool.set(core, entries);
-  return true;
-}
+// Pool mechanics live in src/corroborate.ts, shared with cross-family
+// second-opinion engagement so the matching semantics cannot drift.
 
 /**
  * Derive each proposal's corroboration status against the page's witnesses.
@@ -246,31 +199,12 @@ export function deriveCorroboration(
   proposals: readonly { text: string; modelBoxHint?: [number, number, number, number] }[],
   page: Pick<PageSpatial, 'nativeObservations' | 'ocrObservations'>
 ): EnrichmentProposal[] {
-  const nativeTexts = page.nativeObservations.map((observation) => observation.text);
-  const ocrTexts = page.ocrObservations.map((observation) => observation.text);
-  const nativePool = tokenPool(nativeTexts);
-  const ocrPool = tokenPool(ocrTexts);
-  const nativeBlob = normalizeEvidenceText(nativeTexts.join(' '));
-  const ocrBlob = normalizeEvidenceText(ocrTexts.join(' '));
+  const nativePool = buildCorroborationPool(page.nativeObservations.map((observation) => observation.text));
+  const ocrPool = buildCorroborationPool(page.ocrObservations.map((observation) => observation.text));
 
   return proposals.map((proposal) => {
-    const tokens = criticalTokens(proposal.text);
-    let native: boolean;
-    let ocr: boolean;
-    if (tokens.length) {
-      native = consumeAll(tokens, nativePool);
-      ocr = consumeAll(tokens, ocrPool);
-    } else {
-      // Containment fallback for digit-free proposals. Single characters
-      // would match almost any prose page, so they stay unverifiable; two
-      // normalized characters already carry real meaning in CJK labels.
-      // Containment can still bridge two adjacent observations —
-      // acceptable for digit-free labels, unacceptable for values, which
-      // always take the token path above.
-      const needle = normalizeEvidenceText(proposal.text);
-      native = needle.length >= 2 && nativeBlob.includes(needle);
-      ocr = needle.length >= 2 && ocrBlob.includes(needle);
-    }
+    const native = poolCorroborates(proposal.text, nativePool);
+    const ocr = poolCorroborates(proposal.text, ocrPool);
     const corroboration: ProposalCorroboration = native && ocr
       ? 'corroborated-both'
       : native ? 'corroborated-native' : ocr ? 'corroborated-ocr' : 'novel';

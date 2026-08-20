@@ -266,8 +266,21 @@ export interface UnreadInkRegion {
   confirmations: RecoveryConfirmation[];
 }
 
+export interface SecondOpinionReading {
+  /** Reading location in rendered pixels (the second engine's own segmentation). */
+  box: Box;
+  text: string;
+  confidence?: number;
+}
+
+export interface SecondOpinionPass {
+  /** Engine identity, name@version — provenance is part of the witness. */
+  adapter: string;
+  readings: SecondOpinionReading[];
+}
+
 export interface PageSpatial {
-  schemaVersion: '0.5.0';
+  schemaVersion: '0.6.0';
   documentId: string;
   revisionId: string;
   documentSha256: string;
@@ -287,6 +300,15 @@ export interface PageSpatial {
    * a positive claim — the page was analyzed and no unread ink was found.
    */
   unreadInkRegions?: UnreadInkRegion[];
+  /**
+   * Cross-family second-opinion pass (issue #17 starved-scan rung): raw
+   * readings from a mechanically different OCR engine, recorded only when
+   * the pass ran (typically pages that would otherwise escalate as
+   * coverage-starved). Engagement is DERIVED from these readings by
+   * diagnostics and re-derived by the schema — never stored as a count.
+   * Absent means the pass never ran.
+   */
+  secondOpinion?: SecondOpinionPass;
   diagnostics: PageDiagnostics;
   projection: PageProjection;
   provenance: ExtractionProvenance;
@@ -311,7 +333,7 @@ export interface DocumentDiagnostics {
 }
 
 export interface PageSpatialDocument {
-  schemaVersion: '0.5.0';
+  schemaVersion: '0.6.0';
   document: DocumentIdentity;
   pages: PageSpatial[];
   diagnostics: DocumentDiagnostics;
