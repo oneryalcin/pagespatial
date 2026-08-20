@@ -1,0 +1,516 @@
+{
+ "goldPilotMetricsVersion": "gold-pilot-metrics-v4",
+ "createdAt": "2026-08-20T23:49:10.112Z",
+ "runRoot": ".evaluation/runs/exp-second-opinion-d-2026-08-20",
+ "goldVerifiedAt": "2026-08-20T23:17:11.687Z",
+ "pages": 15,
+ "validatedInputs": [
+  {
+   "objectId": "legistar:seattle:1794:v0:attachment:3283",
+   "pageNumber": 14,
+   "sha256": "68d3c15e51bc52bc805d43a4b592c9945ae059463b6f18808715d007116e3b29"
+  },
+  {
+   "objectId": "legistar:seattle:1859:v0:attachment:3318",
+   "pageNumber": 1,
+   "sha256": "725f4b428d49a365184b8993146e14c2ebd37fdeb3bb774a801c95fc6c7f9fa8"
+  },
+  {
+   "objectId": "legistar:seattle:2159:v0:attachment:3326",
+   "pageNumber": 12,
+   "sha256": "baeffd849ffe8505faeec8f844eefe29148fde8d210c9bde8bc0387210012840"
+  },
+  {
+   "objectId": "legistar:seattle:2159:v0:attachment:3326",
+   "pageNumber": 24,
+   "sha256": "baeffd849ffe8505faeec8f844eefe29148fde8d210c9bde8bc0387210012840"
+  },
+  {
+   "objectId": "legistar:seattle:2438:v0:attachment:6113",
+   "pageNumber": 20,
+   "sha256": "0239b4baffa00b372215c3fae97a8243f536a1acda8ddc43ac6e333cff891a2d"
+  },
+  {
+   "objectId": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+   "pageNumber": 7,
+   "sha256": "c74e6e91d54744d4977f9129a72ee0054eff9937791125aa0209592be01b658d"
+  },
+  {
+   "objectId": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+   "pageNumber": 8,
+   "sha256": "c74e6e91d54744d4977f9129a72ee0054eff9937791125aa0209592be01b658d"
+  },
+  {
+   "objectId": "pa-sers:2024-09-24:llr-vii:staff-memo",
+   "pageNumber": 1,
+   "sha256": "905ecec319fd1ac986015d26eeb774f8b3865ef058444291814a0967f7fb6806"
+  },
+  {
+   "objectId": "public-comps:ares:2026-q1:002",
+   "pageNumber": 51,
+   "sha256": "31f04055ed52950e35cc309b9652d502740c1bdf7072f6973e01e93761dc5707"
+  },
+  {
+   "objectId": "public-comps:ares:2026-q1:002",
+   "pageNumber": 52,
+   "sha256": "31f04055ed52950e35cc309b9652d502740c1bdf7072f6973e01e93761dc5707"
+  },
+  {
+   "objectId": "public-comps:blackstone:2026-q1:002",
+   "pageNumber": 12,
+   "sha256": "c129043bba247a6867115ba8dcfa58cb4ba1c5dad2fe68f99701ebda3d9038c9"
+  },
+  {
+   "objectId": "public-comps:blackstone:2026-q1:002",
+   "pageNumber": 14,
+   "sha256": "c129043bba247a6867115ba8dcfa58cb4ba1c5dad2fe68f99701ebda3d9038c9"
+  },
+  {
+   "objectId": "world-bank:P170734:document:34222345",
+   "pageNumber": 6,
+   "sha256": "63e9dad0bf52ded5d0e09b7f5bdb917ef1fdec76ebfea607c6d2be80744a1c4b"
+  },
+  {
+   "objectId": "world-bank:P170734:document:34222345",
+   "pageNumber": 7,
+   "sha256": "63e9dad0bf52ded5d0e09b7f5bdb917ef1fdec76ebfea607c6d2be80744a1c4b"
+  },
+  {
+   "objectId": "world-bank:P178566:document:34223652",
+   "pageNumber": 3,
+   "sha256": "1d77e1f0480d1e8aa2c76741ca06d491b0b8ae57d6ed5521d647a81ef7084795"
+  }
+ ],
+ "criticalTokenRecall": {
+  "humanVerified": {
+   "goldTokens": 416,
+   "native": 0.0216,
+   "ocr": 0.8606,
+   "union": 0.8606,
+   "missedByBoth": 58
+  },
+  "silverNativeCorroborated": {
+   "goldTokens": 401,
+   "native": 0.995,
+   "ocr": 0.7706,
+   "union": 1,
+   "missedByBoth": 0,
+   "note": "Silver labels were auto-accepted because native text agreed; native/union rates on this tier are tautological by construction and must not be quoted as independent recall."
+  },
+  "bulkPageAccepted": {
+   "goldTokens": 0,
+   "native": null,
+   "ocr": null,
+   "union": null,
+   "missedByBoth": 0,
+   "note": "Accepted with the review UI page-level button: a person accepted these without reading them individually. Not independent gold — report separately and never fold into the human tier."
+  }
+ },
+ "nonScoringProposals": 0,
+ "conflictComposition": {
+  "ocr": 105,
+  "both-wrong": 21,
+  "native": 58
+ },
+ "chartRelations": {
+  "goldTuples": 58,
+  "detectedRelations": 6,
+  "recall": 0,
+  "precision": 0
+ },
+ "escalation": {
+  "escalatedPages": 14,
+  "escalatedBlockingPages": 12,
+  "escalatedConflictBlockingPages": 12,
+  "escalatedConflictBlockingWithConfirmedError": 9,
+  "escalatedUncorroboratedOnlyPages": 0,
+  "escalatedUncorroboratedOnlyWithHumanGoldMissedByBoth": 0,
+  "escalatedAdvisoryOnlyPages": 2,
+  "cleanPages": 1,
+  "cleanWithHumanGoldMissedByBoth": 0
+ },
+ "perPage": [
+  {
+   "objectId": "legistar:seattle:1794:v0:attachment:3283",
+   "pageNumber": 14,
+   "human": {
+    "gold": 36,
+    "native": 0,
+    "ocr": 36,
+    "union": 36,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
+  },
+  {
+   "objectId": "legistar:seattle:1859:v0:attachment:3318",
+   "pageNumber": 1,
+   "human": {
+    "gold": 17,
+    "native": 0,
+    "ocr": 15,
+    "union": 15,
+    "neither": 2
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
+  },
+  {
+   "objectId": "legistar:seattle:2159:v0:attachment:3326",
+   "pageNumber": 12,
+   "human": {
+    "gold": 51,
+    "native": 0,
+    "ocr": 46,
+    "union": 46,
+    "neither": 5
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
+  },
+  {
+   "objectId": "legistar:seattle:2159:v0:attachment:3326",
+   "pageNumber": 24,
+   "human": {
+    "gold": 84,
+    "native": 0,
+    "ocr": 84,
+    "union": 84,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
+  },
+  {
+   "objectId": "legistar:seattle:2438:v0:attachment:6113",
+   "pageNumber": 20,
+   "human": {
+    "gold": 24,
+    "native": 0,
+    "ocr": 24,
+    "union": 24,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
+  },
+  {
+   "objectId": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+   "pageNumber": 7,
+   "human": {
+    "gold": 14,
+    "native": 1,
+    "ocr": 14,
+    "union": 14,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 10,
+    "native": 9,
+    "ocr": 10,
+    "union": 10,
+    "neither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
+  },
+  {
+   "objectId": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+   "pageNumber": 8,
+   "human": {
+    "gold": 3,
+    "native": 0,
+    "ocr": 3,
+    "union": 3,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 9,
+    "native": 9,
+    "ocr": 9,
+    "union": 9,
+    "neither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
+  },
+  {
+   "objectId": "pa-sers:2024-09-24:llr-vii:staff-memo",
+   "pageNumber": 1,
+   "human": {
+    "gold": 3,
+    "native": 3,
+    "ocr": 3,
+    "union": 3,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 45,
+    "native": 45,
+    "ocr": 45,
+    "union": 45,
+    "neither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
+  },
+  {
+   "objectId": "public-comps:ares:2026-q1:002",
+   "pageNumber": 51,
+   "human": {
+    "gold": 36,
+    "native": 0,
+    "ocr": 31,
+    "union": 31,
+    "neither": 5
+   },
+   "silver": {
+    "gold": 9,
+    "native": 9,
+    "ocr": 9,
+    "union": 9,
+    "neither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
+  },
+  {
+   "objectId": "public-comps:ares:2026-q1:002",
+   "pageNumber": 52,
+   "human": {
+    "gold": 40,
+    "native": 2,
+    "ocr": 33,
+    "union": 33,
+    "neither": 7
+   },
+   "silver": {
+    "gold": 12,
+    "native": 11,
+    "ocr": 12,
+    "union": 12,
+    "neither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
+  },
+  {
+   "objectId": "public-comps:blackstone:2026-q1:002",
+   "pageNumber": 12,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 106,
+    "native": 106,
+    "ocr": 64,
+    "union": 106,
+    "neither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
+  },
+  {
+   "objectId": "public-comps:blackstone:2026-q1:002",
+   "pageNumber": 14,
+   "human": {
+    "gold": 106,
+    "native": 1,
+    "ocr": 67,
+    "union": 67,
+    "neither": 39
+   },
+   "silver": {
+    "gold": 30,
+    "native": 30,
+    "ocr": 30,
+    "union": 30,
+    "neither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
+  },
+  {
+   "objectId": "world-bank:P170734:document:34222345",
+   "pageNumber": 6,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 20,
+    "native": 20,
+    "ocr": 18,
+    "union": 20,
+    "neither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
+  },
+  {
+   "objectId": "world-bank:P170734:document:34222345",
+   "pageNumber": 7,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 41,
+    "native": 41,
+    "ocr": 34,
+    "union": 41,
+    "neither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
+  },
+  {
+   "objectId": "world-bank:P178566:document:34223652",
+   "pageNumber": 3,
+   "human": {
+    "gold": 2,
+    "native": 2,
+    "ocr": 2,
+    "union": 2,
+    "neither": 0
+   },
+   "silver": {
+    "gold": 119,
+    "native": 119,
+    "ocr": 78,
+    "union": 119,
+    "neither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0
+   }
+  }
+ ],
+ "caveats": [
+  "Pilot-scale: 15 pages, not the full corpus.",
+  "Recall is occurrence-consuming token containment under the same-ink canonicalization; box agreement is not yet scored.",
+  "Human-tier gold: machine pre-labels verified by one annotator; no second annotator or adjudication yet. Silver tier is not independent of the native engine.",
+  "Bulk tier: 0 tokens were page-accepted without individual reading and are excluded from the human tier.",
+  "Chart precision counts detections matched by any gold tuple; unmatched detections may be correct tuples the gold set does not cover."
+ ]
+}
