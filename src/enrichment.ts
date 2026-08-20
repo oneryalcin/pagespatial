@@ -49,6 +49,12 @@ export interface ConflictAdjudication {
   /** Must reference a conflict id present on the base page (fail-closed). */
   conflictId: string;
   verdict: 'native' | 'ocr' | 'both-wrong' | 'unsure';
+  /**
+   * Present when the verdict was DEFAULTED (the model declined, answered
+   * ambiguously, or answered malformed) rather than actually judged. A run
+   * whose adjudications silently collapsed must be visible in the record.
+   */
+  unanswered?: true;
   /** Model transcription of the disputed ink, verbatim. */
   inkText?: string;
 }
@@ -132,6 +138,7 @@ export const escalatedOcrEnrichmentSchema = z.object({
   adjudications: z.array(z.object({
     conflictId: z.string().min(1),
     verdict: z.enum(['native', 'ocr', 'both-wrong', 'unsure']),
+    unanswered: z.literal(true).optional(),
     inkText: z.string().min(1).optional()
   }).strict()),
   telemetry: z.object({
@@ -346,11 +353,14 @@ function validateAdjudications(
  * status are re-derived.
  *
  * Honest scope: this guards STALENESS (digest of the base page) and
- * INTERNAL CONSISTENCY (every stored corroboration label re-derives from
- * the record). It does NOT authenticate proposal content — the library
- * holds no signing key, so an editor with write access to the enrichment
- * store can inject proposals that self-consistently validate. Content
- * authenticity is a deployment concern (sign or ACL the store).
+ * INTERNAL CONSISTENCY (corroboration labels re-derive; adjudication
+ * conflictIds must reference recorded conflicts, uniquely). It does NOT
+ * authenticate content: proposals, adjudication VERDICTS and inkText,
+ * provenance, and telemetry are all un-derivable from the page and can be
+ * rewritten without failing validation — a flipped verdict is the most
+ * consequential such edit, since it blesses one side of a conflict. The
+ * library holds no signing key; content authenticity is a deployment
+ * concern (sign or ACL the enrichment store).
  *
  * Returns the schema-parsed record: consumers must use `record`, not the
  * input object, so smuggled unknown keys cannot survive into downstream

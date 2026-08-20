@@ -168,11 +168,19 @@ async function worker() {
       const novel = enrichment.proposals.filter((proposal) => proposal.corroboration === 'novel').length;
       console.log(`${target.page.pageId}: ${enrichment.proposals.length} proposals (${novel} novel), ${enrichment.adjudications.length} adjudications, ${enrichment.telemetry.latencyMs}ms`);
     } catch (error) {
-      // Failed pages still carry their spend into the ledger.
+      // Failed pages still carry their spend into the ledger — both the
+      // rungs that completed and the attempts of the call that failed
+      // (the adapter attaches attempt telemetry to its terminal error).
+      const errorTelemetry = error?.telemetry ?? { promptTokens: 0, outputTokens: 0, latencyMs: 0 };
+      const spent = {
+        promptTokens: (partialTelemetry?.promptTokens ?? 0) + errorTelemetry.promptTokens,
+        outputTokens: (partialTelemetry?.outputTokens ?? 0) + errorTelemetry.outputTokens,
+        latencyMs: (partialTelemetry?.latencyMs ?? 0) + errorTelemetry.latencyMs
+      };
       failures.push({
         pageId: target.page.pageId,
         error: String(error).slice(0, 200),
-        ...(partialTelemetry ? { telemetry: partialTelemetry } : {})
+        ...(spent.promptTokens || spent.outputTokens ? { telemetry: spent } : {})
       });
       console.warn(`${target.page.pageId}: FAILED ${String(error).slice(0, 120)}`);
     }
@@ -181,11 +189,16 @@ async function worker() {
 await Promise.all(Array.from({ length: Math.max(1, concurrency) }, () => worker()));
 
 const byStatus = { 'corroborated-both': 0, 'corroborated-native': 0, 'corroborated-ocr': 0, novel: 0 };
+const byVerdict = { native: 0, ocr: 0, 'both-wrong': 0, unsure: 0, unanswered: 0 };
 let promptTokens = 0;
 let outputTokens = 0;
 const latencies = [];
 for (const enrichment of results) {
   for (const proposal of enrichment.proposals) byStatus[proposal.corroboration] += 1;
+  for (const adjudication of enrichment.adjudications) {
+    if (adjudication.unanswered) byVerdict.unanswered += 1;
+    else byVerdict[adjudication.verdict] += 1;
+  }
   promptTokens += enrichment.telemetry.promptTokens;
   outputTokens += enrichment.telemetry.outputTokens;
   latencies.push(enrichment.telemetry.latencyMs);
@@ -198,7 +211,7 @@ latencies.sort((a, b) => a - b);
 const quantile = (q) => latencies.length ? latencies[Math.min(latencies.length - 1, Math.floor(q * latencies.length))] : 0;
 const costUsd = (promptTokens * 0.75 + outputTokens * 3.75) / 1e6;
 const aggregate = {
-  enrichmentRunVersion: 'flash-enrichment-run-v1',
+  enrichmentRunVersion: 'flash-enrichment-run-v2-ladder',
   createdAt: new Date().toISOString(),
   runRoot,
   pagesEnriched: results.length,
@@ -209,6 +222,7 @@ const aggregate = {
   reusedFromDisk: reused,
   failures,
   proposals: byStatus,
+  adjudicationVerdicts: byVerdict,
   telemetry: {
     promptTokens,
     outputTokens,

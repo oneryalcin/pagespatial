@@ -190,6 +190,10 @@
               "unsure"
             ]
           },
+          "unanswered": {
+            "type": "boolean",
+            "const": true
+          },
           "inkText": {
             "type": "string",
             "minLength": 1

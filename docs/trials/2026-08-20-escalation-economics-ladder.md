@@ -51,13 +51,39 @@ judging fine print needs the pixels; emitting big text does not.
 |---|---|---|
 | total spend | $1.51 | **$0.58 (2.6×)** |
 | per corpus page (162) | $0.0093 | **$0.0036** |
-| gold∩blocking union recall | 440/440 | **440/440** |
+| human-tier gold, blocking pages (429 tokens, consume-once matching) | 416/429 | **412/429** |
 | latency p50 / p95 | 6.9s / 44s | **3.3s / 13.4s** |
 
 81 pages adjudicated (470 verdicts: 132 native, 295 ocr, 43 both-wrong),
 25 transcribed. With the Gemini batch API's standard 50% (enrichment is
 async by design, so batch costs nothing in UX): **~$0.0018/corpus page —
 5.2× down**.
+
+### The trade, stated plainly (adversarial-review correction)
+
+The ladder is NOT recall-neutral. An earlier draft claimed parity from a
+looser containment metric; the honest consume-once measurement shows the
+ladder recovers 412 of 429 human-tier gold tokens on blocking pages vs
+full-page's 416 — **2.6× cheaper for −4 tokens (−0.9%)**. Mechanism:
+adjudication-only pages produce no transcription, so a token only the
+model could read on a conflict-only page is no longer proposed
+(`62万点以上`, `500億円`, `30%以上` on monotaro chart pages). The fourth
+loss is the resolution flip: on a legistar ordinance page ultra_high read
+`1st` where HIGH read `7st` — the aggregate 409-vs-402 nets that wrong
+digit against gains elsewhere. Containment, not absolution: none of the
+four are wrong values *blessed* — the pages stay escalated with their
+conflicts recorded, and `7st` lands as an uncorroborated novel proposal
+under its untrusted label. Accepting −0.9% blocking-page enrichment
+recall for 2.6× is the economics decision this trial exists to inform.
+
+### Baseline note
+
+`enrichment-fullpage-v1/` records are enrichment-0.1.0 and are correctly
+rejected by the 0.2.0 schema (fail-closed version discipline); the
+comparison above was computed by the review's reproduction scripts, not
+by loading them through the current library. The two aggregates carry
+distinct run versions (`flash-enrichment-run-v1` vs
+`flash-enrichment-run-v2-ladder`).
 
 ## Remaining path to 10×
 

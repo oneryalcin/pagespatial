@@ -65,7 +65,7 @@ export interface FlashAdjudication {
   telemetry: { promptTokens: number; outputTokens: number; latencyMs: number };
 }
 
-const ADJUDICATION_PROMPT_REVISION = 'adjudicate-conflicts-page-v1';
+const ADJUDICATION_PROMPT_REVISION = 'adjudicate-conflicts-page-v2';
 /**
  * Adjudication keeps ULTRA_HIGH deliberately: measured on the 46
  * human-adjudicated gold conflicts, page-batched ultra_high scored 45/46
@@ -93,7 +93,7 @@ ${options.conflicts
     .map((conflict, index) => `${index}. box ${JSON.stringify(conflict.normalizedBox)}
    native reads: ${JSON.stringify(conflict.nativeText)}
    ocr reads:    ${JSON.stringify(conflict.ocrText)}`)
-    .join('\\n')}`;
+    .join('\n')}`;
   const started = Date.now();
   let lastError: unknown;
   let promptTokens = 0;
@@ -181,13 +181,18 @@ ${options.conflicts
       const verdicts = options.conflicts.map((conflict, index) => {
         const answers = byIndex.get(index) ?? [];
         const match = answers.length === 1 ? answers[0] : undefined;
-        const verdict = typeof match?.verdict === 'string'
-          && ['native', 'ocr', 'both-wrong', 'unsure'].includes(match.verdict)
-          ? match.verdict as 'native' | 'ocr' | 'both-wrong' | 'unsure'
+        const answered = typeof match?.verdict === 'string'
+          && ['native', 'ocr', 'both-wrong', 'unsure'].includes(match.verdict);
+        const verdict = answered
+          ? match!.verdict as 'native' | 'ocr' | 'both-wrong' | 'unsure'
           : 'unsure';
         return {
           conflictId: conflict.conflictId,
           verdict,
+          // 'unsure' the model actually said differs from 'unsure' we
+          // defaulted to (declined/ambiguous/malformed answer): a run whose
+          // adjudications silently collapsed must be visible in the record.
+          ...(answered ? {} : { unanswered: true }),
           ...(verdict !== 'unsure' && typeof match?.inkText === 'string' && match.inkText.trim()
             ? { inkText: match.inkText.trim() }
             : {})
@@ -202,7 +207,9 @@ ${options.conflicts
       lastError = error;
     }
   }
-  throw new Error(`Flash adjudication failed after retries: ${String(lastError).slice(0, 200)}`);
+  const failure = new Error(`Flash adjudication failed after retries: ${String(lastError).slice(0, 200)}`);
+  (failure as Error & { telemetry?: object }).telemetry = { promptTokens, outputTokens, latencyMs: Date.now() - started };
+  throw failure;
 }
 
 function parseModelJson(text: string): unknown {
@@ -328,5 +335,7 @@ export async function transcribePageImage(options: FlashTranscriptionOptions): P
       lastError = error;
     }
   }
-  throw new Error(`Flash transcription failed after retries: ${String(lastError).slice(0, 200)}`);
+  const failure = new Error(`Flash transcription failed after retries: ${String(lastError).slice(0, 200)}`);
+  (failure as Error & { telemetry?: object }).telemetry = { promptTokens, outputTokens, latencyMs: Date.now() - started };
+  throw failure;
 }
