@@ -51,6 +51,23 @@ the same ladder lands at ~$0.0001–0.0003/corpus page. Remaining headroom
 (no longer needed for the target, still real): blocking-rate precision
 (#5, gold-gated) and the accepted −0.9% recall trade's middle option.
 
+## Adversarial-review correction (visible-retraction rule)
+
+The FIRST measurement run had a control-flow bug the Codex review caught:
+the batch branch sat after the synchronous rungs, so batch mode also made
+~18 interactive calls whose spend never reached the ledger — the run
+transmitted those pages twice and understated true cost. Fixed (batch
+branch precedes every sync adapter; a static order check verifies it) and
+re-measured clean: **$0.1334, 0 failures, 470 verdicts, one batch, no
+interactive calls** — the headline survives because the batch itself
+always contained all 103 requests; what changed is that the ledger is now
+complete. Also from that review: rotation-correct crop math
+(`renderedPixelsPerPoint`, not width/pointWidth — wrong on 90°/270°
+pages), a durable recovery manifest persisted at submission (crash after
+submit can no longer orphan paid work; `--batch-resume auto`), resume
+refuses to join results to changed pages (key-set verification), and
+partial batch failures keep sibling-rung usage on the ledger.
+
 ## Caveats (evaluation-debts ledger applies)
 
 Gold∩blocking recall is measured against 19 pages/417 tokens under the

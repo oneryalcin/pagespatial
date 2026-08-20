@@ -431,6 +431,8 @@ export async function runFlashBatch(options: {
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
   signal?: AbortSignal;
+  /** Called with the operation name the moment submission succeeds. */
+  onSubmitted?: (operationName: string) => void;
 }): Promise<FlashBatchResult> {
   if (!options.entries.length) return { payloads: new Map(), errors: new Map(), wallMs: 0 };
   const model = options.model ?? DEFAULT_MODEL;
@@ -453,6 +455,9 @@ export async function runFlashBatch(options: {
   if (!submit.ok) throw new Error(`Batch submit failed: ${submit.status} ${(await submit.text()).slice(0, 300)}`);
   const operation = await submit.json() as { name?: string };
   if (!operation.name) throw new Error('Batch submit returned no operation name.');
+  // Durable-recovery hook: the operation name is the ONLY handle to paid
+  // work — callers persist it (with the entry keys) before polling starts.
+  options.onSubmitted?.(operation.name);
   return awaitFlashBatch({ ...options, operationName: operation.name, startedAt: started });
 }
 

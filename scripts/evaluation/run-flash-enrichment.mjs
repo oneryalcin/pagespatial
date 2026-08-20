@@ -18,7 +18,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildEscalatedOcrEnrichment, pageQualifiesForEscalatedEnrichment, validateEnrichmentAgainstPage } from '../../dist/index.js';
+import { buildEscalatedOcrEnrichment, pageQualifiesForEscalatedEnrichment, renderedPixelsPerPoint, validateEnrichmentAgainstPage } from '../../dist/index.js';
 import {
   adjudicatePageConflicts,
   adjudicationProvenance,
@@ -94,13 +94,17 @@ function assertPdfMatchesRecord(pdfPath, expectedSha) {
 }
 
 const RESIDUE_MIN_SIDE_PT = 8; // mirrors INK_RESIDUE_MIN_SIDE_PT (src/tuning.ts)
+// Rotation-correct pixels-per-point: width/pointWidth is wrong for 90/270
+// pages (rendered width corresponds to point HEIGHT there). The library
+// helper prefers the viewport-transform magnitude and swaps axes on
+// rotation — single source of truth.
 const CROP_MARGIN_PT = 8;      // mirrors RECOVERY_REGION_MARGIN_PT
 
 // Structured unread-ink regions that fired the residue alarm: nothing
 // recovered, nothing confirmed, text-capable geometry. Boxes are in the
 // browser-rendered pixel space of page.geometry.
 function residueRegions(page) {
-  const ppp = page.geometry.width / (page.geometry.pointWidth ?? page.geometry.width / 1.6);
+  const ppp = renderedPixelsPerPoint(page.geometry);
   return (page.unreadInkRegions ?? []).filter((region) =>
     region.kind === 'structured'
     && region.recoveredObservationCount === 0
@@ -112,7 +116,7 @@ function residueRegions(page) {
 // take pixels at the requested dpi, so rendered-px boxes convert through
 // points. Margin keeps boundary glyphs whole.
 function renderCrop(pdfPath, pageNumber, page, box) {
-  const ppp = page.geometry.width / (page.geometry.pointWidth ?? page.geometry.width / 1.6);
+  const ppp = renderedPixelsPerPoint(page.geometry);
   const toDpiPx = (px) => Math.round(((px / ppp) * renderDpi) / 72);
   const x = Math.max(0, toDpiPx(box[0]) - toDpiPx(CROP_MARGIN_PT * ppp));
   const y = Math.max(0, toDpiPx(box[1]) - toDpiPx(CROP_MARGIN_PT * ppp));
@@ -199,7 +203,20 @@ async function worker() {
       }
       assertPdfMatchesRecord(target.pdfPath, target.page.documentSha256);
       const png = renderPng(target.pdfPath, target.pageNumber);
-      let proposals = [];
+      if (batchMode) {
+        // Phase A: build requests ONLY — no synchronous adapter may run in
+        // batch mode (running one would transmit and bill the page twice
+        // and leave the interactive spend off the batch ledger).
+        const entry = { target, name, requests: {}, conflicts: undefined };
+        if (needsFullTranscription) entry.requests.full = buildTranscriptionRequest([new Uint8Array(png)]);
+        else if (needsCrops) {
+          const regions = residueRegions(target.page);
+          if (regions.length) {
+            const pngs = regions.map((region) => new Uint8Array(renderCrop(target.pdfPath, target.pageNumber, target.page, region.box)));
+            entry.requests.crops = buildResidueCropsRequest(pngs);
+          }
+        }
+        let proposals = [];
       let adjudications = [];
       const provenance = {};
       const telemetry = { promptTokens: 0, outputTokens: 0, latencyMs: 0 };
@@ -222,18 +239,7 @@ async function worker() {
           telemetry.latencyMs += transcription.telemetry.latencyMs;
         }
       }
-      if (batchMode) {
-        // Phase A: build requests only; one batch executes them later.
-        const entry = { target, name, requests: {}, conflicts: undefined };
-        if (needsFullTranscription) entry.requests.full = buildTranscriptionRequest([new Uint8Array(png)]);
-        else if (needsCrops) {
-          const regions = residueRegions(target.page);
-          if (regions.length) {
-            const pngs = regions.map((region) => new Uint8Array(renderCrop(target.pdfPath, target.pageNumber, target.page, region.box)));
-            entry.requests.crops = buildResidueCropsRequest(pngs);
-          }
-        }
-        if (needsAdjudication && target.page.conflicts.length) {
+      if (needsAdjudication && target.page.conflicts.length) {
           entry.conflicts = conflictInputs(target.page);
           entry.requests.adj = buildAdjudicationRequest(new Uint8Array(png), entry.conflicts);
         }
@@ -292,44 +298,75 @@ if (batchMode && prepared.length) {
       entries.push({ key: `${item.name}|${kind}`, request });
     }
   }
-  console.log(`Batch: ${batchResume ? 'resuming ' + batchResume : 'submitting'} — ${entries.length} requests for ${prepared.length} pages…`);
-  const batch = batchResume
-    ? await awaitFlashBatch({ apiKey, entries, operationName: batchResume })
-    : await runFlashBatch({ apiKey, entries });
+  const manifestPath = join(outputDir, 'batch-manifest.json');
+  let resumeOperation = batchResume;
+  if (batchResume === 'auto') {
+    // Recover from the persisted manifest of a crashed run.
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    resumeOperation = manifest.operationName;
+  }
+  if (resumeOperation) {
+    // A resumed join is only safe when the locally rebuilt requests are
+    // the ones the batch actually ran: verify the key sets match the
+    // persisted manifest, fail closed on any drift (a page reparsed since
+    // submission must not silently receive the old batch's results).
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    if (manifest.operationName !== resumeOperation) {
+      throw new Error(`Manifest records operation ${manifest.operationName}, not ${resumeOperation}.`);
+    }
+    const localKeys = entries.map((entry) => entry.key).sort();
+    if (JSON.stringify(localKeys) !== JSON.stringify([...manifest.keys].sort())) {
+      throw new Error('Rebuilt batch entries do not match the submitted manifest; refuse to join results to changed pages.');
+    }
+  }
+  console.log(`Batch: ${resumeOperation ? 'resuming ' + resumeOperation : 'submitting'} — ${entries.length} requests for ${prepared.length} pages…`);
+  const batch = resumeOperation
+    ? await awaitFlashBatch({ apiKey, entries, operationName: resumeOperation })
+    : await runFlashBatch({
+        apiKey, entries,
+        onSubmitted(operationName) {
+          // Persist the recovery handle BEFORE polling: a crash after
+          // submission must never orphan paid work (resume with
+          // --batch-resume auto or the printed operation name).
+          writeFileSync(manifestPath, JSON.stringify({
+            operationName,
+            submittedAt: new Date().toISOString(),
+            runRoot,
+            keys: entries.map((entry) => entry.key)
+          }, null, 1));
+          console.log(`Batch submitted: ${operationName} (manifest: ${manifestPath})`);
+        }
+      });
   console.log(`Batch done in ${Math.round(batch.wallMs / 1000)}s (${batch.errors.size} item errors).`);
   for (const item of prepared) {
+    const telemetry = { promptTokens: 0, outputTokens: 0, latencyMs: batch.wallMs };
     try {
       let proposals = [];
       let adjudications = [];
       const provenance = {};
-      const telemetry = { promptTokens: 0, outputTokens: 0, latencyMs: batch.wallMs };
       const take = (kind) => {
         const key = `${item.name}|${kind}`;
         if (batch.errors.has(key)) throw new Error(`batch item ${kind}: ${batch.errors.get(key)}`);
-        return batch.payloads.get(key);
+        const payload = batch.payloads.get(key);
+        // Usage lands the moment the payload is taken — a sibling rung
+        // failing later must not erase this rung's billed spend.
+        telemetry.promptTokens += payload?.usageMetadata?.promptTokenCount ?? 0;
+        telemetry.outputTokens += payload?.usageMetadata?.candidatesTokenCount ?? 0;
+        return payload;
       };
       if (item.requests.full) {
-        const payload = take('full');
-        const parsed = parseTranscriptionPayload(payload);
+        const parsed = parseTranscriptionPayload(take('full'));
         proposals = parsed.proposals;
         provenance.transcription = transcriptionProvenance();
-        telemetry.promptTokens += parsed.usage.promptTokens;
-        telemetry.outputTokens += parsed.usage.outputTokens;
       } else if (item.requests.crops) {
-        const payload = take('crops');
-        const parsed = parseTranscriptionPayload(payload);
+        const parsed = parseTranscriptionPayload(take('crops'));
         proposals = parsed.proposals;
         provenance.transcription = transcriptionProvenance(undefined, RESIDUE_CROPS_PROMPT_REVISION);
-        telemetry.promptTokens += parsed.usage.promptTokens;
-        telemetry.outputTokens += parsed.usage.outputTokens;
       }
       if (item.requests.adj) {
-        const payload = take('adj');
-        const parsed = parseAdjudicationPayload(payload, item.conflicts);
+        const parsed = parseAdjudicationPayload(take('adj'), item.conflicts);
         adjudications = parsed.verdicts;
         provenance.adjudication = adjudicationProvenance();
-        telemetry.promptTokens += parsed.usage.promptTokens;
-        telemetry.outputTokens += parsed.usage.outputTokens;
       }
       const enrichment = await buildEscalatedOcrEnrichment({
         page: item.target.page, proposals, adjudications, provenance, telemetry
@@ -337,7 +374,15 @@ if (batchMode && prepared.length) {
       writeFileSync(join(outputDir, item.name), JSON.stringify(enrichment, null, 1));
       results.push(enrichment);
     } catch (error) {
-      failures.push({ pageId: item.target.page.pageId, error: String(error).slice(0, 200) });
+      // Sibling-rung usage already accumulated in take() stays on the
+      // ledger even when the page's record cannot be built.
+      failures.push({
+        pageId: item.target.page.pageId,
+        error: String(error).slice(0, 200),
+        ...(telemetry.promptTokens || telemetry.outputTokens
+          ? { telemetry: { promptTokens: telemetry.promptTokens, outputTokens: telemetry.outputTokens, latencyMs: telemetry.latencyMs } }
+          : {})
+      });
       console.warn(`${item.target.page.pageId}: FAILED ${String(error).slice(0, 120)}`);
     }
   }
