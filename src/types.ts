@@ -68,6 +68,13 @@ export interface NativeObservation extends ObservationBase {
 export interface OcrObservationInput extends ObservationBase {
   confidence: number;
   model?: string;
+  /**
+   * Set when the observation came from a deliberate second extraction pass
+   * (e.g. 'zoom-retry-v1' over an unread-ink region). Second-pass evidence is
+   * known single-witness by construction and is excluded from the
+   * coverage-starvation denominator.
+   */
+  recoveryMethod?: string;
 }
 
 export interface OcrObservation extends OcrObservationInput {
@@ -145,7 +152,8 @@ export type EscalationReasonType =
   | 'critical-token-omission'
   | 'ambiguous-derived-relation'
   | 'low-ocr-confidence'
-  | 'uncorroborated-ocr';
+  | 'uncorroborated-ocr'
+  | 'unread-ink-region';
 
 /**
  * Derived from the reason type, never from a threshold: contradictory
@@ -213,8 +221,23 @@ export interface PageProjection {
   markdownSource: string;
 }
 
+/**
+ * A page area that carries ink but no observations from either engine — an
+ * evidence desert. Structured regions (bimodal print) are candidates for
+ * second-pass recovery; pictorial regions (continuous-tone) are recorded but
+ * not re-read.
+ */
+export interface UnreadInkRegion {
+  /** Region bounds in rendered pixels. */
+  box: Box;
+  kind: 'structured' | 'pictorial';
+  inkDensity: number;
+  midToneFraction: number;
+  recoveredObservationCount: number;
+}
+
 export interface PageSpatial {
-  schemaVersion: '0.3.0';
+  schemaVersion: '0.4.0';
   documentId: string;
   revisionId: string;
   documentSha256: string;
@@ -228,6 +251,7 @@ export interface PageSpatial {
   conflicts: EvidenceConflict[];
   spatialRows: SpatialRow[];
   derivedRelations: DerivedRelation[];
+  unreadInkRegions: UnreadInkRegion[];
   diagnostics: PageDiagnostics;
   projection: PageProjection;
   provenance: ExtractionProvenance;
@@ -246,7 +270,7 @@ export interface DocumentDiagnostics {
 }
 
 export interface PageSpatialDocument {
-  schemaVersion: '0.3.0';
+  schemaVersion: '0.4.0';
   document: DocumentIdentity;
   pages: PageSpatial[];
   diagnostics: DocumentDiagnostics;

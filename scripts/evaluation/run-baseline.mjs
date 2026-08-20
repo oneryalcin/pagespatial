@@ -20,11 +20,14 @@ const valueFlags = new Set([
   '--data-root', '--ocr-assets', '--document-id', '--page', '--backend', '--ocr-variant', '--render-scale',
   '--page-timeout-ms', '--document-timeout-ms', '--run-id', '--browser-executable'
 ]);
-for (let index = 2; index < process.argv.length; index += 2) {
+const booleanFlags = new Set(['--region-recovery']);
+for (let index = 2; index < process.argv.length; index += 1) {
   const name = process.argv[index];
+  if (booleanFlags.has(name)) continue;
   const value = process.argv[index + 1];
   if (!valueFlags.has(name)) throw new Error(`Unknown baseline argument: ${name}`);
   if (!value || value.startsWith('--')) throw new Error(`${name} requires a value.`);
+  index += 1;
 }
 
 function flag(name, fallback) {
@@ -47,6 +50,7 @@ const requestedObjectId = flag('--document-id');
 const requestedPage = flag('--page') === undefined ? undefined : positiveNumber('--page');
 const backend = flag('--backend', 'wasm');
 const ocrVariant = flag('--ocr-variant', 'tiny');
+const regionRecovery = process.argv.includes('--region-recovery');
 if (!['tiny', 'small'].includes(ocrVariant)) throw new Error('--ocr-variant must be tiny or small.');
 if (!['wasm', 'webgpu', 'auto'].includes(backend)) throw new Error('--backend must be wasm, webgpu, or auto.');
 const renderScale = positiveNumber('--render-scale', 1.6);
@@ -97,6 +101,7 @@ const profile = {
   renderer: 'pdfjs-dist@5.5.207',
   ocrAdapter: '@paddleocr/paddleocr-js@0.4.2',
   ocrVariant,
+  regionRecovery,
   backendPolicy: backend,
   renderScale,
   detectorLimit: 960,
@@ -382,6 +387,7 @@ try {
           ocrAssets,
           backend,
           ocrVariant,
+          regionRecovery,
           pageTimeoutMs,
           warmupTimeoutMs: Math.max(pageTimeoutMs, 180_000),
           chromePath: browserExecutable
@@ -436,6 +442,7 @@ try {
             nativePage: nativeRecord.nativePage,
             renderedPage: { pageNumber: browserPage.renderedPageNumber, geometry: browserPage.geometry },
             ocrPage: browserPage.ocr,
+            unreadInkRegions: browserPage.unreadInkRegions ?? [],
             runId,
             nativeAdapter: nativeAdapterIdentity,
             renderer: 'pdfjs-dist@5.5.207',

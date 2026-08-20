@@ -2,12 +2,14 @@ import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import {
   createPdfJsCanvasRenderer,
   createPpOcrV6BrowserAdapter,
+  createZoomRetryRecovery,
   openPdfJsSession
 } from '../../dist/browser/index.js';
 
 let session;
 let ocr;
 let renderer;
+let regionRecovery;
 let backendEvents = [];
 
 function memorySample() {
@@ -61,6 +63,14 @@ globalThis.pagespatialCorpus = {
       recognitionBatchSize: options.recognitionBatchSize,
       onBackend(event) { backendEvents.push(event); }
     });
+    regionRecovery = options.regionRecovery
+      ? createZoomRetryRecovery({
+          renderer,
+          ocr,
+          maxCanvasSide: options.maxCanvasSide,
+          maxCanvasPixels: options.maxCanvasPixels
+        })
+      : undefined;
     const started = performance.now();
     await ocr.warmup();
     return {
@@ -97,11 +107,32 @@ globalThis.pagespatialCorpus = {
       const ocrStarted = performance.now();
       const result = await ocr.recognize(rendered);
       const ocrMs = performance.now() - ocrStarted;
+      // Harness recovery approximates read boxes with the OCR set only (the
+      // native set lives on the Node side); native-read areas that get
+      // re-read produce corroborating duplicates that associate normally.
+      let unreadInkRegions = [];
+      let observations = result.observations;
+      let recoveryMs = 0;
+      if (regionRecovery) {
+        const recoveryStarted = performance.now();
+        const readBoxes = result.observations.map((observation) => observation.box);
+        unreadInkRegions = await regionRecovery.analyze(rendered, readBoxes);
+        for (const region of unreadInkRegions) {
+          if (region.kind !== 'structured') continue;
+          const recovered = await regionRecovery.recover(
+            session.source, pageNumber, region, rendered.geometry, readBoxes);
+          region.recoveredObservationCount = recovered.length;
+          observations = [...observations, ...recovered];
+        }
+        recoveryMs = performance.now() - recoveryStarted;
+      }
       return {
         pageNumber,
         renderedPageNumber: rendered.pageNumber,
         geometry: rendered.geometry,
-        ocr: result,
+        unreadInkRegions,
+        recoveryMs,
+        ocr: { ...result, observations },
         backend: ocr.getBackend(),
         backendEvents: [...backendEvents],
         timings: { renderMs, ocrMs, totalMs: performance.now() - started },
@@ -117,6 +148,7 @@ globalThis.pagespatialCorpus = {
     const previous = ocr;
     ocr = undefined;
     renderer = undefined;
+    regionRecovery = undefined;
     if (previous) await previous.dispose();
   }
 };

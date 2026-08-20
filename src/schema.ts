@@ -55,7 +55,8 @@ export const ocrObservationSchema = z.object({
   ...observationBase,
   adapterId: z.string().optional(),
   confidence: z.number().min(0).max(1),
-  model: z.string().optional()
+  model: z.string().optional(),
+  recoveryMethod: z.string().min(1).optional()
 });
 
 const nativeLineSchema = z.object({
@@ -94,7 +95,7 @@ const relationSchema = z.object({
 });
 
 const escalationReasonSchema = z.object({
-  type: z.enum(['critical-token-conflict', 'critical-token-omission', 'ambiguous-derived-relation', 'low-ocr-confidence', 'uncorroborated-ocr']),
+  type: z.enum(['critical-token-conflict', 'critical-token-omission', 'ambiguous-derived-relation', 'low-ocr-confidence', 'uncorroborated-ocr', 'unread-ink-region']),
   severity: z.enum(['blocking', 'advisory']),
   sourceIds: z.array(z.string()), count: z.number().int().nonnegative(),
   share: z.number().min(0).max(1)
@@ -121,12 +122,21 @@ const provenanceSchema = z.object({
   backend: z.string().optional(), configuration: z.record(z.string(), z.unknown()).optional()
 });
 
+const unreadInkRegionSchema = z.object({
+  box: boxSchema,
+  kind: z.enum(['structured', 'pictorial']),
+  inkDensity: z.number().min(0).max(1),
+  midToneFraction: z.number().min(0).max(1),
+  recoveredObservationCount: z.number().int().nonnegative()
+});
+
 const pageSpatialBaseSchema = z.object({
-  schemaVersion: z.literal('0.3.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
+  schemaVersion: z.literal('0.4.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
   pageId: z.string(), pageNumber: z.number().int().positive(), geometry: pageGeometrySchema,
   nativeObservations: z.array(nativeObservationSchema), ocrObservations: z.array(ocrObservationSchema),
   nativeLines: z.array(nativeLineSchema), sourceMatches: z.array(sourceMatchSchema), conflicts: z.array(conflictSchema),
-  spatialRows: z.array(spatialRowSchema), derivedRelations: z.array(relationSchema), diagnostics: diagnosticsSchema,
+  spatialRows: z.array(spatialRowSchema), derivedRelations: z.array(relationSchema),
+  unreadInkRegions: z.array(unreadInkRegionSchema), diagnostics: diagnosticsSchema,
   projection: z.object({ markdown: z.string(), format: z.literal('pagespatial-markdown-v1'), trust: z.literal('untrusted-document-content'), derived: z.literal(true), markdownSource: z.string().min(1) }),
   provenance: provenanceSchema
 });
@@ -279,6 +289,9 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
     });
   });
   page.diagnostics.escalationReasons.forEach((reason, index) => {
+    // unread-ink-region references page areas where no observation exists,
+    // so an empty source list is its correct state, not a broken reference.
+    if (reason.type === 'unread-ink-region' && reason.sourceIds.length === 0) return;
     validateSourceIds(reason.sourceIds, allIdSet, ['diagnostics', 'escalationReasons', index, 'sourceIds']);
   });
 
@@ -352,8 +365,10 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
     ['low-ocr-confidence', { severity: 'advisory', count: lowConfidenceIds.length, share: ocrShare(lowConfidenceIds.length), sourceIds: lowConfidenceIds }]
   ]);
   const engagedOcrIds = new Set([...matchedOcrIds, ...conflictedOcrIds]);
+  // Second-pass recoveries are known single-witness by construction and are
+  // excluded from the starvation denominator (mirrors diagnostics.ts).
   const confidentOcr = page.ocrObservations.filter((observation) =>
-    observation.confidence >= page.diagnostics.thresholds.lowOcrConfidence);
+    observation.confidence >= page.diagnostics.thresholds.lowOcrConfidence && !observation.recoveryMethod);
   const uncorroboratedOcr = confidentOcr.filter((observation) => !engagedOcrIds.has(observation.id));
   const engagedCoverage = confidentOcr.length
     ? (confidentOcr.length - uncorroboratedOcr.length) / confidentOcr.length
@@ -365,6 +380,14 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
     count: starvationFires ? uncorroboratedOcr.length : 0,
     share: starvationFires ? ocrShare(uncorroboratedOcr.length) : 0,
     sourceIds: starvationFires ? uncorroboratedOcr.map((observation) => observation.id) : []
+  });
+  const residueRegions = page.unreadInkRegions.filter((region) =>
+    region.kind === 'structured' && region.recoveredObservationCount === 0);
+  expectedReasons.set('unread-ink-region', {
+    severity: 'blocking',
+    count: residueRegions.length,
+    share: page.unreadInkRegions.length ? residueRegions.length / page.unreadInkRegions.length : 0,
+    sourceIds: []
   });
   for (const [type, expected] of expectedReasons) {
     const actual = page.diagnostics.escalationReasons.filter((reason) => reason.type === type);
@@ -386,7 +409,7 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
 });
 
 const pageSpatialDocumentBaseSchema = z.object({
-  schemaVersion: z.literal('0.3.0'),
+  schemaVersion: z.literal('0.4.0'),
   document: documentIdentitySchema,
   pages: z.array(pageSpatialSchema),
   diagnostics: z.object({

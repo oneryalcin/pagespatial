@@ -1,4 +1,4 @@
-import type { DocumentSource, NativePageResult, OcrPageResult, RenderedPage } from './types.js';
+import type { Box, DocumentSource, NativePageResult, OcrObservationInput, OcrPageResult, PageGeometry, RenderedPage, UnreadInkRegion } from './types.js';
 
 export interface NativePageAdapter<TSource = unknown> {
   readonly name: string;
@@ -30,8 +30,24 @@ export interface OcrAdapter<TRaster = unknown> {
   recognize(page: RenderedPage<TRaster>, options?: { signal?: AbortSignal }): Promise<OcrPageResult>;
 }
 
+/**
+ * Optional second-pass recovery over unread-ink regions (issue #10).
+ * analyze() finds evidence deserts on the rendered page; recover() re-reads
+ * one structured region (e.g. re-render at higher scale, crop, re-run OCR)
+ * and returns observations in FIRST-render pixel coordinates with
+ * recoveryMethod set. Both are adapter concerns because they need raster
+ * access; the region math itself lives in core (src/ink.ts).
+ */
+export interface RegionRecoveryAdapter<TSource = unknown, TRaster = unknown> {
+  readonly name: string;
+  readonly version: string;
+  analyze(rendered: RenderedPage<TRaster>, readBoxes: readonly Box[], options?: { signal?: AbortSignal }): Promise<UnreadInkRegion[]>;
+  recover(source: DocumentSource<TSource>, pageNumber: number, region: UnreadInkRegion, firstGeometry: PageGeometry, readBoxes: readonly Box[], options?: { signal?: AbortSignal }): Promise<OcrObservationInput[]>;
+}
+
 export interface ParserAdapters<TSource = unknown, TRaster = unknown> {
   native: NativePageAdapter<TSource>;
   renderer: PageRenderer<TSource, TRaster>;
   ocr: OcrAdapter<TRaster>;
+  regionRecovery?: RegionRecoveryAdapter<TSource, TRaster>;
 }

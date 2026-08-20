@@ -1,14 +1,17 @@
 import type { ParserAdapters } from './adapters.js';
 import { resolveDiagnosticOptions, type DiagnosticOptions } from './diagnostics.js';
 import type { AssociationOptions } from './merge.js';
+import { pointBoxToRenderedBox, roundBox } from './geometry.js';
 import { assemblePageSpatial, validateNativePageGeometry } from './page-parser.js';
 import { documentIdentitySchema, pageSpatialDocumentSchema } from './schema.js';
 import type {
   DocumentIdentity,
   DocumentSource,
   ExtractionProvenance,
+  OcrObservationInput,
   PageSpatial,
-  PageSpatialDocument
+  PageSpatialDocument,
+  UnreadInkRegion
 } from './types.js';
 
 export { buildPageSpatial } from './page-parser.js';
@@ -104,15 +107,39 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
                 if (rendered.pageNumber !== pageNumber) {
                   throw new Error(`Renderer returned page ${rendered.pageNumber} while parsing page ${pageNumber}.`);
                 }
-                validateNativePageGeometry(pageNumber, nativePage, rendered);
+                const pageGeometry = validateNativePageGeometry(pageNumber, nativePage, rendered);
                 const ocr = await adapters.ocr.recognize(rendered, { signal: controller.signal });
                 abortIfNeeded(controller.signal);
+                // Optional second pass (issue #10): find unread-ink regions
+                // and recover structured ones through the recovery adapter.
+                // Recovered observations arrive in first-render pixels with
+                // recoveryMethod set; pictorial regions are recorded only.
+                let unreadInkRegions: UnreadInkRegion[] = [];
+                let ocrObservations: OcrObservationInput[] = ocr.observations;
+                if (adapters.regionRecovery) {
+                  const readBoxes = [
+                    ...nativePage.observations.map((observation) => observation.pointBox
+                      ? pointBoxToRenderedBox(observation.pointBox, pageGeometry).box
+                      : roundBox(observation.box!)),
+                    ...ocr.observations.map((observation) => roundBox(observation.box))
+                  ];
+                  unreadInkRegions = await adapters.regionRecovery.analyze(rendered, readBoxes, { signal: controller.signal });
+                  for (const region of unreadInkRegions) {
+                    if (region.kind !== 'structured') continue;
+                    abortIfNeeded(controller.signal);
+                    const recovered = await adapters.regionRecovery.recover(
+                      source, pageNumber, region, pageGeometry, readBoxes, { signal: controller.signal });
+                    region.recoveredObservationCount = recovered.length;
+                    ocrObservations = [...ocrObservations, ...recovered];
+                  }
+                }
                 const page = assemblePageSpatial({
                   document,
                   pageNumber,
                   nativePage,
                   renderedPage: rendered,
-                  ocrPage: ocr,
+                  ocrPage: { ...ocr, observations: ocrObservations },
+                  unreadInkRegions,
                   runId,
                   nativeAdapter: `${adapters.native.name}@${adapters.native.version}`,
                   renderer: `${adapters.renderer.name}@${adapters.renderer.version}`,
@@ -157,7 +184,7 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
           }
         };
         const result: PageSpatialDocument = {
-          schemaVersion: '0.3.0',
+          schemaVersion: '0.4.0',
           document,
           pages: completed,
           diagnostics: documentDiagnostics(completed),

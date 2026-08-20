@@ -5,7 +5,8 @@ import type {
   NativeObservation,
   OcrObservation,
   PageDiagnostics,
-  SourceMatch
+  SourceMatch,
+  UnreadInkRegion
 } from './types.js';
 
 export interface DiagnosticOptions {
@@ -36,6 +37,7 @@ export function buildDiagnostics(input: {
   sourceMatches: readonly SourceMatch[];
   conflicts: readonly EvidenceConflict[];
   derivedRelations: readonly DerivedRelation[];
+  unreadInkRegions?: readonly UnreadInkRegion[];
   options?: DiagnosticOptions;
 }): PageDiagnostics {
   const policy = resolveDiagnosticOptions(input.options);
@@ -87,7 +89,11 @@ export function buildDiagnostics(input: {
   // caught a confidently-wrong reading, so the page escalates as
   // unverifiable-by-construction (blocking).
   const engaged = new Set([...matched, ...conflictIds]);
-  const confident = input.ocrObservations.filter((observation) => observation.confidence >= lowThreshold);
+  // Second-pass recoveries (recoveryMethod set) are deliberately extracted
+  // from regions known to be single-witness; counting them here would let
+  // successful recovery re-trigger the very alarm it answers.
+  const confident = input.ocrObservations.filter((observation) =>
+    observation.confidence >= lowThreshold && !observation.recoveryMethod);
   const uncorroborated = confident.filter((observation) => !engaged.has(observation.id));
   const engagedCoverage = confident.length ? (confident.length - uncorroborated.length) / confident.length : 1;
   if (confident.length >= policy.uncorroboratedOcrMinimumCount
@@ -102,6 +108,20 @@ export function buildDiagnostics(input: {
       // only, so share and (1 - engagedCoverage) differ on mixed-confidence
       // pages.
       share: ocrShare(uncorroborated.length)
+    });
+  }
+  // Residue: structured unread-ink regions that recovery could not read are
+  // evidence deserts with no witness at all — blocking. Pictorial regions
+  // are recorded on the page but never alarm.
+  const regions = input.unreadInkRegions ?? [];
+  const residue = regions.filter((region) => region.kind === 'structured' && region.recoveredObservationCount === 0);
+  if (residue.length) {
+    escalationReasons.push({
+      type: 'unread-ink-region',
+      severity: 'blocking',
+      sourceIds: [],
+      count: residue.length,
+      share: regions.length ? residue.length / regions.length : 0
     });
   }
 
