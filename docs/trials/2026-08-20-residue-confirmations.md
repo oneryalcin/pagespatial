@@ -65,11 +65,16 @@ shared `regionEligibleForResidue()` keeps diagnostics and schema identical.
 
 ## Results (162 pages, small tier, recovery on)
 
-| | before | confirmations | + geometry |
-|---|---|---|---|
-| residue pages (blocking) | 82 | 72 | **18 (11%)** |
-| true-desert regions | — | 132 | **24** |
-| gold recall (28 verified pages) | 461/468 | 461/468 | 461/468 |
+| | before | confirmations | + geometry | + review hardening |
+|---|---|---|---|---|
+| residue pages (blocking) | 82 | 72 | 18 | **18 (11%)** |
+| gold recall (28 verified pages) | 461/468 | 461/468 | 461/468 | **464/468** |
+
+The hardening pass *improved* recall: the critical-token duplicate rule
+keeps digit-divergent re-reads as observations, and some of those were
+correct readings the old dedup silently discarded. Final run:
+`exp-residue-hardened-2026-08-20` — 3,021 receipts, 1,762 recovered
+observations, 0 failures.
 
 The 24 surviving regions are the population the alarm exists for: 20–70px
 bars and blocks that could hold text and where nothing was read — including
