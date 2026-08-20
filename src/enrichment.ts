@@ -53,6 +53,15 @@ export interface ConflictAdjudication {
   inkText?: string;
 }
 
+export interface OperationProvenance {
+  adapter: string;
+  model: string;
+  mediaResolution: string;
+  promptRevision: string;
+  /** Model thinking budget (0 = disabled) — extractor config, so provenance. */
+  thinkingBudget: number;
+}
+
 export interface EscalatedOcrEnrichment {
   enrichmentSchemaVersion: 'enrichment-0.2.0';
   documentId: string;
@@ -70,13 +79,15 @@ export interface EscalatedOcrEnrichment {
   createdAt: string;
   /** Why this page was routed to the escalated tier (blocking reasons at parse time). */
   trigger: { blockingReasons: string[] };
+  /**
+   * Per-operation provenance: proposals come from `transcription`,
+   * adjudications from `adjudication`. A record carries exactly the
+   * provenance of the operations that ran — attributing one operation's
+   * output to another's extractor config is false provenance.
+   */
   provenance: {
-    adapter: string;
-    model: string;
-    mediaResolution: string;
-    promptRevision: string;
-    /** Model thinking budget (0 = disabled) — extractor config, so provenance. */
-    thinkingBudget: number;
+    transcription?: OperationProvenance;
+    adjudication?: OperationProvenance;
   };
   proposals: EnrichmentProposal[];
   /** Verdicts on the base page's recorded conflicts (may be empty). */
@@ -87,6 +98,14 @@ export interface EscalatedOcrEnrichment {
 }
 
 const boxHintSchema = z.tuple([z.number(), z.number(), z.number(), z.number()]);
+
+const operationProvenanceSchema = z.object({
+  adapter: z.string().min(1),
+  model: z.string().min(1),
+  mediaResolution: z.string().min(1),
+  promptRevision: z.string().min(1),
+  thinkingBudget: z.number().int().nonnegative()
+}).strict();
 
 export const escalatedOcrEnrichmentSchema = z.object({
   enrichmentSchemaVersion: z.literal('enrichment-0.2.0'),
@@ -99,11 +118,8 @@ export const escalatedOcrEnrichmentSchema = z.object({
   createdAt: z.string().min(1),
   trigger: z.object({ blockingReasons: z.array(z.string().min(1)).min(1) }).strict(),
   provenance: z.object({
-    adapter: z.string().min(1),
-    model: z.string().min(1),
-    mediaResolution: z.string().min(1),
-    promptRevision: z.string().min(1),
-    thinkingBudget: z.number().int().nonnegative()
+    transcription: operationProvenanceSchema.optional(),
+    adjudication: operationProvenanceSchema.optional()
   }).strict(),
   // Strict everywhere: a smuggled key on a proposal (e.g. evidenceBox,
   // trust) would contradict the text-only invariant while surviving a
@@ -272,6 +288,15 @@ export async function buildEscalatedOcrEnrichment(input: BuildEnrichmentInput): 
   const reasons = blockingReasons(input.page);
   if (!reasons.length) {
     throw new Error('Enrichment is escalated-tier only: the page carries no blocking escalation reason.');
+  }
+  if (input.proposals.length && !input.provenance.transcription) {
+    throw new Error('Proposals require transcription provenance.');
+  }
+  if ((input.adjudications ?? []).length && !input.provenance.adjudication) {
+    throw new Error('Adjudications require adjudication provenance.');
+  }
+  if (!input.provenance.transcription && !input.provenance.adjudication) {
+    throw new Error('Enrichment provenance must name at least one operation.');
   }
   const record: EscalatedOcrEnrichment = {
     enrichmentSchemaVersion: 'enrichment-0.2.0',

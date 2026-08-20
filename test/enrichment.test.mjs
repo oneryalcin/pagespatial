@@ -50,7 +50,9 @@ async function escalatedPage() {
   return document.pages[0];
 }
 
-const provenance = { adapter: 'flash-escalated-ocr@1', model: 'gemini-3.7-flash', mediaResolution: 'MEDIA_RESOLUTION_ULTRA_HIGH', promptRevision: 'transcribe-critical-tokens-v1', thinkingBudget: 0 };
+const operation = { adapter: 'flash-escalated-ocr@1', model: 'gemini-3.7-flash', mediaResolution: 'MEDIA_RESOLUTION_HIGH', promptRevision: 'transcribe-critical-tokens-v1', thinkingBudget: 0 };
+const provenance = { transcription: operation };
+const adjudicationProvenance = { adjudication: { ...operation, mediaResolution: 'MEDIA_RESOLUTION_ULTRA_HIGH', promptRevision: 'adjudicate-conflicts-page-v1' } };
 const telemetry = { promptTokens: 2200, outputTokens: 900, latencyMs: 4400 };
 
 test('corroboration is derived per witness pool, occurrence-consuming', async () => {
@@ -171,28 +173,68 @@ test('transcriber retries transient statuses and hard-fails terminal ones', asyn
   assert.equal(terminalCalls, 1);
 });
 
+test('ambiguous adjudication responses resolve to unsure, never a side', async () => {
+  const { adjudicatePageConflicts } = await import('../dist/node/flash-ocr.js');
+  const respond = (verdicts) => ({
+    ok: true,
+    json: async () => ({
+      candidates: [{ content: { parts: [{ text: JSON.stringify({ verdicts }) }] } }],
+      usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 20 }
+    })
+  });
+  const conflicts = [
+    { conflictId: 'c0', nativeText: 'a 1', ocrText: 'a 2', normalizedBox: [0, 0, 10, 10] },
+    { conflictId: 'c1', nativeText: 'b 3', ocrText: 'b 4', normalizedBox: [20, 0, 30, 10] }
+  ];
+  // Duplicate answers for index 0 (even agreeing would be ambiguous — these
+  // disagree), an out-of-range index, and no answer at all for index 1.
+  const result = await adjudicatePageConflicts({
+    apiKey: 'k', png: new Uint8Array([1]), conflicts,
+    fetchImpl: async () => respond([
+      { index: 0, verdict: 'native', inkText: 'a 1' },
+      { index: 0, verdict: 'ocr', inkText: 'a 2' },
+      { index: 7, verdict: 'ocr' }
+    ])
+  });
+  assert.deepEqual(result.verdicts.map((v) => v.verdict), ['unsure', 'unsure']);
+  // Unambiguous answers map through.
+  const clean = await adjudicatePageConflicts({
+    apiKey: 'k', png: new Uint8Array([1]), conflicts,
+    fetchImpl: async () => respond([
+      { index: 0, verdict: 'native', inkText: 'a 1' },
+      { index: 1, verdict: 'both-wrong', inkText: 'b 5' }
+    ])
+  });
+  assert.deepEqual(clean.verdicts.map((v) => v.verdict), ['native', 'both-wrong']);
+});
+
 test('adjudications bind fail-closed to recorded conflicts', async () => {
   const page = await escalatedPage();
   const conflictId = page.conflicts[0].id;
   const enrichment = await buildEscalatedOcrEnrichment({
-    page, provenance, telemetry, proposals: [],
+    page, provenance: adjudicationProvenance, telemetry, proposals: [],
     adjudications: [{ conflictId, verdict: 'native', inkText: 'Revenue 647' }]
   });
   assert.equal(enrichment.adjudications.length, 1);
   assert.equal((await validateEnrichmentAgainstPage(enrichment, page)).valid, true);
   // Verdict on a conflict that does not exist = fabricated evidence.
   await assert.rejects(buildEscalatedOcrEnrichment({
-    page, provenance, telemetry, proposals: [],
+    page, provenance: adjudicationProvenance, telemetry, proposals: [],
     adjudications: [{ conflictId: 'conflict:nowhere', verdict: 'ocr' }]
   }), /unknown conflict/u);
   // Duplicate verdicts on one conflict rejected.
   await assert.rejects(buildEscalatedOcrEnrichment({
-    page, provenance, telemetry, proposals: [],
+    page, provenance: adjudicationProvenance, telemetry, proposals: [],
     adjudications: [
       { conflictId, verdict: 'native' },
       { conflictId, verdict: 'ocr' }
     ]
   }), /Duplicate/u);
+  // Adjudications carried without adjudication provenance = false provenance.
+  await assert.rejects(buildEscalatedOcrEnrichment({
+    page, provenance, telemetry, proposals: [],
+    adjudications: [{ conflictId, verdict: 'native' }]
+  }), /adjudication provenance/u);
   // Forged post-hoc adjudication fails validation.
   const forged = structuredClone(enrichment);
   forged.adjudications.push({ conflictId: 'conflict:invented', verdict: 'ocr' });

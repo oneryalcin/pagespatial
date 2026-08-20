@@ -104,6 +104,7 @@ async function worker() {
       .map((reason) => reason.type));
     const needsAdjudication = reasons.has('critical-token-conflict') || reasons.has('critical-token-omission');
     const needsTranscription = reasons.has('uncorroborated-ocr') || reasons.has('unread-ink-region');
+    let partialTelemetry;
     try {
       if (skipExisting && existsSync(join(outputDir, name))) {
         const stored = JSON.parse(readFileSync(join(outputDir, name), 'utf8'));
@@ -119,12 +120,12 @@ async function worker() {
       const png = renderPng(target.pdfPath, target.pageNumber);
       let proposals = [];
       let adjudications = [];
-      let provenance;
+      const provenance = {};
       const telemetry = { promptTokens: 0, outputTokens: 0, latencyMs: 0 };
       if (needsTranscription) {
         const transcription = await transcribePageImage({ apiKey, png: new Uint8Array(png) });
         proposals = transcription.proposals;
-        provenance = transcription.provenance;
+        provenance.transcription = transcription.provenance;
         telemetry.promptTokens += transcription.telemetry.promptTokens;
         telemetry.outputTokens += transcription.telemetry.outputTokens;
         telemetry.latencyMs += transcription.telemetry.latencyMs;
@@ -144,13 +145,17 @@ async function worker() {
             ]
           };
         });
+        // Partial-spend honesty: if this second rung fails, the outer
+        // catch records the telemetry already accumulated — spend is never
+        // invisible just because a later rung failed.
         const adjudication = await adjudicatePageConflicts({ apiKey, png: new Uint8Array(png), conflicts });
         adjudications = adjudication.verdicts;
-        provenance = provenance ?? adjudication.provenance;
+        provenance.adjudication = adjudication.provenance;
         telemetry.promptTokens += adjudication.telemetry.promptTokens;
         telemetry.outputTokens += adjudication.telemetry.outputTokens;
         telemetry.latencyMs += adjudication.telemetry.latencyMs;
       }
+      partialTelemetry = telemetry;
       const enrichment = await buildEscalatedOcrEnrichment({
         page: target.page,
         proposals,
@@ -163,7 +168,12 @@ async function worker() {
       const novel = enrichment.proposals.filter((proposal) => proposal.corroboration === 'novel').length;
       console.log(`${target.page.pageId}: ${enrichment.proposals.length} proposals (${novel} novel), ${enrichment.adjudications.length} adjudications, ${enrichment.telemetry.latencyMs}ms`);
     } catch (error) {
-      failures.push({ pageId: target.page.pageId, error: String(error).slice(0, 200) });
+      // Failed pages still carry their spend into the ledger.
+      failures.push({
+        pageId: target.page.pageId,
+        error: String(error).slice(0, 200),
+        ...(partialTelemetry ? { telemetry: partialTelemetry } : {})
+      });
       console.warn(`${target.page.pageId}: FAILED ${String(error).slice(0, 120)}`);
     }
   }
@@ -179,6 +189,10 @@ for (const enrichment of results) {
   promptTokens += enrichment.telemetry.promptTokens;
   outputTokens += enrichment.telemetry.outputTokens;
   latencies.push(enrichment.telemetry.latencyMs);
+}
+for (const failure of failures) {
+  promptTokens += failure.telemetry?.promptTokens ?? 0;
+  outputTokens += failure.telemetry?.outputTokens ?? 0;
 }
 latencies.sort((a, b) => a - b);
 const quantile = (q) => latencies.length ? latencies[Math.min(latencies.length - 1, Math.floor(q * latencies.length))] : 0;

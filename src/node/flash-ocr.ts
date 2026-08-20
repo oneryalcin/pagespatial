@@ -166,18 +166,31 @@ ${options.conflicts
       const text = payload.candidates?.[0]?.content?.parts?.at(-1)?.text;
       if (!text) throw new Error('Gemini returned no text part.');
       const parsed = parseModelJson(text) as { verdicts?: { index?: unknown; verdict?: unknown; inkText?: unknown }[] };
+      // Fail-closed response mapping: a conflict must have EXACTLY ONE
+      // in-range verdict. Duplicates (even agreeing ones), unknown indexes,
+      // and omissions all resolve to 'unsure' — ambiguity must never pick
+      // a side, and a wrong-side pick is the disqualifying failure.
+      const byIndex = new Map<number, { verdict?: unknown; inkText?: unknown }[]>();
+      for (const item of parsed.verdicts ?? []) {
+        if (typeof item.index !== 'number' || !Number.isInteger(item.index)) continue;
+        if (item.index < 0 || item.index >= options.conflicts.length) continue;
+        const list = byIndex.get(item.index) ?? [];
+        list.push(item);
+        byIndex.set(item.index, list);
+      }
       const verdicts = options.conflicts.map((conflict, index) => {
-        const match = (parsed.verdicts ?? []).find((v) => v.index === index);
+        const answers = byIndex.get(index) ?? [];
+        const match = answers.length === 1 ? answers[0] : undefined;
         const verdict = typeof match?.verdict === 'string'
           && ['native', 'ocr', 'both-wrong', 'unsure'].includes(match.verdict)
           ? match.verdict as 'native' | 'ocr' | 'both-wrong' | 'unsure'
-          // A conflict the model did not answer stays unresolved — never
-          // defaulted to a side.
           : 'unsure';
         return {
           conflictId: conflict.conflictId,
           verdict,
-          ...(typeof match?.inkText === 'string' && match.inkText.trim() ? { inkText: match.inkText.trim() } : {})
+          ...(verdict !== 'unsure' && typeof match?.inkText === 'string' && match.inkText.trim()
+            ? { inkText: match.inkText.trim() }
+            : {})
         };
       });
       return {

@@ -55,35 +55,75 @@
     "provenance": {
       "type": "object",
       "properties": {
-        "adapter": {
-          "type": "string",
-          "minLength": 1
+        "transcription": {
+          "type": "object",
+          "properties": {
+            "adapter": {
+              "type": "string",
+              "minLength": 1
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "mediaResolution": {
+              "type": "string",
+              "minLength": 1
+            },
+            "promptRevision": {
+              "type": "string",
+              "minLength": 1
+            },
+            "thinkingBudget": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "adapter",
+            "model",
+            "mediaResolution",
+            "promptRevision",
+            "thinkingBudget"
+          ],
+          "additionalProperties": false
         },
-        "model": {
-          "type": "string",
-          "minLength": 1
-        },
-        "mediaResolution": {
-          "type": "string",
-          "minLength": 1
-        },
-        "promptRevision": {
-          "type": "string",
-          "minLength": 1
-        },
-        "thinkingBudget": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
+        "adjudication": {
+          "type": "object",
+          "properties": {
+            "adapter": {
+              "type": "string",
+              "minLength": 1
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "mediaResolution": {
+              "type": "string",
+              "minLength": 1
+            },
+            "promptRevision": {
+              "type": "string",
+              "minLength": 1
+            },
+            "thinkingBudget": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "adapter",
+            "model",
+            "mediaResolution",
+            "promptRevision",
+            "thinkingBudget"
+          ],
+          "additionalProperties": false
         }
       },
-      "required": [
-        "adapter",
-        "model",
-        "mediaResolution",
-        "promptRevision",
-        "thinkingBudget"
-      ],
       "additionalProperties": false
     },
     "proposals": {
