@@ -25,6 +25,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { criticalTokens } from '../../dist/text.js';
+import { normalizeTokenBox } from './lib/gold-box.mjs';
 
 function arg(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -60,7 +61,7 @@ for (const page of verdicts.pages) {
       index: token.index,
       verdict: token.verdict,
       text,
-      box: proposalTokens[token.index]?.box_2d,
+      box: normalizeTokenBox(proposalTokens[token.index] ?? {})?.box ?? null,
       image: proposal.image
     });
   }
@@ -109,8 +110,31 @@ const VIEW_WIDTH = 460;
 const VIEW_HEIGHT = 120;
 
 const rows = sample.map((item, sampleIndex) => {
-  const [y0, x0, y1, x1] = item.box ?? [0, 0, 1000, 1000];
   const page = image(item.image);
+  // No usable box: show the whole page, fitted, and say plainly that the
+  // token is unlocated. Centring on a guess would be worse than useless —
+  // it would point confidently at the wrong ink.
+  if (!item.box) {
+    const fitWidth = VIEW_WIDTH;
+    return `
+  <tr>
+    <td class="n">${sampleIndex + 1}</td>
+    <td class="crop">
+      <div class="view unlocated">
+        <img src="data:image/png;base64,${page.data}" style="width:${fitWidth}px;left:0;top:0">
+        <div class="warn">no box from the pre-labeler — find this token on the page yourself</div>
+      </div>
+      <div class="src">${escapeHtml(item.objectId)} p${item.pageNumber} · token ${item.index}</div>
+    </td>
+    <td class="text">${escapeHtml(item.text)}</td>
+    <td class="verdict">
+      <label><input type="radio" name="s-${sampleIndex}" value="agree">matches</label>
+      <label><input type="radio" name="s-${sampleIndex}" value="disagree">does NOT match</label>
+      <input type="text" id="fix-${sampleIndex}" placeholder="what it actually says">
+    </td>
+  </tr>`;
+  }
+  const [y0, x0, y1, x1] = item.box;
   // Scale the page so VIEW_WIDTH covers WINDOW_FRACTION of it, then shift the
   // token's centre to the middle of the window. Positioning the image
   // absolutely (rather than as a background) means the highlight box lands in
@@ -151,6 +175,8 @@ td.n{width:2rem;color:#888}
 .view{position:relative;overflow:hidden;width:${VIEW_WIDTH}px;height:${VIEW_HEIGHT}px;border:1px solid #ccc;background:#fff}
 .view img{position:absolute;max-width:none}
 .mark{position:absolute;border:2px solid #06c;background:rgba(0,102,204,.10);pointer-events:none}
+.view.unlocated{border-color:#c00;height:200px}
+.warn{position:absolute;left:0;right:0;bottom:0;background:rgba(204,0,0,.85);color:#fff;font-size:11px;padding:.2rem .4rem}
 .src{font-size:11px;color:#888;margin-top:.2rem}
 td.text{font:15px/1.4 ui-monospace,Menlo,monospace;white-space:pre;background:#f6f8fa;padding:.4rem .6rem}
 td.verdict label{display:block;font-size:13px}

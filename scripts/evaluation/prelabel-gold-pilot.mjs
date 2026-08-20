@@ -102,7 +102,13 @@ const LABEL_SCHEMA = {
       type: 'ARRAY',
       items: {
         type: 'OBJECT',
-        properties: { text: { type: 'STRING' }, box_2d: { type: 'ARRAY', items: { type: 'INTEGER' } } },
+        // minItems/maxItems are not decoration: a schema that pins the item
+        // type but not the arity still returns [763, 122] where four
+        // coordinates were meant, and a two-number box locates nothing.
+        properties: {
+          text: { type: 'STRING' },
+          box_2d: { type: 'ARRAY', items: { type: 'INTEGER' }, minItems: 4, maxItems: 4 }
+        },
         required: ['text', 'box_2d'],
         propertyOrdering: ['text', 'box_2d']
       }

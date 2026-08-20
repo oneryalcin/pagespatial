@@ -25,6 +25,7 @@
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { criticalTokens, criticalTokensCompatible } from '../../dist/text.js';
+import { normalizeTokenBox, summarizeBoxes } from './lib/gold-box.mjs';
 
 function arg(name, optional) {
   const index = process.argv.indexOf(name);
@@ -100,15 +101,17 @@ const pagesHtml = proposals.map((page, pageIndex) => {
     // nothing and costs a click: batch 3 spent 52 of them, 45 on bare
     // dollar signs from a single dense table.
     noise: criticalTokens(token.text ?? '').length === 0,
-    auto: corroborated(pageKey, token.text, token.box_2d)
+    located: normalizeTokenBox(token)?.box ?? null,
+    auto: corroborated(pageKey, token.text, normalizeTokenBox(token)?.box)
   }));
   const boxes = tokens.map((token, tokenIndex) => {
-    const [y0, x0, y1, x1] = token.box_2d ?? [0, 0, 0, 0];
+    if (!token.located) return '';
+    const [y0, x0, y1, x1] = token.located;
     return `<div class="box${token.auto ? ' auto' : ''}" id="box-${pageIndex}-${tokenIndex}" style="top:${y0 / 10}%;left:${x0 / 10}%;height:${(y1 - y0) / 10}%;width:${(x1 - x0) / 10}%"><span>${tokenIndex}</span></div>`;
   }).join('');
   const row = (token, tokenIndex) => `
     <tr data-page="${pageIndex}" data-token="${tokenIndex}" onmouseover="hl(${pageIndex},${tokenIndex},1)" onmouseout="hl(${pageIndex},${tokenIndex},0)">
-      <td>${tokenIndex}</td>
+      <td>${tokenIndex}${token.located ? '' : '<span class="nobox" title="The pre-labeler returned no usable box for this token — find it on the page yourself before judging it.">⌀</span>'}</td>
       <td class="text" contenteditable="true">${escapeHtml(token.text)}</td>
       <td><label><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="${token.auto ? 'auto' : 'correct'}"${token.auto ? ' checked' : ''}>${token.auto ? 'auto' : 'ok'}</label>
           <label><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="wrong">wrong</label>
@@ -185,6 +188,7 @@ body{font:14px/1.5 -apple-system,sans-serif;margin:0;padding:1rem;background:#fa
 label.bulk{display:none}
 tr.bulked{background:#fff6df}
 tr.bulked td:first-child::after{content:' bulk';color:#a86400;font-size:11px}
+.nobox{color:#c00;font-weight:700;margin-left:.25rem;cursor:help}
 .bulkbar{margin:.4rem 0 0;font-size:12px;color:#666}
 .bulkbar button{font-size:12px;padding:.25rem .5rem}
 .panel{flex:1;max-height:90vh;overflow:auto}
