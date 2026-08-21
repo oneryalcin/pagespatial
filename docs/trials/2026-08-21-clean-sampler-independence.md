@@ -46,11 +46,22 @@ kill.)*
    want" — it over-represents pages the engines read little on.
    The mitigation is stratum-union, recorded in
    `selection.json.populationPartition`: the residual pages AND every
-   previously-labeled clean page with its batch provenance. Prior-labeled
-   clean pages already carry gold, so their miss/no-miss outcomes are
-   derivable from their own batches' aggregates. **The honest future
-   denominator is the union of strata; a rate over the residual alone is
-   a case series over a biased pool.** The evaluator embeds this partition
+   previously-labeled clean page with its batch provenance. **The honest
+   future denominator is the union of strata; a rate over the residual
+   alone is a case series over a biased pool.** Two preconditions
+   (independent re-review, closure verification) before the union is
+   computable — prior strata are NOT usable as their aggregates stand:
+   (a) prior batches predate the no-miss verdict, so their clean pages
+   are all `cleanUnverified` — they can contribute misses but never
+   verified negatives, and a union taken anyway would carry selection
+   bias in the numerator. Their clean pages must first pass through the
+   no-miss review flow (a re-read sitting over already-labeled clean
+   pages) so their negatives become admissible. (b) Prior outcomes were
+   evaluated against older runs' engine pools; before entering the
+   union they must be re-evaluated against the same run root as the new
+   stratum (portable gold verdicts + `evaluate-gold-pilot --run-root`),
+   or the union mixes system versions per stratum. Until both hold, no
+   rate exists. The evaluator embeds this partition
    (and the caveat) in the metrics file where numbers get written. Pages
    with no run record at all — the most total failure mode — are outside
    BOTH populations and now recorded in

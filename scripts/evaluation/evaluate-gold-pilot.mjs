@@ -385,7 +385,8 @@ const metrics = {
     `Bulk tier: ${bulk.gold} tokens were page-accepted without individual reading and are excluded from the human tier.`,
     'Chart precision counts detections matched by any gold tuple; unmatched detections may be correct tuples the gold set does not cover.',
     'Verified negatives require an explicit no-miss verdict (gold-verdicts-v2); clean pages without one are counted cleanUnverified and may not enter any miss-rate denominator. No rate is computed here.',
-    'Clean-page outcomes in this file are ONE STRATUM (this batch). The residual clean pool is conditioned on prior extractor-driven sampling, so any future miss rate must union clean-page outcomes across all batches (see selection.populationPartition), never quote one aggregate alone.'
+    'Clean-page outcomes in this file are ONE STRATUM (this batch). The residual clean pool is conditioned on prior extractor-driven sampling, so any future miss rate must union clean-page outcomes across all batches (see selection.populationPartition), never quote one aggregate alone.',
+    'Union preconditions — prior strata are NOT admissible as they stand: (a) their clean pages predate the no-miss verdict (all cleanUnverified — misses without verified negatives = numerator selection bias), so they must first pass a no-miss re-review; (b) their outcomes were evaluated against older run roots and must be re-evaluated against the union run root before entering. Until both hold, no rate exists.'
   ]
 };
 
