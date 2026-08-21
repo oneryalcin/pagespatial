@@ -99,6 +99,12 @@ const tierReport = (counter) => ({
 
 const human = makeTierCounter();
 const silver = makeTierCounter();
+// Third tier: rows accepted with the review UI's page-level button. A person
+// chose to accept them, but did not read them one by one, so they are neither
+// independent human gold nor native-corroborated silver. Kept separate so a
+// fast batch can never inflate the independent denominator.
+const bulk = makeTierCounter();
+let nonScoringProposals = 0;
 const conflictComposition = {};
 const relationTotals = { goldTuples: 0, detectedRelations: 0, matchedGoldTuples: 0, matchedDetections: 0 };
 const escalation = {
@@ -143,14 +149,21 @@ for (const page of verdicts.pages) {
     ...(page.missedTokens ?? [])
   ].filter(Boolean);
   const silverTexts = page.tokens.filter((token) => token.verdict === 'auto').map(tokenText).filter(Boolean);
-  const unreviewed = page.tokens.filter((token) => !['correct', 'edited', 'auto', 'wrong'].includes(token.verdict));
+  const bulkTexts = page.tokens.filter((token) => token.verdict === 'bulk').map(tokenText).filter(Boolean);
+  // 'noise': a proposal that tokenizes to nothing, dropped by the review UI
+  // before a human ever saw it. Present so verdict indices still line up with
+  // proposals; scored in no tier, because it could never have been gold.
+  nonScoringProposals += page.tokens.filter((token) => token.verdict === 'noise').length;
+  const unreviewed = page.tokens.filter((token) => !['correct', 'edited', 'auto', 'wrong', 'bulk', 'noise'].includes(token.verdict));
   if (unreviewed.length) throw new Error(`${key} has ${unreviewed.length} unreviewed token verdicts; finish the review before evaluating.`);
 
   const pageHuman = makeTierCounter();
   const pageSilver = makeTierCounter();
+  const pageBulk = makeTierCounter();
   scoreTokens(humanTexts, nativePool, ocrPool, pageHuman);
   scoreTokens(silverTexts, nativePool, ocrPool, pageSilver);
-  for (const [total, part] of [[human, pageHuman], [silver, pageSilver]]) {
+  scoreTokens(bulkTexts, nativePool, ocrPool, pageBulk);
+  for (const [total, part] of [[human, pageHuman], [silver, pageSilver], [bulk, pageBulk]]) {
     for (const field of Object.keys(total)) total[field] += part[field];
   }
 
@@ -223,7 +236,8 @@ for (const page of verdicts.pages) {
     objectId: page.objectId,
     pageNumber: page.pageNumber,
     human: pageHuman,
-    silver: pageSilver
+    silver: pageSilver,
+    bulk: pageBulk
   });
 }
 
@@ -239,7 +253,9 @@ if (escalation.escalatedPages + escalation.cleanPages !== verdicts.pages.length)
 }
 
 const metrics = {
-  goldPilotMetricsVersion: 'gold-pilot-metrics-v3',
+  // v4 adds the bulk tier. v3 aggregates stay readable as their own era —
+  // they predate page-level accept, so their human tier means what it says.
+  goldPilotMetricsVersion: 'gold-pilot-metrics-v4',
   createdAt: new Date().toISOString(),
   runRoot,
   goldVerifiedAt: verdicts.verifiedAt,
@@ -250,8 +266,13 @@ const metrics = {
     silverNativeCorroborated: {
       ...tierReport(silver),
       note: 'Silver labels were auto-accepted because native text agreed; native/union rates on this tier are tautological by construction and must not be quoted as independent recall.'
+    },
+    bulkPageAccepted: {
+      ...tierReport(bulk),
+      note: 'Accepted with the review UI page-level button: a person accepted these without reading them individually. Not independent gold — report separately and never fold into the human tier.'
     }
   },
+  nonScoringProposals,
   conflictComposition,
   chartRelations: {
     goldTuples: relationTotals.goldTuples,
@@ -265,6 +286,7 @@ const metrics = {
     `Pilot-scale: ${verdicts.pages.length} pages, not the full corpus.`,
     'Recall is occurrence-consuming token containment under the same-ink canonicalization; box agreement is not yet scored.',
     'Human-tier gold: machine pre-labels verified by one annotator; no second annotator or adjudication yet. Silver tier is not independent of the native engine.',
+    `Bulk tier: ${bulk.gold} tokens were page-accepted without individual reading and are excluded from the human tier.`,
     'Chart precision counts detections matched by any gold tuple; unmatched detections may be correct tuples the gold set does not cover.'
   ]
 };

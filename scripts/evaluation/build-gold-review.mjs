@@ -25,6 +25,7 @@
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { criticalTokens, criticalTokensCompatible } from '../../dist/text.js';
+import { normalizeTokenBox, summarizeBoxes } from './lib/gold-box.mjs';
 
 function arg(name, optional) {
   const index = process.argv.indexOf(name);
@@ -94,23 +95,40 @@ const pagesHtml = proposals.map((page, pageIndex) => {
   const imageBase64 = readFileSync(page.image).toString('base64');
   const tokens = (page.proposal.criticalTokens ?? []).map((token) => ({
     ...token,
-    auto: corroborated(pageKey, token.text, token.box_2d)
+    // A proposal that tokenizes to nothing can never become gold — the
+    // evaluator scores criticalTokens(text), so '$' or 'twelve month'
+    // contributes zero either way. Asking a human to confirm one buys
+    // nothing and costs a click: batch 3 spent 52 of them, 45 on bare
+    // dollar signs from a single dense table.
+    noise: criticalTokens(token.text ?? '').length === 0,
+    located: normalizeTokenBox(token)?.box ?? null,
+    auto: corroborated(pageKey, token.text, normalizeTokenBox(token)?.box)
   }));
   const boxes = tokens.map((token, tokenIndex) => {
-    const [y0, x0, y1, x1] = token.box_2d ?? [0, 0, 0, 0];
+    if (!token.located) return '';
+    const [y0, x0, y1, x1] = token.located;
     return `<div class="box${token.auto ? ' auto' : ''}" id="box-${pageIndex}-${tokenIndex}" style="top:${y0 / 10}%;left:${x0 / 10}%;height:${(y1 - y0) / 10}%;width:${(x1 - x0) / 10}%"><span>${tokenIndex}</span></div>`;
   }).join('');
   const row = (token, tokenIndex) => `
     <tr data-page="${pageIndex}" data-token="${tokenIndex}" onmouseover="hl(${pageIndex},${tokenIndex},1)" onmouseout="hl(${pageIndex},${tokenIndex},0)">
-      <td>${tokenIndex}</td>
+      <td>${tokenIndex}${token.located ? '' : '<span class="nobox" title="The pre-labeler returned no usable box for this token — find it on the page yourself before judging it.">⌀</span>'}</td>
       <td class="text" contenteditable="true">${escapeHtml(token.text)}</td>
       <td><label><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="${token.auto ? 'auto' : 'correct'}"${token.auto ? ' checked' : ''}>${token.auto ? 'auto' : 'ok'}</label>
           <label><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="wrong">wrong</label>
-          <label><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="edited">edited</label></td>
+          <label><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="edited">edited</label>
+          <label class="bulk"><input type="radio" name="t-${pageIndex}-${tokenIndex}" value="bulk">bulk</label></td>
     </tr>`;
-  const reviewRows = tokens.map((token, tokenIndex) => token.auto ? '' : row(token, tokenIndex)).join('');
-  const autoRows = tokens.map((token, tokenIndex) => token.auto ? row(token, tokenIndex) : '').join('');
-  const autoCount = tokens.filter((token) => token.auto).length;
+  // Index alignment is load-bearing: the evaluator joins verdicts to
+  // proposals by index, so a dropped row still exports a verdict. It carries
+  // a checked hidden radio reading 'noise' — present in the record, absent
+  // from the reviewer's work.
+  const noiseInput = (token, tokenIndex) =>
+    `<input type="radio" name="t-${pageIndex}-${tokenIndex}" value="noise" checked hidden>`;
+  const reviewRows = tokens.map((token, tokenIndex) =>
+    token.noise ? noiseInput(token, tokenIndex) : (token.auto ? '' : row(token, tokenIndex))).join('');
+  const autoRows = tokens.map((token, tokenIndex) => (token.auto && !token.noise) ? row(token, tokenIndex) : '').join('');
+  const autoCount = tokens.filter((token) => token.auto && !token.noise).length;
+  const noiseCount = tokens.filter((token) => token.noise).length;
   const tokenRows = `${reviewRows}` + (autoCount ? `
     <tr><td colspan="3"><details><summary>${autoCount} corroborated by the native text layer — auto-accepted (open to override)</summary>
       <table>${autoRows}</table></details></td></tr>` : '');
@@ -141,8 +159,10 @@ const pagesHtml = proposals.map((page, pageIndex) => {
     <div class="layout">
       <div class="imgwrap"><img src="data:image/png;base64,${imageBase64}">${boxes}</div>
       <div class="panel">
-        <h3>Critical tokens: ${tokens.length - autoCount} need review, ${autoCount} auto-accepted — add missed ones below</h3>
+        <h3>Critical tokens: ${tokens.length - autoCount - noiseCount} need review, ${autoCount} auto-accepted${noiseCount ? `, ${noiseCount} dropped as non-scoring` : ''} — add missed ones below</h3>
         <table>${tokenRows}</table>
+        <p class="bulkbar"><button type="button" onclick="acceptRemaining(${pageIndex})">Accept all remaining on this page</button>
+          <span id="bulkcount-${pageIndex}"></span></p>
         <textarea id="missed-${pageIndex}" placeholder="Missed tokens, one per line, verbatim"></textarea>
         ${chartRows ? `<h3>Chart relations</h3><table><tr><th></th><th>series</th><th>category</th><th>value</th><th>unit</th><th></th></tr>${chartRows}</table>` : ''}
         <textarea id="missed-charts-${pageIndex}" placeholder="Missed chart tuples, one per line: category | value | unit"></textarea>
@@ -163,6 +183,14 @@ body{font:14px/1.5 -apple-system,sans-serif;margin:0;padding:1rem;background:#fa
 .box.auto{border-color:rgba(30,160,60,.55);border-style:dashed}
 .box span{position:absolute;top:-1.1em;left:0;font-size:10px;color:#c22;background:#fff8}
 .box.hot{border-color:#06c;border-width:3px;background:rgba(0,102,204,.12)}
+/* The bulk radio is never clicked directly — it is the record that a row was
+   page-accepted rather than read, so it must be settable only by the button. */
+label.bulk{display:none}
+tr.bulked{background:#fff6df}
+tr.bulked td:first-child::after{content:' bulk';color:#a86400;font-size:11px}
+.nobox{color:#c00;font-weight:700;margin-left:.25rem;cursor:help}
+.bulkbar{margin:.4rem 0 0;font-size:12px;color:#666}
+.bulkbar button{font-size:12px;padding:.25rem .5rem}
 .panel{flex:1;max-height:90vh;overflow:auto}
 table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #eee;padding:2px 6px;text-align:left;vertical-align:top}
 .text{font-family:ui-monospace,monospace;background:#f6f6f6}
@@ -185,6 +213,26 @@ function hl(pageIndex, tokenIndex, on){
   const box = document.getElementById('box-' + pageIndex + '-' + tokenIndex);
   if (box) box.classList.toggle('hot', Boolean(on));
 }
+// Page-level accept for the common case where every proposal is right. It
+// records "bulk", NOT "correct": the evaluator scores that as its own tier,
+// so a token a person actually read is never mixed with one accepted in a
+// batch of forty. Rows already marked by hand are left exactly as they are.
+function acceptRemaining(pageIndex){
+  const rows = document.querySelectorAll('tr[data-page="' + pageIndex + '"]');
+  let accepted = 0;
+  rows.forEach(row => {
+    const tokenIndex = row.getAttribute('data-token');
+    const name = 't-' + pageIndex + '-' + tokenIndex;
+    if (document.querySelector('input[name="' + name + '"]:checked')) return;
+    const bulk = document.querySelector('input[name="' + name + '"][value="bulk"]');
+    if (!bulk) return;
+    bulk.checked = true;
+    row.classList.add('bulked');
+    accepted += 1;
+  });
+  document.getElementById('bulkcount-' + pageIndex).textContent =
+    accepted ? accepted + ' rows accepted in bulk — recorded as a separate tier, not as read-and-verified.' : 'nothing left to accept.';
+}
 function exportVerdicts(){
   const pages = PROPOSALS.map((page, pageIndex) => ({
     objectId: page.objectId, sha256: page.sha256, pageNumber: page.pageNumber,
@@ -201,7 +249,11 @@ function exportVerdicts(){
       verdict: document.querySelector('input[name="c-' + pageIndex + '-' + relationIndex + '"]:checked')?.value,
       value: document.getElementById('cv-' + pageIndex + '-' + relationIndex)?.textContent.trim()
     })),
-    missedCharts: (document.getElementById('missed-charts-' + pageIndex)?.value ?? '').split('\n')
+    // The newline escape here must survive into the generated page: this
+    // template literal is the page source, so an unescaped escape becomes a
+    // real line break inside a JS string literal and kills the whole inline
+    // script — hover highlighting and Export verdicts included.
+    missedCharts: (document.getElementById('missed-charts-' + pageIndex)?.value ?? '').split('\\n')
       .map(line => line.trim()).filter(Boolean)
       .map(line => { const [category, value, unit] = line.split('|').map(part => part.trim()); return {category, value, unit: unit || null}; }),
     conflicts: page.conflictIds.map((id, conflictIndex) => ({
@@ -215,6 +267,19 @@ function exportVerdicts(){
   link.click();
 }
 </script>`;
+
+// Fail closed on a page whose script does not parse. A single bad character
+// in the emitted JS takes down the whole inline script — and the failure is
+// SILENT: the page still renders, the rows still list, but hover highlighting
+// stops working and "Export verdicts" does nothing. A reviewer can lose an
+// entire batch of judgements before noticing. Parse, never execute.
+const inlineScript = /<script>([\s\S]*?)<\/script>/u.exec(html)?.[1];
+if (!inlineScript) throw new Error('Generated page has no inline script — refusing to write.');
+try {
+  new Function(inlineScript);
+} catch (error) {
+  throw new Error(`Generated page script does not parse (${error.message}). Refusing to write a review UI whose export button is dead.`);
+}
 
 writeFileSync(outputPath, html);
 console.log(`Wrote ${outputPath} (${(html.length / 1e6).toFixed(1)} MB, ${proposals.length} pages).`);
