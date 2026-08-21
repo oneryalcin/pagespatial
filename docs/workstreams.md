@@ -12,11 +12,30 @@ Onboarding order: [principles](principles.md) →
 
 ## State snapshot (update the date when you touch this)
 
-*As of 2026-08-21, evening.*
+*As of 2026-08-21, night.*
 
-- **main**: through PR #35 (batch 5 clean denominator + currency-symbol
-  scoring fix). Era: schema 0.6.0, enrichment-0.2.0 (with `transport`
-  provenance).
+- **main**: through PRs #43/#44/#45 (retrieval harness; extractor-blind
+  clean sampler + no-miss verdicts; batch-6 re-read instruments). Era:
+  schema 0.6.0, enrichment-0.2.0 (with `transport` provenance). Each
+  landed through cold-review → fix → closure-verification cycles; every
+  finding and correction is in the trial docs.
+- **Retrieval thesis measured (issue #36 CLOSED)**: pre-registered
+  outcome "flat everywhere" — trust metadata does NOT pay in ranking,
+  not even the corroboration links (five-way ablation, n=101 queries,
+  case series over system-conditioned queries). A trust-free
+  duplicate-drop is the strong ingestion baseline (+13 hit@5); gating
+  drops where it should downweight (7 answers structurally excluded).
+  Redirect: answer verification/citation is where trust metadata's value
+  is now hypothesized — future work in the trial doc.
+- **Batch 6 is annotation-ready** (human sitting is the only remaining
+  step): double-label pages (~396 comparable rows, drift-guarded both
+  directions) + silver spot-check (30 seeded crops; scorer quotes the
+  95% Clopper-Pearson bound). Instructions:
+  `docs/trials/2026-08-21-batch6-two-reread-protocols.md`.
+- **Clean-rate preconditions** (from PR #44's closure review): no
+  escalation-recall rate exists until (a) prior batches' clean pages get
+  a no-miss re-review, and (b) prior outcomes are re-evaluated against
+  the union run root. Stated in the evaluator's own caveats.
 - **Recall figures corrected upward** (PR #35): a currency-symbol scoring
   bug made 135/145 "missed-by-both" tokens false misses. Batch 3
   86.1→98.8%, batch 4 67.8→95.9%, batch 5 95.7%. PR #30's description is
@@ -30,18 +49,18 @@ Onboarding order: [principles](principles.md) →
   excludes silver-only clean successes, so **no rate is trustworthy yet**.
   See ledger row 9.
 
-**Agreed next actions (owner-confirmed, 2026-08-21 evening; parallel-safe
-— different skills, no shared state):**
+**Next actions (post PRs #43–#45, 2026-08-21 night):**
 
-1. **#29** — clean-page sampler redesign, first test of the independence
-   check: sample from ALL non-escalated pages blind to extractor output;
-   page-level "no miss found" verdicts so verified negatives enter
-   denominators.
-2. **#36** — retrieval harness, pre-registered design as filed; highest
-   leverage — validates or redirects the roadmap.
-3. **Batch 6** — one annotation sitting, two re-read protocols:
-   double-label ~20 stratified pages (annotator-agreement noise floor)
-   + silver spot-check (#8, row 7 — silver's own error rate).
+1. **The batch-6 human sitting** — the only step blocked on a person:
+   double-label (second annotator) + silver spot-check. Fills ledger
+   rows 1 (noise floor) and 7 (silver error bound).
+2. **First extractor-blind clean batch** (#29) — sampler is ready (seed
+   `batch6-clean-v1` dry-run: 15 pages selected from the 87-page
+   unlabeled pool); plus the no-miss re-review of the 27 prior-labeled
+   clean pages so the union rate's preconditions hold.
+3. **Answer-faithfulness harness** — the redirected successor to #36:
+   test trust metadata where its value is now hypothesized (verification
+   and citation, not ranking).
 
 Parked, unscheduled: the #4 chart triage hour (re-run batch 2 through the
 current scorer; decides instrument-fix vs detector-project).
