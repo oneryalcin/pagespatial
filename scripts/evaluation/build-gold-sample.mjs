@@ -30,14 +30,23 @@
  *     --corpus-root .evaluation/corpus \
  *     --gold-root .evaluation/gold \
  *     --output .evaluation/gold/<batch-id> \
- *     [--size 15] [--profile debt|clean] [--dry-run]
+ *     [--size 15] [--profile debt|clean] [--seed <string>] [--dry-run]
  *
  * --profile clean selects the opposite population for issue #29: pages the
  * pipeline raised no escalation on. Those are the least-labelled class in the
- * corpus precisely because the debt profile avoids them, which is why row 9's
- * "2 of 7 clean pages silently missed verified tokens" is a flare and not a
- * rate. Escalation precision is measurable from flagged pages; escalation
- * RECALL is only measurable from pages nobody flagged.
+ * corpus precisely because the debt profile avoids them. Escalation precision
+ * is measurable from flagged pages; escalation RECALL is only measurable from
+ * pages nobody flagged.
+ *
+ * The clean profile is EXTRACTOR-BLIND (principles §8 independence check):
+ * membership is decided by the `requiresEscalation` flag alone — that
+ * conditioning is definitional, because escalation recall is a property of
+ * pages the system called clean — and selection within the population is
+ * seeded-random. Nothing else about the page (observation counts, token
+ * counts, coverage, text) may influence eligibility or order, or the sample
+ * excludes by construction the total failures it exists to surface. --seed is
+ * REQUIRED with --profile clean so reruns are deterministic and the order is
+ * provably not hand-picked.
  */
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -79,21 +88,29 @@ const outputDir = arg('--output');
 const size = Number(arg('--size', '15'));
 const profile = arg('--profile', 'debt');
 if (!['debt', 'clean'].includes(profile)) throw new Error("--profile must be 'debt' or 'clean'.");
+const seed = arg('--seed', profile === 'clean' ? undefined : 'unused');
 const dryRun = flag('--dry-run');
 if (!Number.isInteger(size) || size <= 0) throw new Error('--size must be a positive integer.');
 
 const slug = (objectId) => objectId.replace(/[^a-zA-Z0-9._-]+/g, '_');
 const pageKey = (objectId, pageNumber) => `${objectId}#${pageNumber}`;
 
-/** Pages already labeled in any prior batch — never sample a page twice. */
+/**
+ * Pages already labeled in any prior batch — never sample a page twice.
+ * Returns a Map keyed by pageKey, valued with which batch labeled the page:
+ * the clean profile needs the provenance, because prior batches were selected
+ * BY extractor output, so subtracting them conditions the residual pool on
+ * the system under test (see the population-partition note below).
+ */
 function alreadyLabeled(root) {
-  const seen = new Set();
+  const seen = new Map();
   if (!existsSync(root)) return seen;
   for (const entry of readdirSync(root)) {
     const samplePath = join(root, entry, 'pilot-sample.json');
     if (!existsSync(samplePath)) continue;
     for (const page of JSON.parse(readFileSync(samplePath, 'utf8'))) {
-      seen.add(pageKey(page.objectId, page.pageNumber));
+      const key = pageKey(page.objectId, page.pageNumber);
+      if (!seen.has(key)) seen.set(key, { batch: entry, objectId: page.objectId, pageNumber: page.pageNumber });
     }
   }
   return seen;
@@ -109,13 +126,17 @@ const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 const labeled = alreadyLabeled(goldRoot);
 
 const candidates = [];
-let missingRecords = 0;
+// Pages the pipeline produced NO run record for are neither escalated nor
+// clean — the most total failure mode there is, and a recall instrument must
+// not lose them to a console line. Recorded in selection.json so a nonzero
+// count cannot pass unnoticed.
+const skippedMissingRecords = [];
 for (const document of manifest.documents) {
   if (document.split !== 'development') continue; // the candidate holdout stays sealed
   for (const page of document.pages ?? []) {
     if (labeled.has(pageKey(document.objectId, page.pageNumber))) continue;
     const record = readPageRecord(document.objectId, page.pageNumber);
-    if (!record?.pageSpatial) { missingRecords += 1; continue; }
+    if (!record?.pageSpatial) { skippedMissingRecords.push(pageKey(document.objectId, page.pageNumber)); continue; }
     const spatial = record.pageSpatial;
     const diagnostics = spatial.diagnostics ?? {};
     const reasons = diagnostics.escalationReasons ?? [];
@@ -153,22 +174,49 @@ for (const document of manifest.documents) {
 // Rank inside a tier by how much evidence the page actually contributes, then
 // by id so the same corpus + run always yields the same batch.
 const byId = (a, b) => a.objectId.localeCompare(b.objectId) || a.pageNumber - b.pageNumber;
+
+// Deterministic seeded shuffle for the clean profile. FNV-1a folds the seed
+// string into 32 bits; mulberry32 drives a Fisher–Yates over the id-sorted
+// base order, so the same seed + corpus + run always yields the same batch
+// and no property of the page influences its position.
+function seededShuffle(items, seedString) {
+  let h = 0x811c9dc5;
+  for (const char of seedString) {
+    h ^= char.codePointAt(0);
+    h = Math.imul(h, 0x01000193);
+  }
+  let state = h >>> 0;
+  const next = () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const shuffled = [...items].sort(byId);
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(next() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 const TIERS = [
-  // WARNING — this tier CANNOT support a miss-rate claim, and the flaw is not
-  // a threshold to tune. `criticalCount` comes from native and OCR
-  // observations, so eligibility is conditioned on the output of the very
-  // extractors under measurement: a clean page whose only figures were missed
-  // by BOTH engines scores zero and is excluded by construction, which is
-  // precisely the total failure row 9 exists to count. Ranking by the same
-  // field then favours pages the engines already handled well.
-  //
-  // It was written to avoid drawing numberless section dividers, and it does
-  // that. It is fit for finding INSTANCES of silent misses — batch 5 found
-  // three — and unfit for estimating how often they happen. A sound rate needs
-  // sampling drawn from all non-escalated pages regardless of extractor
-  // output, plus a recorded page-level "no miss found" verdict so confirmed
-  // negatives can enter the denominator. Neither exists yet.
-  { name: 'clean', match: (c) => !c.escalated && c.criticalCount > 0, rank: (a, b) => b.criticalCount - a.criticalCount || byId(a, b) },
+  // Independence check (principles §8): membership reads ONLY the
+  // `requiresEscalation` flag — definitional, since escalation recall is
+  // measured over pages the system called clean — and order is seeded-random.
+  // The previous eligibility test (`criticalCount > 0`) read the extractors
+  // under measurement and excluded by construction the total failures row 9
+  // exists to count; ranking by the same field favoured pages the engines
+  // already handled well. That instrument was fit for finding instances and
+  // unfit for a rate — see docs/evaluation-debts.md row 9. The cost of
+  // blindness is accepted deliberately: some sampled pages will carry no
+  // figures at all, and the review UI's page-level "no miss found" verdict
+  // records them as verified negatives instead of wasted work.
+  // match/rank are null: membership AND order both come from `cleanOrder`
+  // below (one seeded permutation of the !escalated population), so there is
+  // no second predicate here to drift out of sync with it.
+  { name: 'clean', match: null, rank: null },
   { name: 'starved', match: (c) => c.nativeStarved, rank: (a, b) => b.ocrCount - a.ocrCount || byId(a, b) },
   { name: 'conflict', match: (c) => c.conflictCount > 0, rank: (a, b) => b.conflictCount - a.conflictCount || byId(a, b) },
   { name: 'pictorial', match: (c) => c.pictorialCount > 0, rank: (a, b) => b.pictorialCount - a.pictorialCount || byId(a, b) }
@@ -192,11 +240,18 @@ function take(candidate, tier, documentCap) {
 }
 
 const shares = profile === 'clean' ? TIER_SHARE_CLEAN : TIER_SHARE;
+// The clean population's order is fixed once, up front, and reused by the
+// fill pass — one seeded permutation, so relaxing a diversity cap cannot
+// smuggle in a different (extractor-informed) ordering.
+const cleanOrder = profile === 'clean'
+  ? seededShuffle(candidates.filter((candidate) => !candidate.escalated), seed)
+  : undefined;
 for (const tier of TIERS) {
   if (!shares[tier.name]) continue;
   const quota = Math.round(size * shares[tier.name]);
   let taken = 0;
-  for (const candidate of candidates.filter(tier.match).sort(tier.rank)) {
+  const ordered = tier.rank ? candidates.filter(tier.match).sort(tier.rank) : cleanOrder;
+  for (const candidate of ordered) {
     if (taken >= quota || picked.length >= size) break;
     if (take(candidate, tier.name, MAX_PER_DOCUMENT)) taken += 1;
   }
@@ -205,13 +260,15 @@ for (const tier of TIERS) {
   }
 }
 
-// Residual fill: whatever is left goes to the pages with the widest
-// native/OCR coverage gap — the next most likely place for unread ink.
-// In the clean profile the fill pass must stay inside the population, or it
-// quietly backfills escalated pages and the denominator stops meaning
-// "pages the pipeline declared fine".
-const fillPool = profile === 'clean' ? candidates.filter((c) => !c.escalated) : candidates;
-for (const candidate of [...fillPool].sort((a, b) => a.coverage - b.coverage || byId(a, b))) {
+// Residual fill. Debt profile: pages with the widest native/OCR coverage gap —
+// the next most likely place for unread ink. Clean profile: the SAME seeded
+// order with relaxed document caps — never coverage, which reads the system
+// under test — and confined to the population, or the denominator quietly
+// stops meaning "pages the pipeline declared fine".
+const fillOrder = profile === 'clean'
+  ? cleanOrder
+  : [...candidates].sort((a, b) => a.coverage - b.coverage || byId(a, b));
+for (const candidate of fillOrder) {
   if (picked.length >= size) break;
   take(candidate, 'fill', MAX_PER_DOCUMENT_FILL);
 }
@@ -219,11 +276,58 @@ for (const candidate of [...fillPool].sort((a, b) => a.coverage - b.coverage || 
 if (!picked.length) throw new Error('No unlabeled development pages remain to sample.');
 picked.sort(byId);
 
+// The clean POPULATION is partitioned, not just sampled. Prior-batch
+// subtraction is honest bookkeeping for "never label twice" but it is also
+// INDIRECT CONDITIONING on the system under test: every prior batch was
+// selected by extractor output (debt tiers, coverage-sorted fill, batch 5's
+// criticalCount eligibility), so the residual unlabeled pool is "clean pages
+// the extractor-conditioned samplers didn't want". A rate computed over the
+// residual alone would over-represent pages the engines read little on. The
+// mitigation is stratum-union: previously-labeled clean pages already carry
+// gold, so their miss/no-miss outcomes are derivable from their own batches'
+// aggregates, and the honest future denominator is the UNION of strata —
+// residual (this sampler) plus each prior batch's clean pages — never the
+// residual alone. This partition records both sides with provenance so that
+// union can actually be computed.
+let populationPartition;
+if (profile === 'clean') {
+  const previouslyLabeledClean = [];
+  const previouslyLabeledEscalated = [];
+  const previouslyLabeledUnknown = [];
+  for (const { batch, objectId, pageNumber } of labeled.values()) {
+    const record = readPageRecord(objectId, pageNumber);
+    const entry = { page: pageKey(objectId, pageNumber), batch };
+    if (!record?.pageSpatial) previouslyLabeledUnknown.push(entry);
+    else if (record.pageSpatial.diagnostics?.requiresEscalation) previouslyLabeledEscalated.push(entry);
+    else previouslyLabeledClean.push(entry);
+  }
+  populationPartition = {
+    residualUnlabeledClean: candidates.filter((candidate) => !candidate.escalated)
+      .map((candidate) => pageKey(candidate.objectId, candidate.pageNumber)).sort(),
+    previouslyLabeledClean,
+    previouslyLabeledEscalated: previouslyLabeledEscalated.length,
+    previouslyLabeledUnknownRecord: previouslyLabeledUnknown,
+    note: 'A clean-page miss RATE must be computed over the union of strata (residual + each prior batch\'s clean pages, from their own aggregates), never over the residual alone: the residual pool is conditioned on prior extractor-driven sampling.'
+  };
+}
+
 const tally = picked.reduce((acc, page) => ({ ...acc, [page.tier]: (acc[page.tier] ?? 0) + 1 }), {});
-console.log(`Candidates: ${candidates.length} unlabeled development pages (${labeled.size} already labeled${missingRecords ? `, ${missingRecords} missing run records` : ''}).`);
+console.log(`Candidates: ${candidates.length} unlabeled development pages (${labeled.size} already labeled${skippedMissingRecords.length ? `, ${skippedMissingRecords.length} missing run records` : ''}).`);
 console.log(`Selected ${picked.length}: ${Object.entries(tally).map(([tier, n]) => `${tier} ${n}`).join(', ')}.`);
 for (const page of picked) {
-  console.log(`  ${page.tier.padEnd(9)} ${page.objectId} p${page.pageNumber}  starved=${page.starvedCount} conflicts=${page.conflictCount} pictorial=${page.pictorialCount} coverage=${page.coverage.toFixed(2)}`);
+  // Clean profile: id and tier only. Printing per-page extractor stats here
+  // would hand an operator a seed-shopping channel — re-roll seeds until the
+  // dry run "looks right" — which is selection conditioned on extractor
+  // output with extra steps.
+  console.log(profile === 'clean'
+    ? `  ${page.tier.padEnd(9)} ${page.objectId} p${page.pageNumber}`
+    : `  ${page.tier.padEnd(9)} ${page.objectId} p${page.pageNumber}  starved=${page.starvedCount} conflicts=${page.conflictCount} pictorial=${page.pictorialCount} coverage=${page.coverage.toFixed(2)}`);
+}
+if (populationPartition) {
+  console.log(`Clean population partition: residual ${populationPartition.residualUnlabeledClean.length} unlabeled, prior-labeled clean ${populationPartition.previouslyLabeledClean.length}, prior-labeled escalated ${populationPartition.previouslyLabeledEscalated}${populationPartition.previouslyLabeledUnknownRecord.length ? `, unknown-record ${populationPartition.previouslyLabeledUnknownRecord.length}` : ''}.`);
+}
+if (skippedMissingRecords.length) {
+  console.warn(`WARNING: ${skippedMissingRecords.length} pages have no run record — outside BOTH populations; recorded in selection.json.`);
 }
 if (dryRun) process.exit(0);
 
@@ -273,5 +377,17 @@ const sample = picked.map((page) => {
 });
 
 writeFileSync(join(outputDir, 'pilot-sample.json'), `${JSON.stringify(sample, null, 2)}\n`);
-writeFileSync(join(outputDir, "selection.json"), `${JSON.stringify({ runRoot, size, profile, tally, pages: picked }, null, 2)}\n`);
+writeFileSync(join(outputDir, "selection.json"), `${JSON.stringify({
+  runRoot,
+  size,
+  profile,
+  ...(profile === 'clean' ? {
+    seed,
+    population: 'non-escalated development pages (requiresEscalation false), seeded-random, extractor-blind',
+    populationPartition
+  } : {}),
+  skippedMissingRunRecords: { count: skippedMissingRecords.length, pages: skippedMissingRecords },
+  tally,
+  pages: picked
+}, null, 2)}\n`);
 console.log(`Wrote ${join(outputDir, 'pilot-sample.json')} and ${sample.length} page images.`);

@@ -157,13 +157,18 @@ const pagesHtml = proposals.map((page, pageIndex) => {
       <small>${escapeHtml((page.labels ?? []).join(', '))}</small></h2>
     <p class="notes">${escapeHtml(page.proposal.notes)}</p>
     <div class="layout">
-      <div class="imgwrap"><img src="data:image/png;base64,${imageBase64}">${boxes}</div>
+      <div class="imgwrap" id="imgwrap-${pageIndex}"><img src="data:image/png;base64,${imageBase64}">${boxes}</div>
       <div class="panel">
         <h3>Critical tokens: ${tokens.length - autoCount - noiseCount} need review, ${autoCount} auto-accepted${noiseCount ? `, ${noiseCount} dropped as non-scoring` : ''} — add missed ones below</h3>
         <table>${tokenRows}</table>
         <p class="bulkbar"><button type="button" onclick="acceptRemaining(${pageIndex})">Accept all remaining on this page</button>
           <span id="bulkcount-${pageIndex}"></span></p>
         <textarea id="missed-${pageIndex}" placeholder="Missed tokens, one per line, verbatim"></textarea>
+        <p class="nomiss">
+          <button type="button" onclick="toggleBoxes(${pageIndex})" id="hideboxes-${pageIndex}">Hide boxes to search</button>
+          <label><input type="checkbox" id="nomiss-${pageIndex}" disabled>
+          I searched the UNBOXED parts of this page for figures neither engine read and found <strong>none</strong></label>
+          <small>The boxes are machine-drawn and anchor your eyes to what the machine already found — the misses that matter are exactly where there is no box. The checkbox unlocks after you have viewed the page with boxes hidden at least once. Recorded as a verified negative — a page nobody checked exports nothing here. Leave unchecked if you added missed tokens or did not search.</small></p>
         ${chartRows ? `<h3>Chart relations</h3><table><tr><th></th><th>series</th><th>category</th><th>value</th><th>unit</th><th></th></tr>${chartRows}</table>` : ''}
         <textarea id="missed-charts-${pageIndex}" placeholder="Missed chart tuples, one per line: category | value | unit"></textarea>
         ${conflictRows ? `<h3>Conflict adjudications</h3><table><tr><th></th><th>readings</th><th>machine proposal</th><th>your verdict</th></tr>${conflictRows}</table>` : ''}
@@ -190,6 +195,11 @@ tr.bulked{background:#fff6df}
 tr.bulked td:first-child::after{content:' bulk';color:#a86400;font-size:11px}
 .nobox{color:#c00;font-weight:700;margin-left:.25rem;cursor:help}
 .bulkbar{margin:.4rem 0 0;font-size:12px;color:#666}
+.nomiss{margin:.5rem 0;padding:.4rem;background:#f0f7f0;border:1px solid #cde3cd;border-radius:6px}
+.nomiss button{font-size:12px;padding:.25rem .5rem;margin-right:.5rem}
+.nomiss input:disabled+*{color:#999}
+.imgwrap.noboxes .box{display:none}
+.nomiss small{display:block;color:#666;margin-top:.2rem}
 .bulkbar button{font-size:12px;padding:.25rem .5rem}
 .panel{flex:1;max-height:90vh;overflow:auto}
 table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #eee;padding:2px 6px;text-align:left;vertical-align:top}
@@ -212,6 +222,18 @@ const PROPOSALS = ${JSON.stringify(proposals.map((page) => ({
 function hl(pageIndex, tokenIndex, on){
   const box = document.getElementById('box-' + pageIndex + '-' + tokenIndex);
   if (box) box.classList.toggle('hot', Boolean(on));
+}
+// The no-miss checkbox stays locked until the reviewer has looked at the
+// page WITHOUT the machine-drawn boxes at least once: the boxes anchor
+// attention to what the machine found, and the misses a verified negative
+// vouches for are exactly the unboxed ink.
+function toggleBoxes(pageIndex){
+  const wrap = document.getElementById('imgwrap-' + pageIndex);
+  wrap.classList.toggle('noboxes');
+  const button = document.getElementById('hideboxes-' + pageIndex);
+  button.textContent = wrap.classList.contains('noboxes') ? 'Show boxes' : 'Hide boxes to search';
+  const nomiss = document.getElementById('nomiss-' + pageIndex);
+  if (nomiss) nomiss.disabled = false;
 }
 // Page-level accept for the common case where every proposal is right. It
 // records "bulk", NOT "correct": the evaluator scores that as its own tier,
@@ -244,6 +266,11 @@ function exportVerdicts(){
       text: document.querySelector('tr[data-page="' + pageIndex + '"][data-token="' + tokenIndex + '"] .text')?.textContent.trim()
     })),
     missedTokens: document.getElementById('missed-' + pageIndex).value.split('\\n').map(s => s.trim()).filter(Boolean),
+    // Tri-state by construction: true = the reviewer searched and found no
+    // missed figures (a RECORDED negative); null = no claim either way. A
+    // checked box alongside entered missed tokens is a contradiction the
+    // evaluator rejects — silence is never promoted to a negative.
+    noMissFound: document.getElementById('nomiss-' + pageIndex)?.checked ? true : null,
     charts: Array.from({length: page.chartCount}, (_, relationIndex) => ({
       index: relationIndex,
       verdict: document.querySelector('input[name="c-' + pageIndex + '-' + relationIndex + '"]:checked')?.value,
@@ -260,7 +287,7 @@ function exportVerdicts(){
       id, verdict: document.querySelector('select[name="v-' + pageIndex + '-' + conflictIndex + '"]')?.value
     }))
   }));
-  const blob = new Blob([JSON.stringify({goldVerdictsSchemaVersion: 'gold-verdicts-v1', verifiedAt: new Date().toISOString(), pages}, null, 1)], {type: 'application/json'});
+  const blob = new Blob([JSON.stringify({goldVerdictsSchemaVersion: 'gold-verdicts-v2', verifiedAt: new Date().toISOString(), pages}, null, 1)], {type: 'application/json'});
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = 'gold-verdicts.json';

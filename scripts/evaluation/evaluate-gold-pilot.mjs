@@ -26,7 +26,7 @@
  *     --run-root .evaluation/runs/<run-id> \
  *     --output .evaluation/gold/<pilot-id>/metrics.json
  */
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { criticalTokens, criticalTokensCompatible } from '../../dist/text.js';
 import { consumeMatch } from './lib/recall-match.mjs';
@@ -140,7 +140,23 @@ const escalation = {
   escalatedUncorroboratedOnlyWithHumanGoldMissedByBoth: 0,
   escalatedAdvisoryOnlyPages: 0,
   cleanPages: 0,
-  cleanWithHumanGoldMissedByBoth: 0
+  cleanWithHumanGoldMissedByBoth: 0,
+  // Verified negatives (gold-verdicts-v2): clean pages whose reviewer
+  // RECORDED "searched, no missed figures found" and where no missed-by-both
+  // gold exists. A clean page with neither a miss nor a no-miss verdict is
+  // UNVERIFIED — absence of evidence, never a negative. A future rate's
+  // denominator is cleanWithHumanGoldMissedByBoth + cleanVerifiedNoMiss;
+  // this file reports the counts and deliberately no rate.
+  cleanVerifiedNoMiss: 0,
+  cleanUnverified: 0,
+  // A no-miss verdict on a page where verified gold still shows a
+  // missed-by-both token: the reviewer searched and found nothing, but the
+  // engine comparison did. The computed miss supersedes the human negative —
+  // counted here so the disagreement stays visible, never as a negative.
+  noMissVerdictsSupersededByComputedMiss: 0,
+  // A no-miss verdict on an ESCALATED page is an anomaly (the checkbox is
+  // meant for clean pages) — counted, never silently dropped.
+  noMissVerdictsOnEscalatedPages: 0
 };
 const perPage = [];
 const validatedInputs = [];
@@ -165,7 +181,12 @@ for (const page of verdicts.pages) {
   const tokenText = (token) => (token.verdict === 'edited' && token.text) ? token.text : proposalTokens[token.index]?.text;
   const humanTexts = [
     ...page.tokens.filter((token) => ['correct', 'edited'].includes(token.verdict)).map(tokenText),
-    ...(page.missedTokens ?? [])
+    ...(page.missedTokens ?? []),
+    // Missed chart VALUES are human-verified figures on the page like any
+    // other missed token: scoring them through the same pools means a chart
+    // value neither engine read counts as a miss (and can supersede a no-miss
+    // claim) instead of vanishing into relation accounting.
+    ...(page.missedCharts ?? []).map((chart) => chart.value)
   ].filter(Boolean);
   const silverTexts = page.tokens.filter((token) => token.verdict === 'auto').map(tokenText).filter(Boolean);
   const bulkTexts = page.tokens.filter((token) => token.verdict === 'bulk').map(tokenText).filter(Boolean);
@@ -229,12 +250,22 @@ for (const page of verdicts.pages) {
     }
   }
 
+  // Fail closed on a direct contradiction regardless of escalation state:
+  // the reviewer both claimed "no missed figures found" and entered missed
+  // tokens or missed chart values by hand on the same page. One of the two
+  // is wrong; re-review.
+  const handEnteredMisses = (page.missedTokens ?? []).length + (page.missedCharts ?? []).length;
+  if (page.noMissFound === true && handEnteredMisses > 0) {
+    throw new Error(`${key} claims noMissFound but lists ${handEnteredMisses} missed tokens/charts; resolve the contradiction before evaluating.`);
+  }
+
   const reasons = record.diagnostics.escalationReasons ?? [];
   const blockingTypes = reasons.filter((reason) => reason.severity === 'blocking').map((reason) => reason.type);
   const hasBlocking = blockingTypes.length > 0;
   const uncorroboratedOnly = hasBlocking && blockingTypes.every((type) => type === 'uncorroborated-ocr');
   if (record.diagnostics.requiresEscalation) {
     escalation.escalatedPages += 1;
+    if (page.noMissFound === true) escalation.noMissVerdictsOnEscalatedPages += 1;
     if (hasBlocking) escalation.escalatedBlockingPages += 1;
     if (uncorroboratedOnly) {
       escalation.escalatedUncorroboratedOnlyPages += 1;
@@ -249,14 +280,22 @@ for (const page of verdicts.pages) {
     }
   } else {
     escalation.cleanPages += 1;
-    if (pageHuman.neither > 0) escalation.cleanWithHumanGoldMissedByBoth += 1;
+    if (pageHuman.neither > 0) {
+      escalation.cleanWithHumanGoldMissedByBoth += 1;
+      if (page.noMissFound === true) escalation.noMissVerdictsSupersededByComputedMiss += 1;
+    } else if (page.noMissFound === true) {
+      escalation.cleanVerifiedNoMiss += 1;
+    } else {
+      escalation.cleanUnverified += 1;
+    }
   }
   perPage.push({
     objectId: page.objectId,
     pageNumber: page.pageNumber,
     human: pageHuman,
     silver: pageSilver,
-    bulk: pageBulk
+    bulk: pageBulk,
+    ...(page.noMissFound === true ? { noMissFound: true } : {})
   });
 }
 
@@ -270,15 +309,53 @@ if (escalation.escalatedBlockingPages + escalation.escalatedAdvisoryOnlyPages !=
 if (escalation.escalatedPages + escalation.cleanPages !== verdicts.pages.length) {
   throw new Error('Escalated and clean pages do not sum to the evaluated page count.');
 }
+if (escalation.cleanWithHumanGoldMissedByBoth + escalation.cleanVerifiedNoMiss + escalation.cleanUnverified !== escalation.cleanPages) {
+  throw new Error('Clean-page miss/verified-negative/unverified buckets do not sum to cleanPages.');
+}
+
+// Selection provenance, when the batch dir carries the sampler's
+// selection.json: which profile/seed drew these pages and — for the clean
+// profile — the population partition. Embedded here so the stratum a clean
+// page belongs to is visible in the file where its numbers are written; a
+// clean-page miss rate is only honest over the UNION of strata across
+// batches (residual + each prior batch's clean pages), never one aggregate's
+// clean pages alone.
+const selectionPath = join(goldDir, 'selection.json');
+const selection = existsSync(selectionPath)
+  ? (({ profile, seed, population, populationPartition, skippedMissingRunRecords }) => ({
+      profile,
+      ...(seed ? { seed } : {}),
+      ...(population ? { population } : {}),
+      ...(populationPartition ? {
+        populationPartition: {
+          residualUnlabeledClean: populationPartition.residualUnlabeledClean.length,
+          previouslyLabeledClean: populationPartition.previouslyLabeledClean.length,
+          previouslyLabeledCleanByBatch: populationPartition.previouslyLabeledClean.reduce(
+            (acc, entry) => ({ ...acc, [entry.batch]: (acc[entry.batch] ?? 0) + 1 }), {}),
+          note: populationPartition.note
+        }
+      } : {}),
+      ...(skippedMissingRunRecords?.count ? { skippedMissingRunRecords: skippedMissingRunRecords.count } : {})
+    }))(JSON.parse(readFileSync(selectionPath, 'utf8')))
+  : undefined;
 
 const metrics = {
-  // v4 adds the bulk tier. v3 aggregates stay readable as their own era —
+  // v5 adds verified-negative accounting (cleanVerifiedNoMiss /
+  // cleanUnverified / noMissVerdictsSupersededByComputedMiss /
+  // noMissVerdictsOnEscalatedPages) from gold-verdicts-v2's page-level
+  // no-miss verdict, scores missed chart VALUES through the same token pools
+  // as missed tokens (a chart figure neither engine read now counts as a
+  // miss), and embeds sampler selection provenance where present. Earlier
+  // aggregates predate the verdict: their clean pages are all "unverified",
+  // not negatives, and their missed chart values were relation-only.
+  // v4 added the bulk tier. v3 aggregates stay readable as their own era —
   // they predate page-level accept, so their human tier means what it says.
-  goldPilotMetricsVersion: 'gold-pilot-metrics-v4',
+  goldPilotMetricsVersion: 'gold-pilot-metrics-v5',
   createdAt: new Date().toISOString(),
   runRoot,
   goldVerifiedAt: verdicts.verifiedAt,
   pages: verdicts.pages.length,
+  ...(selection ? { selection } : {}),
   validatedInputs,
   criticalTokenRecall: {
     humanVerified: tierReport(human),
@@ -306,7 +383,10 @@ const metrics = {
     'Recall is occurrence-consuming token containment under the same-ink canonicalization; box agreement is not yet scored.',
     'Human-tier gold: machine pre-labels verified by one annotator; no second annotator or adjudication yet. Silver tier is not independent of the native engine.',
     `Bulk tier: ${bulk.gold} tokens were page-accepted without individual reading and are excluded from the human tier.`,
-    'Chart precision counts detections matched by any gold tuple; unmatched detections may be correct tuples the gold set does not cover.'
+    'Chart precision counts detections matched by any gold tuple; unmatched detections may be correct tuples the gold set does not cover.',
+    'Verified negatives require an explicit no-miss verdict (gold-verdicts-v2); clean pages without one are counted cleanUnverified and may not enter any miss-rate denominator. No rate is computed here.',
+    'Clean-page outcomes in this file are ONE STRATUM (this batch). The residual clean pool is conditioned on prior extractor-driven sampling, so any future miss rate must union clean-page outcomes across all batches (see selection.populationPartition), never quote one aggregate alone.',
+    'Union preconditions — prior strata are NOT admissible as they stand: (a) their clean pages predate the no-miss verdict (all cleanUnverified — misses without verified negatives = numerator selection bias), so they must first pass a no-miss re-review; (b) their outcomes were evaluated against older run roots and must be re-evaluated against the union run root before entering. Until both hold, no rate exists.'
   ]
 };
 
