@@ -46,7 +46,17 @@ without their sample-size caveat until re-measured.
   union recall **67.8%** with **78 of 242 tokens missed by both engines** —
   materially worse than batch 3's 86.1%, and the gap is where row 9 came
   from. Chart relations again score 0: 12 gold tuples, 0 detections. Same
-  single annotator; this batch has not been spot-checked.
+  single annotator. Audited like batch 3 (`--seed 1`): **30 agree, 0
+  disagree, 0 skipped**, and this was the harder sample — 13 of its 30 rows
+  came from the dense `blackstone` p15/p17 tables, against batch 3's
+  ordinance line numbers and plain dates.
+- **Audit position across both batches: 60 re-read rows, 0 disagreements.**
+  That bounds the pre-labeler's error rate on verified rows at **≤4.9% with
+  95% confidence**, tightened from ≤9.8% after batch 3 alone. It still does
+  not confirm the 98.5% precision figure — under that rate the expected
+  number of errors in 60 rows is 0.9, so observing none is unremarkable.
+  Two annotator-independent gaps remain: both batches are one annotator, and
+  272 conflict adjudications have never been sampled at all.
 - Batch-3 gold covers 820 proposed tokens on pages where OCR alone reads
   2,215 critical tokens, and no missed tokens were added by hand. Recall
   measured on this gold is recall against **the pre-labeler's proposal
