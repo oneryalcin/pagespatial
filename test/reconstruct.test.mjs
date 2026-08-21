@@ -97,6 +97,48 @@ test('secondOpinion readings stay out by default and appear only on request', ()
   assert.match(withOpinion, /unauthenticated/u, 'legend states the honest scope');
 });
 
+test('XML-illegal control characters render as visible markers, not invalid XML', () => {
+  const page = fixturePage({
+    geometry: { width: 1000, height: 1000, pointWidth: 500, pointHeight: 500 },
+    nativeObservations: [{ pageNumber: 1, text: 'bad\u0008char \u0000 end', box: [10, 10, 300, 40] }],
+    ocrObservations: []
+  });
+  const svg = reconstructSvg(page);
+  assert.match(svg, /bad\\x08char \\x00 end/u, 'controls become visible markers');
+  assert.doesNotMatch(svg, /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u, 'no raw control bytes in output');
+});
+
+test('legend claims OCR-only text only when a non-conflicted OCR reading was drawn', () => {
+  const page = fixturePage({
+    geometry: { width: 1000, height: 1000, pointWidth: 500, pointHeight: 500 },
+    nativeObservations: [{ pageNumber: 1, text: 'Revenue 647', box: [50, 50, 250, 80] }],
+    ocrObservations: [{ pageNumber: 1, text: 'Revenue 641', box: [50, 50, 250, 80], confidence: 0.99 }]
+  });
+  assert.ok(page.conflicts.length >= 1, 'fixture must produce a conflict');
+  const svg = reconstructSvg(page);
+  assert.doesNotMatch(svg, /OCR-only text/u, 'only blue on the page is conflicted → no OCR-only legend');
+  assert.match(svg, /conflicted reading/u);
+  assert.match(svg, new RegExp(`fill="#b5432c"[^>]*>Revenue 641`, 'u'), 'conflicted reading drawn in conflict color');
+});
+
+test('unknown region kinds fail visible with their kind named', () => {
+  const base = fixturePage({
+    geometry: { width: 1000, height: 1000, pointWidth: 500, pointHeight: 500 },
+    nativeObservations: [{ pageNumber: 1, text: 'Anchor', box: [10, 10, 80, 30] }],
+    ocrObservations: []
+  });
+  const page = {
+    ...base,
+    unreadInkRegions: [
+      { box: [100, 100, 400, 300], kind: 'table-v2', inkDensity: 0.5, midToneFraction: 0.1, recoveredObservationCount: 0, confirmations: [] }
+    ]
+  };
+  const svg = reconstructSvg(page);
+  assert.match(svg, /unknown region \(table-v2\)/u);
+  assert.doesNotMatch(svg, />unread ink</u, 'never mislabeled as unread ink');
+  assert.doesNotMatch(svg, /url\(#unread-hatch\)/u, 'unknown kinds do not borrow the structured hatch');
+});
+
 test('deterministic: same record produces identical bytes; text is XML-escaped', () => {
   const page = fixturePage({
     geometry: { width: 1000, height: 1000, pointWidth: 500, pointHeight: 500 },

@@ -43,7 +43,11 @@ const escapeXml = (value: string): string =>
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    // XML 1.0 forbids most C0 controls even as entities. Render them as a
+    // VISIBLE marker instead of crashing or silently dropping: the record's
+    // weirdness stays on the page, which is the honest outcome.
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, (ch) => `\\x${ch.charCodeAt(0).toString(16).padStart(2, '0')}`);
 
 const round = (value: number): string => Number(value.toFixed(2)).toString();
 
@@ -90,9 +94,12 @@ export function reconstructSvg(page: PageSpatial, options: ReconstructOptions = 
 
   let drewOcrOnly = false;
   for (const observation of page.ocrObservations) {
-    if (matchedOcrIds.has(observation.id) && !conflictOcrIds.has(observation.id)) continue;
-    parts.push(textElement(observation.box, observation.text, OCR_ONLY));
-    drewOcrOnly = true;
+    const conflicted = conflictOcrIds.has(observation.id);
+    if (matchedOcrIds.has(observation.id) && !conflicted) continue;
+    // A conflicted reading is disputed, not merely single-witness — it gets
+    // the conflict color so the legend never claims a state the page lacks.
+    parts.push(textElement(observation.box, observation.text, conflicted ? CONFLICT : OCR_ONLY));
+    if (!conflicted) drewOcrOnly = true;
   }
   if (drewOcrOnly) legend.push(`<tspan fill="${OCR_ONLY}">OCR-only text</tspan>`);
 
@@ -111,13 +118,20 @@ export function reconstructSvg(page: PageSpatial, options: ReconstructOptions = 
   }
 
   for (const region of page.unreadInkRegions ?? []) {
-    const label = region.kind === 'pictorial'
-      ? 'pictorial region'
-      : region.confirmations.length && !region.recoveredObservationCount
-        ? 'unread ink (corroborated)'
-        : 'unread ink';
-    const hatch = region.kind === 'pictorial' ? '' : ' fill="url(#unread-hatch)"';
-    parts.push(rect(region.box, `stroke="${REGION}" stroke-width="1"${hatch || ' fill="none"'}`));
+    // Fail visible on kinds this renderer does not know (the CLI performs
+    // no schema validation, so hand-loaded records can carry anything):
+    // an unknown kind is labeled as such, never silently drawn as unread ink.
+    const known = region.kind === 'structured' || region.kind === 'pictorial';
+    const label = !known
+      ? `unknown region (${region.kind})`
+      : region.kind === 'pictorial'
+        ? 'pictorial region'
+        : region.confirmations.length && !region.recoveredObservationCount
+          ? 'unread ink (corroborated)'
+          : 'unread ink';
+    const hatch = region.kind === 'structured' ? ' fill="url(#unread-hatch)"' : '';
+    const stroke = known ? 'stroke-width="1"' : 'stroke-width="2" stroke-dasharray="2 2"';
+    parts.push(rect(region.box, `stroke="${REGION}" ${stroke}${hatch || ' fill="none"'}`));
     const [x0, y0] = region.box;
     parts.push(`<text x="${round(x0 + 3)}" y="${round(y0 + 11)}" font-size="9" fill="${REGION}">${escapeXml(label)}</text>`);
   }
