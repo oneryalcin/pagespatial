@@ -193,6 +193,27 @@ test('agreement scorer reports presentation drift first-class, in the rate sente
   assert.equal(report.agreement.compared, 1, 'the clean row still compares');
 });
 
+test('agreement scorer catches reverse drift: A1-auto row exported as correct', () => {
+  // Mirror of the drift test above. An auto row's radio never offers
+  // 'correct', so a 'correct' export on a row A1's era auto-marked can only
+  // mean the regenerated page showed annotator 2 a plain human row.
+  const report = scorerFixture({
+    a1Tokens: [
+      { index: 0, verdict: 'auto', text: '1,234' },
+      { index: 1, verdict: 'correct', text: '5,678' }
+    ],
+    a2Tokens: [
+      { index: 0, verdict: 'correct', text: '1,234' },
+      { index: 1, verdict: 'correct', text: '5,678' }
+    ],
+    groupRunRoot: '/some/run'
+  });
+  assert.equal(report.presentationDrift, 1);
+  assert.match(report.agreement.rate, /DRIFT/u);
+  assert.equal(report.autoOverridesBySecond, 0, 'reverse drift must not count as an override');
+  assert.equal(report.agreement.compared, 1, 'the clean row still compares');
+});
+
 test('an edited row exporting empty text is excluded, never spurious agreement', () => {
   const report = scorerFixture({
     a1Tokens: [{ index: 0, verdict: 'edited', text: '' }],
