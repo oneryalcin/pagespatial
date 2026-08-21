@@ -140,7 +140,20 @@ const escalation = {
   escalatedUncorroboratedOnlyWithHumanGoldMissedByBoth: 0,
   escalatedAdvisoryOnlyPages: 0,
   cleanPages: 0,
-  cleanWithHumanGoldMissedByBoth: 0
+  cleanWithHumanGoldMissedByBoth: 0,
+  // Verified negatives (gold-verdicts-v2): clean pages whose reviewer
+  // RECORDED "searched, no missed figures found" and where no missed-by-both
+  // gold exists. A clean page with neither a miss nor a no-miss verdict is
+  // UNVERIFIED — absence of evidence, never a negative. A future rate's
+  // denominator is cleanWithHumanGoldMissedByBoth + cleanVerifiedNoMiss;
+  // this file reports the counts and deliberately no rate.
+  cleanVerifiedNoMiss: 0,
+  cleanUnverified: 0,
+  // A no-miss verdict on a page where verified gold still shows a
+  // missed-by-both token: the reviewer searched and found nothing, but the
+  // engine comparison did. The computed miss supersedes the human negative —
+  // counted here so the disagreement stays visible, never as a negative.
+  noMissVerdictsSupersededByComputedMiss: 0
 };
 const perPage = [];
 const validatedInputs = [];
@@ -229,6 +242,13 @@ for (const page of verdicts.pages) {
     }
   }
 
+  // Fail closed on a direct contradiction regardless of escalation state:
+  // the reviewer both claimed "no missed figures found" and entered missed
+  // tokens by hand on the same page. One of the two is wrong; re-review.
+  if (page.noMissFound === true && (page.missedTokens ?? []).length > 0) {
+    throw new Error(`${key} claims noMissFound but lists ${page.missedTokens.length} missed tokens; resolve the contradiction before evaluating.`);
+  }
+
   const reasons = record.diagnostics.escalationReasons ?? [];
   const blockingTypes = reasons.filter((reason) => reason.severity === 'blocking').map((reason) => reason.type);
   const hasBlocking = blockingTypes.length > 0;
@@ -249,14 +269,22 @@ for (const page of verdicts.pages) {
     }
   } else {
     escalation.cleanPages += 1;
-    if (pageHuman.neither > 0) escalation.cleanWithHumanGoldMissedByBoth += 1;
+    if (pageHuman.neither > 0) {
+      escalation.cleanWithHumanGoldMissedByBoth += 1;
+      if (page.noMissFound === true) escalation.noMissVerdictsSupersededByComputedMiss += 1;
+    } else if (page.noMissFound === true) {
+      escalation.cleanVerifiedNoMiss += 1;
+    } else {
+      escalation.cleanUnverified += 1;
+    }
   }
   perPage.push({
     objectId: page.objectId,
     pageNumber: page.pageNumber,
     human: pageHuman,
     silver: pageSilver,
-    bulk: pageBulk
+    bulk: pageBulk,
+    ...(page.noMissFound === true ? { noMissFound: true } : {})
   });
 }
 
@@ -270,11 +298,18 @@ if (escalation.escalatedBlockingPages + escalation.escalatedAdvisoryOnlyPages !=
 if (escalation.escalatedPages + escalation.cleanPages !== verdicts.pages.length) {
   throw new Error('Escalated and clean pages do not sum to the evaluated page count.');
 }
+if (escalation.cleanWithHumanGoldMissedByBoth + escalation.cleanVerifiedNoMiss + escalation.cleanUnverified !== escalation.cleanPages) {
+  throw new Error('Clean-page miss/verified-negative/unverified buckets do not sum to cleanPages.');
+}
 
 const metrics = {
-  // v4 adds the bulk tier. v3 aggregates stay readable as their own era —
+  // v5 adds verified-negative accounting (cleanVerifiedNoMiss /
+  // cleanUnverified / noMissVerdictsSupersededByComputedMiss) from
+  // gold-verdicts-v2's page-level no-miss verdict. Earlier aggregates predate
+  // the verdict: their clean pages are all "unverified", not negatives.
+  // v4 added the bulk tier. v3 aggregates stay readable as their own era —
   // they predate page-level accept, so their human tier means what it says.
-  goldPilotMetricsVersion: 'gold-pilot-metrics-v4',
+  goldPilotMetricsVersion: 'gold-pilot-metrics-v5',
   createdAt: new Date().toISOString(),
   runRoot,
   goldVerifiedAt: verdicts.verifiedAt,
@@ -306,7 +341,8 @@ const metrics = {
     'Recall is occurrence-consuming token containment under the same-ink canonicalization; box agreement is not yet scored.',
     'Human-tier gold: machine pre-labels verified by one annotator; no second annotator or adjudication yet. Silver tier is not independent of the native engine.',
     `Bulk tier: ${bulk.gold} tokens were page-accepted without individual reading and are excluded from the human tier.`,
-    'Chart precision counts detections matched by any gold tuple; unmatched detections may be correct tuples the gold set does not cover.'
+    'Chart precision counts detections matched by any gold tuple; unmatched detections may be correct tuples the gold set does not cover.',
+    'Verified negatives require an explicit no-miss verdict (gold-verdicts-v2); clean pages without one are counted cleanUnverified and may not enter any miss-rate denominator. No rate is computed here.'
   ]
 };
 
