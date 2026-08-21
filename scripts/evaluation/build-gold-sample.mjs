@@ -154,13 +154,20 @@ for (const document of manifest.documents) {
 // by id so the same corpus + run always yields the same batch.
 const byId = (a, b) => a.objectId.localeCompare(b.objectId) || a.pageNumber - b.pageNumber;
 const TIERS = [
-  // Clean pages that carry NUMBERS. A page with no figures on it cannot
-  // demonstrate a numeric silent miss, so including one dilutes the rate
-  // toward zero without adding information — the first clean batch drew five
-  // such pages, where both engines and the pre-labeler agreed there was
-  // nothing to read. The measured quantity is therefore explicitly
-  // conditional: the rate among clean pages that carry numbers, which is the
-  // only population where row 9's failure can occur at all.
+  // WARNING — this tier CANNOT support a miss-rate claim, and the flaw is not
+  // a threshold to tune. `criticalCount` comes from native and OCR
+  // observations, so eligibility is conditioned on the output of the very
+  // extractors under measurement: a clean page whose only figures were missed
+  // by BOTH engines scores zero and is excluded by construction, which is
+  // precisely the total failure row 9 exists to count. Ranking by the same
+  // field then favours pages the engines already handled well.
+  //
+  // It was written to avoid drawing numberless section dividers, and it does
+  // that. It is fit for finding INSTANCES of silent misses — batch 5 found
+  // three — and unfit for estimating how often they happen. A sound rate needs
+  // sampling drawn from all non-escalated pages regardless of extractor
+  // output, plus a recorded page-level "no miss found" verdict so confirmed
+  // negatives can enter the denominator. Neither exists yet.
   { name: 'clean', match: (c) => !c.escalated && c.criticalCount > 0, rank: (a, b) => b.criticalCount - a.criticalCount || byId(a, b) },
   { name: 'starved', match: (c) => c.nativeStarved, rank: (a, b) => b.ocrCount - a.ocrCount || byId(a, b) },
   { name: 'conflict', match: (c) => c.conflictCount > 0, rank: (a, b) => b.conflictCount - a.conflictCount || byId(a, b) },

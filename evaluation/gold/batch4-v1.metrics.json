@@ -1,6 +1,6 @@
 {
  "goldPilotMetricsVersion": "gold-pilot-metrics-v4",
- "createdAt": "2026-08-21T13:49:23.122Z",
+ "createdAt": "2026-08-21T14:10:09.243Z",
  "runRoot": ".evaluation/runs/exp-second-opinion-d-2026-08-20",
  "goldVerifiedAt": "2026-08-21T09:25:09.885Z",
  "pages": 15,
@@ -85,7 +85,7 @@
   "humanVerified": {
    "goldTokens": 242,
    "native": 0.5207,
-   "ocr": 0.9587,
+   "ocr": 0.9339,
    "union": 0.9587,
    "missedByBoth": 10,
    "strict": {
@@ -635,7 +635,7 @@
    "human": {
     "gold": 40,
     "native": 40,
-    "ocr": 40,
+    "ocr": 34,
     "union": 40,
     "neither": 0,
     "strictNative": 0,
