@@ -22,11 +22,21 @@
  * the failure the audit exists to detect. The recorded verdict is rejoined
  * from proposals when the export is folded in.
  *
+ * With --tier silver the sample is drawn from SILVER rows instead — tokens
+ * auto-accepted because the native text layer corroborated them, which no
+ * human has ever read (issue #8 / ledger row 7). Silver decides what a human
+ * never sees, so its errors cannot surface in any human-tier metric; the
+ * only way to measure its error rate is to put a seeded random slice of it
+ * in front of a person. Sampling is stratified proportional to each batch's
+ * silver population (an equal-per-batch split would silently reweight the
+ * tier), seeded, and conditioned on nothing the pipeline computed — verdict
+ * 'auto' is the population definition, not a ranking.
+ *
  * Usage:
  *   node scripts/evaluation/build-gold-spotcheck.mjs \
  *     --gold-dir .evaluation/gold/<batch-id>[,<batch-id>...] \
  *     --output <path>/spotcheck.html \
- *     [--size 30] [--adjudications 0] [--seed 1]
+ *     [--size 30] [--adjudications 0] [--seed 1] [--tier human|silver]
  */
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -46,37 +56,54 @@ const size = Number(arg('--size', '30'));
 const adjudicationSize = Number(arg('--adjudications', '0'));
 const runRoot = arg('--run-root', '');
 const seed = Number(arg('--seed', '1'));
+const tier = arg('--tier', 'human');
+if (!['human', 'silver'].includes(tier)) throw new Error(`Unknown --tier ${tier}`);
 
 // Comma-separated dirs: a ledger claim spans every batch that fed it, so an
 // audit of that claim has to sample the same span. Row 4's 272 adjudications
 // live across two batches; sampling one of them would audit half a number.
 const goldDirs = goldDir.split(',').map((entry) => entry.trim()).filter(Boolean);
 const proposalByPage = new Map();
+const batchOfPage = new Map();
 const verdicts = { pages: [] };
 for (const dir of goldDirs) {
+  const batchName = dir.replace(/\/+$/u, '').split('/').pop();
   for (const page of JSON.parse(readFileSync(join(dir, 'proposals.json'), 'utf8'))) {
     proposalByPage.set(`${page.objectId}#${page.pageNumber}`, page);
   }
-  verdicts.pages.push(...JSON.parse(readFileSync(join(dir, 'gold-verdicts.json'), 'utf8')).pages);
+  for (const page of JSON.parse(readFileSync(join(dir, 'gold-verdicts.json'), 'utf8')).pages) {
+    batchOfPage.set(`${page.objectId}#${page.pageNumber}`, batchName);
+    verdicts.pages.push(page);
+  }
 }
 
-// Only human-tier rows are worth re-reading: silver was never a human's
-// judgement, and bulk already declares itself unread.
-const HUMAN_VERDICTS = ['correct', 'edited'];
+// Which rows are worth re-reading depends on the tier. Human tier: rows a
+// person marked, to catch rubber-stamping (bulk already declares itself
+// unread). Silver tier: rows NO person ever marked — auto-accepted on native
+// corroboration — whose error rate is unmeasured precisely because they skip
+// every human. The verdict value is the population definition and nothing
+// else about the pipeline conditions membership.
+const TIER_VERDICTS = tier === 'silver' ? ['auto'] : ['correct', 'edited'];
 const population = [];
 for (const page of verdicts.pages) {
   const proposal = proposalByPage.get(`${page.objectId}#${page.pageNumber}`);
   if (!proposal) throw new Error(`No proposal for ${page.objectId} p${page.pageNumber}`);
   const proposalTokens = proposal.proposal.criticalTokens ?? [];
   for (const token of page.tokens) {
-    if (!HUMAN_VERDICTS.includes(token.verdict)) continue;
-    const text = (token.verdict === 'edited' && token.text) ? token.text : proposalTokens[token.index]?.text;
+    if (!TIER_VERDICTS.includes(token.verdict)) continue;
+    // Silver rows were never edited by a human; their claim is the proposal's
+    // own text, which is what corroboration accepted.
+    const text = (tier === 'human' && token.verdict === 'edited' && token.text)
+      ? token.text
+      : proposalTokens[token.index]?.text;
     if (!text || criticalTokens(text).length === 0) continue;
     population.push({
       objectId: page.objectId,
       pageNumber: page.pageNumber,
+      batch: batchOfPage.get(`${page.objectId}#${page.pageNumber}`) ?? null,
       index: token.index,
       verdict: token.verdict,
+      tier,
       text,
       box: normalizeTokenBox(proposalTokens[token.index] ?? {})?.box ?? null,
       image: proposal.image
@@ -180,7 +207,7 @@ for (const page of verdicts.pages) {
   }
 }
 
-if (!population.length) throw new Error('No scoring human-tier tokens to spot-check.');
+if (!population.length) throw new Error(`No scoring ${tier}-tier tokens to spot-check.`);
 
 // Deterministic sample: a seeded LCG shuffle. Math.random would make the
 // slice unreproducible, and a disputed spot-check nobody can regenerate is
@@ -198,7 +225,34 @@ function shuffle(items) {
   }
   return shuffled;
 }
-const sample = shuffle(population).slice(0, Math.min(size, population.length));
+// Silver samples stratified PROPORTIONAL to each batch's silver population
+// (largest-remainder rounding): the tier's overall error rate is the target,
+// and an equal-per-batch split would quietly reweight small batches. The
+// human tier keeps its original unstratified draw.
+function proportionalSample(count) {
+  const byBatch = new Map();
+  for (const item of population) {
+    const key = item.batch ?? 'unknown';
+    if (!byBatch.has(key)) byBatch.set(key, []);
+    byBatch.get(key).push(item);
+  }
+  const total = population.length;
+  const want = Math.min(count, total);
+  const quotas = [...byBatch].map(([key, items]) => {
+    const exact = want * items.length / total;
+    return { key, items: shuffle(items), floor: Math.floor(exact), remainder: exact - Math.floor(exact) };
+  });
+  let assigned = quotas.reduce((sum, quota) => sum + quota.floor, 0);
+  for (const quota of quotas.sort((a, b) => b.remainder - a.remainder)) {
+    if (assigned >= want) break;
+    quota.floor += 1;
+    assigned += 1;
+  }
+  return shuffle(quotas.flatMap((quota) => quota.items.slice(0, quota.floor)));
+}
+const sample = tier === 'silver'
+  ? proportionalSample(size)
+  : shuffle(population).slice(0, Math.min(size, population.length));
 // Stratified half and half, so the class that can put a wrong number in the
 // index is not drowned out by the class that cannot.
 function stratifiedAdjudications(count) {
@@ -407,10 +461,15 @@ button{position:fixed;right:1rem;bottom:1rem;padding:.6rem 1rem;font-size:14px;b
 h1{font-size:18px}
 p.lead{color:#555;max-width:60rem}
 </style>
-${sample.length ? `<h1>Gold spot-check — ${sample.length} of ${population.length} scoring human-tier tokens</h1>
+${sample.length ? `<h1>${tier === 'silver' ? 'Silver spot-check' : 'Gold spot-check'} — ${sample.length} of ${population.length} scoring ${tier}-tier tokens</h1>
 <p class="lead">Read the crop, not the transcription. Mark <b>matches</b> only if the
 printed ink says exactly what the middle column says. This slice is seeded
 (<code>--seed ${seed}</code>), so it can be regenerated and disputed later.</p>
+${tier === 'silver' ? `<p class="lead"><b>No human has ever read these rows.</b> Each was
+auto-accepted because the page's native text layer corroborated the
+pre-labeler — this pass is the first time a person judges them against the
+ink. The engines' agreement is not evidence here: two witnesses reading the
+same wrong glyphs agree too. Judge only what is printed.</p>` : ''}
 <table>${rows}</table>` : ''}
 ${adjudicationSection}
 <button type="button" onclick="exportSpotcheck()">Export spot-check</button>
@@ -432,7 +491,7 @@ function exportSpotcheck(){
   }));
   const disagreements = rows.filter(r => r.spotcheck === 'disagree').length;
   const unreviewed = rows.filter(r => r.spotcheck === 'unreviewed').length;
-  const payload = {goldSpotcheckSchemaVersion: 'gold-spotcheck-v2', seed: ${seed},
+  const payload = {goldSpotcheckSchemaVersion: 'gold-spotcheck-v3', tier: '${tier}', seed: ${seed},
     population: ${population.length}, sampled: rows.length, disagreements, unreviewed,
     adjudicationPopulation: ${adjudicationPopulation.length}, adjudications,
     checkedAt: new Date().toISOString(), rows};
@@ -452,6 +511,9 @@ try {
 }
 
 writeFileSync(outputPath, html);
-console.log(`Wrote ${outputPath} — ${sample.length} of ${population.length} scoring human-tier tokens`
+const perBatchSampled = {};
+for (const item of sample) perBatchSampled[item.batch ?? 'unknown'] = (perBatchSampled[item.batch ?? 'unknown'] ?? 0) + 1;
+if (tier === 'silver') console.log(`Silver sample per batch: ${JSON.stringify(perBatchSampled)}`);
+console.log(`Wrote ${outputPath} — ${sample.length} of ${population.length} scoring ${tier}-tier tokens`
   + (adjudicationSample.length ? `, ${adjudicationSample.length} of ${adjudicationPopulation.length} adjudications (blind)` : '')
   + ` (seed ${seed}).`);
