@@ -29,6 +29,22 @@ Onboarding order: [principles](principles.md) →
   computed from the extractors under measurement) and its denominator
   excludes silver-only clean successes, so **no rate is trustworthy yet**.
   See ledger row 9.
+
+**Agreed next actions (owner-confirmed, 2026-08-21 evening; parallel-safe
+— different skills, no shared state):**
+
+1. **#29** — clean-page sampler redesign, first test of the independence
+   check: sample from ALL non-escalated pages blind to extractor output;
+   page-level "no miss found" verdicts so verified negatives enter
+   denominators.
+2. **#36** — retrieval harness, pre-registered design as filed; highest
+   leverage — validates or redirects the roadmap.
+3. **Batch 6** — one annotation sitting, two re-read protocols:
+   double-label ~20 stratified pages (annotator-agreement noise floor)
+   + silver spot-check (#8, row 7 — silver's own error rate).
+
+Parked, unscheduled: the #4 chart triage hour (re-run batch 2 through the
+current scorer; decides instrument-fix vs detector-project).
 - **Row 4 retraction**: "272/272 correct" did not survive independent
   audit (25/29 agree); **"zero wrong-side" stands** and is the only form
   the economics quote. Furniture test now in prompt + audit page.
