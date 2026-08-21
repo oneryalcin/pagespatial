@@ -8,3 +8,4 @@ public/ocr-assets/
 .env.*
 !.env.example
 .omx/
+service/data/
