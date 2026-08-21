@@ -12,10 +12,10 @@ Onboarding order: [principles](principles.md) →
 
 ## State snapshot (update the date when you touch this)
 
-*As of 2026-08-20, late evening.*
+*As of 2026-08-21, morning.*
 
-- **main**: through PR #23. Era: schema 0.6.0, enrichment-0.2.0 (with
-  `transport` provenance).
+- **main**: through PR #27 (gold batch 3). Era: schema 0.6.0,
+  enrichment-0.2.0 (with `transport` provenance).
 - **Reference baseline**: `dev-v12-cross-family-2026-08-20` (dirty:false;
   starved 4, blocking 91, gold 464/468; summary committed).
 - **Escalation economics CLOSED** (issues #17/#20): $0.0093 →
@@ -28,7 +28,7 @@ Onboarding order: [principles](principles.md) →
 
 | Stream | Issue | Status | Owner | Touches | Blocked by |
 |---|---|---|---|---|---|
-| Gold extension (132 pages, human batches) | #1 | **open — highest leverage**: unblocks every row of evaluation-debts.md | — | evaluation/gold, review.html flow | nothing |
+| Gold extension (human batches) | #1 | **in progress — batch 3 shipped (PR #27)**: 45/162 pages covered; rows 4/8 measured, row 1 gold collected (scorer pending). NOT a universal unblock: row 1b is uncollectable by this instrument (digit-only pre-labeler) | — | evaluation/gold, review.html flow | nothing |
 | Server-GPU OCR adapter (privacy-constrained deployments) | #2 | open | — | new node/server module | nothing |
 | Index ingestion spec (consumption contract) | #21 | open — design doc only | — | docs/ | nothing |
 | Recovery tile budget (cost bound) | #13 | open — small, well-specified; good first task | — | src/browser/region-recovery.ts, tuning | nothing |
