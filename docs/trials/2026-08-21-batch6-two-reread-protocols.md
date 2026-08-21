@@ -56,9 +56,19 @@ Two IOUs, one annotation session:
    presence) fixed before either sitting — never any annotator's verdicts.
 3. *Ranking reads it?* No — seeded shuffle only.
 4. *Presentation reads it?* The generator never opens gold-verdicts.json,
-   so annotator 1's answers cannot appear; enforced by a test asserting the
-   generated pages carry no verdict content and no pre-checked human radio.
-   Corroboration marks are machine state both annotators see identically.
+   so annotator 1's answers cannot appear; enforced by tests asserting the
+   generated pages carry no verdict content and no pre-checked human radio,
+   and that selection is byte-identical with the verdict files deleted.
+   Corroboration marks are machine state — but only identical machine state
+   if the corroboration code has not moved since annotator 1's sitting.
+   **Review finding (corrected): for batch2 it HAD moved** — 18 rows
+   annotator 1 hand-judged regenerate as auto under the current tokenizer,
+   so "both annotators see the same page" was false for 3 of the 4 batch2
+   pages as first generated. Fix: batch2 regenerates plain (no auto marks;
+   `--plain`), which keeps all 21 of its hand-judged rows comparable, and
+   the scorer independently cross-checks auto status per row, reporting any
+   mismatch as first-class `presentationDrift` in the same sentence as the
+   agreement rate (test-pinned).
 5. *Confirmed negatives recorded?* Yes — "wrong" is an explicit verdict and
    the evaluator rejects unreviewed rows; disagreement is never inferred
    from silence.
@@ -82,18 +92,20 @@ Two IOUs, one annotation session:
 ## Generated batch (committed nowhere — lives under `.evaluation/`)
 
 - Double-label: 20 pages, seed 6 → `.evaluation/gold/batch6-doublelabel-v1/`
-  (review-1: pilot ×4, no corroboration; review-2: batch2 ×4 vs dev-v8 run;
-  review-3: batches 3–5 ×12 vs exp-second-opinion-d). Per-batch classes:
-  pilot clean 2 / conflict 1 / other 1; batch2 other 2 / conflict 1 /
-  clean 1; batch3 other 2 / conflict 1 / clean 1; batch4 other 2 / clean 1 /
-  conflict 1; batch5 clean 4.
+  (review-1: pilot ×4 + batch2 ×4, both plain — pilot predates silver,
+  batch2 drifts across the tokenizer era; review-2: batches 3–5 ×12 with
+  corroboration vs exp-second-opinion-d). Per-batch classes: pilot clean 2 /
+  conflict 1 / other 1; batch2 other 2 / conflict 1 / clean 1; batch3
+  other 2 / conflict 1 / clean 1; batch4 other 2 / clean 1 / conflict 1;
+  batch5 clean 4. Comparable A1-human rows per batch: pilot 141, batch2 21,
+  batch3 133, batch4 77, batch5 24 (~396 total).
 - Silver: 30 of 1,640 (batch2 10, batch3 7, batch4 10, batch5 3; pilot has
   no silver) → `.evaluation/gold/batch6-silver-spotcheck-v1.html`, seed 6.
 
 ## The human sitting (instructions)
 
 1. **Second annotator** (must not be annotator 1, and must not consult the
-   existing verdict files): open the three
+   existing verdict files): open the two
    `.evaluation/gold/batch6-doublelabel-v1/review-*.html` pages and work
    them exactly like a normal batch — every unmarked row gets ok / wrong /
    edited, missed tokens go in the textarea, then **Export verdicts** per
@@ -101,7 +113,9 @@ Two IOUs, one annotation session:
 2. Score agreement:
    `node scripts/evaluation/score-annotator-agreement.mjs --selection
    .evaluation/gold/batch6-doublelabel-v1/selection.json --gold-root
-   .evaluation/gold --second annotator2-group-1.json,annotator2-group-2.json,annotator2-group-3.json`
+   .evaluation/gold --second annotator2-group-1.json,annotator2-group-2.json`
+   — a nonzero `presentationDrift` in the output means the two annotators
+   saw different pages; stop and regenerate before quoting anything.
 3. **Silver** (either annotator): open
    `.evaluation/gold/batch6-silver-spotcheck-v1.html`, judge each crop
    against the ink, **Export spot-check**, then
@@ -120,4 +134,10 @@ Two IOUs, one annotation session:
   apply); silver-only clean pages from batch 5 ARE in the population.
 - 30 silver tokens bound the error rate usefully only if disagreements are
   few; if several appear, the follow-up is a larger sample, not a rate
-  quoted from n=30.
+  quoted from n=30. The scorer emits the exact one-sided 95%
+  Clopper-Pearson upper bound next to the point rate (0/30 clean still
+  admits ~9.5%) — the BOUND is what the ledger quotes, never the point
+  rate alone.
+- A wrong box that lands on *different* ink displaying the *same* text
+  (repeated column values) yields a false "matches" — rare under
+  position-consuming corroboration, and invisible to this instrument.

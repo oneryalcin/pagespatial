@@ -37,6 +37,33 @@ const reviewed = data.rows.filter((row) => row.spotcheck !== 'unreviewed').lengt
 const disagree = data.rows.filter((row) => row.spotcheck === 'disagree').length;
 const rate = (part, whole) => whole ? `${(100 * part / whole).toFixed(1)}%` : 'n/a';
 
+// Exact one-sided 95% Clopper-Pearson upper bound: the largest error rate
+// consistent with seeing x disagreements in n reviews. At n=30 a clean
+// 0/30 still admits ~9.5% — the bound is what the ledger may quote, the
+// point rate alone over-claims at this sample size.
+function binomialCdf(x, n, p) {
+  let term = (1 - p) ** n;
+  let sum = term;
+  for (let k = 1; k <= x; k += 1) {
+    term *= ((n - k + 1) / k) * (p / (1 - p));
+    sum += term;
+  }
+  return sum;
+}
+function upperBound95(x, n) {
+  if (!n) return null;
+  if (x >= n) return 1;
+  let lo = x / n;
+  let hi = 1;
+  for (let i = 0; i < 60; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (binomialCdf(x, n, mid) > 0.05) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+const bound = upperBound95(disagree, reviewed);
+
 console.log(JSON.stringify({
   scorerVersion: 'silver-spotcheck-v1',
   seed: data.seed,
@@ -45,7 +72,8 @@ console.log(JSON.stringify({
   reviewed,
   unreviewed: data.rows.length - reviewed,
   disagreements: disagree,
-  errorRate: `${rate(disagree, reviewed)} of ${reviewed} reviewed (population ${data.population})`,
+  errorRate: `${rate(disagree, reviewed)} of ${reviewed} reviewed (population ${data.population}); 95% upper bound ${bound === null ? 'n/a' : `${(100 * bound).toFixed(1)}%`} — quote the bound, not the point rate`,
+  errorRateUpperBound95: bound,
   perBatch: Object.fromEntries([...byBatch].map(([key, entry]) => [key, {
     ...entry, rate: rate(entry.disagree, entry.sampled - entry.unreviewed)
   }])),

@@ -110,6 +110,100 @@ test('double-label pages never contain annotator-1 verdicts', () => {
   }
 });
 
+test('double-label selection is identical with the verdict files deleted', () => {
+  // The independence claim is structural: selection cannot read verdicts.
+  // The sentinel test above pins the PRESENTATION channel only — a generator
+  // edited to read verdicts for PAGE PICKING would leak no sentinel. This
+  // pins selection: deleting gold-verdicts.json must change nothing.
+  const withVerdicts = goldFixture();
+  const withoutVerdicts = goldFixture();
+  try {
+    rmSync(join(withoutVerdicts.goldRoot, 'fixture-batch', 'gold-verdicts.json'));
+    const generate = (fixture) => {
+      const outputDir = join(fixture.dir, 'doublelabel');
+      execFileSync(process.execPath, [
+        join(root, 'scripts/evaluation/build-gold-doublelabel.mjs'),
+        '--gold-root', fixture.goldRoot,
+        '--batches', 'fixture-batch',
+        '--output-dir', outputDir,
+        '--per-batch', '2', '--seed', '1'
+      ], { encoding: 'utf8' });
+      // The two fixtures live at different tmp paths; compare path-free.
+      return readFileSync(join(outputDir, 'selection.json'), 'utf8')
+        .replaceAll(fixture.dir, '<dir>');
+    };
+    assert.equal(generate(withVerdicts), generate(withoutVerdicts),
+      'selection must be byte-identical whether or not verdicts exist');
+  } finally {
+    rmSync(withVerdicts.dir, { recursive: true, force: true });
+    rmSync(withoutVerdicts.dir, { recursive: true, force: true });
+  }
+});
+
+// Scorer fixtures: a selection + A1 verdicts + an A2 export, no HTML needed.
+function scorerFixture({ a1Tokens, a2Tokens, groupRunRoot }) {
+  const dir = mkdtempSync(join(tmpdir(), 'gold-agree-'));
+  const batchDir = join(dir, 'gold', 'fixture-batch');
+  mkdirSync(batchDir, { recursive: true });
+  const sha = 'f'.repeat(64);
+  writeFileSync(join(batchDir, 'proposals.json'), JSON.stringify([{
+    objectId: 'fixture-doc', sha256: sha, pageNumber: 1,
+    proposal: { criticalTokens: [{ text: '1,234' }, { text: '5,678' }, { text: '9,012' }] }
+  }]));
+  writeFileSync(join(batchDir, 'gold-verdicts.json'), JSON.stringify({
+    pages: [{ objectId: 'fixture-doc', sha256: sha, pageNumber: 1, tokens: a1Tokens, missedTokens: [] }]
+  }));
+  writeFileSync(join(dir, 'selection.json'), JSON.stringify({
+    seed: 1, batches: ['fixture-batch'],
+    pages: [{ batch: 'fixture-batch', objectId: 'fixture-doc', pageNumber: 1, sha256: sha }],
+    groups: [{ group: 1, runRoot: groupRunRoot, batches: ['fixture-batch'] }]
+  }));
+  writeFileSync(join(dir, 'annotator2.json'), JSON.stringify({
+    pages: [{ objectId: 'fixture-doc', pageNumber: 1, tokens: a2Tokens, missedTokens: [] }]
+  }));
+  const stdout = execFileSync(process.execPath, [
+    join(root, 'scripts/evaluation/score-annotator-agreement.mjs'),
+    '--selection', join(dir, 'selection.json'),
+    '--gold-root', join(dir, 'gold'),
+    '--second', join(dir, 'annotator2.json')
+  ], { encoding: 'utf8' });
+  rmSync(dir, { recursive: true, force: true });
+  return JSON.parse(stdout);
+}
+
+test('agreement scorer reports presentation drift first-class, in the rate sentence', () => {
+  // A1 hand-judged index 0; the regenerated page auto-marked it. That row
+  // must surface as drift — not vanish into unreviedEitherSide, and not
+  // count as an auto override.
+  const report = scorerFixture({
+    a1Tokens: [
+      { index: 0, verdict: 'correct', text: '1,234' },
+      { index: 1, verdict: 'correct', text: '5,678' }
+    ],
+    a2Tokens: [
+      { index: 0, verdict: 'auto', text: '1,234' },
+      { index: 1, verdict: 'correct', text: '5,678' }
+    ],
+    groupRunRoot: '/some/run'
+  });
+  assert.equal(report.presentationDrift, 1);
+  assert.match(report.agreement.rate, /DRIFT/u, 'drift must be stated in the same sentence as the rate');
+  assert.equal(report.excluded.unreviewedEitherSide, 0, 'drift must not be mislabelled as unreviewed');
+  assert.equal(report.autoOverridesBySecond, 0);
+  assert.equal(report.agreement.compared, 1, 'the clean row still compares');
+});
+
+test('an edited row exporting empty text is excluded, never spurious agreement', () => {
+  const report = scorerFixture({
+    a1Tokens: [{ index: 0, verdict: 'edited', text: '' }],
+    a2Tokens: [{ index: 0, verdict: 'correct', text: '1,234' }],
+    groupRunRoot: null
+  });
+  assert.equal(report.excluded.emptyEditedExport, 1);
+  assert.equal(report.agreement.compared, 0);
+  assert.equal(report.agreement.agree, 0);
+});
+
 test('silver spot-check samples only silver rows, deterministically per seed', () => {
   const fixture = goldFixture();
   try {
