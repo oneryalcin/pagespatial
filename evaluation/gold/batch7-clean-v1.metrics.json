@@ -1,0 +1,749 @@
+{
+ "goldPilotMetricsVersion": "gold-pilot-metrics-v5",
+ "createdAt": "2026-08-21T23:11:45.373Z",
+ "runRoot": ".evaluation/runs/dev-v12-cross-family-2026-08-20",
+ "goldVerifiedAt": "2026-08-21T23:09:18.445Z",
+ "pages": 15,
+ "selection": {
+  "profile": "clean",
+  "seed": "batch7-clean-v1",
+  "population": "non-escalated development pages (requiresEscalation false), seeded-random, extractor-blind",
+  "populationPartition": {
+   "residualUnlabeledClean": 28,
+   "previouslyLabeledClean": 27,
+   "previouslyLabeledCleanByBatch": {
+    "batch2-v1": 1,
+    "batch3-v1": 1,
+    "batch4-v1": 6,
+    "batch5-clean-v1": 15,
+    "pilot-v1": 4
+   },
+   "note": "A clean-page miss RATE must be computed over the union of strata (residual + each prior batch's clean pages, from their own aggregates), never over the residual alone: the residual pool is conditioned on prior extractor-driven sampling."
+  }
+ },
+ "validatedInputs": [
+  {
+   "objectId": "osf:file:64a59e4ea2a2f4140943711a:v1",
+   "pageNumber": 144,
+   "sha256": "a06ddba529ff277a72a639928808860c6fe3b27bf759e5f2070408dfd4d2dbad"
+  },
+  {
+   "objectId": "osf:file:670e77f61b29952574a5e7a2:v1",
+   "pageNumber": 2,
+   "sha256": "4926c7bdff7d56576ec2a045f139352048ee2c4ce9945fc64db271a7225beedd"
+  },
+  {
+   "objectId": "osf:file:670e77f61b29952574a5e7a2:v1",
+   "pageNumber": 148,
+   "sha256": "4926c7bdff7d56576ec2a045f139352048ee2c4ce9945fc64db271a7225beedd"
+  },
+  {
+   "objectId": "osf:file:686ffb54a56d843965a6c614:v1",
+   "pageNumber": 1,
+   "sha256": "74e8ea267c4d1ec4fb1b2bfee29e7c6dd735e12c3bb023bb68bbbc008626fd92"
+  },
+  {
+   "objectId": "osf:file:686ffb54a56d843965a6c614:v1",
+   "pageNumber": 43,
+   "sha256": "74e8ea267c4d1ec4fb1b2bfee29e7c6dd735e12c3bb023bb68bbbc008626fd92"
+  },
+  {
+   "objectId": "osf:file:6a74c836f0cba432843c7153:v1",
+   "pageNumber": 1,
+   "sha256": "d18f4cc61a5368a901f57e368f82a6c193b2b852d0ce3efbe4a63f15ed4ba48a"
+  },
+  {
+   "objectId": "osf:file:6a74c836f0cba432843c7153:v1",
+   "pageNumber": 18,
+   "sha256": "d18f4cc61a5368a901f57e368f82a6c193b2b852d0ce3efbe4a63f15ed4ba48a"
+  },
+  {
+   "objectId": "pa-sers:2024-09-24:llr-vii:consultant-memo",
+   "pageNumber": 2,
+   "sha256": "1f026cc0d68e9abcc5177935d3244b654b77e1611060aadd15ffb4741411dcb0"
+  },
+  {
+   "objectId": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+   "pageNumber": 7,
+   "sha256": "96f5a05d2aaa27c96fcb45513dac3488731a67169ef57f6856fc07d76c678356"
+  },
+  {
+   "objectId": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+   "pageNumber": 10,
+   "sha256": "96f5a05d2aaa27c96fcb45513dac3488731a67169ef57f6856fc07d76c678356"
+  },
+  {
+   "objectId": "public-comps:ares:2026-q1:002",
+   "pageNumber": 3,
+   "sha256": "31f04055ed52950e35cc309b9652d502740c1bdf7072f6973e01e93761dc5707"
+  },
+  {
+   "objectId": "public-comps:ares:2026-q1:002",
+   "pageNumber": 4,
+   "sha256": "31f04055ed52950e35cc309b9652d502740c1bdf7072f6973e01e93761dc5707"
+  },
+  {
+   "objectId": "public-comps:ares:2026-q1:002",
+   "pageNumber": 8,
+   "sha256": "31f04055ed52950e35cc309b9652d502740c1bdf7072f6973e01e93761dc5707"
+  },
+  {
+   "objectId": "public-comps:blackstone:2026-q1:002",
+   "pageNumber": 16,
+   "sha256": "c129043bba247a6867115ba8dcfa58cb4ba1c5dad2fe68f99701ebda3d9038c9"
+  },
+  {
+   "objectId": "world-bank:P170734:document:34222345",
+   "pageNumber": 2,
+   "sha256": "63e9dad0bf52ded5d0e09b7f5bdb917ef1fdec76ebfea607c6d2be80744a1c4b"
+  }
+ ],
+ "criticalTokenRecall": {
+  "humanVerified": {
+   "goldTokens": 4,
+   "native": 0.5,
+   "ocr": 0.5,
+   "union": 0.5,
+   "missedByBoth": 2,
+   "strict": {
+    "native": 0.5,
+    "ocr": 0.5,
+    "union": 0.5,
+    "missedByBoth": 2
+   }
+  },
+  "silverNativeCorroborated": {
+   "goldTokens": 34,
+   "native": 1,
+   "ocr": 1,
+   "union": 1,
+   "missedByBoth": 0,
+   "strict": {
+    "native": 1,
+    "ocr": 1,
+    "union": 1,
+    "missedByBoth": 0
+   },
+   "note": "Silver labels were auto-accepted because native text agreed; native/union rates on this tier are tautological by construction and must not be quoted as independent recall."
+  },
+  "bulkPageAccepted": {
+   "goldTokens": 0,
+   "native": null,
+   "ocr": null,
+   "union": null,
+   "missedByBoth": 0,
+   "strict": {
+    "native": null,
+    "ocr": null,
+    "union": null,
+    "missedByBoth": 0
+   },
+   "note": "Accepted with the review UI page-level button: a person accepted these without reading them individually. Not independent gold — report separately and never fold into the human tier."
+  }
+ },
+ "nonScoringProposals": 0,
+ "conflictComposition": {},
+ "chartRelations": {
+  "goldTuples": 0,
+  "detectedRelations": 0,
+  "recall": null,
+  "precision": null
+ },
+ "escalation": {
+  "escalatedPages": 0,
+  "escalatedBlockingPages": 0,
+  "escalatedConflictBlockingPages": 0,
+  "escalatedConflictBlockingWithConfirmedError": 0,
+  "escalatedUncorroboratedOnlyPages": 0,
+  "escalatedUncorroboratedOnlyWithHumanGoldMissedByBoth": 0,
+  "escalatedAdvisoryOnlyPages": 0,
+  "cleanPages": 15,
+  "cleanWithHumanGoldMissedByBoth": 1,
+  "cleanVerifiedNoMiss": 14,
+  "cleanUnverified": 0,
+  "noMissVerdictsSupersededByComputedMiss": 1,
+  "noMissVerdictsOnEscalatedPages": 0
+ },
+ "perPage": [
+  {
+   "objectId": "osf:file:64a59e4ea2a2f4140943711a:v1",
+   "pageNumber": 144,
+   "human": {
+    "gold": 2,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 2,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 2
+   },
+   "silver": {
+    "gold": 14,
+    "native": 14,
+    "ocr": 14,
+    "union": 14,
+    "neither": 0,
+    "strictNative": 14,
+    "strictOcr": 14,
+    "strictUnion": 14,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "noMissFound": true
+  },
+  {
+   "objectId": "osf:file:670e77f61b29952574a5e7a2:v1",
+   "pageNumber": 2,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "noMissFound": true
+  },
+  {
+   "objectId": "osf:file:670e77f61b29952574a5e7a2:v1",
+   "pageNumber": 148,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "noMissFound": true
+  },
+  {
+   "objectId": "osf:file:686ffb54a56d843965a6c614:v1",
+   "pageNumber": 1,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 3,
+    "native": 3,
+    "ocr": 3,
+    "union": 3,
+    "neither": 0,
+    "strictNative": 3,
+    "strictOcr": 3,
+    "strictUnion": 3,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "noMissFound": true
+  },
+  {
+   "objectId": "osf:file:686ffb54a56d843965a6c614:v1",
+   "pageNumber": 43,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 1,
+    "native": 1,
+    "ocr": 1,
+    "union": 1,
+    "neither": 0,
+    "strictNative": 1,
+    "strictOcr": 1,
+    "strictUnion": 1,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "noMissFound": true
+  },
+  {
+   "objectId": "osf:file:6a74c836f0cba432843c7153:v1",
+   "pageNumber": 1,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 2,
+    "native": 2,
+    "ocr": 2,
+    "union": 2,
+    "neither": 0,
+    "strictNative": 2,
+    "strictOcr": 2,
+    "strictUnion": 2,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "noMissFound": true
+  },
+  {
+   "objectId": "osf:file:6a74c836f0cba432843c7153:v1",
+   "pageNumber": 18,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "noMissFound": true
+  },
+  {
+   "objectId": "pa-sers:2024-09-24:llr-vii:consultant-memo",
+   "pageNumber": 2,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 1,
+    "native": 1,
+    "ocr": 1,
+    "union": 1,
+    "neither": 0,
+    "strictNative": 1,
+    "strictOcr": 1,
+    "strictUnion": 1,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "noMissFound": true
+  },
+  {
+   "objectId": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+   "pageNumber": 7,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "noMissFound": true
+  },
+  {
+   "objectId": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+   "pageNumber": 10,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "noMissFound": true
+  },
+  {
+   "objectId": "public-comps:ares:2026-q1:002",
+   "pageNumber": 3,
+   "human": {
+    "gold": 2,
+    "native": 2,
+    "ocr": 2,
+    "union": 2,
+    "neither": 0,
+    "strictNative": 2,
+    "strictOcr": 2,
+    "strictUnion": 2,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 10,
+    "native": 10,
+    "ocr": 10,
+    "union": 10,
+    "neither": 0,
+    "strictNative": 10,
+    "strictOcr": 10,
+    "strictUnion": 10,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "noMissFound": true
+  },
+  {
+   "objectId": "public-comps:ares:2026-q1:002",
+   "pageNumber": 4,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 2,
+    "native": 2,
+    "ocr": 2,
+    "union": 2,
+    "neither": 0,
+    "strictNative": 2,
+    "strictOcr": 2,
+    "strictUnion": 2,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "noMissFound": true
+  },
+  {
+   "objectId": "public-comps:ares:2026-q1:002",
+   "pageNumber": 8,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 1,
+    "native": 1,
+    "ocr": 1,
+    "union": 1,
+    "neither": 0,
+    "strictNative": 1,
+    "strictOcr": 1,
+    "strictUnion": 1,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "noMissFound": true
+  },
+  {
+   "objectId": "public-comps:blackstone:2026-q1:002",
+   "pageNumber": 16,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "noMissFound": true
+  },
+  {
+   "objectId": "world-bank:P170734:document:34222345",
+   "pageNumber": 2,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "noMissFound": true
+  }
+ ],
+ "caveats": [
+  "Pilot-scale: 15 pages, not the full corpus.",
+  "Recall is occurrence-consuming token containment under the same-ink canonicalization; box agreement is not yet scored.",
+  "Human-tier gold: machine pre-labels verified by one annotator; no second annotator or adjudication yet. Silver tier is not independent of the native engine.",
+  "Bulk tier: 0 tokens were page-accepted without individual reading and are excluded from the human tier.",
+  "Chart precision counts detections matched by any gold tuple; unmatched detections may be correct tuples the gold set does not cover.",
+  "Verified negatives require an explicit no-miss verdict (gold-verdicts-v2); clean pages without one are counted cleanUnverified and may not enter any miss-rate denominator. No rate is computed here.",
+  "Clean-page outcomes in this file are ONE STRATUM (this batch). The residual clean pool is conditioned on prior extractor-driven sampling, so any future miss rate must union clean-page outcomes across all batches (see selection.populationPartition), never quote one aggregate alone.",
+  "Union preconditions — prior strata are NOT admissible as they stand: (a) their clean pages predate the no-miss verdict (all cleanUnverified — misses without verified negatives = numerator selection bias), so they must first pass a no-miss re-review; (b) their outcomes were evaluated against older run roots and must be re-evaluated against the union run root before entering. Until both hold, no rate exists."
+ ]
+}
