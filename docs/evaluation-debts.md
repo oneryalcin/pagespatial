@@ -146,3 +146,13 @@ comparison it appears to be.
 - A claim's row links forward only: when re-measured, update the row with
   the new number and run id; never overwrite the original claim silently
   (visible-retraction rule).
+- Before a re-measured number lands in a row, run the **independence
+  check** (principles §8): name the denominator's population, and confirm
+  that eligibility, ranking, and presentation do not read the system under
+  test. Any yes makes the result a case series, and the row says so in the
+  same sentence as the number. Row 9 is the worked example of getting this
+  wrong — a rate was published, then withdrawn, because the sampler's
+  eligibility test read the extractors it was auditing.
+- Recall figures are comparable only within one run. A `strict` block
+  carried over from a different run is not a historical comparison; it is
+  two variables moving at once.
