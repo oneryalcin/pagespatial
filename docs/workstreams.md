@@ -64,6 +64,12 @@ Onboarding order: [principles](principles.md) →
 
 - **Measure before building**; every quoted number says what it measures
   and its sample size (evaluation-debts.md tracks thin-gold claims).
+- **The independence check** (principles §8, five questions, answered in
+  writing before a number is quoted): no instrument's denominator,
+  eligibility, ranking, or presentation may read the system under test;
+  confirmed negatives are recorded, never inferred from silence. Any
+  violation makes the result a case series, said in the same sentence as
+  the number. Broken three times in one week before it became a checklist.
 - No threshold tuning without gold labels.
 - Every PR gets an adversarial review pass before merge; findings are
   fixed or explicitly tracked, never quietly dropped.
