@@ -353,9 +353,14 @@ row</em>, and the machine's verdict is not shown, so this is an independent
 judgement rather than a review of one. Each reading's own extent is outlined in
 its colour — <b class="keyA">A solid blue</b>, <b class="keyB">B dashed
 orange</b> — so a reading that swallowed a neighbouring block shows as a box
-that covers more than it should. Pick <b>they cover different regions</b> when
-that is what happened: it is a segmentation failure, not a transcription one,
-and the two need separating. "Can't tell" is a legitimate answer.</p>
+that covers more than it should.</p>
+<p class="lead"><b>Which option:</b> if one box sits inside the other on the same
+line or cell — usually one reading keeping a currency symbol the other dropped —
+that is the same content at two extents, so pick whichever transcribes the ink
+in that region more faithfully. Reserve <b>they cover different regions</b> for
+boxes reaching into separate lines, cells or columns: that is a segmentation
+failure rather than a transcription one, and the two need separating. "Can't
+tell" is a legitimate answer.</p>
 <table>${adjudicationRows}</table>
 ` : '';
 
