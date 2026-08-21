@@ -28,7 +28,7 @@
  *     --output <path>/spotcheck.html \
  *     [--size 30] [--adjudications 0] [--seed 1]
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { criticalTokens } from '../../dist/text.js';
 import { normalizeTokenBox } from './lib/gold-box.mjs';
@@ -44,6 +44,7 @@ const goldDir = arg('--gold-dir');
 const outputPath = arg('--output');
 const size = Number(arg('--size', '30'));
 const adjudicationSize = Number(arg('--adjudications', '0'));
+const runRoot = arg('--run-root', '');
 const seed = Number(arg('--seed', '1'));
 
 // Comma-separated dirs: a ledger claim spans every batch that fed it, so an
@@ -83,6 +84,50 @@ for (const page of verdicts.pages) {
   }
 }
 
+/**
+ * The disputed region spanning BOTH witnesses, in 0-1000 page space.
+ *
+ * The proposal's own box is the OCR observation's extent. On a symbol-only
+ * conflict that frames precisely what OCR read — "$ 442,952" — so the
+ * reading whose extent drew the box is the one that appears to match it, and
+ * a blind auditor is answering a question the highlight already decided.
+ * Spanning both witnesses marks the disputed region instead of one side's
+ * answer. Needs --run-root; without it the OCR box is used and the bias is
+ * declared in the report rather than hidden.
+ */
+const conflictBoxes = new Map();
+if (runRoot) {
+  const documentsRoot = join(runRoot, 'documents');
+  for (const doc of readdirSync(documentsRoot)) {
+    let pages;
+    try { pages = readdirSync(join(documentsRoot, doc, 'pages')); } catch { continue; }
+    for (const file of pages) {
+      const record = JSON.parse(readFileSync(join(documentsRoot, doc, 'pages', file), 'utf8'));
+      const spatial = record.pageSpatial;
+      if (!spatial) continue;
+      const { width, height } = spatial.geometry;
+      const boxById = new Map();
+      for (const observation of [...spatial.nativeObservations, ...spatial.ocrObservations]) {
+        boxById.set(observation.id, observation.box);
+      }
+      for (const conflict of spatial.conflicts ?? []) {
+        const parts = [conflict.ocrId, ...(conflict.nativeIds ?? [])]
+          .map((id) => boxById.get(id))
+          .filter(Boolean);
+        if (!parts.length) continue;
+        const x0 = Math.min(...parts.map((b) => b[0]));
+        const y0 = Math.min(...parts.map((b) => b[1]));
+        const x1 = Math.max(...parts.map((b) => b[2]));
+        const y1 = Math.max(...parts.map((b) => b[3]));
+        conflictBoxes.set(`${record.objectId}#${record.pageNumber}#${conflict.id}`,
+          [y0 / height * 1000, x0 / width * 1000, y1 / height * 1000, x1 / width * 1000]);
+      }
+    }
+  }
+}
+const neutralBox = (objectId, pageNumber, conflictId) =>
+  conflictBoxes.get(`${objectId}#${pageNumber}#${conflictId}`) ?? null;
+
 // Adjudications are audited BLIND: the page never shows the machine's verdict
 // or its transcription, only the two witness readings and the ink. Row 4
 // stands at 272 consecutive confirmations, and an auditor shown the answer
@@ -114,7 +159,12 @@ for (const page of verdicts.pages) {
       nativeText: source.nativeText,
       ocrText: source.ocrText,
       digitsDiffer: digitsOf(source.nativeText) !== digitsOf(source.ocrText),
-      box: source.normalizedBox ?? null,
+      // The proposal's own box is the OCR observation's extent, which on a
+      // symbol-only conflict frames exactly what OCR read ("$ 442,952") and
+      // makes that reading correct by construction. neutralBox spans both
+      // witnesses instead, so the highlight marks the disputed region rather
+      // than one side's answer.
+      box: neutralBox(page.objectId, page.pageNumber, conflict.id) ?? source.normalizedBox ?? null,
       image: proposal.image
     });
   }
@@ -194,12 +244,21 @@ function cropCell(item, caption) {
       <div class="src">${caption}</div>`;
   }
   const [y0, x0, y1, x1] = item.box;
-  // Scale the page so VIEW_WIDTH covers WINDOW_FRACTION of it, then shift the
-  // region's centre to the middle of the window. Positioning the image
-  // absolutely (rather than as a background) means the highlight box lands in
-  // the same coordinate space — exactly, not approximately.
-  const scaledWidth = VIEW_WIDTH / WINDOW_FRACTION;
-  const scaledHeight = scaledWidth * (page.height / page.width);
+  // Magnify as far as WINDOW_FRACTION allows, but never past the point where
+  // the region stops fitting in the window. A fixed zoom silently crops long
+  // regions, and on a conflict the distinguishing text is usually at one end
+  // of the line — the leading figure in "5 months of transportation…" is
+  // exactly what a fixed 22% window cuts off, leaving an auditor to judge a
+  // disagreement they cannot see.
+  const aspect = page.height / page.width;
+  const boxFractionWidth = Math.max((x1 - x0) / 1000, 1e-4);
+  const boxFractionHeight = Math.max((y1 - y0) / 1000, 1e-4);
+  const scaledWidth = Math.min(
+    VIEW_WIDTH / WINDOW_FRACTION,
+    (VIEW_WIDTH * 0.92) / boxFractionWidth,
+    (VIEW_HEIGHT * 0.92) / (boxFractionHeight * aspect)
+  );
+  const scaledHeight = scaledWidth * aspect;
   const left = (x0 / 1000) * scaledWidth;
   const top = (y0 / 1000) * scaledHeight;
   const width = Math.max(((x1 - x0) / 1000) * scaledWidth, 3);
@@ -225,29 +284,44 @@ const rows = sample.map((item, sampleIndex) => `
     </td>
   </tr>`).join('');
 
-const adjudicationRows = adjudicationSample.map((item, index) => `
+// Presentation order is randomised per row. Listing native first every time
+// makes the position a tell — and since the OCR reading is the one that used
+// to draw the highlight box, "B" was usually the answer. Order is part of the
+// blind, not decoration.
+for (const item of adjudicationSample) item.ocrFirst = nextRandom() < 0.5;
+
+const adjudicationRows = adjudicationSample.map((item, index) => {
+  const first = item.ocrFirst
+    ? { label: 'ocr', text: item.ocrText }
+    : { label: 'native', text: item.nativeText };
+  const second = item.ocrFirst
+    ? { label: 'native', text: item.nativeText }
+    : { label: 'ocr', text: item.ocrText };
+  return `
   <tr>
     <td class="n">${index + 1}</td>
     <td class="crop">${cropCell(item, `${escapeHtml(item.objectId)} p${item.pageNumber} · conflict ${item.conflictIndex}`)}</td>
     <td class="readings">
-      <div><b>A</b> <code>${escapeHtml(item.nativeText)}</code></div>
-      <div><b>B</b> <code>${escapeHtml(item.ocrText)}</code></div>
+      <div><b>A</b> <code>${escapeHtml(first.text)}</code></div>
+      <div><b>B</b> <code>${escapeHtml(second.text)}</code></div>
     </td>
     <td class="verdict">
-      <label><input type="radio" name="a-${index}" value="native">A matches the ink</label>
-      <label><input type="radio" name="a-${index}" value="ocr">B matches the ink</label>
+      <label><input type="radio" name="a-${index}" value="${first.label}">A matches the ink</label>
+      <label><input type="radio" name="a-${index}" value="${second.label}">B matches the ink</label>
       <label><input type="radio" name="a-${index}" value="both-wrong">neither matches</label>
       <label><input type="radio" name="a-${index}" value="unsure">can't tell</label>
       <input type="text" id="ink-${index}" placeholder="what the ink says, verbatim">
     </td>
-  </tr>`).join('');
+  </tr>`;
+}).join('');
 
 const adjudicationSection = adjudicationSample.length ? `
 <h1>Adjudications — ${adjudicationSample.length} of ${adjudicationPopulation.length}</h1>
 <p class="lead">Two extractors disagreed here. Read the ink and say which reading is
-right — <b>A</b> and <b>B</b> are deliberately unlabelled as to engine, and the
-machine's verdict is not shown, so this is an independent judgement rather than a
-review of one. Answer from the crop alone; "can't tell" is a legitimate answer.</p>
+right — <b>A</b> and <b>B</b> are unlabelled as to engine <em>and shuffled per
+row</em>, and the machine's verdict is not shown, so this is an independent
+judgement rather than a review of one. The highlight spans both readings, not
+either one. Answer from the crop alone; "can't tell" is a legitimate answer.</p>
 <table>${adjudicationRows}</table>
 ` : '';
 
