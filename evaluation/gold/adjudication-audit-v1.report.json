@@ -1,0 +1,110 @@
+{
+ "adjudicationAuditVersion": "adjudication-audit-v1",
+ "createdAt": "2026-08-21T12:19:25.322Z",
+ "auditFile": "/tmp/gold-spotcheck-4-last.json",
+ "seed": 7,
+ "adjudicationPopulation": 272,
+ "sampled": 30,
+ "missingMachineVerdict": 0,
+ "overall": {
+  "compared": 29,
+  "agree": 25,
+  "disagree": 4,
+  "unsure": 0,
+  "unreviewed": 1,
+  "disagreements": [
+   {
+    "objectId": "osf:file:6826162a05236079589c42d8:v1",
+    "pageNumber": 1,
+    "conflictIndex": 15,
+    "machine": "ocr",
+    "independent": "native",
+    "inkQuoted": true
+   },
+   {
+    "objectId": "osf:file:6826158a05236079589c42c3:v1",
+    "pageNumber": 1,
+    "conflictIndex": 8,
+    "machine": "ocr",
+    "independent": "native",
+    "inkQuoted": true
+   },
+   {
+    "objectId": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+    "pageNumber": 8,
+    "conflictIndex": 0,
+    "machine": "ocr",
+    "independent": "different-regions",
+    "inkQuoted": true
+   },
+   {
+    "objectId": "public-comps:asseco-poland:2025-fy:001",
+    "pageNumber": 78,
+    "conflictIndex": 5,
+    "machine": "native",
+    "independent": "both-wrong",
+    "inkQuoted": true
+   }
+  ],
+  "agreementRate": 0.8621
+ },
+ "byClass": {
+  "digitsDiffer": {
+   "compared": 15,
+   "agree": 11,
+   "disagree": 4,
+   "unsure": 0,
+   "unreviewed": 0,
+   "disagreements": [
+    {
+     "objectId": "osf:file:6826162a05236079589c42d8:v1",
+     "pageNumber": 1,
+     "conflictIndex": 15,
+     "machine": "ocr",
+     "independent": "native",
+     "inkQuoted": true
+    },
+    {
+     "objectId": "osf:file:6826158a05236079589c42c3:v1",
+     "pageNumber": 1,
+     "conflictIndex": 8,
+     "machine": "ocr",
+     "independent": "native",
+     "inkQuoted": true
+    },
+    {
+     "objectId": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+     "pageNumber": 8,
+     "conflictIndex": 0,
+     "machine": "ocr",
+     "independent": "different-regions",
+     "inkQuoted": true
+    },
+    {
+     "objectId": "public-comps:asseco-poland:2025-fy:001",
+     "pageNumber": 78,
+     "conflictIndex": 5,
+     "machine": "native",
+     "independent": "both-wrong",
+     "inkQuoted": true
+    }
+   ],
+   "agreementRate": 0.7333
+  },
+  "symbolOnly": {
+   "compared": 14,
+   "agree": 14,
+   "disagree": 0,
+   "unsure": 0,
+   "unreviewed": 1,
+   "disagreements": [],
+   "agreementRate": 1
+  }
+ },
+ "caveats": [
+  "Agreement between an independent human and the machine, not proof of correctness: both can be wrong together on degraded ink.",
+  "The digitsDiffer class is the one that can put a wrong figure in the index; quote it separately from the blended rate.",
+  "Sampling is stratified half and half, so the blended rate is NOT an estimate of population accuracy — the classes are not equally common.",
+  "Readings are stripped from this file; the full report with the disputed ink stays under .evaluation/."
+ ]
+}

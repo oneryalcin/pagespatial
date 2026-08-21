@@ -163,7 +163,8 @@ const LABEL_PROMPT = `You are pre-labeling a PDF page image for a gold evaluatio
  "hasTable": true or false,
  "notes": "<1-2 sentences a human verifier should know about this page>"
 }
-Rules: transcribe EXACTLY what is printed — keep commas, periods, currency symbols, signs and unit words verbatim; never normalize or convert. box_2d is normalized 0-1000 as [ymin, xmin, ymax, xmax]. Include every visible number on the page, including ones inside charts and images. chartRelations only when an actual chart is present.`;
+Rules: transcribe EXACTLY what is printed — keep commas, periods, currency symbols, signs and unit words verbatim; never normalize or convert. box_2d is normalized 0-1000 as [ymin, xmin, ymax, xmax]. Include every visible number on the page, including ones inside charts and images. chartRelations only when an actual chart is present.
+Page furniture is not content: skip a number if removing it would not change what the text asserts — margin line numbers beside a paragraph, page numbers in a running header or footer, standalone footnote markers. Keep a number if removing it changes the claim: "5 months of transportation" keeps its 5, and numbered table columns (procurement line items, ranked rows) are data, not furniture. When in doubt, include it — a human verifier can delete a token, but cannot recover one you never proposed.`;
 
 function adjudicationPrompt(conflicts) {
   return `Two PDF extractors disagree about text on this page. For each numbered disagreement, look at the page image at the given region (box normalized 0-1000, [ymin, xmin, ymax, xmax]) and judge which reading matches the printed ink. Return STRICT JSON:
