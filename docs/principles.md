@@ -156,6 +156,33 @@ one place (`src/tuning.ts`), carries its rationale and unit, and scales with
 render resolution rather than assuming one. Elegance matters; simplicity
 wins.
 
+### The rabbit-hole test
+
+The same rule governs effort, not just code. Before starting any piece of
+work — a measurement, a refinement, an instrument — answer one question:
+**what decision changes based on the result?** If no decision changes, or
+the deciding consumer does not exist yet, the work is a rabbit hole no
+matter how rigorous it is. Rigor is not the test; consequence is.
+
+Applications that recur here:
+
+- **Failure cost ranks the queue.** Work that bounds an expensive failure
+  (a wrong number served from the index) outranks work that polishes a
+  cheap one (an unnecessary escalation worth a fraction of a cent).
+- **Bounds have a stopping rule.** Once a bound is tight enough that no
+  decision changes by tightening it (a ≤9.5% bound nobody consumes does
+  not need to become ≤4.9%), stop. Tighten it when a consumer needs it.
+- **Measurement must not outrun the product.** When the measuring
+  apparatus is more sophisticated than the thing it measures, the next
+  unit of effort belongs to the product. Ship, then let real usage
+  nominate the next measurement.
+- **Tradeoffs are stated, not engineered away.** A simple design with an
+  honestly documented limitation beats a complex one that hides it.
+
+This section does not weaken §8: what IS measured gets measured honestly,
+pre-registered where results could be argued with. It says: choose what to
+measure by what it decides.
+
 ## 10. Privacy and cost are design inputs, not afterthoughts
 
 Documents are untrusted content and private by default: local parsing paths

@@ -49,17 +49,25 @@ Onboarding order: [principles](principles.md) →
   excludes silver-only clean successes, so **no rate is trustworthy yet**.
   See ledger row 9.
 
-**Next actions (post PR #47, 2026-08-21 night):**
+**Next actions (owner-confirmed 2026-08-22; ranked by the rabbit-hole
+test, principles §9):**
 
-1. **First extractor-blind clean batch** (#29) — sampler is ready (seed
-   `batch6-clean-v1` dry-run: 15 pages selected from the 87-page
+1. **First extractor-blind clean batch** (#29) — the last measurement
+   with index-corruption stakes (silent quiet-page misses = wrong
+   numbers served; every other open measurement bounds cheap failures).
+   Sampler ready (seed `batch6-clean-v1`: 15 pages from the 87-page
    unlabeled pool); plus the no-miss re-review of the 27 prior-labeled
-   clean pages so the union rate's preconditions hold. Fills the
-   escalation-recall denominator — the last measurement with
-   index-corruption stakes.
-2. **Answer-faithfulness harness** — the redirected successor to #36:
-   test trust metadata where its value is now hypothesized (verification
-   and citation, not ranking).
+   clean pages so the union-rate preconditions hold.
+2. **Build the product: #21 ingestion contract + #22 offline service.**
+   The measurement apparatus now exceeds the product it measures (noise
+   floor 0.5%, silver bounded, thesis tested); the next unit of effort
+   belongs to the consumer. Ingestion shape per the #36 result: dedup
+   the witness union, chunk at ~50 words, carry trust as metadata.
+
+Demoted (deliberate, not forgotten): the **answer-faithfulness harness**
+(#36's successor) runs as part of #21's design work when something
+actually quotes answers — measuring it now has no consumer and decides
+nothing. Silver-bound tightening: only if a consumer needs <9.5%.
 
 Parked, unscheduled: the #4 chart triage hour (re-run batch 2 through the
 current scorer; decides instrument-fix vs detector-project).
