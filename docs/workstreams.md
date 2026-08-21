@@ -60,16 +60,27 @@ test, principles §9):**
    no-miss re-review of the 27 prior-labeled clean pages. Follow-up
    worth an hour: why both engines dropped exactly the two `16`s on a
    page where they read every neighbouring number (osf p144).
-2. **Build the product: #21 ingestion contract + #22 offline service.**
-   The measurement apparatus now exceeds the product it measures (noise
-   floor 0.5%, silver bounded, thesis tested); the next unit of effort
-   belongs to the consumer. Ingestion shape per the #36 result: dedup
-   the witness union, chunk at ~50 words, carry trust as metadata.
+2. **Build the parse service (#22, rescoped 2026-08-22): submit PDF →
+   ticket → progressive schema-0.6.0 records. NO indexing** — #21 is
+   parked until the service exists. Primary goal: per-stage bottleneck
+   measurement (render / native / OCR / assembly / second opinion;
+   pages-per-second-per-core). Three parallel streams:
+   - **#2-now**: server-native PP-OCR adapter (onnxruntime-node, CPU
+     first) + witness-equivalence run vs the browser witness. No
+     browser in any worker.
+   - **#22**: service skeleton — API, queue, stateless page workers,
+     stage instrumentation, fail-closed page semantics (#37).
+   - **#51**: deterministic SVG reconstruction from a record — the
+     format's acid test and the service's debug endpoint. LLM
+     reconstruction explicitly out of scope (eval someday, never a
+     feature).
+   GPU (#2-gated) waits for the throughput number.
 
-Demoted (deliberate, not forgotten): the **answer-faithfulness harness**
-(#36's successor) runs as part of #21's design work when something
-actually quotes answers — measuring it now has no consumer and decides
-nothing. Silver-bound tightening: only if a consumer needs <9.5%.
+Demoted (deliberate, not forgotten): #21 ingestion contract + the
+**answer-faithfulness harness** (folded into #21) — both wait for the
+service and a consumer; the #36 chunk-contract anchor is recorded on
+#21 for when it unparks. Silver-bound tightening: only if a consumer
+needs <9.5%.
 
 Parked, unscheduled: the #4 chart triage hour (re-run batch 2 through the
 current scorer; decides instrument-fix vs detector-project).
