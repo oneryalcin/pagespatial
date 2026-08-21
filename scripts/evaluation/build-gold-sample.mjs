@@ -95,15 +95,22 @@ if (!Number.isInteger(size) || size <= 0) throw new Error('--size must be a posi
 const slug = (objectId) => objectId.replace(/[^a-zA-Z0-9._-]+/g, '_');
 const pageKey = (objectId, pageNumber) => `${objectId}#${pageNumber}`;
 
-/** Pages already labeled in any prior batch — never sample a page twice. */
+/**
+ * Pages already labeled in any prior batch — never sample a page twice.
+ * Returns a Map keyed by pageKey, valued with which batch labeled the page:
+ * the clean profile needs the provenance, because prior batches were selected
+ * BY extractor output, so subtracting them conditions the residual pool on
+ * the system under test (see the population-partition note below).
+ */
 function alreadyLabeled(root) {
-  const seen = new Set();
+  const seen = new Map();
   if (!existsSync(root)) return seen;
   for (const entry of readdirSync(root)) {
     const samplePath = join(root, entry, 'pilot-sample.json');
     if (!existsSync(samplePath)) continue;
     for (const page of JSON.parse(readFileSync(samplePath, 'utf8'))) {
-      seen.add(pageKey(page.objectId, page.pageNumber));
+      const key = pageKey(page.objectId, page.pageNumber);
+      if (!seen.has(key)) seen.set(key, { batch: entry, objectId: page.objectId, pageNumber: page.pageNumber });
     }
   }
   return seen;
@@ -119,13 +126,17 @@ const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 const labeled = alreadyLabeled(goldRoot);
 
 const candidates = [];
-let missingRecords = 0;
+// Pages the pipeline produced NO run record for are neither escalated nor
+// clean — the most total failure mode there is, and a recall instrument must
+// not lose them to a console line. Recorded in selection.json so a nonzero
+// count cannot pass unnoticed.
+const skippedMissingRecords = [];
 for (const document of manifest.documents) {
   if (document.split !== 'development') continue; // the candidate holdout stays sealed
   for (const page of document.pages ?? []) {
     if (labeled.has(pageKey(document.objectId, page.pageNumber))) continue;
     const record = readPageRecord(document.objectId, page.pageNumber);
-    if (!record?.pageSpatial) { missingRecords += 1; continue; }
+    if (!record?.pageSpatial) { skippedMissingRecords.push(pageKey(document.objectId, page.pageNumber)); continue; }
     const spatial = record.pageSpatial;
     const diagnostics = spatial.diagnostics ?? {};
     const reasons = diagnostics.escalationReasons ?? [];
@@ -265,11 +276,58 @@ for (const candidate of fillOrder) {
 if (!picked.length) throw new Error('No unlabeled development pages remain to sample.');
 picked.sort(byId);
 
+// The clean POPULATION is partitioned, not just sampled. Prior-batch
+// subtraction is honest bookkeeping for "never label twice" but it is also
+// INDIRECT CONDITIONING on the system under test: every prior batch was
+// selected by extractor output (debt tiers, coverage-sorted fill, batch 5's
+// criticalCount eligibility), so the residual unlabeled pool is "clean pages
+// the extractor-conditioned samplers didn't want". A rate computed over the
+// residual alone would over-represent pages the engines read little on. The
+// mitigation is stratum-union: previously-labeled clean pages already carry
+// gold, so their miss/no-miss outcomes are derivable from their own batches'
+// aggregates, and the honest future denominator is the UNION of strata —
+// residual (this sampler) plus each prior batch's clean pages — never the
+// residual alone. This partition records both sides with provenance so that
+// union can actually be computed.
+let populationPartition;
+if (profile === 'clean') {
+  const previouslyLabeledClean = [];
+  const previouslyLabeledEscalated = [];
+  const previouslyLabeledUnknown = [];
+  for (const { batch, objectId, pageNumber } of labeled.values()) {
+    const record = readPageRecord(objectId, pageNumber);
+    const entry = { page: pageKey(objectId, pageNumber), batch };
+    if (!record?.pageSpatial) previouslyLabeledUnknown.push(entry);
+    else if (record.pageSpatial.diagnostics?.requiresEscalation) previouslyLabeledEscalated.push(entry);
+    else previouslyLabeledClean.push(entry);
+  }
+  populationPartition = {
+    residualUnlabeledClean: candidates.filter((candidate) => !candidate.escalated)
+      .map((candidate) => pageKey(candidate.objectId, candidate.pageNumber)).sort(),
+    previouslyLabeledClean,
+    previouslyLabeledEscalated: previouslyLabeledEscalated.length,
+    previouslyLabeledUnknownRecord: previouslyLabeledUnknown,
+    note: 'A clean-page miss RATE must be computed over the union of strata (residual + each prior batch\'s clean pages, from their own aggregates), never over the residual alone: the residual pool is conditioned on prior extractor-driven sampling.'
+  };
+}
+
 const tally = picked.reduce((acc, page) => ({ ...acc, [page.tier]: (acc[page.tier] ?? 0) + 1 }), {});
-console.log(`Candidates: ${candidates.length} unlabeled development pages (${labeled.size} already labeled${missingRecords ? `, ${missingRecords} missing run records` : ''}).`);
+console.log(`Candidates: ${candidates.length} unlabeled development pages (${labeled.size} already labeled${skippedMissingRecords.length ? `, ${skippedMissingRecords.length} missing run records` : ''}).`);
 console.log(`Selected ${picked.length}: ${Object.entries(tally).map(([tier, n]) => `${tier} ${n}`).join(', ')}.`);
 for (const page of picked) {
-  console.log(`  ${page.tier.padEnd(9)} ${page.objectId} p${page.pageNumber}  starved=${page.starvedCount} conflicts=${page.conflictCount} pictorial=${page.pictorialCount} coverage=${page.coverage.toFixed(2)}`);
+  // Clean profile: id and tier only. Printing per-page extractor stats here
+  // would hand an operator a seed-shopping channel — re-roll seeds until the
+  // dry run "looks right" — which is selection conditioned on extractor
+  // output with extra steps.
+  console.log(profile === 'clean'
+    ? `  ${page.tier.padEnd(9)} ${page.objectId} p${page.pageNumber}`
+    : `  ${page.tier.padEnd(9)} ${page.objectId} p${page.pageNumber}  starved=${page.starvedCount} conflicts=${page.conflictCount} pictorial=${page.pictorialCount} coverage=${page.coverage.toFixed(2)}`);
+}
+if (populationPartition) {
+  console.log(`Clean population partition: residual ${populationPartition.residualUnlabeledClean.length} unlabeled, prior-labeled clean ${populationPartition.previouslyLabeledClean.length}, prior-labeled escalated ${populationPartition.previouslyLabeledEscalated}${populationPartition.previouslyLabeledUnknownRecord.length ? `, unknown-record ${populationPartition.previouslyLabeledUnknownRecord.length}` : ''}.`);
+}
+if (skippedMissingRecords.length) {
+  console.warn(`WARNING: ${skippedMissingRecords.length} pages have no run record — outside BOTH populations; recorded in selection.json.`);
 }
 if (dryRun) process.exit(0);
 
@@ -325,8 +383,10 @@ writeFileSync(join(outputDir, "selection.json"), `${JSON.stringify({
   profile,
   ...(profile === 'clean' ? {
     seed,
-    population: 'non-escalated development pages (requiresEscalation false), seeded-random, extractor-blind'
+    population: 'non-escalated development pages (requiresEscalation false), seeded-random, extractor-blind',
+    populationPartition
   } : {}),
+  skippedMissingRunRecords: { count: skippedMissingRecords.length, pages: skippedMissingRecords },
   tally,
   pages: picked
 }, null, 2)}\n`);
