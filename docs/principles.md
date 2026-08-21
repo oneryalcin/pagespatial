@@ -114,6 +114,39 @@ different things and must be labeled. Beyond that:
   the parser. A gold set whose criterion coincides with the system under
   test is not gold.
 
+### The independence check
+
+The rule above is not new, and it did not work. In one week it was broken
+three times: silver used as its own denominator, an adjudication highlight
+drawn from one of the two candidate readings it was meant to arbitrate, and
+a clean-page sampler whose eligibility test read the extractors it existed
+to audit. The third case is the instructive one — the conditioning was
+*noticed and named in a code comment*, and naming it changed nothing. A
+principle you can nod at is not a control.
+
+So it is a checklist. Before any measurement's number is quoted anywhere,
+its trial doc answers these in writing:
+
+1. **What is the denominator, and how did a member get in?** Name the
+   population, not the count.
+2. **Does eligibility read the system under test?** If the thing being
+   measured decides what gets sampled, total failures are excluded by
+   construction — they are exactly the cases that score zero.
+3. **Does ranking or ordering read it?** Sorting by what the system found
+   over-represents what it handles well, even when eligibility is clean.
+4. **Does the presentation read it?** A crop, a highlight, or a default
+   ordering derived from one candidate answer decides the question before
+   the human sees it.
+5. **Are confirmed negatives recorded as such?** Absence of evidence is not
+   a verified negative. If "nothing found here" and "nobody looked here"
+   are the same value in the data, there is no denominator.
+
+Any yes to 2, 3, or 4 means the result is a **case series, not a rate** —
+and it is described that way in the same sentence as the number, not in a
+caveat further down. A case series is still worth having: one verified
+instance refutes a universal claim, which is often the claim that matters.
+What it cannot do is estimate frequency.
+
 ## 9. Ruthless simplicity, explicit composition
 
 Adapters are plain objects wired by imports — no registries, plugins, or
