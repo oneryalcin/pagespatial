@@ -5,7 +5,11 @@
  * v2 (post fairness review): the original two-way A/B comparison used a
  * strawman baseline — naive interleaved BOTH witnesses, double-indexing
  * nearly every word, while B quietly contained a TRUST-FREE duplicate-drop.
- * v2 runs a four-variant component ablation over the SAME corpus,
+ * v3 (post Codex review) additionally fixed a scoring bug (substring
+ * containment let currency-only answers match every chunk on their page and
+ * short answers match inside larger tokens — now token-boundary matching
+ * via the recall test's consumeMatch, unscoreable answers dropped) and
+ * added the corroboration-link variant. Five variants over the SAME corpus,
  * retriever, and chunking, so every point of margin is attributed to a
  * mechanism:
  *   A-raw      — every observation from both witnesses (the old naive).
@@ -13,6 +17,9 @@
  *                nothing else: no conflict gating, no confidence floor, no
  *                enrichment. This is the REAL baseline; the duplicate-drop
  *                reads only the two witnesses' raw text.
+ *   A-srcdedup — A-raw minus OCR observations with a recorded sourceMatch.
+ *                The corroboration links ARE trust metadata — the one
+ *                ingestion mechanism only the record can provide.
  *   B-noinject — trust gating (adjudicated conflicts, reject-don't-repair,
  *                low-confidence floor, duplicate-drop) WITHOUT the
  *                enrichment-text appends.
@@ -43,7 +50,7 @@
  */
 import { readFileSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { stripCurrency } from './lib/recall-match.mjs';
+import { stripCurrency, consumeMatch } from './lib/recall-match.mjs';
 
 function arg(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -127,6 +134,16 @@ function dedupText(page) {
   return kept.sort(readingOrder).map((observation) => observation.text);
 }
 
+// Corroboration-link dedup: drops exactly the OCR observations the record's
+// derived sourceMatches tie to a native observation. This IS trust metadata —
+// the one ingestion mechanism only the record can provide.
+function srcDedupText(page) {
+  const matched = new Set(page.sourceMatches.map((match) => match.ocrId));
+  return [...page.nativeObservations, ...page.ocrObservations.filter((observation) => !matched.has(observation.id))]
+    .sort(readingOrder)
+    .map((observation) => observation.text);
+}
+
 function trustAwareText(page, enrichment, { inject }) {
   const drop = new Set();
   const extras = [];
@@ -165,10 +182,11 @@ function trustAwareText(page, enrichment, { inject }) {
   return texts;
 }
 
-const VARIANTS = ['A-raw', 'A-dedup', 'B-noinject', 'B-full'];
+const VARIANTS = ['A-raw', 'A-dedup', 'A-srcdedup', 'B-noinject', 'B-full'];
 function variantText(name, page, enrichment) {
   if (name === 'A-raw') return naiveText(page);
   if (name === 'A-dedup') return dedupText(page);
+  if (name === 'A-srcdedup') return srcDedupText(page);
   if (name === 'B-noinject') return trustAwareText(page, enrichment, { inject: false });
   return trustAwareText(page, enrichment, { inject: true });
 }
@@ -290,11 +308,16 @@ for (const entry of gold) {
   byPage.get(entry.pageKey).push(entry);
 }
 const queries = [];
+let droppedUnscoreableAnswers = 0;
 for (const [, entries] of [...byPage.entries()].sort(([a], [b]) => a.localeCompare(b))) {
   const step = Math.max(1, Math.floor(entries.length / MAX_QUERIES_PER_PAGE));
   const picked = [];
   for (let i = 0; i < entries.length && picked.length < MAX_QUERIES_PER_PAGE; i += step) picked.push(entries[i]);
   for (const entry of picked) {
+    // An answer with no letters/digits after currency-stripping (e.g. a bare
+    // "$") cannot be located at a token boundary — with the old substring
+    // rule it matched EVERY chunk on its page as a fake rank-1 hit.
+    if (!answerParts(entry.answer).length) { droppedUnscoreableAnswers += 1; continue; }
     const query = buildQuery(entry);
     if (query) queries.push({ ...entry, query });
   }
@@ -310,10 +333,26 @@ for (const [pageKey, page] of pages) {
   }
 }
 
+// Token-boundary matching via the recall test's own matcher (consumeMatch,
+// tolerant): exact word first, detached-currency forgiven, contradictory
+// currency never, consume-once across a multi-word answer. Never substring
+// containment — "5" must not match inside "2015". Currency-only answer
+// words are segmentation artifacts and are skipped; answers that are
+// entirely currency/punctuation are dropped from the query set upstream.
+// Limitation (stated in the trial doc): chunks carry no observation ids, so
+// a same-page other-occurrence of the answer word still counts as the hit.
+function answerParts(text) {
+  return String(text).toLowerCase().split(/\s+/u).filter((part) => tokenize(stripCurrency(part)).length);
+}
+function chunkContainsAnswer(chunk, parts) {
+  const pool = chunk.text.toLowerCase().split(/\s+/u).filter(Boolean);
+  return parts.every((part) => consumeMatch(pool, part, { tolerant: true }));
+}
+
 function evaluate(index, query) {
-  const answer = answerForm(query.answer);
+  const parts = answerParts(query.answer);
   const chunkMatches = (i) => index.chunks[i].pageKey === query.pageKey
-    && answerForm(index.chunks[i].text).includes(answer);
+    && chunkContainsAnswer(index.chunks[i], parts);
   const inIndex = index.chunks.some((chunk, i) => chunkMatches(i));
   const ranking = bm25Rank(index, tokenize(query.query));
   let rank = null;
@@ -367,9 +406,10 @@ function pairwise(results, x, y) {
 const primary = sweep[PRIMARY_WIDTH];
 const strata = ['conflict', 'escalated-other', 'clean'];
 const report = {
-  harnessVersion: 'retrieval-harness-v2-ablation',
+  harnessVersion: 'retrieval-harness-v3-token-boundary',
   runRoot,
   queries: primary.length,
+  droppedUnscoreableAnswers,
   queriesByStratum: Object.fromEntries(strata.map((name) => [name, primary.filter((result) => result.stratum === name).length])),
   answerNotInIndex: Object.fromEntries(VARIANTS.map((name) => [
     name, primary.filter((result) => !result.variants[name].inIndex).length
@@ -387,6 +427,6 @@ const report = {
 };
 
 mkdirSync(outDir, { recursive: true });
-writeFileSync(join(outDir, 'results-v2.json'), JSON.stringify({ report, perQuery }, null, 1));
+writeFileSync(join(outDir, 'results-v3.json'), JSON.stringify({ report, perQuery }, null, 1));
 console.log(JSON.stringify(report, null, 1));
-console.log(`Per-query detail (private, contains corpus text): ${join(outDir, 'results-v2.json')}`);
+console.log(`Per-query detail (private, contains corpus text): ${join(outDir, 'results-v3.json')}`);
