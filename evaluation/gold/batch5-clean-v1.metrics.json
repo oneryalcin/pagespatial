@@ -1,111 +1,111 @@
 {
  "goldPilotMetricsVersion": "gold-pilot-metrics-v4",
- "createdAt": "2026-08-21T13:49:22.680Z",
+ "createdAt": "2026-08-21T13:49:23.556Z",
  "runRoot": ".evaluation/runs/exp-second-opinion-d-2026-08-20",
- "goldVerifiedAt": "2026-08-20T23:17:11.687Z",
+ "goldVerifiedAt": "2026-08-21T13:40:59.415Z",
  "pages": 15,
  "validatedInputs": [
   {
-   "objectId": "legistar:seattle:1794:v0:attachment:3283",
-   "pageNumber": 14,
-   "sha256": "68d3c15e51bc52bc805d43a4b592c9945ae059463b6f18808715d007116e3b29"
-  },
-  {
-   "objectId": "legistar:seattle:1859:v0:attachment:3318",
+   "objectId": "osf:file:64a59e4ea2a2f4140943711a:v1",
    "pageNumber": 1,
-   "sha256": "725f4b428d49a365184b8993146e14c2ebd37fdeb3bb774a801c95fc6c7f9fa8"
+   "sha256": "a06ddba529ff277a72a639928808860c6fe3b27bf759e5f2070408dfd4d2dbad"
   },
   {
-   "objectId": "legistar:seattle:2159:v0:attachment:3326",
-   "pageNumber": 12,
-   "sha256": "baeffd849ffe8505faeec8f844eefe29148fde8d210c9bde8bc0387210012840"
+   "objectId": "osf:file:64a59e4ea2a2f4140943711a:v1",
+   "pageNumber": 143,
+   "sha256": "a06ddba529ff277a72a639928808860c6fe3b27bf759e5f2070408dfd4d2dbad"
   },
   {
-   "objectId": "legistar:seattle:2159:v0:attachment:3326",
-   "pageNumber": 24,
-   "sha256": "baeffd849ffe8505faeec8f844eefe29148fde8d210c9bde8bc0387210012840"
+   "objectId": "osf:file:670e77f61b29952574a5e7a2:v1",
+   "pageNumber": 1,
+   "sha256": "4926c7bdff7d56576ec2a045f139352048ee2c4ce9945fc64db271a7225beedd"
   },
   {
-   "objectId": "legistar:seattle:2438:v0:attachment:6113",
-   "pageNumber": 20,
-   "sha256": "0239b4baffa00b372215c3fae97a8243f536a1acda8ddc43ac6e333cff891a2d"
+   "objectId": "osf:file:6826158a05236079589c42c3:v1",
+   "pageNumber": 27,
+   "sha256": "50ceaee66564a9f22d1b01da1c2b4e4cba9225b9394ed5b33a800cf259a68125"
+  },
+  {
+   "objectId": "osf:file:6826162a05236079589c42d8:v1",
+   "pageNumber": 27,
+   "sha256": "8cd6656fbe0c901f68d1e2faf1321400548d0c9ee2276c3c4b81543c9fda6425"
+  },
+  {
+   "objectId": "osf:file:686ffb54a56d843965a6c614:v1",
+   "pageNumber": 22,
+   "sha256": "74e8ea267c4d1ec4fb1b2bfee29e7c6dd735e12c3bb023bb68bbbc008626fd92"
+  },
+  {
+   "objectId": "osf:file:686ffb54a56d843965a6c614:v1",
+   "pageNumber": 44,
+   "sha256": "74e8ea267c4d1ec4fb1b2bfee29e7c6dd735e12c3bb023bb68bbbc008626fd92"
+  },
+  {
+   "objectId": "osf:file:6a74c836f0cba432843c7153:v1",
+   "pageNumber": 36,
+   "sha256": "d18f4cc61a5368a901f57e368f82a6c193b2b852d0ce3efbe4a63f15ed4ba48a"
   },
   {
    "objectId": "pa-sers:2024-09-24:llr-vii:manager-presentation",
-   "pageNumber": 7,
+   "pageNumber": 4,
    "sha256": "c74e6e91d54744d4977f9129a72ee0054eff9937791125aa0209592be01b658d"
   },
   {
    "objectId": "pa-sers:2024-09-24:llr-vii:manager-presentation",
-   "pageNumber": 8,
+   "pageNumber": 9,
    "sha256": "c74e6e91d54744d4977f9129a72ee0054eff9937791125aa0209592be01b658d"
   },
   {
-   "objectId": "pa-sers:2024-09-24:llr-vii:staff-memo",
-   "pageNumber": 1,
-   "sha256": "905ecec319fd1ac986015d26eeb774f8b3865ef058444291814a0967f7fb6806"
-  },
-  {
    "objectId": "public-comps:ares:2026-q1:002",
-   "pageNumber": 51,
+   "pageNumber": 63,
    "sha256": "31f04055ed52950e35cc309b9652d502740c1bdf7072f6973e01e93761dc5707"
   },
   {
    "objectId": "public-comps:ares:2026-q1:002",
-   "pageNumber": 52,
+   "pageNumber": 65,
    "sha256": "31f04055ed52950e35cc309b9652d502740c1bdf7072f6973e01e93761dc5707"
   },
   {
-   "objectId": "public-comps:blackstone:2026-q1:002",
-   "pageNumber": 12,
-   "sha256": "c129043bba247a6867115ba8dcfa58cb4ba1c5dad2fe68f99701ebda3d9038c9"
+   "objectId": "public-comps:asseco-poland:2025-fy:001",
+   "pageNumber": 13,
+   "sha256": "7f84c3668bc57c89b2ce30427abc26c59dd4849451f6d33f71d9d5deb730a5d0"
   },
   {
-   "objectId": "public-comps:blackstone:2026-q1:002",
-   "pageNumber": 14,
-   "sha256": "c129043bba247a6867115ba8dcfa58cb4ba1c5dad2fe68f99701ebda3d9038c9"
-  },
-  {
-   "objectId": "world-bank:P170734:document:34222345",
-   "pageNumber": 6,
-   "sha256": "63e9dad0bf52ded5d0e09b7f5bdb917ef1fdec76ebfea607c6d2be80744a1c4b"
-  },
-  {
-   "objectId": "world-bank:P170734:document:34222345",
-   "pageNumber": 7,
-   "sha256": "63e9dad0bf52ded5d0e09b7f5bdb917ef1fdec76ebfea607c6d2be80744a1c4b"
+   "objectId": "public-comps:asseco-poland:2025-fy:001",
+   "pageNumber": 149,
+   "sha256": "7f84c3668bc57c89b2ce30427abc26c59dd4849451f6d33f71d9d5deb730a5d0"
   },
   {
    "objectId": "world-bank:P178566:document:34223652",
-   "pageNumber": 3,
+   "pageNumber": 4,
    "sha256": "1d77e1f0480d1e8aa2c76741ca06d491b0b8ae57d6ed5521d647a81ef7084795"
   }
  ],
  "criticalTokenRecall": {
   "humanVerified": {
-   "goldTokens": 416,
-   "native": 0.274,
-   "ocr": 0.988,
-   "union": 0.988,
-   "missedByBoth": 5,
+   "goldTokens": 70,
+   "native": 0.1429,
+   "ocr": 0.9571,
+   "union": 0.9571,
+   "missedByBoth": 3,
    "strict": {
-    "native": 0.0216,
-    "ocr": 0.8606,
-    "union": 0.8606,
-    "missedByBoth": 58
+    "native": 0.0714,
+    "ocr": 0.8714,
+    "union": 0.8714,
+    "missedByBoth": 9
    }
   },
   "silverNativeCorroborated": {
-   "goldTokens": 401,
-   "native": 0.995,
-   "ocr": 0.8753,
-   "union": 1,
-   "missedByBoth": 0,
+   "goldTokens": 164,
+   "native": 0.9695,
+   "ocr": 0.9756,
+   "union": 0.9939,
+   "missedByBoth": 1,
    "strict": {
-    "native": 0.995,
-    "ocr": 0.7706,
-    "union": 1,
-    "missedByBoth": 0
+    "native": 0.9695,
+    "ocr": 0.9756,
+    "union": 0.9939,
+    "missedByBoth": 1
    },
    "note": "Silver labels were auto-accepted because native text agreed; native/union rates on this tier are tautological by construction and must not be quoted as independent recall."
   },
@@ -124,82 +124,30 @@
    "note": "Accepted with the review UI page-level button: a person accepted these without reading them individually. Not independent gold — report separately and never fold into the human tier."
   }
  },
- "nonScoringProposals": 0,
- "conflictComposition": {
-  "ocr": 105,
-  "both-wrong": 21,
-  "native": 58
- },
+ "nonScoringProposals": 5,
+ "conflictComposition": {},
  "chartRelations": {
-  "goldTuples": 58,
-  "detectedRelations": 6,
+  "goldTuples": 13,
+  "detectedRelations": 0,
   "recall": 0,
-  "precision": 0
+  "precision": null
  },
  "escalation": {
-  "escalatedPages": 14,
-  "escalatedBlockingPages": 12,
-  "escalatedConflictBlockingPages": 12,
-  "escalatedConflictBlockingWithConfirmedError": 9,
+  "escalatedPages": 0,
+  "escalatedBlockingPages": 0,
+  "escalatedConflictBlockingPages": 0,
+  "escalatedConflictBlockingWithConfirmedError": 0,
   "escalatedUncorroboratedOnlyPages": 0,
   "escalatedUncorroboratedOnlyWithHumanGoldMissedByBoth": 0,
-  "escalatedAdvisoryOnlyPages": 2,
-  "cleanPages": 1,
-  "cleanWithHumanGoldMissedByBoth": 0
+  "escalatedAdvisoryOnlyPages": 0,
+  "cleanPages": 15,
+  "cleanWithHumanGoldMissedByBoth": 3
  },
  "perPage": [
   {
-   "objectId": "legistar:seattle:1794:v0:attachment:3283",
-   "pageNumber": 14,
-   "human": {
-    "gold": 36,
-    "native": 0,
-    "ocr": 36,
-    "union": 36,
-    "neither": 0,
-    "strictNative": 0,
-    "strictOcr": 36,
-    "strictUnion": 36,
-    "strictNeither": 0
-   },
-   "silver": {
-    "gold": 0,
-    "native": 0,
-    "ocr": 0,
-    "union": 0,
-    "neither": 0,
-    "strictNative": 0,
-    "strictOcr": 0,
-    "strictUnion": 0,
-    "strictNeither": 0
-   },
-   "bulk": {
-    "gold": 0,
-    "native": 0,
-    "ocr": 0,
-    "union": 0,
-    "neither": 0,
-    "strictNative": 0,
-    "strictOcr": 0,
-    "strictUnion": 0,
-    "strictNeither": 0
-   }
-  },
-  {
-   "objectId": "legistar:seattle:1859:v0:attachment:3318",
+   "objectId": "osf:file:64a59e4ea2a2f4140943711a:v1",
    "pageNumber": 1,
    "human": {
-    "gold": 17,
-    "native": 0,
-    "ocr": 15,
-    "union": 15,
-    "neither": 2,
-    "strictNative": 0,
-    "strictOcr": 15,
-    "strictUnion": 15,
-    "strictNeither": 2
-   },
-   "silver": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
@@ -208,6 +156,17 @@
     "strictNative": 0,
     "strictOcr": 0,
     "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 27,
+    "native": 27,
+    "ocr": 27,
+    "union": 27,
+    "neither": 0,
+    "strictNative": 27,
+    "strictOcr": 27,
+    "strictUnion": 27,
     "strictNeither": 0
    },
    "bulk": {
@@ -223,139 +182,65 @@
    }
   },
   {
-   "objectId": "legistar:seattle:2159:v0:attachment:3326",
-   "pageNumber": 12,
+   "objectId": "osf:file:64a59e4ea2a2f4140943711a:v1",
+   "pageNumber": 143,
    "human": {
-    "gold": 51,
-    "native": 0,
-    "ocr": 50,
-    "union": 50,
-    "neither": 1,
-    "strictNative": 0,
-    "strictOcr": 46,
-    "strictUnion": 46,
-    "strictNeither": 5
-   },
-   "silver": {
-    "gold": 0,
-    "native": 0,
-    "ocr": 0,
-    "union": 0,
-    "neither": 0,
-    "strictNative": 0,
-    "strictOcr": 0,
-    "strictUnion": 0,
-    "strictNeither": 0
-   },
-   "bulk": {
-    "gold": 0,
-    "native": 0,
-    "ocr": 0,
-    "union": 0,
-    "neither": 0,
-    "strictNative": 0,
-    "strictOcr": 0,
-    "strictUnion": 0,
-    "strictNeither": 0
-   }
-  },
-  {
-   "objectId": "legistar:seattle:2159:v0:attachment:3326",
-   "pageNumber": 24,
-   "human": {
-    "gold": 84,
-    "native": 0,
-    "ocr": 84,
-    "union": 84,
-    "neither": 0,
-    "strictNative": 0,
-    "strictOcr": 84,
-    "strictUnion": 84,
-    "strictNeither": 0
-   },
-   "silver": {
-    "gold": 0,
-    "native": 0,
-    "ocr": 0,
-    "union": 0,
-    "neither": 0,
-    "strictNative": 0,
-    "strictOcr": 0,
-    "strictUnion": 0,
-    "strictNeither": 0
-   },
-   "bulk": {
-    "gold": 0,
-    "native": 0,
-    "ocr": 0,
-    "union": 0,
-    "neither": 0,
-    "strictNative": 0,
-    "strictOcr": 0,
-    "strictUnion": 0,
-    "strictNeither": 0
-   }
-  },
-  {
-   "objectId": "legistar:seattle:2438:v0:attachment:6113",
-   "pageNumber": 20,
-   "human": {
-    "gold": 24,
-    "native": 0,
-    "ocr": 24,
-    "union": 24,
-    "neither": 0,
-    "strictNative": 0,
-    "strictOcr": 24,
-    "strictUnion": 24,
-    "strictNeither": 0
-   },
-   "silver": {
-    "gold": 0,
-    "native": 0,
-    "ocr": 0,
-    "union": 0,
-    "neither": 0,
-    "strictNative": 0,
-    "strictOcr": 0,
-    "strictUnion": 0,
-    "strictNeither": 0
-   },
-   "bulk": {
-    "gold": 0,
-    "native": 0,
-    "ocr": 0,
-    "union": 0,
-    "neither": 0,
-    "strictNative": 0,
-    "strictOcr": 0,
-    "strictUnion": 0,
-    "strictNeither": 0
-   }
-  },
-  {
-   "objectId": "pa-sers:2024-09-24:llr-vii:manager-presentation",
-   "pageNumber": 7,
-   "human": {
-    "gold": 14,
+    "gold": 2,
     "native": 1,
-    "ocr": 14,
-    "union": 14,
-    "neither": 0,
+    "ocr": 1,
+    "union": 1,
+    "neither": 1,
     "strictNative": 1,
-    "strictOcr": 14,
-    "strictUnion": 14,
+    "strictOcr": 1,
+    "strictUnion": 1,
+    "strictNeither": 1
+   },
+   "silver": {
+    "gold": 27,
+    "native": 26,
+    "ocr": 26,
+    "union": 26,
+    "neither": 1,
+    "strictNative": 26,
+    "strictOcr": 26,
+    "strictUnion": 26,
+    "strictNeither": 1
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   }
+  },
+  {
+   "objectId": "osf:file:670e77f61b29952574a5e7a2:v1",
+   "pageNumber": 1,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
     "strictNeither": 0
    },
    "silver": {
-    "gold": 10,
-    "native": 9,
-    "ocr": 10,
-    "union": 10,
+    "gold": 2,
+    "native": 2,
+    "ocr": 2,
+    "union": 2,
     "neither": 0,
-    "strictNative": 9,
-    "strictOcr": 10,
-    "strictUnion": 10,
+    "strictNative": 2,
+    "strictOcr": 2,
+    "strictUnion": 2,
     "strictNeither": 0
    },
    "bulk": {
@@ -371,27 +256,101 @@
    }
   },
   {
-   "objectId": "pa-sers:2024-09-24:llr-vii:manager-presentation",
-   "pageNumber": 8,
+   "objectId": "osf:file:6826158a05236079589c42c3:v1",
+   "pageNumber": 27,
    "human": {
-    "gold": 3,
+    "gold": 0,
     "native": 0,
-    "ocr": 3,
-    "union": 3,
+    "ocr": 0,
+    "union": 0,
     "neither": 0,
     "strictNative": 0,
-    "strictOcr": 3,
-    "strictUnion": 3,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 2,
+    "native": 2,
+    "ocr": 2,
+    "union": 2,
+    "neither": 0,
+    "strictNative": 2,
+    "strictOcr": 2,
+    "strictUnion": 2,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   }
+  },
+  {
+   "objectId": "osf:file:6826162a05236079589c42d8:v1",
+   "pageNumber": 27,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 2,
+    "native": 2,
+    "ocr": 2,
+    "union": 2,
+    "neither": 0,
+    "strictNative": 2,
+    "strictOcr": 2,
+    "strictUnion": 2,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   }
+  },
+  {
+   "objectId": "osf:file:686ffb54a56d843965a6c614:v1",
+   "pageNumber": 22,
+   "human": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
     "strictNeither": 0
    },
    "silver": {
     "gold": 9,
     "native": 9,
-    "ocr": 9,
+    "ocr": 7,
     "union": 9,
     "neither": 0,
     "strictNative": 9,
-    "strictOcr": 9,
+    "strictOcr": 7,
     "strictUnion": 9,
     "strictNeither": 0
    },
@@ -408,28 +367,28 @@
    }
   },
   {
-   "objectId": "pa-sers:2024-09-24:llr-vii:staff-memo",
-   "pageNumber": 1,
+   "objectId": "osf:file:686ffb54a56d843965a6c614:v1",
+   "pageNumber": 44,
    "human": {
-    "gold": 3,
-    "native": 3,
-    "ocr": 3,
-    "union": 3,
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
     "neither": 0,
-    "strictNative": 3,
-    "strictOcr": 3,
-    "strictUnion": 3,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
     "strictNeither": 0
    },
    "silver": {
-    "gold": 45,
-    "native": 45,
-    "ocr": 45,
-    "union": 45,
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
     "neither": 0,
-    "strictNative": 45,
-    "strictOcr": 45,
-    "strictUnion": 45,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
     "strictNeither": 0
    },
    "bulk": {
@@ -445,28 +404,102 @@
    }
   },
   {
-   "objectId": "public-comps:ares:2026-q1:002",
-   "pageNumber": 51,
+   "objectId": "osf:file:6a74c836f0cba432843c7153:v1",
+   "pageNumber": 36,
    "human": {
-    "gold": 36,
+    "gold": 0,
     "native": 0,
-    "ocr": 36,
-    "union": 36,
+    "ocr": 0,
+    "union": 0,
     "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 6,
+    "native": 6,
+    "ocr": 6,
+    "union": 6,
+    "neither": 0,
+    "strictNative": 6,
+    "strictOcr": 6,
+    "strictUnion": 6,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   }
+  },
+  {
+   "objectId": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+   "pageNumber": 4,
+   "human": {
+    "gold": 32,
+    "native": 0,
+    "ocr": 31,
+    "union": 31,
+    "neither": 1,
     "strictNative": 0,
     "strictOcr": 31,
     "strictUnion": 31,
-    "strictNeither": 5
+    "strictNeither": 1
    },
    "silver": {
-    "gold": 9,
-    "native": 9,
-    "ocr": 9,
-    "union": 9,
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
     "neither": 0,
-    "strictNative": 9,
-    "strictOcr": 9,
-    "strictUnion": 9,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   },
+   "bulk": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
+   }
+  },
+  {
+   "objectId": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+   "pageNumber": 9,
+   "human": {
+    "gold": 8,
+    "native": 0,
+    "ocr": 8,
+    "union": 8,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 8,
+    "strictUnion": 8,
+    "strictNeither": 0
+   },
+   "silver": {
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
     "strictNeither": 0
    },
    "bulk": {
@@ -483,27 +516,27 @@
   },
   {
    "objectId": "public-comps:ares:2026-q1:002",
-   "pageNumber": 52,
+   "pageNumber": 63,
    "human": {
-    "gold": 40,
-    "native": 2,
-    "ocr": 38,
-    "union": 38,
-    "neither": 2,
-    "strictNative": 2,
-    "strictOcr": 33,
-    "strictUnion": 33,
+    "gold": 28,
+    "native": 9,
+    "ocr": 27,
+    "union": 27,
+    "neither": 1,
+    "strictNative": 4,
+    "strictOcr": 21,
+    "strictUnion": 21,
     "strictNeither": 7
    },
    "silver": {
-    "gold": 12,
-    "native": 11,
-    "ocr": 12,
-    "union": 12,
+    "gold": 26,
+    "native": 22,
+    "ocr": 26,
+    "union": 26,
     "neither": 0,
-    "strictNative": 11,
-    "strictOcr": 12,
-    "strictUnion": 12,
+    "strictNative": 22,
+    "strictOcr": 26,
+    "strictUnion": 26,
     "strictNeither": 0
    },
    "bulk": {
@@ -519,8 +552,8 @@
    }
   },
   {
-   "objectId": "public-comps:blackstone:2026-q1:002",
-   "pageNumber": 12,
+   "objectId": "public-comps:ares:2026-q1:002",
+   "pageNumber": 65,
    "human": {
     "gold": 0,
     "native": 0,
@@ -533,14 +566,14 @@
     "strictNeither": 0
    },
    "silver": {
-    "gold": 106,
-    "native": 106,
-    "ocr": 106,
-    "union": 106,
+    "gold": 54,
+    "native": 54,
+    "ocr": 54,
+    "union": 54,
     "neither": 0,
-    "strictNative": 106,
-    "strictOcr": 64,
-    "strictUnion": 106,
+    "strictNative": 54,
+    "strictOcr": 54,
+    "strictUnion": 54,
     "strictNeither": 0
    },
    "bulk": {
@@ -556,28 +589,28 @@
    }
   },
   {
-   "objectId": "public-comps:blackstone:2026-q1:002",
-   "pageNumber": 14,
+   "objectId": "public-comps:asseco-poland:2025-fy:001",
+   "pageNumber": 13,
    "human": {
-    "gold": 106,
-    "native": 106,
-    "ocr": 106,
-    "union": 106,
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
     "neither": 0,
-    "strictNative": 1,
-    "strictOcr": 67,
-    "strictUnion": 67,
-    "strictNeither": 39
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    },
    "silver": {
-    "gold": 30,
-    "native": 30,
-    "ocr": 30,
-    "union": 30,
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
     "neither": 0,
-    "strictNative": 30,
-    "strictOcr": 30,
-    "strictUnion": 30,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
     "strictNeither": 0
    },
    "bulk": {
@@ -593,8 +626,8 @@
    }
   },
   {
-   "objectId": "world-bank:P170734:document:34222345",
-   "pageNumber": 6,
+   "objectId": "public-comps:asseco-poland:2025-fy:001",
+   "pageNumber": 149,
    "human": {
     "gold": 0,
     "native": 0,
@@ -607,17 +640,6 @@
     "strictNeither": 0
    },
    "silver": {
-    "gold": 20,
-    "native": 20,
-    "ocr": 18,
-    "union": 20,
-    "neither": 0,
-    "strictNative": 20,
-    "strictOcr": 18,
-    "strictUnion": 20,
-    "strictNeither": 0
-   },
-   "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
@@ -626,32 +648,6 @@
     "strictNative": 0,
     "strictOcr": 0,
     "strictUnion": 0,
-    "strictNeither": 0
-   }
-  },
-  {
-   "objectId": "world-bank:P170734:document:34222345",
-   "pageNumber": 7,
-   "human": {
-    "gold": 0,
-    "native": 0,
-    "ocr": 0,
-    "union": 0,
-    "neither": 0,
-    "strictNative": 0,
-    "strictOcr": 0,
-    "strictUnion": 0,
-    "strictNeither": 0
-   },
-   "silver": {
-    "gold": 41,
-    "native": 41,
-    "ocr": 34,
-    "union": 41,
-    "neither": 0,
-    "strictNative": 41,
-    "strictOcr": 34,
-    "strictUnion": 41,
     "strictNeither": 0
    },
    "bulk": {
@@ -668,27 +664,27 @@
   },
   {
    "objectId": "world-bank:P178566:document:34223652",
-   "pageNumber": 3,
+   "pageNumber": 4,
    "human": {
-    "gold": 2,
-    "native": 2,
-    "ocr": 2,
-    "union": 2,
+    "gold": 0,
+    "native": 0,
+    "ocr": 0,
+    "union": 0,
     "neither": 0,
-    "strictNative": 2,
-    "strictOcr": 2,
-    "strictUnion": 2,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
     "strictNeither": 0
    },
    "silver": {
-    "gold": 119,
-    "native": 119,
-    "ocr": 78,
-    "union": 119,
+    "gold": 9,
+    "native": 9,
+    "ocr": 8,
+    "union": 9,
     "neither": 0,
-    "strictNative": 119,
-    "strictOcr": 78,
-    "strictUnion": 119,
+    "strictNative": 9,
+    "strictOcr": 8,
+    "strictUnion": 9,
     "strictNeither": 0
    },
    "bulk": {

@@ -21,7 +21,7 @@ without their sample-size caveat until re-measured.
 | 6 | Pictorial classification threshold (midtone ≥ 0.30) does not swallow dense print | Corpus-sample photographs vs synthetic counterexamples (issue #14) | Label pages carrying pictorial regions: photo or mislabelled content? | Misclassification rate; decides threshold work vs advisory reason vs leave-as-is |
 | 7 | Silver-tier auto-accepts (native-corroborated gold) are sound | Never independently spot-checked (issue #8). **Geometry precondition measured 2026-08-21** across 60 gold pages: of 2,504 proposal tokens an engine also read, **99.1% have a box overlapping the matching engine box** (median centre offset 1 unit in 1000); the 22 that match on text but not position lose silver and fall to human review — the safe direction. Drift has a tail (323 tokens >25 units off) concentrated on chart and diagram pages, the same pages where chart-relation recall is 0. This measures the precondition silver relies on, **not** silver's error rate, which is still unmeasured | Human-verify a random silver sample | Silver error rate; if >0, silver stops being usable as denominator anywhere |
 | 8 | Blocking escalation precision at 65% rate on the dev corpus | Reason-level composition known; token-level precision not measured. **batch3-v1 measures conflict-blocking precision at 9/12 pages = 75%** (12 conflict-blocking pages, 9 carrying a human-confirmed error; 2 advisory-only, 1 clean with zero missed-by-both). **batch4-v1: 7/8 = 87.5%** (8 conflict-blocking, 7 with a confirmed error). Combined 16/20 = 80% across both batches — but see row 9: precision is the cheap half of this question, and the expensive half now has a number | Conflict triage labels (#5): real disagreement vs benign segmentation | Escalation precision/recall per reason type; feeds the routing economics directly |
-| 9 | **A page reporting no escalation has been fully read** — the false-confidence assumption every downstream consumer makes | **Refuted on first measurement.** Across batches 3-4, 7 pages came back clean; **2 of them (osf `607883db` p10, pa-sers `llr-vii:manager-presentation` p1) carry human-verified tokens neither engine read** — `1,000`, `500`, `1,800 analysts`, `17`, `2024`. Both are scans with zero native text. Two distinct mechanisms, neither a tuning accident: (a) osf p10 — starvation *would* have fired on 27 confident observations, but cross-family engagement cleared it, and the region holding the missing figures was classed `pictorial`, which is recorded and never escalated; (b) pa-sers p1 — 7 confident observations against a starvation floor of 8, one short of the alarm, on a page where almost nothing was read | More clean pages with verified gold — clean pages are currently the *least* labelled class because selection targets escalated ones | Rate of clean pages carrying missed-by-both gold. This is escalation **recall**, the metric the ladder's economics assume and none of rows 2/3/8 measure. A false blocking escalation costs a fraction of a cent; a silent miss puts a wrong number in the index |
+| 9 | **A page reporting no escalation has been fully read** — the false-confidence assumption every downstream consumer makes | **Refuted, and the rate now has a purpose-built denominator.** batch5-clean-v1 sampled 15 clean pages on purpose (`build-gold-sample.mjs --profile clean`). Across all batches, **27 clean pages are labelled, 16 carry human-tier gold, and 6 of those 16 (37.5%) hold a token neither engine read.** Severity splits: 3 pages carry substantive figures — `1,000` / `500` / `1,800 analysts` (osf `607883db` p10), `17` / `2024` (pa-sers `manager-presentation` p1), `-$100 m` (pa-sers `manager-presentation` p4) — and 3 carry a single bare digit (`1`, `1`, `32`) that may itself be page furniture under the row-4 test. Substantive-miss rate **3 of 16 (18.8%)**. Measured after the currency-symbol scoring fix, so these are not tokenization artifacts: 135 of the 145 tokens the old comparison called missed were read fine, and these survived it. Two distinct mechanisms, neither a tuning accident: (a) osf p10 — starvation *would* have fired on 27 confident observations, but cross-family engagement cleared it, and the region holding the missing figures was classed `pictorial`, which is recorded and never escalated; (b) pa-sers p1 — 7 confident observations against a starvation floor of 8, one short of the alarm, on a page where almost nothing was read | More clean pages with verified gold — clean pages are currently the *least* labelled class because selection targets escalated ones | Rate of clean pages carrying missed-by-both gold. This is escalation **recall**, the metric the ladder's economics assume and none of rows 2/3/8 measure. A false blocking escalation costs a fraction of a cent; a silent miss puts a wrong number in the index |
 
 ## Batch provenance
 
@@ -43,9 +43,10 @@ without their sample-size caveat until re-measured.
 - `batch4-v1` (15 pages, same run, aggregate
   `evaluation/gold/batch4-v1.metrics.json`): 242 human-tier gold tokens,
   582 silver, 88 adjudications, 1 proposal dropped as non-scoring. Human
-  union recall **67.8%** with **78 of 242 tokens missed by both engines** —
-  materially worse than batch 3's 86.1%, and the gap is where row 9 came
-  from. Chart relations again score 0: 12 gold tuples, 0 detections. Same
+  union recall **95.9%** with **10 of 242 tokens missed by both engines**.
+  Both figures were reported as 67.8% / 78 until the currency-symbol scoring
+  bug was fixed on 2026-08-21 (see hygiene note); batch 3's companion figure
+  moved 86.1% → 98.8% in the same correction. Chart relations again score 0: 12 gold tuples, 0 detections. Same
   single annotator. Audited like batch 3 (`--seed 1`): **30 agree, 0
   disagree, 0 skipped**, and this was the harder sample — 13 of its 30 rows
   came from the dense `blackstone` p15/p17 tables, against batch 3's
@@ -61,6 +62,31 @@ without their sample-size caveat until re-measured.
   2,215 critical tokens, and no missed tokens were added by hand. Recall
   measured on this gold is recall against **the pre-labeler's proposal
   set**, not against the page's ink. Do not restate it as page coverage.
+
+- `batch5-clean-v1` (15 pages, same run, aggregate
+  `evaluation/gold/batch5-clean-v1.metrics.json`): the first batch selected
+  *for* clean pages, to give row 9 a denominator. 70 human-tier gold tokens,
+  union recall 95.7%, 3 tokens missed by both across 3 pages. Selection is
+  conditioned on the page carrying figures at all — a numberless page cannot
+  demonstrate a numeric miss — so the rate it feeds is explicitly "among
+  clean pages that carry numbers", not "among clean pages".
+
+## Correction, 2026-08-21: the currency-symbol scoring bug
+
+`criticalTokensCompatible('$684,663', '684,663')` is false, and a native
+text layer routinely emits the currency symbol as its own observation. Every
+recall figure this evaluator produced before 2026-08-21 therefore counted
+correctly-read numbers as missed by both engines: **135 of 145 such tokens
+across the whole gold set were false misses.** Recall now strips currency
+symbols for the recall test only — percent and sign are untouched, because
+they change the value — and runs strict-before-tolerant so an exact match is
+never displaced. Both figures are reported; `strict` in every aggregate is
+what the old comparison would have said.
+
+Restated: batch 3 86.1% → **98.8%**, batch 4 67.8% → **95.9%**, batch 5
+87.1% → **95.7%**. The pilot and batch 2 are unaffected. Row 9 is unaffected
+in kind — all six of its clean-page misses survive the fix — but anything
+quoting the old recall numbers, including PR #30's description, is wrong.
 
 ## Re-scoring hygiene
 

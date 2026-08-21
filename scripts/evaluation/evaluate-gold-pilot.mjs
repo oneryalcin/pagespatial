@@ -63,30 +63,67 @@ for (const doc of readdirSync(documentsRoot)) {
   }
 }
 
+/**
+ * Recall asks whether an engine READ this figure, which is not the same
+ * question as whether two readings of it agree. A native layer routinely
+ * emits the currency symbol as its own observation, so gold's "$684,663"
+ * and native's "684,663" describe identical ink and yet fail
+ * criticalTokensCompatible — 135 of the first 145 tokens this evaluator
+ * scored as missed-by-both were read perfectly by an engine that had simply
+ * drawn its observation boundary after the symbol.
+ *
+ * Currency symbols are therefore stripped for the recall test, and ONLY for
+ * it. Percent and sign are left alone because they change the value: 28.9%
+ * is not 28.9 and -150,672 is not 150,672. poolCorroborates keeps the strict
+ * rule everywhere else — for corroboration, conflicts, and the cross-family
+ * re-score, "$" presence is a real difference between two readings.
+ */
+const stripCurrency = (token) => token.replace(/\p{Sc}/gu, '');
+
 /** Consume one pool entry compatible with the token; exact matches first. */
-function consumeCompatible(pool, token) {
-  let index = pool.indexOf(token);
-  if (index < 0) index = pool.findIndex((candidate) => criticalTokensCompatible(candidate, token));
+function consumeCompatible(pool, token, normalize = (value) => value) {
+  const target = normalize(token);
+  if (!target) return false;
+  let index = pool.findIndex((candidate) => normalize(candidate) === target);
+  if (index < 0) index = pool.findIndex((candidate) => criticalTokensCompatible(normalize(candidate), target));
   if (index < 0) return false;
   pool.splice(index, 1);
   return true;
 }
 
 function makeTierCounter() {
-  return { gold: 0, native: 0, ocr: 0, union: 0, neither: 0 };
+  return { gold: 0, native: 0, ocr: 0, union: 0, neither: 0, strictNative: 0, strictOcr: 0, strictUnion: 0, strictNeither: 0 };
 }
+
+/**
+ * Two passes, strict before tolerant, so an exact match is never displaced by
+ * a relaxed one: the tolerant pass only ever sees pool entries the strict pass
+ * left behind. Both results are reported — the strict figures are what earlier
+ * eras of this file measured, and keeping them visible is what makes the
+ * correction auditable instead of a number that quietly improved.
+ */
 function scoreTokens(texts, nativePool, ocrPool, counter) {
-  for (const text of texts) {
-    for (const token of criticalTokens(text ?? '')) {
-      counter.gold += 1;
-      const inNative = consumeCompatible(nativePool, token);
-      const inOcr = consumeCompatible(ocrPool, token);
-      if (inNative) counter.native += 1;
-      if (inOcr) counter.ocr += 1;
-      if (inNative || inOcr) counter.union += 1;
-      else counter.neither += 1;
-    }
-  }
+  const tokens = texts.flatMap((text) => criticalTokens(text ?? ''));
+  counter.gold += tokens.length;
+  const found = tokens.map(() => ({ native: false, ocr: false }));
+
+  tokens.forEach((token, index) => {
+    found[index].native = consumeCompatible(nativePool, token);
+    found[index].ocr = consumeCompatible(ocrPool, token);
+    if (found[index].native) counter.strictNative += 1;
+    if (found[index].ocr) counter.strictOcr += 1;
+    if (found[index].native || found[index].ocr) counter.strictUnion += 1;
+    else counter.strictNeither += 1;
+  });
+
+  tokens.forEach((token, index) => {
+    if (!found[index].native) found[index].native = consumeCompatible(nativePool, token, stripCurrency);
+    if (!found[index].ocr) found[index].ocr = consumeCompatible(ocrPool, token, stripCurrency);
+    if (found[index].native) counter.native += 1;
+    if (found[index].ocr) counter.ocr += 1;
+    if (found[index].native || found[index].ocr) counter.union += 1;
+    else counter.neither += 1;
+  });
 }
 const rate = (numerator, denominator) => denominator ? Number((numerator / denominator).toFixed(4)) : null;
 const tierReport = (counter) => ({
@@ -94,7 +131,15 @@ const tierReport = (counter) => ({
   native: rate(counter.native, counter.gold),
   ocr: rate(counter.ocr, counter.gold),
   union: rate(counter.union, counter.gold),
-  missedByBoth: counter.neither
+  missedByBoth: counter.neither,
+  // What the strict comparison would have said. Kept so the currency-symbol
+  // correction stays visible in every aggregate rather than being absorbed.
+  strict: {
+    native: rate(counter.strictNative, counter.gold),
+    ocr: rate(counter.strictOcr, counter.gold),
+    union: rate(counter.strictUnion, counter.gold),
+    missedByBoth: counter.strictNeither
+  }
 });
 
 const human = makeTierCounter();
