@@ -12,9 +12,9 @@ Onboarding order: [principles](principles.md) →
 
 ## State snapshot (update the date when you touch this)
 
-*As of 2026-08-21, morning.*
+*As of 2026-08-21, midday.*
 
-- **main**: through PR #27 (gold batch 3). Era: schema 0.6.0,
+- **main**: through PR #30 (gold batch 4). Era: schema 0.6.0,
   enrichment-0.2.0 (with `transport` provenance).
 - **Reference baseline**: `dev-v12-cross-family-2026-08-20` (dirty:false;
   starved 4, blocking 91, gold 464/468; summary committed).
@@ -28,7 +28,9 @@ Onboarding order: [principles](principles.md) →
 
 | Stream | Issue | Status | Owner | Touches | Blocked by |
 |---|---|---|---|---|---|
-| Gold extension (human batches) | #1 | **in progress — batch 3 shipped (PR #27)**: 45/162 pages covered; rows 4/8 measured, row 1 gold collected (scorer pending). NOT a universal unblock: row 1b is uncollectable by this instrument (digit-only pre-labeler) | — | evaluation/gold, review.html flow | nothing |
+| Gold extension (human batches) | #1 | **in progress — batches 3+4 shipped (PRs #27/#30)**: 60/162 pages; rows 1/4/7/8 measured, row 9 refuted (clean ≠ fully read, #29). Known gaps: single annotator; row 1b uncollectable by the digit-only pre-labeler; batch 5 should re-tier toward clean pages (#29) | — | evaluation/gold, review.html flow | nothing |
+| Escalation recall (clean-page silent misses) | #29 | **open — new**: 2/7 clean pages carried unread verified tokens (two mechanisms); needs a clean-page-tiered gold batch for a real denominator | — | sampler tiering, diagnostics | nothing |
+| Adjudication spot-check (audit the 272/272) | #31 | open — contained; extend build-gold-spotcheck.mjs to adjudication rows before row 4 is quoted anywhere load-bearing | — | scripts/evaluation | nothing |
 | Server-GPU OCR adapter (privacy-constrained deployments) | #2 | open | — | new node/server module | nothing |
 | Index ingestion spec (consumption contract) | #21 | open — design doc only | — | docs/ | nothing |
 | Recovery tile budget (cost bound) | #13 | open — small, well-specified; good first task | — | src/browser/region-recovery.ts, tuning | nothing |
