@@ -52,12 +52,14 @@ Onboarding order: [principles](principles.md) →
 **Next actions (owner-confirmed 2026-08-22; ranked by the rabbit-hole
 test, principles §9):**
 
-1. **First extractor-blind clean batch** (#29) — the last measurement
-   with index-corruption stakes (silent quiet-page misses = wrong
-   numbers served; every other open measurement bounds cheap failures).
-   Sampler ready (seed `batch6-clean-v1`: 15 pages from the 87-page
-   unlabeled pool); plus the no-miss re-review of the 27 prior-labeled
-   clean pages so the union-rate preconditions hold.
+1. ~~First extractor-blind clean batch~~ **DONE (batch7-clean-v1,
+   2026-08-22)**: 15 extractor-blind clean pages, all verdicted — **14
+   verified no-miss, 1 page with 2 substantive silently-missed tokens.
+   Residual-stratum miss rate 1/15 (6.7%), 95% upper bound 27.9% —
+   quote the bound; n=15 is wide.** Remaining for the union rate: the
+   no-miss re-review of the 27 prior-labeled clean pages. Follow-up
+   worth an hour: why both engines dropped exactly the two `16`s on a
+   page where they read every neighbouring number (osf p144).
 2. **Build the product: #21 ingestion contract + #22 offline service.**
    The measurement apparatus now exceeds the product it measures (noise
    floor 0.5%, silver bounded, thesis tested); the next unit of effort
