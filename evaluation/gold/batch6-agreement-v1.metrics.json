@@ -1,0 +1,76 @@
+{
+ "scorerVersion": "annotator-agreement-v2",
+ "statistic": "raw percent agreement (not chance-corrected; sample too small for kappa to be honest)",
+ "seed": 6,
+ "pagesCompared": 20,
+ "pagesSelected": 20,
+ "agreement": {
+  "compared": 394,
+  "agree": 392,
+  "rate": "99.5%"
+ },
+ "presentationDrift": 0,
+ "driftRows": [],
+ "disagreements": {
+  "digitsDiffer": 0,
+  "symbolOrSpan": 0,
+  "acceptance": 2
+ },
+ "perBatch": {
+  "pilot-v1": {
+   "compared": 140,
+   "agree": 138,
+   "rate": "98.6%"
+  },
+  "batch2-v1": {
+   "compared": 20,
+   "agree": 20,
+   "rate": "100.0%"
+  },
+  "batch3-v1": {
+   "compared": 133,
+   "agree": 133,
+   "rate": "100.0%"
+  },
+  "batch4-v1": {
+   "compared": 77,
+   "agree": 77,
+   "rate": "100.0%"
+  },
+  "batch5-clean-v1": {
+   "compared": 24,
+   "agree": 24,
+   "rate": "100.0%"
+  }
+ },
+ "autoRows": 322,
+ "autoOverridesBySecond": 0,
+ "freshHumanReadsOfA1Auto": 134,
+ "excluded": {
+  "bulk": 39,
+  "noise": 1,
+  "unreviewedEitherSide": 1,
+  "emptyEditedExport": 0
+ },
+ "missedTokens": {
+  "firstOnly": 0,
+  "secondOnly": 0,
+  "both": 0
+ },
+ "disagreementRows": [
+  {
+   "page": "osf:file:64a59e4ea2a2f4140943711a:v1#2",
+   "index": 25,
+   "class": "acceptance",
+   "first": "wrong",
+   "second": "correct"
+  },
+  {
+   "page": "osf:file:64a59e4ea2a2f4140943711a:v1#2",
+   "index": 26,
+   "class": "acceptance",
+   "first": "wrong",
+   "second": "correct"
+  }
+ ]
+}

@@ -1,0 +1,38 @@
+{
+ "scorerVersion": "silver-spotcheck-v1",
+ "seed": 6,
+ "silverPopulation": 1640,
+ "sampled": 30,
+ "reviewed": 30,
+ "unreviewed": 0,
+ "disagreements": 0,
+ "errorRate": "0.0% of 30 reviewed (population 1640); 95% upper bound 9.5% — quote the bound, not the point rate",
+ "errorRateUpperBound95": 0.09503385285530414,
+ "perBatch": {
+  "batch3-v1": {
+   "sampled": 7,
+   "disagree": 0,
+   "unreviewed": 0,
+   "rate": "0.0%"
+  },
+  "batch4-v1": {
+   "sampled": 10,
+   "disagree": 0,
+   "unreviewed": 0,
+   "rate": "0.0%"
+  },
+  "batch2-v1": {
+   "sampled": 10,
+   "disagree": 0,
+   "unreviewed": 0,
+   "rate": "0.0%"
+  },
+  "batch5-clean-v1": {
+   "sampled": 3,
+   "disagree": 0,
+   "unreviewed": 0,
+   "rate": "0.0%"
+  }
+ },
+ "disagreementRows": []
+}
