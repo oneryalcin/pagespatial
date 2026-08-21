@@ -21,9 +21,14 @@ Onboarding order: [principles](principles.md) →
   bug made 135/145 "missed-by-both" tokens false misses. Batch 3
   86.1→98.8%, batch 4 67.8→95.9%, batch 5 95.7%. PR #30's description is
   stale on batch 4; the ledger carries the dated correction.
-- **Row 9 confirmed against a real denominator**: among clean pages that
-  carry numbers, 6/16 (37.5%) hold a token neither engine read;
-  substantive-miss rate 3/16 (18.8%). Not a thin-sample fluke.
+- **Row 9: instances confirmed, RATE WITHDRAWN** (correction to the
+  previous snapshot, which quoted 6/16 / 18.8% from PR #35's pre-review
+  description): 6 clean pages hold a token neither engine read, 3
+  substantive — a case series refuting "clean = fully read". The batch-5
+  sampler's selection is circular (eligibility keyed on `criticalCount`,
+  computed from the extractors under measurement) and its denominator
+  excludes silver-only clean successes, so **no rate is trustworthy yet**.
+  See ledger row 9.
 - **Row 4 retraction**: "272/272 correct" did not survive independent
   audit (25/29 agree); **"zero wrong-side" stands** and is the only form
   the economics quote. Furniture test now in prompt + audit page.
@@ -40,7 +45,7 @@ Onboarding order: [principles](principles.md) →
 | Stream | Issue | Status | Owner | Touches | Blocked by |
 |---|---|---|---|---|---|
 | Gold extension (human batches) | #1 | **in progress — batches 3–5 shipped (PRs #27/#30/#35)**: ~75 pages labelled incl. 27 clean; rows 1/4/7/8 measured. Known gaps: single annotator (**batch 6 amendment: double-label ~20 stratified pages for an inter-annotator noise floor** — see issue comment); row 1b uncollectable by the digit-only pre-labeler | — | evaluation/gold, review.html flow | nothing |
-| Escalation recall (clean-page silent misses) | #29 | **measured (PR #35), open for the fix**: 6/16 clean number-bearing pages hold an unread token; substantive 3/16 (18.8%). Next: mechanism triage → detector/threshold work, gold-backed | — | sampler tiering, diagnostics | nothing |
+| Escalation recall (clean-page silent misses) | #29 | **instances confirmed, rate withdrawn (PR #35 review)**: sound sampling needs (a) selection from ALL non-escalated pages independent of extractor output, (b) a page-level "no miss found here" verdict in the review UI so verified negatives can enter a denominator | — | sampler tiering, review UI, diagnostics | nothing |
 | Retrieval harness (does trust metadata move retrieval?) | #36 | open — **pre-registered design in the issue**; deterministic paired scoring, stratified queries; 1–2 days; co-evolves the #21 chunk contract and $/trusted-chunk metric | — | scripts/evaluation, trial doc | nothing (gold bounds query pool; grows with #1) |
 | Malformed-PDF fuzz pass (fail-closed degradation) | #37 | open — bounded; synthetic hostile PDFs; one bad page must not kill a document | — | test/, scripts | nothing |
 | Adjudication spot-check (audit the 272/272) | #31 | **shipped** (PR #33): 25/29 agree; "272/272" retracted, "zero wrong-side" survives. Optional follow-up: second batch on the digits-differ class (11/15) | — | — | — |
