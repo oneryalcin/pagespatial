@@ -50,7 +50,7 @@
  */
 import { readFileSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { stripCurrency, consumeMatch } from './lib/recall-match.mjs';
+import { stripCurrency, currencyCompatible } from './lib/recall-match.mjs';
 
 function arg(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -333,20 +333,46 @@ for (const [pageKey, page] of pages) {
   }
 }
 
-// Token-boundary matching via the recall test's own matcher (consumeMatch,
-// tolerant): exact word first, detached-currency forgiven, contradictory
-// currency never, consume-once across a multi-word answer. Never substring
-// containment — "5" must not match inside "2015". Currency-only answer
-// words are segmentation artifacts and are skipped; answers that are
-// entirely currency/punctuation are dropped from the query set upstream.
+// Boundary-guarded matching (v4): the answer must appear with no digit or
+// cased letter glued to either side — "5" never matches inside "2015" or
+// "5th" — but trailing punctuation ("9/3/24,"), URLs, and CJK-adjacent
+// occurrences ("2010年" inside "2010年事業開始）") DO match: CJK ideographs
+// and kana are uncased (\p{Lo}) and are deliberately outside the guard
+// class, because CJK has no whitespace token boundaries at all (v3's
+// whitespace-token equality silently made every query on the Japanese
+// document unmeasurable). Currency stays under the recall test's rule:
+// detached symbols forgiven, contradictory ones never (the match span is
+// extended across adjacent currency symbols and checked with
+// currencyCompatible). Currency-only answer words are segmentation
+// artifacts and are skipped; answers entirely currency/punctuation are
+// dropped from the query set upstream.
 // Limitation (stated in the trial doc): chunks carry no observation ids, so
-// a same-page other-occurrence of the answer word still counts as the hit.
+// a same-page other-occurrence of the answer still counts as the hit.
+const GUARD = '[\\p{N}\\p{Lu}\\p{Ll}]';
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 function answerParts(text) {
   return String(text).toLowerCase().split(/\s+/u).filter((part) => tokenize(stripCurrency(part)).length);
 }
+function partMatches(chunkLower, part) {
+  const target = stripCurrency(part);
+  if (!target) return false;
+  // The extra lookarounds reject thousands/decimal continuations: "684,663"
+  // must not match inside "1,684,663", nor "100" inside "100.5".
+  const pattern = new RegExp(
+    `(?<!${GUARD})(?<!\\p{N}[,.])${escapeRegex(target)}(?!${GUARD})(?![,.]\\p{N})`, 'gu'
+  );
+  for (let match = pattern.exec(chunkLower); match !== null; match = pattern.exec(chunkLower)) {
+    let start = match.index;
+    while (start > 0 && /\p{Sc}/u.test(chunkLower[start - 1])) start -= 1;
+    let end = match.index + target.length;
+    while (end < chunkLower.length && /\p{Sc}/u.test(chunkLower[end])) end += 1;
+    if (currencyCompatible(chunkLower.slice(start, end), part)) return true;
+  }
+  return false;
+}
 function chunkContainsAnswer(chunk, parts) {
-  const pool = chunk.text.toLowerCase().split(/\s+/u).filter(Boolean);
-  return parts.every((part) => consumeMatch(pool, part, { tolerant: true }));
+  const lower = chunk.text.toLowerCase();
+  return parts.every((part) => partMatches(lower, part));
 }
 
 function evaluate(index, query) {
@@ -406,7 +432,7 @@ function pairwise(results, x, y) {
 const primary = sweep[PRIMARY_WIDTH];
 const strata = ['conflict', 'escalated-other', 'clean'];
 const report = {
-  harnessVersion: 'retrieval-harness-v3-token-boundary',
+  harnessVersion: 'retrieval-harness-v4-boundary-guarded',
   runRoot,
   queries: primary.length,
   droppedUnscoreableAnswers,
@@ -427,6 +453,6 @@ const report = {
 };
 
 mkdirSync(outDir, { recursive: true });
-writeFileSync(join(outDir, 'results-v3.json'), JSON.stringify({ report, perQuery }, null, 1));
+writeFileSync(join(outDir, 'results-v4.json'), JSON.stringify({ report, perQuery }, null, 1));
 console.log(JSON.stringify(report, null, 1));
-console.log(`Per-query detail (private, contains corpus text): ${join(outDir, 'results-v3.json')}`);
+console.log(`Per-query detail (private, contains corpus text): ${join(outDir, 'results-v4.json')}`);
