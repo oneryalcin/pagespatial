@@ -12,19 +12,17 @@ Onboarding order: [principles](principles.md) →
 
 ## State snapshot (update the date when you touch this)
 
-*As of 2026-08-20, end of day.*
+*As of 2026-08-20, late evening.*
 
-- **main**: through PR #18 (escalation ladder). Era: schema 0.5.0,
-  enrichment-0.2.0.
-- **In review**: PR #19 `cross-family-corroboration` — schema 0.6.0
-  (secondOpinion on the page record), two adversarial reviews absorbed,
-  final run validated (`exp-second-opinion-d`: starved 27→4, blocking 91,
-  gold 464/468).
-- **Reference baseline**: `dev-v11-residue-honest-2026-08-20` (schema
-  0.5.0 era). A dev-v12 cut is due after PR #19 merges (0.6.0 era —
-  summaries of old eras fail current validation by design).
-- **Escalation economics** (issue #17): $0.0093 → $0.00307/corpus page
-  measured; ≤$0.0015 projected after #20.
+- **main**: through PR #23. Era: schema 0.6.0, enrichment-0.2.0 (with
+  `transport` provenance).
+- **Reference baseline**: `dev-v12-cross-family-2026-08-20` (dirty:false;
+  starved 4, blocking 91, gold 464/468; summary committed).
+- **Escalation economics CLOSED** (issues #17/#20): $0.0093 →
+  **$0.000817/corpus page measured (11.4×; owner's 10× target exceeded)**
+  under a test-enforced zero-interactive-calls invariant
+  (`test/enrichment-runner.test.mjs`). Recall via the committed
+  `scripts/evaluation/score-enrichment-recall.mjs`.
 
 ## Streams
 
@@ -34,9 +32,10 @@ Onboarding order: [principles](principles.md) →
 | Server-GPU OCR adapter (privacy-constrained deployments) | #2 | open | — | new node/server module | nothing |
 | Index ingestion spec (consumption contract) | #21 | open — design doc only | — | docs/ | nothing |
 | Recovery tile budget (cost bound) | #13 | open — small, well-specified; good first task | — | src/browser/region-recovery.ts, tuning | nothing |
-| Batch API + residue-crop rungs | #20 | open | — | run-flash-enrichment.mjs, flash-ocr.ts | PR #19 merge |
+| Batch API + residue-crop rungs | #20 | **shipped** (PR #23) | session | — | — |
 | Production-scale offline ingestion service | #22 | open — design + throughput prototype | — | new service layer; coordinates with #21 | nothing |
-| Cross-family second opinion | #17/PR #19 | in review | session | schema 0.6.0, parser, diagnostics | owner merge call |
+| pdf-inspector WASM in browser (markdown parity) | #25 | open — low priority; CJK/CMap gate first (monotaro p61); pair with native 1.14.2→1.15.0 bump | — | src/browser, package.json | nothing |
+| Cross-family second opinion | PR #19 | **shipped** | session | — | — |
 | Pictorial threshold + residue-severity data check | #14 | parked, gold-gated | — | tuning, ink.ts | #1 |
 | Conflict triage taxonomy | #5 | parked, gold-gated | — | evaluation | #1 |
 | Silver-tier spot check + review follow-ups | #8 | parked, gold-gated | — | evaluation | #1 |
