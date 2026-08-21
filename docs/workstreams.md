@@ -12,10 +12,13 @@ Onboarding order: [principles](principles.md) →
 
 ## State snapshot (update the date when you touch this)
 
-*As of 2026-08-21, midday.*
+*As of 2026-08-21, afternoon.*
 
-- **main**: through PR #30 (gold batch 4). Era: schema 0.6.0,
+- **main**: through PR #33 (adjudication audit). Era: schema 0.6.0,
   enrichment-0.2.0 (with `transport` provenance).
+- **Row 4 retraction**: "272/272 correct" did not survive independent
+  audit (25/29 agree); **"zero wrong-side" stands** and is the only form
+  the economics quote. Furniture test now in prompt + audit page.
 - **Reference baseline**: `dev-v12-cross-family-2026-08-20` (dirty:false;
   starved 4, blocking 91, gold 464/468; summary committed).
 - **Escalation economics CLOSED** (issues #17/#20): $0.0093 →
@@ -30,7 +33,7 @@ Onboarding order: [principles](principles.md) →
 |---|---|---|---|---|---|
 | Gold extension (human batches) | #1 | **in progress — batches 3+4 shipped (PRs #27/#30)**: 60/162 pages; rows 1/4/7/8 measured, row 9 refuted (clean ≠ fully read, #29). Known gaps: single annotator; row 1b uncollectable by the digit-only pre-labeler; batch 5 should re-tier toward clean pages (#29) | — | evaluation/gold, review.html flow | nothing |
 | Escalation recall (clean-page silent misses) | #29 | **open — new**: 2/7 clean pages carried unread verified tokens (two mechanisms); needs a clean-page-tiered gold batch for a real denominator | — | sampler tiering, diagnostics | nothing |
-| Adjudication spot-check (audit the 272/272) | #31 | open — contained; extend build-gold-spotcheck.mjs to adjudication rows before row 4 is quoted anywhere load-bearing | — | scripts/evaluation | nothing |
+| Adjudication spot-check (audit the 272/272) | #31 | **shipped** (PR #33): 25/29 agree; "272/272" retracted, "zero wrong-side" survives. Optional follow-up: second batch on the digits-differ class (11/15) | — | — | — |
 | Server-GPU OCR adapter (privacy-constrained deployments) | #2 | open | — | new node/server module | nothing |
 | Index ingestion spec (consumption contract) | #21 | open — design doc only | — | docs/ | nothing |
 | Recovery tile budget (cost bound) | #13 | open — small, well-specified; good first task | — | src/browser/region-recovery.ts, tuning | nothing |
