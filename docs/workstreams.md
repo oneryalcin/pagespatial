@@ -27,11 +27,11 @@ Onboarding order: [principles](principles.md) →
   drops where it should downweight (7 answers structurally excluded).
   Redirect: answer verification/citation is where trust metadata's value
   is now hypothesized — future work in the trial doc.
-- **Batch 6 is annotation-ready** (human sitting is the only remaining
-  step): double-label pages (~396 comparable rows, drift-guarded both
-  directions) + silver spot-check (30 seeded crops; scorer quotes the
-  95% Clopper-Pearson bound). Instructions:
-  `docs/trials/2026-08-21-batch6-two-reread-protocols.md`.
+- **Batch 6 sittings DONE (PR #47)**: annotator agreement **99.5%**
+  (394 rows, drift 0, zero digit-class disagreements) — the ledger-wide
+  noise floor is ~0.5%, 0% on digits. Silver spot-check: 0/30 →
+  **silver error ≤9.5% at 95%** (quote the bound). Ledger rows updated;
+  aggregates committed under `evaluation/gold/`.
 - **Clean-rate preconditions** (from PR #44's closure review): no
   escalation-recall rate exists until (a) prior batches' clean pages get
   a no-miss re-review, and (b) prior outcomes are re-evaluated against
@@ -49,16 +49,15 @@ Onboarding order: [principles](principles.md) →
   excludes silver-only clean successes, so **no rate is trustworthy yet**.
   See ledger row 9.
 
-**Next actions (post PRs #43–#45, 2026-08-21 night):**
+**Next actions (post PR #47, 2026-08-21 night):**
 
-1. **The batch-6 human sitting** — the only step blocked on a person:
-   double-label (second annotator) + silver spot-check. Fills ledger
-   rows 1 (noise floor) and 7 (silver error bound).
-2. **First extractor-blind clean batch** (#29) — sampler is ready (seed
+1. **First extractor-blind clean batch** (#29) — sampler is ready (seed
    `batch6-clean-v1` dry-run: 15 pages selected from the 87-page
    unlabeled pool); plus the no-miss re-review of the 27 prior-labeled
-   clean pages so the union rate's preconditions hold.
-3. **Answer-faithfulness harness** — the redirected successor to #36:
+   clean pages so the union rate's preconditions hold. Fills the
+   escalation-recall denominator — the last measurement with
+   index-corruption stakes.
+2. **Answer-faithfulness harness** — the redirected successor to #36:
    test trust metadata where its value is now hypothesized (verification
    and citation, not ranking).
 
