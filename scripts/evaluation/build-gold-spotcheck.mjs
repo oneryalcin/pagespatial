@@ -354,13 +354,25 @@ judgement rather than a review of one. Each reading's own extent is outlined in
 its colour — <b class="keyA">A solid blue</b>, <b class="keyB">B dashed
 orange</b> — so a reading that swallowed a neighbouring block shows as a box
 that covers more than it should.</p>
+<p class="lead"><b>The ink is what is printed on the page.</b> The boxes are each
+engine's claim about where its reading came from — evidence about extent, not
+the definition of the answer. Judge the text against the marks on the paper and
+use the boxes to see whether the two readings are even describing the same
+thing. The standard is verbatim glyphs, not meaning: what is printed, not what
+the cell is for.</p>
 <p class="lead"><b>Which option:</b> if one box sits inside the other on the same
 line or cell — usually one reading keeping a currency symbol the other dropped —
 that is the same content at two extents, so pick whichever transcribes the ink
 in that region more faithfully. Reserve <b>they cover different regions</b> for
 boxes reaching into separate lines, cells or columns: that is a segmentation
-failure rather than a transcription one, and the two need separating. "Can't
-tell" is a legitimate answer.</p>
+failure rather than a transcription one, and the two need separating.</p>
+<p class="lead"><b>When the standard does not decide, say so.</b> Where both
+readings are faithful to the glyphs and differ only in span — whether a
+column-level currency symbol belongs to this cell has no verbatim answer —
+<b>can't tell</b> is the correct response, not a cop-out. It is counted, never
+dropped, and a run of them is itself a finding about the task. Spend the care on
+rows where the digits differ: those have a real answer, and getting one wrong
+puts a wrong figure in the index.</p>
 <table>${adjudicationRows}</table>
 ` : '';
 
