@@ -110,17 +110,26 @@ if (runRoot) {
       for (const observation of [...spatial.nativeObservations, ...spatial.ocrObservations]) {
         boxById.set(observation.id, observation.box);
       }
-      for (const conflict of spatial.conflicts ?? []) {
-        const parts = [conflict.ocrId, ...(conflict.nativeIds ?? [])]
-          .map((id) => boxById.get(id))
-          .filter(Boolean);
-        if (!parts.length) continue;
+      const normalize = (boxes) => {
+        const parts = boxes.filter(Boolean);
+        if (!parts.length) return null;
         const x0 = Math.min(...parts.map((b) => b[0]));
         const y0 = Math.min(...parts.map((b) => b[1]));
         const x1 = Math.max(...parts.map((b) => b[2]));
         const y1 = Math.max(...parts.map((b) => b[3]));
-        conflictBoxes.set(`${record.objectId}#${record.pageNumber}#${conflict.id}`,
-          [y0 / height * 1000, x0 / width * 1000, y1 / height * 1000, x1 / width * 1000]);
+        return [y0 / height * 1000, x0 / width * 1000, y1 / height * 1000, x1 / width * 1000];
+      };
+      for (const conflict of spatial.conflicts ?? []) {
+        // Each witness keeps its OWN extent. Merging them into one highlight
+        // makes whichever reading spans more of the page look correct — the
+        // mirror of framing the region with the OCR box alone. Drawn side by
+        // side, a reading that merged two columns is visible as one.
+        const ocr = normalize([boxById.get(conflict.ocrId)]);
+        const native = normalize((conflict.nativeIds ?? []).map((id) => boxById.get(id)));
+        if (!ocr && !native) continue;
+        conflictBoxes.set(`${record.objectId}#${record.pageNumber}#${conflict.id}`, {
+          ocr, native, union: normalize([boxById.get(conflict.ocrId), ...(conflict.nativeIds ?? []).map((id) => boxById.get(id))])
+        });
       }
     }
   }
@@ -164,7 +173,8 @@ for (const page of verdicts.pages) {
       // makes that reading correct by construction. neutralBox spans both
       // witnesses instead, so the highlight marks the disputed region rather
       // than one side's answer.
-      box: neutralBox(page.objectId, page.pageNumber, conflict.id) ?? source.normalizedBox ?? null,
+      box: neutralBox(page.objectId, page.pageNumber, conflict.id)?.union ?? source.normalizedBox ?? null,
+      witnessBoxes: neutralBox(page.objectId, page.pageNumber, conflict.id) ?? null,
       image: proposal.image
     });
   }
@@ -230,8 +240,12 @@ const WINDOW_FRACTION = 0.22;
 const VIEW_WIDTH = 460;
 const VIEW_HEIGHT = 120;
 
-/** The magnified crop, centred on `box`, with the region outlined. */
-function cropCell(item, caption) {
+/**
+ * The magnified crop, framed on `item.box`, with the region outlined.
+ * `extraMarks` draws additional boxes in the same coordinate space — used to
+ * show each witness's own extent rather than a single merged highlight.
+ */
+function cropCell(item, caption, extraMarks = []) {
   const page = image(item.image);
   // No usable box: show the whole page, fitted, and say plainly that it is
   // unlocated. Centring on a guess would be worse than useless — it would
@@ -265,9 +279,20 @@ function cropCell(item, caption) {
   const height = Math.max(((y1 - y0) / 1000) * scaledHeight, 3);
   const offsetLeft = VIEW_WIDTH / 2 - (left + width / 2);
   const offsetTop = VIEW_HEIGHT / 2 - (top + height / 2);
+  const place = (box, className) => {
+    const [by0, bx0, by1, bx1] = box;
+    const l = (bx0 / 1000) * scaledWidth + offsetLeft;
+    const t = (by0 / 1000) * scaledHeight + offsetTop;
+    const w = Math.max(((bx1 - bx0) / 1000) * scaledWidth, 3);
+    const h = Math.max(((by1 - by0) / 1000) * scaledHeight, 3);
+    return `<div class="${className}" style="left:${l.toFixed(1)}px;top:${t.toFixed(1)}px;width:${w.toFixed(1)}px;height:${h.toFixed(1)}px"></div>`;
+  };
+  const marks = extraMarks.length
+    ? extraMarks.filter((entry) => entry.box).map((entry) => place(entry.box, entry.className)).join('')
+    : `<div class="mark" style="left:${(left + offsetLeft).toFixed(1)}px;top:${(top + offsetTop).toFixed(1)}px;width:${width.toFixed(1)}px;height:${height.toFixed(1)}px"></div>`;
   return `<div class="view">
         <img src="data:image/png;base64,${page.data}" style="width:${scaledWidth.toFixed(1)}px;left:${offsetLeft.toFixed(1)}px;top:${offsetTop.toFixed(1)}px">
-        <div class="mark" style="left:${(left + offsetLeft).toFixed(1)}px;top:${(top + offsetTop).toFixed(1)}px;width:${width.toFixed(1)}px;height:${height.toFixed(1)}px"></div>
+        ${marks}
       </div>
       <div class="src">${caption}</div>`;
 }
@@ -297,17 +322,22 @@ const adjudicationRows = adjudicationSample.map((item, index) => {
   const second = item.ocrFirst
     ? { label: 'native', text: item.nativeText }
     : { label: 'ocr', text: item.ocrText };
+  const marks = [
+    { box: item.witnessBoxes?.[first.label], className: 'mark markA' },
+    { box: item.witnessBoxes?.[second.label], className: 'mark markB' }
+  ];
   return `
   <tr>
     <td class="n">${index + 1}</td>
-    <td class="crop">${cropCell(item, `${escapeHtml(item.objectId)} p${item.pageNumber} · conflict ${item.conflictIndex}`)}</td>
+    <td class="crop">${cropCell(item, `${escapeHtml(item.objectId)} p${item.pageNumber} · conflict ${item.conflictIndex}`, marks)}</td>
     <td class="readings">
-      <div><b>A</b> <code>${escapeHtml(first.text)}</code></div>
-      <div><b>B</b> <code>${escapeHtml(second.text)}</code></div>
+      <div><b class="keyA">A</b> <code>${escapeHtml(first.text)}</code></div>
+      <div><b class="keyB">B</b> <code>${escapeHtml(second.text)}</code></div>
     </td>
     <td class="verdict">
       <label><input type="radio" name="a-${index}" value="${first.label}">A matches the ink</label>
       <label><input type="radio" name="a-${index}" value="${second.label}">B matches the ink</label>
+      <label><input type="radio" name="a-${index}" value="different-regions">they cover different regions</label>
       <label><input type="radio" name="a-${index}" value="both-wrong">neither matches</label>
       <label><input type="radio" name="a-${index}" value="unsure">can't tell</label>
       <input type="text" id="ink-${index}" placeholder="what the ink says, verbatim">
@@ -320,8 +350,12 @@ const adjudicationSection = adjudicationSample.length ? `
 <p class="lead">Two extractors disagreed here. Read the ink and say which reading is
 right — <b>A</b> and <b>B</b> are unlabelled as to engine <em>and shuffled per
 row</em>, and the machine's verdict is not shown, so this is an independent
-judgement rather than a review of one. The highlight spans both readings, not
-either one. Answer from the crop alone; "can't tell" is a legitimate answer.</p>
+judgement rather than a review of one. Each reading's own extent is outlined in
+its colour — <b class="keyA">A solid blue</b>, <b class="keyB">B dashed
+orange</b> — so a reading that swallowed a neighbouring block shows as a box
+that covers more than it should. Pick <b>they cover different regions</b> when
+that is what happened: it is a segmentation failure, not a transcription one,
+and the two need separating. "Can't tell" is a legitimate answer.</p>
 <table>${adjudicationRows}</table>
 ` : '';
 
@@ -334,6 +368,10 @@ td.n{width:2rem;color:#888}
 .view{position:relative;overflow:hidden;width:${VIEW_WIDTH}px;height:${VIEW_HEIGHT}px;border:1px solid #ccc;background:#fff}
 .view img{position:absolute;max-width:none}
 .mark{position:absolute;border:2px solid #06c;background:rgba(0,102,204,.10);pointer-events:none}
+.markA{border-color:#06c;background:rgba(0,102,204,.10)}
+.markB{border-color:#d17000;background:rgba(209,112,0,.10);border-style:dashed}
+.keyA{color:#06c}
+.keyB{color:#d17000}
 .view.unlocated{border-color:#c00;height:200px}
 .warn{position:absolute;left:0;right:0;bottom:0;background:rgba(204,0,0,.85);color:#fff;font-size:11px;padding:.2rem .4rem}
 .src{font-size:11px;color:#888;margin-top:.2rem}
