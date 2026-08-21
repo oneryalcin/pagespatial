@@ -360,6 +360,12 @@ the definition of the answer. Judge the text against the marks on the paper and
 use the boxes to see whether the two readings are even describing the same
 thing. The standard is verbatim glyphs, not meaning: what is printed, not what
 the cell is for.</p>
+<p class="lead"><b>Page furniture is not content.</b> A number counts as part of the
+reading only if removing it would change what the text asserts. Margin line
+numbers beside a paragraph, page numbers in a running header, and standalone
+footnote markers are apparatus — a reading that excludes them is the better one.
+The leading 5 in "5 months of transportation" is content, and numbered table
+columns are data. The test is the claim, not the position.</p>
 <p class="lead"><b>Which option:</b> if one box sits inside the other on the same
 line or cell — usually one reading keeping a currency symbol the other dropped —
 that is the same content at two extents, so pick whichever transcribes the ink

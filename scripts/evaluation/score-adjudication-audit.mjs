@@ -37,6 +37,7 @@ function arg(name, fallback) {
 const auditPath = arg('--audit');
 const goldRoot = arg('--gold-root', '.evaluation/gold');
 const outputPath = arg('--output', '');
+const publicOutputPath = arg('--public-output', '');
 
 const audit = JSON.parse(readFileSync(auditPath, 'utf8'));
 const rows = audit.adjudications ?? [];
@@ -106,4 +107,25 @@ const report = {
 };
 
 if (outputPath) writeFileSync(outputPath, `${JSON.stringify(report, null, 1)}\n`);
+
+// The full report quotes the disputed ink, which is private corpus text and
+// must stay under .evaluation/. --public-output writes the same findings with
+// the readings stripped, so the counts can be committed without the pages.
+if (publicOutputPath) {
+  const strip = (bucket) => ({
+    ...bucket,
+    disagreements: bucket.disagreements.map(({ machineInk, auditorInk, ...rest }) => ({
+      ...rest,
+      inkQuoted: Boolean(machineInk || auditorInk)
+    }))
+  });
+  const publicReport = {
+    ...report,
+    overall: strip(report.overall),
+    byClass: { digitsDiffer: strip(report.byClass.digitsDiffer), symbolOnly: strip(report.byClass.symbolOnly) },
+    caveats: [...report.caveats, 'Readings are stripped from this file; the full report with the disputed ink stays under .evaluation/.']
+  };
+  writeFileSync(publicOutputPath, `${JSON.stringify(publicReport, null, 1)}\n`);
+}
+
 console.log(JSON.stringify(report, null, 1));
