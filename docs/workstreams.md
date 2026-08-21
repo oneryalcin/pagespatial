@@ -12,10 +12,18 @@ Onboarding order: [principles](principles.md) →
 
 ## State snapshot (update the date when you touch this)
 
-*As of 2026-08-21, afternoon.*
+*As of 2026-08-21, evening.*
 
-- **main**: through PR #33 (adjudication audit). Era: schema 0.6.0,
-  enrichment-0.2.0 (with `transport` provenance).
+- **main**: through PR #35 (batch 5 clean denominator + currency-symbol
+  scoring fix). Era: schema 0.6.0, enrichment-0.2.0 (with `transport`
+  provenance).
+- **Recall figures corrected upward** (PR #35): a currency-symbol scoring
+  bug made 135/145 "missed-by-both" tokens false misses. Batch 3
+  86.1→98.8%, batch 4 67.8→95.9%, batch 5 95.7%. PR #30's description is
+  stale on batch 4; the ledger carries the dated correction.
+- **Row 9 confirmed against a real denominator**: among clean pages that
+  carry numbers, 6/16 (37.5%) hold a token neither engine read;
+  substantive-miss rate 3/16 (18.8%). Not a thin-sample fluke.
 - **Row 4 retraction**: "272/272 correct" did not survive independent
   audit (25/29 agree); **"zero wrong-side" stands** and is the only form
   the economics quote. Furniture test now in prompt + audit page.
@@ -31,10 +39,12 @@ Onboarding order: [principles](principles.md) →
 
 | Stream | Issue | Status | Owner | Touches | Blocked by |
 |---|---|---|---|---|---|
-| Gold extension (human batches) | #1 | **in progress — batches 3+4 shipped (PRs #27/#30)**: 60/162 pages; rows 1/4/7/8 measured, row 9 refuted (clean ≠ fully read, #29). Known gaps: single annotator; row 1b uncollectable by the digit-only pre-labeler; batch 5 should re-tier toward clean pages (#29) | — | evaluation/gold, review.html flow | nothing |
-| Escalation recall (clean-page silent misses) | #29 | **open — new**: 2/7 clean pages carried unread verified tokens (two mechanisms); needs a clean-page-tiered gold batch for a real denominator | — | sampler tiering, diagnostics | nothing |
+| Gold extension (human batches) | #1 | **in progress — batches 3–5 shipped (PRs #27/#30/#35)**: ~75 pages labelled incl. 27 clean; rows 1/4/7/8 measured. Known gaps: single annotator (**batch 6 amendment: double-label ~20 stratified pages for an inter-annotator noise floor** — see issue comment); row 1b uncollectable by the digit-only pre-labeler | — | evaluation/gold, review.html flow | nothing |
+| Escalation recall (clean-page silent misses) | #29 | **measured (PR #35), open for the fix**: 6/16 clean number-bearing pages hold an unread token; substantive 3/16 (18.8%). Next: mechanism triage → detector/threshold work, gold-backed | — | sampler tiering, diagnostics | nothing |
+| Retrieval harness (does trust metadata move retrieval?) | #36 | open — **pre-registered design in the issue**; deterministic paired scoring, stratified queries; 1–2 days; co-evolves the #21 chunk contract and $/trusted-chunk metric | — | scripts/evaluation, trial doc | nothing (gold bounds query pool; grows with #1) |
+| Malformed-PDF fuzz pass (fail-closed degradation) | #37 | open — bounded; synthetic hostile PDFs; one bad page must not kill a document | — | test/, scripts | nothing |
 | Adjudication spot-check (audit the 272/272) | #31 | **shipped** (PR #33): 25/29 agree; "272/272" retracted, "zero wrong-side" survives. Optional follow-up: second batch on the digits-differ class (11/15) | — | — | — |
-| Server-GPU OCR adapter (privacy-constrained deployments) | #2 | open | — | new node/server module | nothing |
+| Server-GPU OCR adapter (privacy-constrained deployments) | #2 | open — **gated: re-measure JA/chart recovery recall on current main first** (CMap fix + zoom-retry shipped since the motivating number; see issue comment) | — | new node/server module | the re-measure |
 | Index ingestion spec (consumption contract) | #21 | open — design doc only | — | docs/ | nothing |
 | Recovery tile budget (cost bound) | #13 | open — small, well-specified; good first task | — | src/browser/region-recovery.ts, tuning | nothing |
 | Batch API + residue-crop rungs | #20 | **shipped** (PR #23) | session | — | — |
