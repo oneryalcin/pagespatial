@@ -2,27 +2,30 @@
  * Retrieval harness (issue #36, pre-registered): does trust metadata change
  * downstream retrieval outcomes?
  *
- * Two ingestion paths over the SAME corpus, retriever, and chunking:
- *   A (naive)       — every observation from both witnesses, in reading
- *                     order, duplicates and disputed readings included.
- *   B (trust-aware) — the record's own semantics gate what enters the index:
- *                     * conflicts: adjudicated → winning side only (plus
- *                       inkText); unadjudicated/unsure/both-wrong → BOTH
- *                       sides excluded (reject-don't-repair), inkText
- *                       indexed when the adjudicator supplied one;
- *                     * corroborated OCR duplicates of native text are
- *                       dropped (the naive path double-counts them);
- *                     * uncorroborated OCR below the low-confidence floor
- *                       (0.5) is dropped;
- *                     * enrichment proposals (escalated-tier recovery) are
- *                       appended.
+ * v2 (post fairness review): the original two-way A/B comparison used a
+ * strawman baseline — naive interleaved BOTH witnesses, double-indexing
+ * nearly every word, while B quietly contained a TRUST-FREE duplicate-drop.
+ * v2 runs a four-variant component ablation over the SAME corpus,
+ * retriever, and chunking, so every point of margin is attributed to a
+ * mechanism:
+ *   A-raw      — every observation from both witnesses (the old naive).
+ *   A-dedup    — A-raw plus the trust-free substring duplicate-drop and
+ *                nothing else: no conflict gating, no confidence floor, no
+ *                enrichment. This is the REAL baseline; the duplicate-drop
+ *                reads only the two witnesses' raw text.
+ *   B-noinject — trust gating (adjudicated conflicts, reject-don't-repair,
+ *                low-confidence floor, duplicate-drop) WITHOUT the
+ *                enrichment-text appends.
+ *   B-full     — B-noinject plus enrichment proposals + adjudication
+ *                inkText appended (content no A variant receives).
+ * The headline comparison is A-dedup vs B-full.
  *
  * Queries are built deterministically from gold-verified tokens: the answer
  * is a human-verified token; the query is context words drawn from
- * BOTH-WITNESS-AGREED text near the token's box. Agreed text is indexed
- * identically by both paths, so query construction cannot favour either
- * path; the paths differ only on disputed/uncorroborated content, which
- * never enters a query.
+ * BOTH-WITNESS-AGREED text near the token's box. Note the disclosed bias:
+ * agreed vocabulary is exactly what B's gating is guaranteed to retain, so
+ * this construction shields B from its main cost (recall loss on gated
+ * text) — it favours B, and the fairness conclusion below holds despite it.
  *
  * Scoring is deterministic (no LLM judge): BM25 over word-window chunks,
  * hit@k = a chunk from the gold page containing the answer token appears in
@@ -111,7 +114,20 @@ function naiveText(page) {
     .map((observation) => observation.text);
 }
 
-function trustAwareText(page, enrichment) {
+// Trust-free duplicate-drop: reads only the two witnesses' raw text, no
+// record semantics. Any reasonable dual-witness ingestion would do this.
+function dedupText(page) {
+  const nativeBlob = normalize(page.nativeObservations.map((observation) => observation.text).join(' '));
+  const kept = [...page.nativeObservations];
+  for (const observation of page.ocrObservations) {
+    const norm = normalize(observation.text);
+    if (norm && nativeBlob.includes(norm)) continue;
+    kept.push(observation);
+  }
+  return kept.sort(readingOrder).map((observation) => observation.text);
+}
+
+function trustAwareText(page, enrichment, { inject }) {
   const drop = new Set();
   const extras = [];
   const adjudications = new Map((enrichment?.adjudications ?? []).map((entry) => [entry.conflictId, entry]));
@@ -142,9 +158,19 @@ function trustAwareText(page, enrichment) {
     kept.push(observation);
   }
   const texts = kept.sort(readingOrder).map((observation) => observation.text);
-  for (const proposal of enrichment?.proposals ?? []) texts.push(proposal.text);
-  for (const extra of extras) texts.push(extra.text);
+  if (inject) {
+    for (const proposal of enrichment?.proposals ?? []) texts.push(proposal.text);
+    for (const extra of extras) texts.push(extra.text);
+  }
   return texts;
+}
+
+const VARIANTS = ['A-raw', 'A-dedup', 'B-noinject', 'B-full'];
+function variantText(name, page, enrichment) {
+  if (name === 'A-raw') return naiveText(page);
+  if (name === 'A-dedup') return dedupText(page);
+  if (name === 'B-noinject') return trustAwareText(page, enrichment, { inject: false });
+  return trustAwareText(page, enrichment, { inject: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -277,11 +303,11 @@ for (const [, entries] of [...byPage.entries()].sort(([a], [b]) => a.localeCompa
 // ---------------------------------------------------------------------------
 // Build corpora, run the sweep
 // ---------------------------------------------------------------------------
-const corpusA = new Map();
-const corpusB = new Map();
+const corpora = new Map(VARIANTS.map((name) => [name, new Map()]));
 for (const [pageKey, page] of pages) {
-  corpusA.set(pageKey, naiveText(page));
-  corpusB.set(pageKey, trustAwareText(page, enrichments.get(pageKey)));
+  for (const name of VARIANTS) {
+    corpora.get(name).set(pageKey, variantText(name, page, enrichments.get(pageKey)));
+  }
 }
 
 function evaluate(index, query) {
@@ -300,14 +326,12 @@ function evaluate(index, query) {
 const sweep = {};
 const perQuery = [];
 for (const width of CHUNK_WIDTHS) {
-  const indexA = buildIndex(buildChunks(corpusA, width));
-  const indexB = buildIndex(buildChunks(corpusB, width));
+  const indexes = new Map(VARIANTS.map((name) => [name, buildIndex(buildChunks(corpora.get(name), width))]));
   const results = queries.map((query) => ({
     stratum: query.stratum,
     pageKey: query.pageKey,
     answer: query.answer,
-    a: evaluate(indexA, query),
-    b: evaluate(indexB, query)
+    variants: Object.fromEntries(VARIANTS.map((name) => [name, evaluate(indexes.get(name), query)]))
   }));
   sweep[width] = results;
   if (width === PRIMARY_WIDTH) {
@@ -321,14 +345,21 @@ for (const width of CHUNK_WIDTHS) {
 // Aggregate + report (counts only on stdout)
 // ---------------------------------------------------------------------------
 const hit = (result, k) => result.rank !== null && result.rank <= k;
-function table(results) {
+function hitsTable(results) {
   const rows = {};
   for (const k of KS) {
-    const aHits = results.filter((result) => hit(result.a, k)).length;
-    const bHits = results.filter((result) => hit(result.b, k)).length;
-    const wins = results.filter((result) => hit(result.b, k) && !hit(result.a, k)).length;
-    const losses = results.filter((result) => hit(result.a, k) && !hit(result.b, k)).length;
-    rows[`@${k}`] = { A: aHits, B: bHits, bWins: wins, bLosses: losses, flat: results.length - wins - losses };
+    rows[`@${k}`] = Object.fromEntries(VARIANTS.map((name) => [
+      name, results.filter((result) => hit(result.variants[name], k)).length
+    ]));
+  }
+  return rows;
+}
+function pairwise(results, x, y) {
+  const rows = {};
+  for (const k of KS) {
+    const wins = results.filter((result) => hit(result.variants[y], k) && !hit(result.variants[x], k)).length;
+    const losses = results.filter((result) => hit(result.variants[x], k) && !hit(result.variants[y], k)).length;
+    rows[`@${k}`] = { [`${y}Wins`]: wins, [`${y}Losses`]: losses, flat: results.length - wins - losses };
   }
   return rows;
 }
@@ -336,25 +367,26 @@ function table(results) {
 const primary = sweep[PRIMARY_WIDTH];
 const strata = ['conflict', 'escalated-other', 'clean'];
 const report = {
-  harnessVersion: 'retrieval-harness-v1',
+  harnessVersion: 'retrieval-harness-v2-ablation',
   runRoot,
   queries: primary.length,
   queriesByStratum: Object.fromEntries(strata.map((name) => [name, primary.filter((result) => result.stratum === name).length])),
-  answerNotInIndex: {
-    A: primary.filter((result) => !result.a.inIndex).length,
-    B: primary.filter((result) => !result.b.inIndex).length
-  },
+  answerNotInIndex: Object.fromEntries(VARIANTS.map((name) => [
+    name, primary.filter((result) => !result.variants[name].inIndex).length
+  ])),
   primaryWidth: PRIMARY_WIDTH,
-  overall: table(primary),
-  byStratum: Object.fromEntries(strata.map((name) => [name, table(primary.filter((result) => result.stratum === name))])),
+  overall: hitsTable(primary),
+  headlinePairwiseAdedupVsBfull: pairwise(primary, 'A-dedup', 'B-full'),
+  byStratum: Object.fromEntries(strata.map((name) => [name, hitsTable(primary.filter((result) => result.stratum === name))])),
   chunkSweepHitAt5: Object.fromEntries(CHUNK_WIDTHS.map((width) => [width, {
-    A: sweep[width].filter((result) => hit(result.a, 5)).length,
-    B: sweep[width].filter((result) => hit(result.b, 5)).length,
+    ...Object.fromEntries(VARIANTS.map((name) => [
+      name, sweep[width].filter((result) => hit(result.variants[name], 5)).length
+    ])),
     of: sweep[width].length
   }]))
 };
 
 mkdirSync(outDir, { recursive: true });
-writeFileSync(join(outDir, 'results-v1.json'), JSON.stringify({ report, perQuery }, null, 1));
+writeFileSync(join(outDir, 'results-v2.json'), JSON.stringify({ report, perQuery }, null, 1));
 console.log(JSON.stringify(report, null, 1));
-console.log(`Per-query detail (private, contains corpus text): ${join(outDir, 'results-v1.json')}`);
+console.log(`Per-query detail (private, contains corpus text): ${join(outDir, 'results-v2.json')}`);
