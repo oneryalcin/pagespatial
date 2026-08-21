@@ -30,19 +30,35 @@
  *     --corpus-root .evaluation/corpus \
  *     --gold-root .evaluation/gold \
  *     --output .evaluation/gold/<batch-id> \
- *     [--size 15] [--dry-run]
+ *     [--size 15] [--profile debt|clean] [--dry-run]
+ *
+ * --profile clean selects the opposite population for issue #29: pages the
+ * pipeline raised no escalation on. Those are the least-labelled class in the
+ * corpus precisely because the debt profile avoids them, which is why row 9's
+ * "2 of 7 clean pages silently missed verified tokens" is a flare and not a
+ * rate. Escalation precision is measurable from flagged pages; escalation
+ * RECALL is only measurable from pages nobody flagged.
  */
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { criticalTokens } from '../../dist/text.js';
 
 const RENDER_DPI = 150; // matches run-flash-enrichment.mjs — the resolution the ~$0.01/page precision was measured at.
 
 // Quota shape for a 15-page batch, scaled proportionally by --size. Starved
 // pages lead because two claims (rows 1, 1b) rest on the thinnest evidence.
 const TIER_SHARE = { starved: 6 / 15, conflict: 5 / 15, pictorial: 3 / 15 };
+
+// --profile clean inverts the selection for issue #29. The default profile
+// targets pages the pipeline already flagged, which is why clean pages are the
+// least-labelled class in the corpus and why row 9's "2 of 7 clean pages
+// silently missed verified tokens" is a flare rather than a rate. Measuring
+// escalation RECALL needs a denominator built on purpose: pages the pipeline
+// declared fine, sampled without regard to whether they look interesting.
+const TIER_SHARE_CLEAN = { clean: 1 };
 const MAX_PER_DOCUMENT = 2;
 const MAX_PER_FAMILY = 3;
 const MAX_PER_DOCUMENT_FILL = 3; // relaxed cap for the residual fill pass
@@ -61,6 +77,8 @@ const corpusRoot = arg('--corpus-root', '.evaluation/corpus');
 const goldRoot = arg('--gold-root', '.evaluation/gold');
 const outputDir = arg('--output');
 const size = Number(arg('--size', '15'));
+const profile = arg('--profile', 'debt');
+if (!['debt', 'clean'].includes(profile)) throw new Error("--profile must be 'debt' or 'clean'.");
 const dryRun = flag('--dry-run');
 if (!Number.isInteger(size) || size <= 0) throw new Error('--size must be a positive integer.');
 
@@ -113,6 +131,10 @@ for (const document of manifest.documents) {
       escalated: Boolean(diagnostics.requiresEscalation),
       starvedCount: starvation?.count ?? 0,
       ocrCount: diagnostics.ocrObservationCount ?? 0,
+      // Distinct figures either engine read on this page — the ceiling on how
+      // much a numeric gold pass can learn from it.
+      criticalCount: new Set([...(spatial.nativeObservations ?? []), ...(spatial.ocrObservations ?? [])]
+        .flatMap((observation) => criticalTokens(observation.text ?? ''))).size,
       // The row 1 / 1b population is a page READ ENTIRELY BY OCR — not a page
       // that still fires `uncorroborated-ocr`. Cross-family engagement counts
       // toward the starvation denominator (src/schema.ts), so the corroborator
@@ -132,6 +154,21 @@ for (const document of manifest.documents) {
 // by id so the same corpus + run always yields the same batch.
 const byId = (a, b) => a.objectId.localeCompare(b.objectId) || a.pageNumber - b.pageNumber;
 const TIERS = [
+  // WARNING — this tier CANNOT support a miss-rate claim, and the flaw is not
+  // a threshold to tune. `criticalCount` comes from native and OCR
+  // observations, so eligibility is conditioned on the output of the very
+  // extractors under measurement: a clean page whose only figures were missed
+  // by BOTH engines scores zero and is excluded by construction, which is
+  // precisely the total failure row 9 exists to count. Ranking by the same
+  // field then favours pages the engines already handled well.
+  //
+  // It was written to avoid drawing numberless section dividers, and it does
+  // that. It is fit for finding INSTANCES of silent misses — batch 5 found
+  // three — and unfit for estimating how often they happen. A sound rate needs
+  // sampling drawn from all non-escalated pages regardless of extractor
+  // output, plus a recorded page-level "no miss found" verdict so confirmed
+  // negatives can enter the denominator. Neither exists yet.
+  { name: 'clean', match: (c) => !c.escalated && c.criticalCount > 0, rank: (a, b) => b.criticalCount - a.criticalCount || byId(a, b) },
   { name: 'starved', match: (c) => c.nativeStarved, rank: (a, b) => b.ocrCount - a.ocrCount || byId(a, b) },
   { name: 'conflict', match: (c) => c.conflictCount > 0, rank: (a, b) => b.conflictCount - a.conflictCount || byId(a, b) },
   { name: 'pictorial', match: (c) => c.pictorialCount > 0, rank: (a, b) => b.pictorialCount - a.pictorialCount || byId(a, b) }
@@ -154,8 +191,10 @@ function take(candidate, tier, documentCap) {
   return true;
 }
 
+const shares = profile === 'clean' ? TIER_SHARE_CLEAN : TIER_SHARE;
 for (const tier of TIERS) {
-  const quota = Math.round(size * TIER_SHARE[tier.name]);
+  if (!shares[tier.name]) continue;
+  const quota = Math.round(size * shares[tier.name]);
   let taken = 0;
   for (const candidate of candidates.filter(tier.match).sort(tier.rank)) {
     if (taken >= quota || picked.length >= size) break;
@@ -168,7 +207,11 @@ for (const tier of TIERS) {
 
 // Residual fill: whatever is left goes to the pages with the widest
 // native/OCR coverage gap — the next most likely place for unread ink.
-for (const candidate of [...candidates].sort((a, b) => a.coverage - b.coverage || byId(a, b))) {
+// In the clean profile the fill pass must stay inside the population, or it
+// quietly backfills escalated pages and the denominator stops meaning
+// "pages the pipeline declared fine".
+const fillPool = profile === 'clean' ? candidates.filter((c) => !c.escalated) : candidates;
+for (const candidate of [...fillPool].sort((a, b) => a.coverage - b.coverage || byId(a, b))) {
   if (picked.length >= size) break;
   take(candidate, 'fill', MAX_PER_DOCUMENT_FILL);
 }
@@ -230,5 +273,5 @@ const sample = picked.map((page) => {
 });
 
 writeFileSync(join(outputDir, 'pilot-sample.json'), `${JSON.stringify(sample, null, 2)}\n`);
-writeFileSync(join(outputDir, 'selection.json'), `${JSON.stringify({ runRoot, size, tally, pages: picked }, null, 2)}\n`);
+writeFileSync(join(outputDir, "selection.json"), `${JSON.stringify({ runRoot, size, profile, tally, pages: picked }, null, 2)}\n`);
 console.log(`Wrote ${join(outputDir, 'pilot-sample.json')} and ${sample.length} page images.`);

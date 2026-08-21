@@ -29,6 +29,7 @@
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { criticalTokens, criticalTokensCompatible } from '../../dist/text.js';
+import { consumeMatch } from './lib/recall-match.mjs';
 
 function arg(name) {
   const index = process.argv.indexOf(name);
@@ -63,30 +64,40 @@ for (const doc of readdirSync(documentsRoot)) {
   }
 }
 
-/** Consume one pool entry compatible with the token; exact matches first. */
-function consumeCompatible(pool, token) {
-  let index = pool.indexOf(token);
-  if (index < 0) index = pool.findIndex((candidate) => criticalTokensCompatible(candidate, token));
-  if (index < 0) return false;
-  pool.splice(index, 1);
-  return true;
-}
 
 function makeTierCounter() {
-  return { gold: 0, native: 0, ocr: 0, union: 0, neither: 0 };
+  return { gold: 0, native: 0, ocr: 0, union: 0, neither: 0, strictNative: 0, strictOcr: 0, strictUnion: 0, strictNeither: 0 };
 }
+
+/**
+ * Two passes, strict before tolerant, so an exact match is never displaced by
+ * a relaxed one: the tolerant pass only ever sees pool entries the strict pass
+ * left behind. Both results are reported — the strict figures are what earlier
+ * eras of this file measured, and keeping them visible is what makes the
+ * correction auditable instead of a number that quietly improved.
+ */
 function scoreTokens(texts, nativePool, ocrPool, counter) {
-  for (const text of texts) {
-    for (const token of criticalTokens(text ?? '')) {
-      counter.gold += 1;
-      const inNative = consumeCompatible(nativePool, token);
-      const inOcr = consumeCompatible(ocrPool, token);
-      if (inNative) counter.native += 1;
-      if (inOcr) counter.ocr += 1;
-      if (inNative || inOcr) counter.union += 1;
-      else counter.neither += 1;
-    }
-  }
+  const tokens = texts.flatMap((text) => criticalTokens(text ?? ''));
+  counter.gold += tokens.length;
+  const found = tokens.map(() => ({ native: false, ocr: false }));
+
+  tokens.forEach((token, index) => {
+    found[index].native = consumeMatch(nativePool, token);
+    found[index].ocr = consumeMatch(ocrPool, token);
+    if (found[index].native) counter.strictNative += 1;
+    if (found[index].ocr) counter.strictOcr += 1;
+    if (found[index].native || found[index].ocr) counter.strictUnion += 1;
+    else counter.strictNeither += 1;
+  });
+
+  tokens.forEach((token, index) => {
+    if (!found[index].native) found[index].native = consumeMatch(nativePool, token, { tolerant: true });
+    if (!found[index].ocr) found[index].ocr = consumeMatch(ocrPool, token, { tolerant: true });
+    if (found[index].native) counter.native += 1;
+    if (found[index].ocr) counter.ocr += 1;
+    if (found[index].native || found[index].ocr) counter.union += 1;
+    else counter.neither += 1;
+  });
 }
 const rate = (numerator, denominator) => denominator ? Number((numerator / denominator).toFixed(4)) : null;
 const tierReport = (counter) => ({
@@ -94,7 +105,15 @@ const tierReport = (counter) => ({
   native: rate(counter.native, counter.gold),
   ocr: rate(counter.ocr, counter.gold),
   union: rate(counter.union, counter.gold),
-  missedByBoth: counter.neither
+  missedByBoth: counter.neither,
+  // What the strict comparison would have said. Kept so the currency-symbol
+  // correction stays visible in every aggregate rather than being absorbed.
+  strict: {
+    native: rate(counter.strictNative, counter.gold),
+    ocr: rate(counter.strictOcr, counter.gold),
+    union: rate(counter.strictUnion, counter.gold),
+    missedByBoth: counter.strictNeither
+  }
 });
 
 const human = makeTierCounter();

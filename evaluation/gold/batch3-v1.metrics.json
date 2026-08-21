@@ -1,6 +1,6 @@
 {
  "goldPilotMetricsVersion": "gold-pilot-metrics-v4",
- "createdAt": "2026-08-20T23:49:10.112Z",
+ "createdAt": "2026-08-21T14:10:08.823Z",
  "runRoot": ".evaluation/runs/exp-second-opinion-d-2026-08-20",
  "goldVerifiedAt": "2026-08-20T23:17:11.687Z",
  "pages": 15,
@@ -84,17 +84,29 @@
  "criticalTokenRecall": {
   "humanVerified": {
    "goldTokens": 416,
-   "native": 0.0216,
-   "ocr": 0.8606,
-   "union": 0.8606,
-   "missedByBoth": 58
+   "native": 0.274,
+   "ocr": 0.9712,
+   "union": 0.988,
+   "missedByBoth": 5,
+   "strict": {
+    "native": 0.0216,
+    "ocr": 0.8606,
+    "union": 0.8606,
+    "missedByBoth": 58
+   }
   },
   "silverNativeCorroborated": {
    "goldTokens": 401,
    "native": 0.995,
-   "ocr": 0.7706,
+   "ocr": 0.8753,
    "union": 1,
    "missedByBoth": 0,
+   "strict": {
+    "native": 0.995,
+    "ocr": 0.7706,
+    "union": 1,
+    "missedByBoth": 0
+   },
    "note": "Silver labels were auto-accepted because native text agreed; native/union rates on this tier are tautological by construction and must not be quoted as independent recall."
   },
   "bulkPageAccepted": {
@@ -103,6 +115,12 @@
    "ocr": null,
    "union": null,
    "missedByBoth": 0,
+   "strict": {
+    "native": null,
+    "ocr": null,
+    "union": null,
+    "missedByBoth": 0
+   },
    "note": "Accepted with the review UI page-level button: a person accepted these without reading them individually. Not independent gold — report separately and never fold into the human tier."
   }
  },
@@ -138,21 +156,33 @@
     "native": 0,
     "ocr": 36,
     "union": 36,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 36,
+    "strictUnion": 36,
+    "strictNeither": 0
    },
    "silver": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    },
    "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    }
   },
   {
@@ -163,21 +193,33 @@
     "native": 0,
     "ocr": 15,
     "union": 15,
-    "neither": 2
+    "neither": 2,
+    "strictNative": 0,
+    "strictOcr": 15,
+    "strictUnion": 15,
+    "strictNeither": 2
    },
    "silver": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    },
    "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    }
   },
   {
@@ -186,23 +228,35 @@
    "human": {
     "gold": 51,
     "native": 0,
-    "ocr": 46,
-    "union": 46,
-    "neither": 5
+    "ocr": 50,
+    "union": 50,
+    "neither": 1,
+    "strictNative": 0,
+    "strictOcr": 46,
+    "strictUnion": 46,
+    "strictNeither": 5
    },
    "silver": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    },
    "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    }
   },
   {
@@ -213,21 +267,33 @@
     "native": 0,
     "ocr": 84,
     "union": 84,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 84,
+    "strictUnion": 84,
+    "strictNeither": 0
    },
    "silver": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    },
    "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    }
   },
   {
@@ -238,21 +304,33 @@
     "native": 0,
     "ocr": 24,
     "union": 24,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 24,
+    "strictUnion": 24,
+    "strictNeither": 0
    },
    "silver": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    },
    "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    }
   },
   {
@@ -263,21 +341,33 @@
     "native": 1,
     "ocr": 14,
     "union": 14,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 1,
+    "strictOcr": 14,
+    "strictUnion": 14,
+    "strictNeither": 0
    },
    "silver": {
     "gold": 10,
     "native": 9,
     "ocr": 10,
     "union": 10,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 9,
+    "strictOcr": 10,
+    "strictUnion": 10,
+    "strictNeither": 0
    },
    "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    }
   },
   {
@@ -288,21 +378,33 @@
     "native": 0,
     "ocr": 3,
     "union": 3,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 3,
+    "strictUnion": 3,
+    "strictNeither": 0
    },
    "silver": {
     "gold": 9,
     "native": 9,
     "ocr": 9,
     "union": 9,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 9,
+    "strictOcr": 9,
+    "strictUnion": 9,
+    "strictNeither": 0
    },
    "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    }
   },
   {
@@ -313,21 +415,33 @@
     "native": 3,
     "ocr": 3,
     "union": 3,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 3,
+    "strictOcr": 3,
+    "strictUnion": 3,
+    "strictNeither": 0
    },
    "silver": {
     "gold": 45,
     "native": 45,
     "ocr": 45,
     "union": 45,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 45,
+    "strictOcr": 45,
+    "strictUnion": 45,
+    "strictNeither": 0
    },
    "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    }
   },
   {
@@ -336,23 +450,35 @@
    "human": {
     "gold": 36,
     "native": 0,
-    "ocr": 31,
-    "union": 31,
-    "neither": 5
+    "ocr": 36,
+    "union": 36,
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 31,
+    "strictUnion": 31,
+    "strictNeither": 5
    },
    "silver": {
     "gold": 9,
     "native": 9,
     "ocr": 9,
     "union": 9,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 9,
+    "strictOcr": 9,
+    "strictUnion": 9,
+    "strictNeither": 0
    },
    "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    }
   },
   {
@@ -361,23 +487,35 @@
    "human": {
     "gold": 40,
     "native": 2,
-    "ocr": 33,
-    "union": 33,
-    "neither": 7
+    "ocr": 38,
+    "union": 38,
+    "neither": 2,
+    "strictNative": 2,
+    "strictOcr": 33,
+    "strictUnion": 33,
+    "strictNeither": 7
    },
    "silver": {
     "gold": 12,
     "native": 11,
     "ocr": 12,
     "union": 12,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 11,
+    "strictOcr": 12,
+    "strictUnion": 12,
+    "strictNeither": 0
    },
    "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    }
   },
   {
@@ -388,21 +526,33 @@
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    },
    "silver": {
     "gold": 106,
     "native": 106,
-    "ocr": 64,
+    "ocr": 106,
     "union": 106,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 106,
+    "strictOcr": 64,
+    "strictUnion": 106,
+    "strictNeither": 0
    },
    "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    }
   },
   {
@@ -410,24 +560,36 @@
    "pageNumber": 14,
    "human": {
     "gold": 106,
-    "native": 1,
-    "ocr": 67,
-    "union": 67,
-    "neither": 39
+    "native": 106,
+    "ocr": 99,
+    "union": 106,
+    "neither": 0,
+    "strictNative": 1,
+    "strictOcr": 67,
+    "strictUnion": 67,
+    "strictNeither": 39
    },
    "silver": {
     "gold": 30,
     "native": 30,
     "ocr": 30,
     "union": 30,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 30,
+    "strictOcr": 30,
+    "strictUnion": 30,
+    "strictNeither": 0
    },
    "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    }
   },
   {
@@ -438,21 +600,33 @@
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    },
    "silver": {
     "gold": 20,
     "native": 20,
     "ocr": 18,
     "union": 20,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 20,
+    "strictOcr": 18,
+    "strictUnion": 20,
+    "strictNeither": 0
    },
    "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    }
   },
   {
@@ -463,21 +637,33 @@
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    },
    "silver": {
     "gold": 41,
     "native": 41,
     "ocr": 34,
     "union": 41,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 41,
+    "strictOcr": 34,
+    "strictUnion": 41,
+    "strictNeither": 0
    },
    "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    }
   },
   {
@@ -488,21 +674,33 @@
     "native": 2,
     "ocr": 2,
     "union": 2,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 2,
+    "strictOcr": 2,
+    "strictUnion": 2,
+    "strictNeither": 0
    },
    "silver": {
     "gold": 119,
     "native": 119,
     "ocr": 78,
     "union": 119,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 119,
+    "strictOcr": 78,
+    "strictUnion": 119,
+    "strictNeither": 0
    },
    "bulk": {
     "gold": 0,
     "native": 0,
     "ocr": 0,
     "union": 0,
-    "neither": 0
+    "neither": 0,
+    "strictNative": 0,
+    "strictOcr": 0,
+    "strictUnion": 0,
+    "strictNeither": 0
    }
   }
  ],
