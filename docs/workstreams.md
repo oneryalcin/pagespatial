@@ -60,21 +60,31 @@ test, principles §9):**
    no-miss re-review of the 27 prior-labeled clean pages. Follow-up
    worth an hour: why both engines dropped exactly the two `16`s on a
    page where they read every neighbouring number (osf p144).
-2. **Build the parse service (#22, rescoped 2026-08-22): submit PDF →
-   ticket → progressive schema-0.6.0 records. NO indexing** — #21 is
-   parked until the service exists. Primary goal: per-stage bottleneck
-   measurement (render / native / OCR / assembly / second opinion;
-   pages-per-second-per-core). Three parallel streams:
-   - **#2-now**: server-native PP-OCR adapter (onnxruntime-node, CPU
-     first) + witness-equivalence run vs the browser witness. No
-     browser in any worker.
-   - **#22**: service skeleton — API, queue, stateless page workers,
-     stage instrumentation, fail-closed page semantics (#37).
-   - **#51**: deterministic SVG reconstruction from a record — the
-     format's acid test and the service's debug endpoint. LLM
-     reconstruction explicitly out of scope (eval someday, never a
-     feature).
-   GPU (#2-gated) waits for the throughput number.
+2. **Parse-service pivot: ALL THREE STREAMS SHIPPED (2026-08-22 night,
+   PRs #53/#54/#55 — each through cold-review → fix → closure cycles):**
+   - **#51 SVG reconstructor**: merged, issue closed. `reconstructSvg()`
+     in the library; byte-honest text+layout skeleton with trust states
+     drawn in.
+   - **#22 skeleton**: merged. API (submit → ticket → progressive
+     0.6.0 records), atomic disk-backed jobs, TWO-sided
+     canonical-witness gate, mixed-document records impossible by
+     construction, degraded-pool → 503. First bottleneck table: render
+     p50 296ms (40× native), 8.9 pages/sec on 4 laptop workers,
+     OCR column pending integration.
+   - **#2-now server witness**: merged. Identical PP-OCR pipeline under
+     Node (WASM EP): **near-equivalent, symmetric** (91.7%/91.4% token
+     agreement, IoU 0.922, gold a statistical tie; JA preserved).
+     **3.7 s/page is the WASM-EP cost, not "the CPU cost"** — native
+     EP with the same models is the first speed arm, THEN render
+     batching, THEN (only if numbers demand) GPU.
+   Remaining #22 v1 integration: plug the canonical adapter into the
+   service, wire the SVG endpoint, full-pipeline bottleneck re-measure.
+   **Owner decision pending**: adopting the server witness for service
+   runs is a run-configuration change (era rules; cross-swap comparisons
+   at gold level only).
+   Mechanism lead on #29 from the equivalence run: the server witness
+   READS batch 7's osf-p144 missed tokens — silent misses are
+   render-path-sensitive, not model blind spots.
 
 Demoted (deliberate, not forgotten): #21 ingestion contract + the
 **answer-faithfulness harness** (folded into #21) — both wait for the
