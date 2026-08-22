@@ -10,9 +10,18 @@ adoption decision), #22 · **Builds on:** the adoption ceremony
    child (`service/sidecar/ppocr_sidecar.py`) running the official
    PaddleOCR pipeline — JSONL over stdin/stdout, pages travel as tmpfiles
    (no base64, no HTTP, no ports). A child crash rejects the in-flight page
-   (fails closed, queue requeues) and the next page respawns the child; the
-   child never outlives its worker. Adapter:
-   `service/adapters/ppocr-sidecar.mjs`.
+   (fails closed, queue requeues) and the next page respawns the child. A
+   page with no reply within the recognize deadline (120 s default) kills
+   the child and fails closed — a torn response line cannot silently
+   starve the pool. Child reaping is by PROCESS-GROUP kill (children are
+   spawned detached): a wrapper launcher like uv spawns python rather
+   than exec'ing it, so killing only the direct child would orphan the
+   ~1.5 GB engine — group kill reaps wrapper and interpreter together, on
+   dispose, worker exit hooks, and worker signals. If the worker itself
+   dies un-hooked (hard SIGKILL), the fallback is the child's stdin-EOF
+   exit, which waits out any in-flight predict — production should prefer
+   a direct-interpreter `SERVICE_SIDECAR_PYTHON` so the group is shallow.
+   Adapter: `service/adapters/ppocr-sidecar.mjs`.
 2. **Model pinning — the ceremony's open precondition, closed.**
    `service/sidecar/fetch_models.py --record` resolved and froze exact HF
    revisions + per-file sha256 into the committed
@@ -88,9 +97,15 @@ NODE side only; the Python child is a separate process (capacity: budget
 **Lifecycle fix shipped alongside (found live during this measurement's
 teardown):** an unhandled SIGTERM terminated the server without draining
 the pool, leaking workers — each now holding a ~1.5 GB Python engine.
-`server.mjs` handles SIGTERM like SIGINT, and workers exit through
-`process.exit` so adapter exit-hooks kill their children. Verified
+`server.mjs` handles SIGTERM like SIGINT (with a 10 s force-exit
+deadline so a stalled graceful path never escalates to a
+worker-orphaning supervisor SIGKILL), and workers exit through
+`process.exit` so adapter exit-hooks group-kill their children. Verified
 empirically: SIGTERM → 0 workers, 0 sidecar processes within seconds.
+The review round added the group-kill (a uv-shaped wrapper otherwise
+shields the interpreter from SIGKILL), the meta-timeout reap with
+instance-scoped handlers (a slow-booting child can no longer leak OR
+poison its replacement), and the per-page recognize deadline.
 
 Cross-machine caveats apply as ever (PR #64 lesson): compare trends, not
 milliseconds, across hosts.

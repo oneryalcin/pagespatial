@@ -1,4 +1,8 @@
 {
+ "notes": {
+  "PaddlePaddle/PP-OCRv6_small_det": "pinned; revision INDEPENDENTLY OBSERVED in the adoption ceremony (PR #67) — direct lineage to the validated weights",
+  "PaddlePaddle/PP-OCRv6_small_rec": "pinned post-ceremony (the ceremony captured no rec revision); BEHAVIORALLY VALIDATED via the integrated-path sanity check (438/438 gold parity, service/sidecar/sanity-check.mjs)"
+ },
  "repos": {
   "PaddlePaddle/PP-OCRv6_small_det": {
    "revision": "106c97591b235f607453300d9fc8c1cad1b25488",

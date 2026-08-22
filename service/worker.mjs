@@ -137,8 +137,11 @@ process.on('message', async (message) => {
 });
 
 // A SIGTERM'd worker must exit THROUGH process.exit so 'exit' hooks run —
-// the sidecar adapter kills its Python child from one (a signal's default
-// termination skips them and would orphan a ~1.5 GB engine per worker).
+// the sidecar adapter's hook kills its child's WHOLE process group from
+// one (a signal's default termination skips hooks and would orphan a
+// ~1.5 GB engine per worker). A hard SIGKILL of this worker bypasses
+// this path too: the sidecar then exits via stdin EOF after finishing
+// any in-flight predict — best-effort, documented in the adapter.
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => process.exit(0));
 }

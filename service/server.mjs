@@ -81,9 +81,26 @@ if (adapterId === 'ppocr-sidecar') {
     console.error(`SERVICE_SIDECAR_THREADS must be a positive integer, got '${process.env.SERVICE_SIDECAR_THREADS}'.`);
     process.exit(1);
   }
-  const pythonCmd = process.env.SERVICE_SIDECAR_PYTHON
-    ? process.env.SERVICE_SIDECAR_PYTHON.split(' ')
-    : DEFAULT_PYTHON_CMD;
+  // JSON-array form survives paths with spaces: '["/opt/my venv/bin/python"]'.
+  // The bare form is split on spaces and documented as such.
+  const rawPython = process.env.SERVICE_SIDECAR_PYTHON;
+  let pythonCmd = DEFAULT_PYTHON_CMD;
+  if (rawPython) {
+    if (rawPython.trim().startsWith('[')) {
+      try {
+        pythonCmd = JSON.parse(rawPython);
+      } catch {
+        console.error('SERVICE_SIDECAR_PYTHON looks like JSON but does not parse; fix it or use the space-separated form.');
+        process.exit(1);
+      }
+      if (!Array.isArray(pythonCmd) || !pythonCmd.every((part) => typeof part === 'string') || !pythonCmd.length) {
+        console.error('SERVICE_SIDECAR_PYTHON JSON form must be a non-empty array of strings.');
+        process.exit(1);
+      }
+    } else {
+      pythonCmd = rawPython.split(' ').filter(Boolean);
+    }
+  }
   try {
     verifyModelPins(modelsDir);
     if (process.env.SERVICE_SIDECAR_SKIP_BOOT_CHECK !== '1') {
@@ -230,7 +247,14 @@ server.listen(port, () => {
 // the sidecar loadtest teardown; both signals now drain the pool.
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, async () => {
+    // Force-exit deadline: if a keep-alive connection or a wedged worker
+    // stalls the graceful path, exiting OURSELVES (running 'exit' hooks in
+    // the workers' parents is moot here, but process.exit lets close
+    // callbacks flush) beats the supervisor escalating to SIGKILL — which
+    // would orphan workers and their ~2 GB sidecar engines.
+    setTimeout(() => process.exit(0), 10_000).unref();
     await service.shutdown();
+    server.closeIdleConnections?.();
     server.close(() => process.exit(0));
   });
 }

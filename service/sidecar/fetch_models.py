@@ -74,6 +74,8 @@ def main() -> int:
 
         api = HfApi()
         manifest = {"repos": {}}
+        if MANIFEST.exists():  # keep human-written provenance notes across re-records
+            manifest["notes"] = json.loads(MANIFEST.read_text()).get("notes", {})
         for repo in REPOS:
             revision = api.repo_info(repo).sha
             target = snapshot(repo, models_dir, revision)
