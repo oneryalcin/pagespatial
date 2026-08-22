@@ -75,12 +75,46 @@ agreement) and are symmetric — renderer antialiasing and EP numerics
 change WHICH faint tokens each pipeline admits, with no directional
 winner and almost no gold impact.
 
+### Discordant-pair analysis (added after the grounding review; the
+### statistics the verdict's wording is allowed to lean on)
+
+Token-level paired classification of all 1,223 gold tokens (each token
+checked against both witnesses' pools, consume-once):
+
+| cell | tokens |
+|---|---|
+| both witnesses read it | 946 |
+| node only | **36** |
+| browser only | **26** |
+| neither | 215 |
+
+McNemar exact two-sided on the 62 discordant tokens: **p = 0.25** — the
+witnesses cannot be distinguished at this sample size. Clopper-Pearson
+95% on the discordant split: the data are consistent with a true
+node-minus-browser difference between **−6 and +25 tokens of 1,223**
+(−0.5% to +2.0%).
+
+The sentence these numbers earn, no stronger: *the +10-token aggregate
+difference is not statistically distinguishable from zero; a small node
+advantage is neither demonstrated nor excluded; node being materially
+worse IS excluded (worst case −0.5% of gold at 95%)* — which is the
+direction the swap decision cares about. "Statistical tie" remains
+unearned language; "near-equivalent, with node-worse bounded at 0.5%"
+is the quotable form.
+
+Backend labeling, explicit: the dev-v12 reference witness ran pdf.js
+render + **WebGPU**; the node witness runs pdftoppm render + **WASM**.
+This comparison is therefore cross-engine-cross-host — deliberately,
+because that composite IS the production swap under consideration — and
+none of its numbers isolate either factor alone.
+
 ### Verdict
 
 **Near-equivalent with documented deltas.** Not byte-identical — 8% of
 either witness's tokens are unmatched by the other, symmetrically — but
-evidentiary strength is equal: aggregate gold recall is a wash (982 vs
-972 of 1,223; per-page ties dominate) and CJK, the historical failure
+evidentiary strength is equal: aggregate gold recall differs by +10
+tokens, statistically indistinguishable from zero (McNemar p = 0.25;
+node-worse bounded at −0.5%), and CJK, the historical failure
 mode, is fully preserved. Per the era rules the witness swap is a run-
 configuration change: service runs must carry their own configuration id
 and comparisons across the swap happen at the gold level, not raw
