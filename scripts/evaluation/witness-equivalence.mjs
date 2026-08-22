@@ -209,12 +209,32 @@ for (const record of sample) {
   const goldEntry = gold.get(key);
   let goldRecall = null;
   if (goldEntry?.tokens.length) {
+    // Token-level paired classification: each gold token is checked against
+    // both witnesses' pools in the same order (consume-once per pool), so
+    // the discordant cells are exactly the tokens where the witnesses
+    // genuinely differ — the input McNemar needs.
     const browserPool = buildCorroborationPool(browserTexts);
     const nodePool = buildCorroborationPool(nodeTexts);
+    let bothHit = 0;
+    let nodeOnly = 0;
+    let browserOnly = 0;
+    let bothMiss = 0;
+    for (const token of goldEntry.tokens) {
+      const inBrowser = poolCorroborates(token, browserPool);
+      const inNode = poolCorroborates(token, nodePool);
+      if (inBrowser && inNode) bothHit += 1;
+      else if (inNode) nodeOnly += 1;
+      else if (inBrowser) browserOnly += 1;
+      else bothMiss += 1;
+    }
     goldRecall = {
       goldTokens: goldEntry.tokens.length,
-      browser: goldEntry.tokens.filter((token) => poolCorroborates(token, browserPool)).length,
-      node: goldEntry.tokens.filter((token) => poolCorroborates(token, nodePool)).length
+      browser: bothHit + browserOnly,
+      node: bothHit + nodeOnly,
+      bothHit,
+      nodeOnly,
+      browserOnly,
+      bothMiss
     };
   }
 
@@ -238,12 +258,57 @@ rmSync(tmp, { recursive: true, force: true });
 await adapter.dispose();
 
 const sum = (values) => values.reduce((a, b) => a + b, 0);
+
+/**
+ * McNemar exact test, two-sided: under H0 (witnesses equally likely to be
+ * the sole reader of a token), the discordant count in either cell is
+ * Binomial(b+c, 0.5). p = min(1, 2 * P(X <= min(b, c))).
+ */
+function mcNemarExactTwoSided(b, c) {
+  const n = b + c;
+  if (n === 0) return 1;
+  const k = Math.min(b, c);
+  const logChoose = (m, i) => {
+    let s = 0;
+    for (let j = 0; j < i; j += 1) s += Math.log(m - j) - Math.log(j + 1);
+    return s;
+  };
+  let tail = 0;
+  for (let i = 0; i <= k; i += 1) tail += Math.exp(logChoose(n, i) - n * Math.LN2);
+  return Math.min(1, 2 * tail);
+}
+
+/** Clopper-Pearson 95% two-sided interval for successes/trials, by bisection. */
+function clopperPearson95(successes, trials) {
+  if (trials === 0) return [0, 1];
+  const cdf = (k, n, p) => {
+    let s = 0;
+    let c = 1;
+    for (let i = 0; i <= k; i += 1) {
+      s += c * Math.pow(p, i) * Math.pow(1 - p, n - i);
+      c = (c * (n - i)) / (i + 1);
+    }
+    return s;
+  };
+  const solve = (predicate) => {
+    let lo = 0;
+    let hi = 1;
+    for (let it = 0; it < 60; it += 1) {
+      const mid = (lo + hi) / 2;
+      if (predicate(mid)) lo = mid; else hi = mid;
+    }
+    return lo;
+  };
+  const lower = successes === 0 ? 0 : solve((p) => cdf(successes - 1, trials, p) > 0.975);
+  const upper = successes === trials ? 1 : solve((p) => cdf(successes, trials, p) > 0.025);
+  return [lower, upper];
+}
 const bIntoN = perPage.map((p) => p.browserTokensMatchedByNode);
 const nIntoB = perPage.map((p) => p.nodeTokensMatchedByBrowser);
 const goldPages = perPage.filter((p) => p.goldRecall);
 const sorted = [...timingsMs].sort((a, b) => a - b);
 const aggregate = {
-  method: 'witness-equivalence-v1',
+  method: 'witness-equivalence-v2',
   runRoot: runRoot.split('/').filter(Boolean).pop(),
   sampleFilter: 'all gold-labelled pages with a run record',
   serverWitness: { adapter: adapter.name, render: 'pdftoppm at the run dpi (rotation-aware), boxes mapped to record geometry', threads },
@@ -270,6 +335,30 @@ const aggregate = {
     browser: sum(goldPages.map((p) => p.goldRecall.browser)),
     node: sum(goldPages.map((p) => p.goldRecall.node))
   },
+  goldDiscordance: (() => {
+    const bothHit = sum(goldPages.map((p) => p.goldRecall.bothHit));
+    const nodeOnly = sum(goldPages.map((p) => p.goldRecall.nodeOnly));
+    const browserOnly = sum(goldPages.map((p) => p.goldRecall.browserOnly));
+    const bothMiss = sum(goldPages.map((p) => p.goldRecall.bothMiss));
+    const discordant = nodeOnly + browserOnly;
+    const goldTokens = bothHit + nodeOnly + browserOnly + bothMiss;
+    const p = mcNemarExactTwoSided(nodeOnly, browserOnly);
+    const [lo, hi] = clopperPearson95(nodeOnly, discordant);
+    // Conditional on the observed discordant count: the true node-minus-
+    // browser difference consistent with the data at 95%, in tokens.
+    const diffLow = Math.round(discordant * (2 * lo - 1));
+    const diffHigh = Math.round(discordant * (2 * hi - 1));
+    return {
+      bothHit,
+      nodeOnly,
+      browserOnly,
+      bothMiss,
+      mcNemarExactTwoSidedP: Number(p.toFixed(4)),
+      nodeShareOfDiscordantsCI95: [Number(lo.toFixed(3)), Number(hi.toFixed(3))],
+      trueDifferenceTokensCI95: [diffLow, diffHigh],
+      note: `Conditional on ${discordant} discordant tokens of ${goldTokens}: the data are consistent with a true node-minus-browser difference between ${diffLow} and ${diffHigh} tokens at 95%.`
+    };
+  })(),
   timings: {
     ocrMsP50: sorted[Math.floor(sorted.length / 2)] ?? null,
     ocrMsP95: sorted[Math.floor(sorted.length * 0.95)] ?? null,
