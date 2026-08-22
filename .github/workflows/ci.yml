@@ -17,7 +17,10 @@ jobs:
       # dies before issuing a single (stubbed) API call, and the runner tests
       # fail on assertions about call counts — which reads as a logic bug
       # rather than a missing binary.
-      - run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      # tesseract-ocr backs the second-opinion rung the service integration
+      # test exercises end to end (a would-starve page must actually produce
+      # secondOpinion readings, not silently skip the rung).
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils tesseract-ocr
       - uses: actions/setup-node@v6
         with:
           node-version: 25
