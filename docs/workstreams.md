@@ -72,19 +72,29 @@ test, principles §9):**
      p50 296ms (40× native), 8.9 pages/sec on 4 laptop workers,
      OCR column pending integration.
    - **#2-now server witness**: merged. Identical PP-OCR pipeline under
-     Node (WASM EP): **near-equivalent, symmetric** (91.7%/91.4% token
-     agreement, IoU 0.922, gold a statistical tie; JA preserved).
-     **3.7 s/page is the WASM-EP cost, not "the CPU cost"** — native
-     EP with the same models is the first speed arm, THEN render
-     batching, THEN (only if numbers demand) GPU.
+     Node (WASM EP): **near-equivalent with documented deltas**
+     (91.7%/91.4% token agreement, IoU 0.922, gold +10 to node of
+     1,223; JA preserved). NOT yet a "tie" — the McNemar
+     discordant-pair analysis is the first post-merge task (issue #2),
+     and the comparison is cross-engine-cross-host (browser=WebGPU,
+     node=WASM — which IS the production swap, labeled as such).
+     **3.7 s/page is the WASM-EP cost, not "the CPU cost"** — and once
+     this witness wires in, **OCR dominates render ~12:1**, so the
+     speed arms in order: native EP with the same models, THEN render
+     batching, THEN (only if numbers demand) GPU. The skeleton's
+     "render is the bottleneck" table was the stub era; do not optimize
+     296ms while 3.7s burns.
    Remaining #22 v1 integration: plug the canonical adapter into the
    service, wire the SVG endpoint, full-pipeline bottleneck re-measure.
    **Owner decision pending**: adopting the server witness for service
    runs is a run-configuration change (era rules; cross-swap comparisons
    at gold level only).
-   Mechanism lead on #29 from the equivalence run: the server witness
-   READS batch 7's osf-p144 missed tokens — silent misses are
-   render-path-sensitive, not model blind spots.
+   Mechanism HYPOTHESIS on #29 (downgraded from "lead" — one page, two
+   tokens, three variables changed at once): the server witness reads
+   batch 7's osf-p144 missed tokens, suggesting render-path
+   sensitivity. The clean differential (cross-feed tiles via
+   dumpRecoveryTiles, half a day) is specced on #29; the fix direction
+   does not move until it runs.
 
 Demoted (deliberate, not forgotten): #21 ingestion contract + the
 **answer-faithfulness harness** (folded into #21) — both wait for the
