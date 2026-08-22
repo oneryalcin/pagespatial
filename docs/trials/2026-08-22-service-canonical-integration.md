@@ -44,6 +44,15 @@
 peak 1,759 MB. 176/176 pages produced schema-valid canonical records, 0
 failures, 0 non-canonical leaks.**
 
+A caveat on the two RSS figures in circulation — they come from different
+instruments and both are true. The 1,759 MB here is
+`process.memoryUsage().rss` sampled at page **completion** (the service's
+Metrics path), which misses transient peaks during inference; the adapter
+trial's 2.3 GB/worker was OS-level max RSS over the whole run. Capacity
+planning should budget against the OS number: **4 workers ≈ 9 GB
+(4 × 2.3 GB), not 7 GB** — the page-boundary sample is a floor, not the
+peak.
+
 ### The corrected bottleneck sentence
 
 The stub-era table's "render is the bottleneck (40× native)" described a
