@@ -9,3 +9,4 @@ public/ocr-assets/
 !.env.example
 .omx/
 service/data/
+__pycache__/

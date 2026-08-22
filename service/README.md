@@ -14,12 +14,58 @@ curl -X POST :8571/v1/jobs -H 'content-type: application/pdf' --data-binary @doc
 curl :8571/v1/jobs/<jobId>              # status + pages as they complete
 curl :8571/v1/jobs/<jobId>/pages/3      # one page
 curl :8571/v1/metrics                   # per-stage p50/p95, pages/sec, rss
+# NB: metrics rss is the NODE worker only — the sidecar's Python engine is
+# a separate process (~1.4-1.8 GB); budget ~2 GB combined per worker.
 
 node service/loadtest.mjs --base http://localhost:8571 a.pdf b.pdf   # bottleneck table
 ```
 
-The canonical OCR witness is the server-native PP-OCRv6 adapter (issue #2,
-witness-equivalence verified — node-worse bounded at 0.5% of gold at 95%):
+## OCR witnesses
+
+**The ADOPTED canonical witness is the PaddleOCR sidecar** (issue #2 owner
+decision; ceremony PR #67 — candidate-worse vs browser bounded at 0.74%
+of gold at 95%, 2/1,223 discordant vs the node port):
+
+```sh
+# once per host: fetch + verify the PINNED models (revisions + sha256 in
+# service/sidecar/model-pins.json — committed; det revision was observed
+# in the ceremony itself, the rec pin is BEHAVIORALLY VALIDATED by the
+# integrated-path sanity check; a mismatch refuses to serve)
+uv run --with huggingface_hub python service/sidecar/fetch_models.py \
+  --models-dir /path/to/sidecar-models
+
+SERVICE_OCR_ADAPTER=ppocr-sidecar \
+SERVICE_SIDECAR_MODELS_DIR=/path/to/sidecar-models \  # required, explicit
+SERVICE_SIDECAR_THREADS=1 \   # default; latency is flat vs cores (PR #66) — pack 1-vCPU workers
+node service/server.mjs
+```
+
+Each page-worker owns one Python child (JSONL over stdin/stdout, pages as
+tmpfiles; a page that gets no reply within `recognizeTimeoutMs` — 120 s
+default — kills the child and fails closed). The child launcher defaults
+to `uv run --with paddleocr==3.7.0 --with paddlepaddle==3.2.1 python`;
+**for production prefer a prepared venv with a direct interpreter**
+(`SERVICE_SIDECAR_PYTHON="python3"`, or the JSON-array form for paths
+with spaces: `SERVICE_SIDECAR_PYTHON='["/opt/my venv/bin/python3"]'`) —
+a wrapper like uv spawns python rather than exec'ing it, which is why
+child cleanup kills the whole process group, and the first uv run on a
+cold cache downloads ~1 GB (pre-warm before serving).
+Boot fails closed: Node-side pin verification plus a real child `--check`
+(imports, child-side pin verification, pipeline construction;
+`SERVICE_SIDECAR_SKIP_BOOT_CHECK=1` for pre-warmed hosts that would rather
+fail on the first page). There is NO silent fallback from a configured
+sidecar to any other adapter.
+
+Provenance is truthful per host: `enable_hpi` engages on Linux
+(`ep=hpi`); elsewhere the pipeline runs paddle-default and the descriptor
+says so (`ppocrv6-small-sidecar@3.7.0#ep=paddle-default;threads=1`).
+`configuration.ocrBackend` carries the machine-readable block including
+`modelPins` (repo → revision) and `engineEvidence` (the C++
+backend-selection line, captured from child stderr and labeled
+log-derived — the C++ layer bypasses Python logging).
+
+The **validated fallback** is the server-native WASM adapter (node-worse
+bounded at 0.5% of gold at 95%):
 
 ```sh
 SERVICE_OCR_ADAPTER=ppocr-server \
