@@ -96,11 +96,22 @@ test, principles §9):**
    witness end to end: 176/176 canonical records, SVG endpoint live,
    second opinion engaging on starved pages. **Full-pipeline profile:
    OCR = 88% of wall (6.5 s/page p50 WASM under load), 0.54 pages/sec,
-   budget ~2.3 GB OS-max RSS/worker (9 GB for 4).** Speed arms on #2:
-   native ORT runtime → official PaddleOCR HPI benchmark gate (half-day,
-   ~30 pages through the equivalence harness; candidate NEW witness —
-   full ceremony if adopted) → GPU last, still gated. LOW follow-ups
-   recorded on #22.
+   budget ~2.3 GB OS-max RSS/worker (9 GB for 4).**
+   **HPI GATE RUN (PR #64, Modal, 2026-08-23): the sidecar earns it.**
+   HPI CPU (OpenVINO, v6-small) = 989 ms/page on 4 vCPU (~4
+   core-s/page vs WASM's ~26 — ~6× core-efficiency; the 6.6× latency
+   multiplier is cross-machine, stated as approximate). **GPU is DEAD
+   on this workload** (T4 952 vs CPU 989 ms, same-container — a 1.5M-
+   param model can't feed a GPU; L40 would not change this, only
+   aggressive cross-page batching could, measure-if-ever). v6-medium:
+   no gold gain at 2× cost. Accuracy: sample-matched PARITY with both
+   existing witnesses (the initially-claimed "cross-pipeline daylight"
+   was a sample-composition artifact, retracted — 4th such class this
+   week). **Next: the adoption ceremony** (90-page equivalence,
+   McNemar, calibration diff, box-IoU, in-band backend capture, era
+   decision, per-core scaling curve) before the Python sidecar produces
+   any canonical record. Native-ORT port drops to fallback. LOW
+   follow-ups recorded on #22.
    The p144 differential RESOLVED the hypothesis by dissolving it (PR
    #58): no witness ever missed the ink — the scorer did (sign-glue).
    The render-sensitivity hypothesis is dead; see item 1 above for the
