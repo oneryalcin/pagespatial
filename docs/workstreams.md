@@ -107,8 +107,18 @@ test, principles §9):**
    no gold gain at 2× cost. Scaling curve (PR #66): latency FLAT 1–8
    vCPU → **1-vCPU workers are the packing unit, ~1.45 core-s/page
    (~18× WASM core-efficiency)**.
-   **ADOPTION CEREMONY COMPLETE (PR #67, cold-reviewed, all gates
-   passed): recommendation = ADOPT, owner decision pending.** Three
+   **ADOPTED AND INTEGRATED (owner decision 2026-08-22; PRs #67 + #69
+   merged).** The sidecar is the service's canonical OCR witness:
+   subprocess-per-worker JSONL protocol, hash-pinned models
+   (refuse-to-boot on mismatch; det pin ceremony-observed, rec
+   behaviorally validated), per-host-truthful provenance, group-kill
+   child lifecycle with per-page recognize deadline — two demonstrated
+   lifecycle HIGHs fixed and re-verified by repro. Integration-path
+   sanity: 438/438 gold parity with the ceremony. WASM witness =
+   explicit fallback; browser = dev environment. **Standing era items:
+   dev-v13 reference baseline at the first post-adoption corpus run;
+   target-hardware (Linux/OpenVINO) re-measure at deploy.**
+   Ceremony record (PR #67): Three
    witnesses on 90 pages: candidate ≡ server witness (2 discordant
    tokens of 1,223; 98.7% byte-identical raw lines), candidate-worse
    vs browser bounded at 0.74% at 95%; calibration drift negligible
