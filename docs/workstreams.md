@@ -53,13 +53,19 @@ Onboarding order: [principles](principles.md) →
 test, principles §9):**
 
 1. ~~First extractor-blind clean batch~~ **DONE (batch7-clean-v1,
-   2026-08-22)**: 15 extractor-blind clean pages, all verdicted — **14
-   verified no-miss, 1 page with 2 substantive silently-missed tokens.
-   Residual-stratum miss rate 1/15 (6.7%), 95% upper bound 27.9% —
-   quote the bound; n=15 is wide.** Remaining for the union rate: the
-   no-miss re-review of the 27 prior-labeled clean pages. Follow-up
-   worth an hour: why both engines dropped exactly the two `16`s on a
-   page where they read every neighbouring number (osf p144).
+   2026-08-22), CORRECTED same day (PRs #58/#60)**: the "1/15
+   substantive miss" was a scoring artifact — every witness read the
+   p144 ink; the tokenizer glued `+ 16` into a signed token bare `16`
+   cannot match. **Corrected: 0/15 substantive, 95% CP upper bound
+   18.1%.** The same re-check dissolved most of row 9's older case
+   series (four glue classes catalogued: currency/sign/date/unit-tail);
+   **the clean≠fully-read refutation survives on exactly ONE page**
+   (osf p10: PP-OCR misread + no alarm; Tesseract saw the figures but
+   is inadmissible by design). Fix location (tokenizer vs matcher) is
+   an OPEN era-sensitive design decision — owner's call; a matcher-side
+   "split glued alphanumeric boundaries" rule likely covers sign, date,
+   and unit-tail at once. Remaining for the union rate: no-miss
+   re-review of the 27 prior-labeled clean pages.
 2. **Parse-service pivot: ALL THREE STREAMS SHIPPED (2026-08-22 night,
    PRs #53/#54/#55 — each through cold-review → fix → closure cycles):**
    - **#51 SVG reconstructor**: merged, issue closed. `reconstructSvg()`
@@ -89,12 +95,13 @@ test, principles §9):**
    **Owner decision pending**: adopting the server witness for service
    runs is a run-configuration change (era rules; cross-swap comparisons
    at gold level only).
-   Mechanism HYPOTHESIS on #29 (downgraded from "lead" — one page, two
-   tokens, three variables changed at once): the server witness reads
-   batch 7's osf-p144 missed tokens, suggesting render-path
-   sensitivity. The clean differential (cross-feed tiles via
-   dumpRecoveryTiles, half a day) is specced on #29; the fix direction
-   does not move until it runs.
+   The p144 differential RESOLVED the hypothesis by dissolving it (PR
+   #58): no witness ever missed the ink — the scorer did (sign-glue).
+   The render-sensitivity hypothesis is dead; see item 1 above for the
+   corrected row-9 state. **Equivalence upgraded with earned stats (PR
+   #59)**: McNemar p=0.25 on 36-vs-26 discordants; the quotable form is
+   "near-equivalent, node-worse bounded at 0.5% of gold at 95%" — the
+   direction the swap decision cares about.
 
 Demoted (deliberate, not forgotten): #21 ingestion contract + the
 **answer-faithfulness harness** (folded into #21) — both wait for the
