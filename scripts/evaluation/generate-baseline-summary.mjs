@@ -121,10 +121,13 @@ export async function generateBaselineSummary({ runRoot, output, invocation }) {
       ...run.environment,
       browserSessions: [...new Map([
         ...run.environment.browserSessions,
+        ...(run.environment.sidecarSessions ?? []),
         ...envelopes.map(({ envelope }) => envelope.runtime).filter(Boolean)
       ].map((session) => [session.sessionId, session])).values()].map(({ executablePath, ...session }) => ({
         ...session,
-        executableLabel: basename(executablePath)
+        // Browser sessions carry an executable path; sidecar sessions (the
+        // adopted witness era) identify themselves by launcher instead.
+        executableLabel: executablePath ? basename(executablePath) : (session.launcher ?? session.kind ?? 'runtime')
       }))
     },
     execution: { executed: run.totals.executed, resumed: run.totals.resumed },
