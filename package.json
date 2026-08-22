@@ -28,6 +28,10 @@
       "types": "./dist/node/tesseract-ocr.d.ts",
       "import": "./dist/node/tesseract-ocr.js"
     },
+    "./node/ppocr-ocr": {
+      "types": "./dist/node/ppocr-ocr.d.ts",
+      "import": "./dist/node/ppocr-ocr.js"
+    },
     "./schema.json": "./schemas/pagespatial.schema.json"
   },
   "files": [
@@ -64,7 +68,8 @@
     "@firecrawl/pdf-inspector": "1.14.2",
     "@paddleocr/paddleocr-js": "0.4.2",
     "onnxruntime-web": "1.24.3",
-    "pdfjs-dist": "5.5.207"
+    "pdfjs-dist": "5.5.207",
+    "@techstark/opencv-js": "4.10.0-release.1"
   },
   "peerDependenciesMeta": {
     "@firecrawl/pdf-inspector": {
@@ -78,6 +83,9 @@
     },
     "pdfjs-dist": {
       "optional": true
+    },
+    "@techstark/opencv-js": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -90,6 +98,8 @@
     "pdfjs-dist": "5.5.207",
     "playwright-core": "1.58.2",
     "typescript": "7.0.2",
-    "vite": "7.3.6"
+    "vite": "7.3.6",
+    "@techstark/opencv-js": "4.10.0-release.1",
+    "pngjs": "7.0.0"
   }
 }
