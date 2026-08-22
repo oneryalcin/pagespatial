@@ -51,7 +51,11 @@ reproduction dissolved the premise:
   ledger row 9 need a dated correction — the false-confidence
   *refutation* now rests entirely on the batch-5-era case series, which
   predates this artifact's discovery and should be re-checked for the
-  same class before it is quoted again.
+  same class before it is quoted again. **Re-check done same day** — see
+  the dated correction in `docs/evaluation-debts.md`: two of the three
+  substantive instances dissolve as glue artifacts; osf `607883db` p10
+  survives (reclassified: misread + inadmissible second-opinion
+  readings), so the refutation stands on one substantive page.
 - **A third sign/symbol scoring artifact class.** After the
   currency-symbol bug (batch-scoring, PR #35) and the boundary-matcher
   over-strictness (PR #43 v4), this is the third instance of
