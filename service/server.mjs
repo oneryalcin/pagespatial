@@ -40,13 +40,19 @@ const json = (res, status, body) => {
 
 const MAX_BODY_BYTES = 100 * 1024 * 1024;
 
+// Over-cap bodies: reject WITHOUT destroying the socket — the handler must
+// send the 413 first, or the client sees a reset instead of the status.
+// The request stream is destroyed by the handler after the response flushes.
 const readBody = (req) => new Promise((resolve, reject) => {
   const chunks = [];
   let total = 0;
+  let exceeded = false;
   req.on('data', (chunk) => {
+    if (exceeded) return; // stop buffering; bytes drain to nowhere
     total += chunk.length;
     if (total > MAX_BODY_BYTES) {
-      req.destroy();
+      exceeded = true;
+      chunks.length = 0;
       const error = new Error(`Request body exceeds ${MAX_BODY_BYTES} bytes.`);
       error.statusCode = 413;
       reject(error);
@@ -54,8 +60,8 @@ const readBody = (req) => new Promise((resolve, reject) => {
     }
     chunks.push(chunk);
   });
-  req.on('end', () => resolve(Buffer.concat(chunks)));
-  req.on('error', reject);
+  req.on('end', () => { if (!exceeded) resolve(Buffer.concat(chunks)); });
+  req.on('error', (error) => { if (!exceeded) reject(error); });
 });
 
 const server = createServer(async (req, res) => {
@@ -68,7 +74,9 @@ const server = createServer(async (req, res) => {
       try {
         body = await readBody(req);
       } catch (error) {
-        return json(res, error.statusCode ?? 500, { error: error.message });
+        json(res, error.statusCode ?? 500, { error: error.message });
+        if (error.statusCode === 413) res.once('finish', () => req.destroy());
+        return;
       }
       let pdfPath;
       let sourceUri;
@@ -95,6 +103,7 @@ const server = createServer(async (req, res) => {
       } catch (error) {
         // A rejected upload is dead weight (and its bytes may be sensitive).
         if (uploaded) rmSync(pdfPath, { force: true });
+        if (error.statusCode === 503) return json(res, 503, { error: error.message });
         return json(res, 422, { error: `Could not open PDF: ${error.message}` });
       }
     }

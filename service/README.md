@@ -43,6 +43,10 @@ authentication, and none is pretended. Two consequences:
 - Request bodies are capped at 100 MB (413 beyond); malformed JSON is a
   400; uploads that fail to open as PDFs are deleted immediately.
 
-Document identity is pinned at submission (sha256) and re-verified by the
-worker before each page — a file mutated between submit and processing
-fails its pages closed rather than mixing two documents under one job.
+Document identity is pinned at submission (sha256) and holds **by
+construction**: when a worker opens a document it snapshots the bytes to a
+context-private copy, and every stage — pdf.js, pdf-inspector, pdftoppm
+render, Tesseract — reads that copy, never the live path. The worker also
+fails a page closed if the on-disk file no longer matches the pinned hash
+at context-open time. A file mutated after submission can therefore never
+mix a second document into a job's records.

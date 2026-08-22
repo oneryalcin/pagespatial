@@ -75,6 +75,18 @@ production); worker respawn backoff with a degraded-pool cutoff after 5
 consecutive deaths (fails queued pages closed instead of fork-looping);
 bounded metrics arrays + jobId membership check on the page endpoint.
 
+**Closure round (three residuals):** the sha guard held only for fresh
+contexts — a cached context's pdftoppm stages read the LIVE path, so a
+file swap after open could mix doc-B pixels under doc-A's pinned hash.
+Fixed structurally: contexts snapshot their bytes to a private temp copy
+and every shell-out stage reads that copy — render input equals the
+pinned identity by construction (test: swap the file after open, render a
+later page, raster dimensions still match doc A). The 100 MB cap now
+delivers a real 413 (response first, request destroyed after flush —
+verified over the wire). A degraded pool refuses new submissions with 503
+and fails already-queued pages closed instead of 202-ing into a silent
+hang.
+
 ## Verification
 
 `test/service-skeleton.test.mjs` (6 tests, all passing; full suite

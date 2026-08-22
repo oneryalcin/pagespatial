@@ -10,12 +10,12 @@ import { createStubOcrAdapter } from '../service/adapters/stub-ocr.mjs';
 
 // Minimal N-page PDF with a VALID xref (pdf-inspector's Rust parser rejects
 // the sloppy-offset trick the enrichment fixture gets away with).
-function minimalPdf(pageCount) {
+function minimalPdf(pageCount, mediaBox = '0 0 612 792') {
   const objects = ['<< /Type /Catalog /Pages 2 0 R >>'];
   const kids = Array.from({ length: pageCount }, (_, index) => `${index + 3} 0 R`).join(' ');
   objects.push(`<< /Type /Pages /Kids [${kids}] /Count ${pageCount} >>`);
   for (let index = 0; index < pageCount; index += 1) {
-    objects.push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>');
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [${mediaBox}] >>`);
   }
   let body = '%PDF-1.4\n';
   const offsets = [];
@@ -213,6 +213,74 @@ test('a document mutated after submission fails its pages closed', async () => {
     assert.match(page.failure.message, /changed since submission/u);
     assert.match(page.failure.message, new RegExp(sha256.slice(0, 12), 'u'));
   } finally {
+    await service.shutdown();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('render reads the context-private byte snapshot, never the live path', async () => {
+  const { openDocumentContext, renderStage } = await import('../service/lib/stages.mjs');
+  const dir = mkdtempSync(join(tmpdir(), 'svc-test-'));
+  const pdfPath = join(dir, 'doc.pdf');
+  writeFileSync(pdfPath, minimalPdf(2)); // doc A: 612x792pt -> 980x1268 at 1.6
+  const context = await openDocumentContext(pdfPath);
+  try {
+    // Swap the live file for a visibly different document (300x300pt).
+    writeFileSync(pdfPath, minimalPdf(2, '0 0 300 300'));
+    const rendered = await renderStage(context, 2);
+    assert.equal(rendered.value.raster.width, 980, 'raster comes from doc A bytes, not the swapped file');
+    assert.equal(rendered.value.raster.height, 1268);
+  } finally {
+    await context.dispose();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('over-cap POST receives an actual 413 response', async () => {
+  const { fork } = await import('node:child_process');
+  const dir = mkdtempSync(join(tmpdir(), 'svc-test-'));
+  const port = 18000 + Math.floor(Math.random() * 2000);
+  const child = fork(new URL('../service/server.mjs', import.meta.url), [], {
+    env: { ...process.env, PORT: String(port), SERVICE_DATA_DIR: join(dir, 'data'), SERVICE_WORKERS: '0' },
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc']
+  });
+  try {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('server did not start')), 10_000);
+      child.stdout.on('data', (chunk) => { if (String(chunk).includes('listening')) { clearTimeout(timer); resolve(); } });
+      child.on('exit', () => reject(new Error('server exited during startup')));
+    });
+    const response = await fetch(`http://127.0.0.1:${port}/v1/jobs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/pdf' },
+      body: Buffer.alloc(101 * 1024 * 1024)
+    });
+    assert.equal(response.status, 413);
+    const body = await response.json();
+    assert.match(body.error, /exceeds/u);
+  } finally {
+    child.kill();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('degraded pool: queued pages fail closed and new submissions get 503', async () => {
+  const { dir, pdfPath, dataDir } = fixture(1);
+  const crashFile = join(dir, 'crash-once');
+  process.env.STUB_CRASH_ONCE_FILE = crashFile;
+  // Threshold 1: the first worker death degrades the pool immediately.
+  const service = new ParseService({ dataDir, workers: 1, maxConsecutiveWorkerDeaths: 1 });
+  try {
+    const { jobId } = await service.submit({ pdfPath });
+    // Pre-degrade job must COMPLETE (failed-closed), not hang.
+    const status = await waitForCompletion(service, jobId);
+    assert.equal(service.degraded, true);
+    assert.equal(status.pages[0].ok, false);
+    assert.equal(status.pages[0].failure.errorClass, 'WorkerPoolDegraded');
+    // New submissions are refused loudly, not accepted into a silent hang.
+    await assert.rejects(service.submit({ pdfPath }), (error) => error.statusCode === 503);
+  } finally {
+    delete process.env.STUB_CRASH_ONCE_FILE;
     await service.shutdown();
     rmSync(dir, { recursive: true, force: true });
   }

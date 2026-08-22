@@ -13,7 +13,7 @@
  * #2 witness-equivalence run can verify the convention on every page.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -40,13 +40,25 @@ export async function openDocumentContext(pdfPath, identity = {}) {
   const bytes = readFileSync(pdfPath);
   const session = await openNodePdfSession(bytes, identity);
   const native = createPdfInspectorNativeAdapter();
+  // Every stage that shells out (pdftoppm render, Tesseract second opinion)
+  // reads THIS context-private copy of the bytes the identity was computed
+  // from — never the live path. A file swapped on disk after open therefore
+  // cannot mix a second document into the record: the raster input equals
+  // the pinned sha256 by construction.
+  const privateDir = mkdtempSync(join(tmpdir(), 'psvc-doc-'));
+  const privatePdfPath = join(privateDir, 'doc.pdf');
+  writeFileSync(privatePdfPath, bytes);
   return {
-    pdfPath,
+    pdfPath: privatePdfPath,
+    submittedPath: pdfPath,
     session,
     native,
     identity: session.source.identity,
     pageCount: session.source.identity.pageCount,
-    dispose: () => session.dispose()
+    dispose: async () => {
+      rmSync(privateDir, { recursive: true, force: true });
+      return session.dispose();
+    }
   };
 }
 

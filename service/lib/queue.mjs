@@ -35,9 +35,10 @@ function writeFileAtomic(path, contents) {
 }
 
 export class ParseService {
-  constructor({ dataDir, workers = 2, adapterId = 'stub-ocr' }) {
+  constructor({ dataDir, workers = 2, adapterId = 'stub-ocr', maxConsecutiveWorkerDeaths = MAX_CONSECUTIVE_WORKER_DEATHS }) {
     this.dataDir = dataDir;
     this.adapterId = adapterId;
+    this.maxConsecutiveWorkerDeaths = maxConsecutiveWorkerDeaths;
     this.jobs = new Map();
     this.pending = [];
     this.metrics = new Metrics();
@@ -74,7 +75,7 @@ export class ParseService {
         this.requeueOrFail(task, { message: `worker exited with code ${code} while processing the page`, errorClass: 'WorkerCrash' });
       }
       this.consecutiveWorkerDeaths += 1;
-      if (this.consecutiveWorkerDeaths >= MAX_CONSECUTIVE_WORKER_DEATHS) {
+      if (this.consecutiveWorkerDeaths >= this.maxConsecutiveWorkerDeaths) {
         // A worker that dies at import would fork-loop forever. Stop
         // respawning and fail everything queued closed instead of hanging.
         this.degraded = true;
@@ -123,6 +124,13 @@ export class ParseService {
   }
 
   async submit({ pdfPath, sourceUri }) {
+    if (this.degraded) {
+      // A degraded pool has no workers and never will: accepting the job
+      // would 202 into a silent forever-hang.
+      const error = new Error('Service degraded: worker pool stopped after repeated worker deaths; not accepting jobs.');
+      error.statusCode = 503;
+      throw error;
+    }
     // Open once up front: rejects non-PDFs immediately and pins identity
     // (sha256, pageCount) at submission, before any worker touches it.
     const probe = await openDocumentContext(pdfPath, sourceUri ? { sourceUri } : {});
@@ -154,6 +162,12 @@ export class ParseService {
   }
 
   enqueue(task) {
+    if (this.degraded) {
+      // Nothing will ever drain a degraded pool: fail closed now.
+      task.attempts = MAX_ATTEMPTS;
+      this.requeueOrFail(task, { message: 'worker pool degraded: consecutive worker deaths exceeded the cap', errorClass: 'WorkerPoolDegraded' });
+      return;
+    }
     this.pending.push(task);
     this.drain();
   }
