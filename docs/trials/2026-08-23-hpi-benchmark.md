@@ -21,9 +21,11 @@ owner-authorized on modal.com (Linux x86), decided before any commitment.
   construction**.
 - **Remote:** `hpi_bench_modal.py`, ephemeral Modal app, pages passed as
   function arguments (nothing persisted remotely). Container: **4 vCPU /
-  8 GB** (GPU arm adds a **Tesla T4**, identity proven in-band:
-  `nvidia-smi -L` + `paddle.device.get_device()` recorded in every result —
-  a silent CPU fallback cannot forge the GPU row). Pins:
+  8 GB** (GPU arm adds a **Tesla T4**, identity proven in-band on the GPU
+  re-run: `nvidia-smi -L` + `paddle.device.get_device()` in the result —
+  a silent CPU fallback cannot forge the GPU rows. The four CPU results
+  predate the deviceTruth payload and carry none; mitigated by physics —
+  Modal CPU functions have no GPU to fall back onto). Pins:
   **paddleocr 3.7.0, paddlepaddle 3.2.1** (3.4.0 predates the v6 model
   registry), Python 3.11, `paddleocr install_hpi_deps cpu`.
   Orientation/unwarping/textline stages disabled (clean rasters, as the
@@ -38,17 +40,19 @@ owner-authorized on modal.com (Linux x86), decided before any commitment.
   first-pass vs first-pass against the dev-v12 browser reference, plus
   paired gold recall on the 23 gold pages (560 human-verified tokens).
   Same mechanics as the committed equivalence run, so rows are comparable.
-- HPI backend actually selected (from container logs): **OpenVINO**, with
-  `cpu_num_threads=10` self-configured inside the 4-vCPU cgroup
-  (oversubscribed but enforced — the number is honest per-4-vCPU and
-  might improve slightly with a matched thread setting).
+- HPI backend actually selected: **OpenVINO**, with `cpu_num_threads=10`
+  self-configured inside the 4-vCPU cgroup (oversubscribed but enforced —
+  the number is honest per-4-vCPU and might improve slightly with a
+  matched thread setting). Evidence: streamed container LOGS, not an
+  in-band result field — in-band backend capture is a named item for the
+  ceremony run.
 
 ## Speed (warm ms/page, 32 pages, 4 vCPU / T4)
 
 | config | warm p50 | warm p95 | cold: init + first page |
 |---|---|---|---|
-| service witness, WASM EP (reference, 4-worker load) | 6,504 | 10,869 | 0.6 s |
-| service witness, WASM EP (reference, single) | 3,700 | 13,300 | 0.6 s |
+| service witness, WASM EP (reference: M-series laptop, 176 pages, 4-worker contention) | 6,504 | 10,869 | 0.6 s |
+| service witness, WASM EP (reference: M-series laptop, single adapter, 90 pages) | 3,700 | 13,300 | 0.6 s |
 | paddle default CPU, v6-small | 3,884 | 8,796 | 11 s + 4.0 s |
 | paddle default CPU, v6-medium | 4,110 | — | 9 s + 3.3 s |
 | **paddle HPI CPU (OpenVINO), v6-small** | **989** | — | **54 s** + 0.8 s |
@@ -60,12 +64,23 @@ owner-authorized on modal.com (Linux x86), decided before any commitment.
 GPU rows are from the device-verified re-run — the first GPU run measured
 783/1,237 ms, same order, run-to-run variance noted.)
 
+**Reference-row provenance and the honest multipliers.** The two reference
+rows are cross-machine AND cross-sample (laptop, different page sets,
+contended vs single) — so the headline multipliers are approximate by
+construction: **~6.6× vs the loaded-laptop service figure, ~3.7× vs the
+single-adapter laptop figure**, both cross-machine. One order-of-magnitude
+sanity note (not a control): paddle-default-CPU on Modal (3,884 ms) lands
+where single-adapter WASM on the laptop does (3,700 ms). The GPU-vs-HPI
+comparison, by contrast, is same-container and clean — the GPU-dead
+conclusion does not depend on any cross-machine inference.
+
 ## Accuracy (vs dev-v12 browser witness; gold = 560 tokens on 23 pages)
 
 | config | token agreement b→cand / cand→b | gold recall | discordants (+cand/−browser) |
 |---|---|---|---|
 | browser witness (reference) | — | 399 | — |
-| server witness WASM (committed equivalence, all 90 pages) | 91.7% / 91.4% | tie ±0.5% | +36/−26 of 1,223 |
+| **server witness WASM, SAME 32 pages** (recomputed from the committed equivalence perPage) | **85.3% / 84.8%** | **414** | — |
+| server witness WASM (all 90 pages, for context) | 91.7% / 91.4% | tie ±0.5% | +36/−26 of 1,223 |
 | paddle default CPU small | 85.2% / 84.8% | 413 | +26/−12 |
 | **paddle HPI CPU small** | **85.5% / 85.0%** | **409** | **+22/−12** |
 | paddle default/GPU medium | 83.6% / 82.0% | 405 | +42/−36 |
@@ -79,10 +94,18 @@ pages — no equivalence claim is being made here):
   siblings' accuracy within noise — same models, faster engine.
 - **The official pipeline is not worse than our witnesses on gold**: every
   config lands at or above the browser's 399/560, with modest discordants.
-- **Cross-pipeline daylight is real**: 85% agreement vs the 91.7% the
-  same-pipeline server witness achieved. Different pre/postprocessing
-  reads genuinely differently — this is exactly what the full ceremony
-  exists to characterize before any witnesshood.
+- **No cross-pipeline gap is demonstrated — a correction to this doc's
+  first draft.** The draft compared the candidates' 85% agreement against
+  the server witness's 90-page figure (91.7%) and called the difference
+  "cross-pipeline daylight". Sample-matched, it vanishes: restricted to
+  these same 32 pages (which deliberately overweight the hard families —
+  rotated, CJK, dense tables), the same-pipeline server witness scores
+  **85.3%/84.8%** and gold 414 — indistinguishable from the official
+  pipeline's 85.5%/85.0% and 409–413. **This strengthens the adoption
+  case**: the official pipeline agrees with the browser exactly as well
+  as our own same-pipeline witness does on these pages. The ceremony's
+  job becomes verifying parity on the full gold set, not characterizing
+  a gap.
 - **v6-medium buys nothing on this corpus**: gold 405–407 vs small's
   409–413, at ~2× the cost, with larger both-way discordants. The
   documented medium uplift does not show on financial-numeric gold.
@@ -101,7 +124,9 @@ requires forking paddleocr-js and owning the fork.
 These are recommendations, not decisions: adopting any official-pipeline
 config as a witness is a NEW-witness adoption and takes the full ceremony
 — witness-equivalence run over all gold pages, McNemar, confidence-
-calibration diff, era decision. Not started here.
+calibration diff, **geometry/box-IoU verification** (this benchmark scored
+text only; candidate boxes are in the raw results but unverified),
+in-band backend capture, and the era decision. Not started here.
 
 Operational notes for whoever runs the ceremony: HPI worker boot pays a
 ~54 s engine build (amortizes in a long-lived worker; a restart storm

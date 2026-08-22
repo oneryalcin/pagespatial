@@ -5,9 +5,9 @@
  * witness-equivalence.mjs, so candidate numbers are comparable with the
  * committed server-witness figures.
  *
- * Boxes arrive in rendered-PNG pixel space (hpi-bench-render.mjs renders at
- * the record's own dpi) and are mapped into record geometry space via the
- * manifest's dimensions, mirroring the equivalence script's correction.
+ * Scoring is TEXT-ONLY (token agreement + gold recall); candidate boxes are
+ * carried in the results JSON but not scored here — geometry/box-IoU
+ * verification is a named item for the full adoption ceremony.
  *
  * Usage:
  *   node scripts/evaluation/score-candidate-witness.mjs \
