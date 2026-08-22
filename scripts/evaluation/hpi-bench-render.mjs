@@ -35,6 +35,10 @@ const runRoot = arg('--run-root');
 const corpusRoot = arg('--corpus-root');
 const equivalencePath = arg('--equivalence');
 const outputDir = arg('--output-dir');
+// --all: every page in the equivalence sample (the full gold∩record set),
+// for the adoption ceremony's 90-page run. Without it: the stratified
+// benchmark subset below.
+const allPages = process.argv.includes('--all');
 mkdirSync(outputDir, { recursive: true });
 
 // Stratified selection over the equivalence sample's families: rotated
@@ -56,18 +60,20 @@ const PINNED = ['public-comps:monotaro:2025-fy:003#61'];
 
 const equivalence = JSON.parse(readFileSync(equivalencePath, 'utf8'));
 const pages = equivalence.perPage.map((entry) => entry.page).sort();
-const selected = new Set(PINNED.filter((key) => pages.includes(key)));
-for (const [prefix, quota] of QUOTAS) {
-  let taken = [...selected].filter((key) => key.startsWith(prefix)).length;
-  for (const key of pages) {
-    if (taken >= quota) break;
-    if (key.startsWith(prefix) && !selected.has(key)) {
-      selected.add(key);
-      taken += 1;
+const selected = new Set(allPages ? pages : PINNED.filter((key) => pages.includes(key)));
+if (!allPages) {
+  for (const [prefix, quota] of QUOTAS) {
+    let taken = [...selected].filter((key) => key.startsWith(prefix)).length;
+    for (const key of pages) {
+      if (taken >= quota) break;
+      if (key.startsWith(prefix) && !selected.has(key)) {
+        selected.add(key);
+        taken += 1;
+      }
     }
   }
 }
-console.log(`Selected ${selected.size} pages.`);
+console.log(`Selected ${selected.size} pages${allPages ? ' (--all)' : ''}.`);
 
 const recordIndex = new Map();
 for (const doc of readdirSync(join(runRoot, 'documents'))) {
