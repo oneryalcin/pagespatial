@@ -90,11 +90,17 @@ test, principles §9):**
      batching, THEN (only if numbers demand) GPU. The skeleton's
      "render is the bottleneck" table was the stub era; do not optimize
      296ms while 3.7s burns.
-   Remaining #22 v1 integration: plug the canonical adapter into the
-   service, wire the SVG endpoint, full-pipeline bottleneck re-measure.
-   **Owner decision pending**: adopting the server witness for service
-   runs is a run-configuration change (era rules; cross-swap comparisons
-   at gold level only).
+   **#22 v1 COMPLETE (PR #62, 2026-08-22): witness swap ADOPTED by the
+   owner** (conditions on #2: backend pinned in config+provenance — no
+   'auto'; calibration diff before dev-v13). The service runs the real
+   witness end to end: 176/176 canonical records, SVG endpoint live,
+   second opinion engaging on starved pages. **Full-pipeline profile:
+   OCR = 88% of wall (6.5 s/page p50 WASM under load), 0.54 pages/sec,
+   budget ~2.3 GB OS-max RSS/worker (9 GB for 4).** Speed arms on #2:
+   native ORT runtime → official PaddleOCR HPI benchmark gate (half-day,
+   ~30 pages through the equivalence harness; candidate NEW witness —
+   full ceremony if adopted) → GPU last, still gated. LOW follow-ups
+   recorded on #22.
    The p144 differential RESOLVED the hypothesis by dissolving it (PR
    #58): no witness ever missed the ink — the scorer did (sign-glue).
    The render-sensitivity hypothesis is dead; see item 1 above for the
