@@ -14,7 +14,7 @@
  * SERVICE_WORKERS (default 2), SERVICE_OCR_ADAPTER (default stub-ocr).
  */
 import { createServer } from 'node:http';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -38,9 +38,22 @@ const json = (res, status, body) => {
   res.end(payload);
 };
 
+const MAX_BODY_BYTES = 100 * 1024 * 1024;
+
 const readBody = (req) => new Promise((resolve, reject) => {
   const chunks = [];
-  req.on('data', (chunk) => chunks.push(chunk));
+  let total = 0;
+  req.on('data', (chunk) => {
+    total += chunk.length;
+    if (total > MAX_BODY_BYTES) {
+      req.destroy();
+      const error = new Error(`Request body exceeds ${MAX_BODY_BYTES} bytes.`);
+      error.statusCode = 413;
+      reject(error);
+      return;
+    }
+    chunks.push(chunk);
+  });
   req.on('end', () => resolve(Buffer.concat(chunks)));
   req.on('error', reject);
 });
@@ -51,11 +64,22 @@ const server = createServer(async (req, res) => {
     const parts = url.pathname.split('/').filter(Boolean);
 
     if (req.method === 'POST' && url.pathname === '/v1/jobs') {
-      const body = await readBody(req);
+      let body;
+      try {
+        body = await readBody(req);
+      } catch (error) {
+        return json(res, error.statusCode ?? 500, { error: error.message });
+      }
       let pdfPath;
       let sourceUri;
+      let uploaded = false;
       if ((req.headers['content-type'] ?? '').includes('application/json')) {
-        const parsed = JSON.parse(body.toString('utf8'));
+        let parsed;
+        try {
+          parsed = JSON.parse(body.toString('utf8'));
+        } catch {
+          return json(res, 400, { error: 'Request body is not valid JSON.' });
+        }
         pdfPath = parsed.pdfPath;
         sourceUri = parsed.sourceUri;
         if (typeof pdfPath !== 'string' || !pdfPath) return json(res, 400, { error: 'pdfPath (string) is required in JSON mode.' });
@@ -63,11 +87,14 @@ const server = createServer(async (req, res) => {
         if (!body.length) return json(res, 400, { error: 'Send PDF bytes, or JSON {"pdfPath": "..."}.' });
         pdfPath = join(uploadsDir, `upload_${randomBytes(6).toString('hex')}.pdf`);
         writeFileSync(pdfPath, body);
+        uploaded = true;
       }
       try {
         const submitted = await service.submit({ pdfPath, sourceUri });
         return json(res, 202, submitted);
       } catch (error) {
+        // A rejected upload is dead weight (and its bytes may be sensitive).
+        if (uploaded) rmSync(pdfPath, { force: true });
         return json(res, 422, { error: `Could not open PDF: ${error.message}` });
       }
     }

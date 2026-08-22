@@ -103,9 +103,15 @@ export async function ocrStage(adapter, rendered, pageNumber) {
 /**
  * Assembly + conditional cross-family second opinion, mirroring the
  * evaluation harness flow (scripts/evaluation/run-baseline.mjs). Runs ONLY
- * for canonical OCR adapters — a stub witness must never reach this.
+ * for canonical OCR adapters — a stub witness must never reach this. The
+ * gate is enforced HERE as well as at the worker call site (defense in
+ * depth: refusal lives on both sides of the process boundary, so bypassing
+ * one gate still cannot turn a stub witness into evidence).
  */
-export async function assemblyStage(context, pageNumber, nativePage, renderedPage, ocrPage, options) {
+export async function assemblyStage(context, pageNumber, adapter, nativePage, renderedPage, ocrPage, options) {
+  if (adapter?.canonical !== true) {
+    throw new Error(`Assembly refused: OCR adapter '${adapter?.name ?? 'unknown'}' is not a canonical witness.`);
+  }
   const assembled = await timed(async () => {
     const base = {
       document: context.identity,

@@ -24,7 +24,25 @@ a `canonical: false` stub: results carry stage timings and counts only —
 evidence). Real records + the Tesseract second-opinion rung switch on when
 a canonical adapter is configured via `SERVICE_OCR_ADAPTER`.
 
-Job state is on disk under `SERVICE_DATA_DIR` (restart-resumable). Page
-failures are fail-closed per page (#37): failed entry after 2 attempts,
-siblings unaffected. Job dirs contain corpus-derived text — keep the data
-dir out of git and treat it as private.
+Job state is on disk under `SERVICE_DATA_DIR` (restart-resumable; state
+writes are atomic temp+rename). Page failures are fail-closed per page
+(#37): failed entry after 2 attempts, siblings unaffected. Job dirs
+contain corpus-derived text — keep the data dir out of git and treat it
+as private.
+
+## Trust model (v1)
+
+This service binds to localhost for a **trusted caller** — there is no
+authentication, and none is pretended. Two consequences:
+
+- **`pdfPath` mode is a dev convenience that MUST NOT survive to
+  production**: it is an arbitrary server-file read plus a file-existence
+  oracle for whoever can reach the port. The production ingress is bytes
+  upload (or a fetch-from-object-store variant), never a caller-supplied
+  server path.
+- Request bodies are capped at 100 MB (413 beyond); malformed JSON is a
+  400; uploads that fail to open as PDFs are deleted immediately.
+
+Document identity is pinned at submission (sha256) and re-verified by the
+worker before each page — a file mutated between submit and processing
+fails its pages closed rather than mixing two documents under one job.

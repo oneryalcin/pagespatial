@@ -56,6 +56,24 @@ levers may change once real inference joins the table.
 These are stage timings on a laptop, not capacity claims. The
 production-shaped number (pages/sec/core on server hardware, with real
 OCR) is exactly what this instrumentation exists to produce when #2 lands.
+`pagesPerSecond` in `/v1/metrics` is a continuous-run figure — idle gaps
+between jobs deflate it; quote the load-driver's end-to-end number for a
+specific run instead.
+
+## Review hardening (cold review, same day)
+
+Six findings fixed before merge: atomic temp+rename for all state files
+with resume() requeuing any page file that fails to parse (the reviewer
+demonstrated a torn write permanently poisoning a job — file presence was
+truth); the canonical-witness gate now enforced on BOTH sides of the
+process boundary (assembly itself refuses non-canonical adapters, not
+just the worker call site); pinned sha256 re-verified by the worker per
+page with the context cache keyed by (path, sha); HTTP hardening (100 MB
+body cap → 413, malformed JSON → 400, rejected uploads deleted, trust
+model written down: localhost/trusted-caller, pdfPath mode dies before
+production); worker respawn backoff with a degraded-pool cutoff after 5
+consecutive deaths (fails queued pages closed instead of fork-looping);
+bounded metrics arrays + jobId membership check on the page endpoint.
 
 ## Verification
 

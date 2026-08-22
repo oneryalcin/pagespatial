@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { ParseService } from '../service/lib/queue.mjs';
+import { assemblyStage } from '../service/lib/stages.mjs';
+import { createStubOcrAdapter } from '../service/adapters/stub-ocr.mjs';
 
 // Minimal N-page PDF with a VALID xref (pdf-inspector's Rust parser rejects
 // the sloppy-offset trick the enrichment fixture gets away with).
@@ -152,6 +154,66 @@ test('restart resume: a new service instance finishes a half-done job', async ()
     assert.equal(status.completedPages, 2);
   } finally {
     await second.shutdown();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('resume requeues a torn page file instead of counting it done', async () => {
+  const { dir, pdfPath, dataDir } = fixture(2);
+  const first = new ParseService({ dataDir, workers: 1 });
+  let jobId;
+  try {
+    ({ jobId } = await first.submit({ pdfPath }));
+    await waitForCompletion(first, jobId);
+  } finally {
+    await first.shutdown();
+  }
+  // Simulate a SIGKILL mid-write under the OLD non-atomic scheme: page 2's
+  // file exists but is truncated garbage.
+  const tornPath = join(dataDir, jobId, 'pages', '000002.json');
+  writeFileSync(tornPath, '{"pageNumber": 2, "ok": tr');
+  // Job.json still says processing for the resume path to engage.
+  const jobJsonPath = join(dataDir, jobId, 'job.json');
+  const job = JSON.parse(readFileSync(jobJsonPath, 'utf8'));
+  job.status = 'processing';
+  writeFileSync(jobJsonPath, JSON.stringify(job));
+  const second = new ParseService({ dataDir, workers: 1 });
+  try {
+    const status = await waitForCompletion(second, jobId);
+    assert.equal(status.completedPages, 2);
+    const page2 = JSON.parse(readFileSync(tornPath, 'utf8'));
+    assert.equal(page2.ok, true, 'torn page was reprocessed, not trusted');
+  } finally {
+    await second.shutdown();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('assembly itself refuses a non-canonical witness (defense in depth)', async () => {
+  // Bypass the worker-side gate entirely: call assemblyStage directly with
+  // the stub adapter. The stage must refuse regardless.
+  await assert.rejects(
+    assemblyStage({}, 1, createStubOcrAdapter(), {}, {}, {}, {}),
+    /not a canonical witness/u
+  );
+  await assert.rejects(assemblyStage({}, 1, undefined, {}, {}, {}, {}), /not a canonical witness/u);
+});
+
+test('a document mutated after submission fails its pages closed', async () => {
+  const { dir, pdfPath, dataDir } = fixture(1);
+  // workers: 0 so nothing processes until the file has been swapped.
+  const service = new ParseService({ dataDir, workers: 0 });
+  try {
+    const { jobId, sha256 } = await service.submit({ pdfPath });
+    writeFileSync(pdfPath, minimalPdf(2));
+    service.spawnWorker();
+    const status = await waitForCompletion(service, jobId);
+    const page = status.pages[0];
+    assert.equal(page.ok, false);
+    assert.match(page.failure.message, /changed since submission/u);
+    assert.match(page.failure.message, new RegExp(sha256.slice(0, 12), 'u'));
+  } finally {
+    await service.shutdown();
     rmSync(dir, { recursive: true, force: true });
   }
 });

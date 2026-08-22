@@ -18,9 +18,11 @@ const ADAPTERS = {
 };
 
 // A worker mostly serves one job at a time; two slots absorb interleaving.
+// Keyed by (pdfPath, sha256): two jobs over one path with different pinned
+// identities must never share a context.
 const contexts = new Map();
 async function contextFor(task) {
-  const key = task.pdfPath;
+  const key = `${task.pdfPath}|${task.sha256 ?? ''}`;
   if (contexts.has(key)) return contexts.get(key);
   const context = await openDocumentContext(task.pdfPath, task.identity);
   contexts.set(key, context);
@@ -37,6 +39,13 @@ async function runPage(task) {
   if (!adapterFactory) throw new Error(`Unknown OCR adapter '${task.adapterId}'.`);
   const adapter = adapterFactory();
   const context = await contextFor(task);
+  // The submission probe pinned the document identity; the bytes on disk
+  // must still be that document at work time. Fail the page closed on drift.
+  if (task.sha256 && context.identity.sha256 !== task.sha256) {
+    contexts.forEach((value, key) => { if (value === context) contexts.delete(key); });
+    await context.dispose().catch(() => undefined);
+    throw new Error(`Document changed since submission: pinned sha256 ${task.sha256}, on disk ${context.identity.sha256}.`);
+  }
   const stageTimingsMs = {};
 
   const rendered = await renderStage(context, task.pageNumber, task.renderScale ?? RENDER_SCALE);
@@ -60,7 +69,7 @@ async function runPage(task) {
     };
   }
 
-  const assembled = await assemblyStage(context, task.pageNumber, native.value, rendered.value.renderedPage, ocr.value, {
+  const assembled = await assemblyStage(context, task.pageNumber, adapter, native.value, rendered.value.renderedPage, ocr.value, {
     runId: task.runId,
     ocrAdapterId: `${adapter.name}@${adapter.version}`,
     configuration: { renderScale: task.renderScale ?? RENDER_SCALE }
