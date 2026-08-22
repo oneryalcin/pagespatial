@@ -5,11 +5,17 @@ gold∩record sample, at the adopted packing unit (1 vCPU, threads=1).
 Differences from hpi_bench_modal.py:
   - full observation dumps (text/box/score) per page, for box-IoU and
     calibration scoring locally;
-  - backend evidence captured IN-BAND (PR #64 review finding 3): a
-    logging.Handler attached before construction records the pipeline's own
-    backend-selection messages, and a bounded attribute walk of the pipeline
-    object collects any primitive config mentioning backend/HPI. No stdout
-    scraping.
+  - backend evidence capture, two channels with different strength: a
+    bounded attribute walk of the pipeline object (genuinely in-band —
+    yields use_hpip and thread config), and a logging.Handler attached
+    before construction. HONEST LIMIT, as executed: the handler's keyword
+    filter matched infra noise (httpcore/filelock/HF URLs) and caught ZERO
+    pipeline backend-selection lines — the OpenVINO choice is announced by
+    the C++ ultra_infer layer, which bypasses Python logging entirely and
+    is only visible in the container's stdout stream. In-band capture of
+    the C++ backend choice remains open (PR #64 finding 3, rides the
+    integration PR); the ceremony retains the tracked run's stream as the
+    evidence artifact instead.
 
 Pages travel as function arguments; nothing persists remotely.
 

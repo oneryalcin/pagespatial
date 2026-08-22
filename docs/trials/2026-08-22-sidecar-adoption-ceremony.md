@@ -1,6 +1,7 @@
 # Sidecar adoption ceremony: the evidence package
 
-**Date:** 2026-08-23 · **Branch:** `sidecar-adoption-ceremony` · **Issue:** #2
+**Date:** 2026-08-22 (run artifacts timestamped same day) · **Branch:**
+`sidecar-adoption-ceremony` · **Issue:** #2
 **Candidate:** official PaddleOCR pipeline (paddleocr 3.7.0 / paddlepaddle
 3.2.1), `enable_hpi=True`, OpenVINO CPU, PP-OCRv6 **small**, 1-vCPU packing
 unit — run on Modal (Linux x86) over the full 90-page gold∩dev-v12 sample,
@@ -56,7 +57,9 @@ src/diagnostics.ts):
 | candidate (7,940) | 0.888 | 0.999 | 1.0 | **0.99%** |
 
 Paired deltas on matched-text observations (candidate − browser): mean
-−0.0006, p50 0.000, p05/p95 ±0.02. **Verdict: no re-tuning indicated.**
+−0.0006, p50 0.000, p05/p95 ±0.02 — pairs come from the §4 best-match
+(non-consume-once) loop and carry the same diagnostic-only caveat.
+**Verdict: no re-tuning indicated.**
 The candidate marks ~0.46 percentage points more observations
 low-confidence than the browser (≈0.4 observations/page); starvation
 denominators move negligibly. This is a distribution comparison, not a
@@ -77,15 +80,31 @@ not decision-bearing.
 ## 5. Backend and device evidence
 
 - **In-band** (committed): pipeline attrs `use_hpip: true`; `cpu_threads=1`
-  kwarg accepted; model weights pinned to HF revisions (in the aggregate's
-  `modelRevisionPins`); `os.cpu_count()` = 17 — the host's cores; the
-  1-vCPU limit is a cgroup quota invisible to it.
-- **Programmatically captured container stream** (not in-band — the C++
-  layer bypasses Python logging; stated per the PR #64 review):
-  `Runtime initialized with Backend::OPENVINO in Device::CPU`, and the
-  backend-internal `cpu_num_threads=10` default (the cgroup caps actual
-  parallelism at 1 vCPU regardless). In-band capture of the C++ backend
-  choice remains open — carried to the integration PR.
+  kwarg accepted; `os.cpu_count()` = 17 — the host's cores; the 1-vCPU
+  limit is a cgroup quota invisible to it.
+- **Model revisions: OBSERVED, not pinned.** The pipeline downloads latest
+  weights at run time; the det revision was recovered after the fact from
+  HF redirect URLs in the in-band log capture, and **the rec model has no
+  revision evidence at all** (the capture cap filled with infra noise
+  first). Pinning is wholly owed by integration precondition 2 below — a
+  future image could pull different weights than this ceremony validated
+  unless it pins.
+- **Retained container stream** (`.evaluation/hpi-ceremony/
+  modal-run-stream.log`; not in-band — the C++ layer bypasses Python
+  logging; the committed aggregate's lines are grep-verbatim from this
+  artifact): `Runtime initialized with Backend::OPENVINO in Device::CPU`,
+  and `Inference backend config: cpu_num_threads=10` — the backend-internal
+  default; the accepted `cpu_threads=1` kwarg does not reach that layer,
+  and the cgroup caps actual parallelism at 1 vCPU regardless. In-band
+  capture of the C++ backend choice remains open — carried to the
+  integration PR. The committed `deviceTruth` block is machine-derived
+  from the raw scorer output plus this retained artifact (derivation
+  recorded in the JSON itself).
+- **Run-to-run output stability**: across separate runs of the same config
+  (different containers/vCPU sizings), gold hits varied by ~±4 tokens
+  (e.g. 413 vs 409 on the benchmark's 32-page subset). "HPI changes speed,
+  not output" holds to that tolerance — output is stable to ~±4 tokens,
+  not bit-stable across containers.
 
 ## The era memo (decision is the owner's)
 

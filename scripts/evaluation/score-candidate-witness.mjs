@@ -10,7 +10,8 @@
  *  - box IoU on exact-normalized-text matches (candidate polygons →
  *    rendered-pixel AABBs → record geometry space via the manifest dims;
  *    same best-match method as witness-equivalence.mjs — NOT consume-once,
- *    diagnostic only);
+ *    diagnostic only; the paired confidence deltas inherit this same
+ *    best-match pairing and carry the same caveat);
  *  - McNemar exact test + Clopper-Pearson CI on the gold discordants
  *    (implementations copied from witness-equivalence.mjs, validated there
  *    against known values);
@@ -313,6 +314,7 @@ console.log(JSON.stringify({
       massBelowFloor: Number((allBrowserConfidences.filter((s) => s < LOW_OCR_CONFIDENCE).length / (allBrowserConfidences.length || 1)).toFixed(4))
     },
     pairedDeltasOnMatches: {
+      note: 'pairs inherit the box-IoU loop’s best-match (non-consume-once) pairing — same diagnostic-only caveat',
       count: allPairedDeltas.length,
       quantiles: quantiles(allPairedDeltas),
       mean: allPairedDeltas.length ? Number((sum(allPairedDeltas) / allPairedDeltas.length).toFixed(4)) : null

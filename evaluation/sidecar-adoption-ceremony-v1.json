@@ -10,6 +10,7 @@
   "paddlepaddle": "3.2.1"
  },
  "deviceTruth": {
+  "derivation": "machine-derived by the command recorded here from two retained artifacts: .evaluation/hpi-ceremony/ceremony-score.json (raw scorer output, unmodified) and .evaluation/hpi-ceremony/modal-run-stream.log (the tracked 'modal run' stream); grep 'Backend::|backend config' produces containerStreamLines verbatim",
   "osCpuCount": 17,
   "osCpuCountNote": "os.cpu_count() reports the host cores; the 1.0-vCPU limit is a cgroup quota invisible to it",
   "backendAttrs": {
@@ -18,14 +19,15 @@
    "pipeline.paddlex_pipeline.multi_device_inference": false,
    "pipeline.paddlex_pipeline.use_hpip": true
   },
-  "modelRevisionPins": [
+  "modelRevisionsObserved": [
    "PP-OCRv6_small_det@106c97591b235f607453300d9fc8c1cad1b25488"
   ],
-  "containerLogEvidence": [
-   "Runtime initialized with Backend::OPENVINO in Device::CPU. (ultra_infer/runtime.cc:283)",
-   "Inference backend config: cpu_num_threads=10 (backend-internal default; pipeline cpu_threads=1 kwarg accepted but the ultra_infer layer keeps its own thread pool — the 1-vCPU cgroup caps actual parallelism regardless)"
+  "modelRevisionsNote": "OBSERVED, not pinned: models download latest at run time; these revisions were recovered after the fact from HF redirect URLs in the in-band log capture — det only; the rec model revision has NO evidence (the capture cap filled with infra noise first). Pinning is wholly owed by integration precondition 2; a future image could pull different weights than this ceremony validated unless it pins.",
+  "containerStreamLines": [
+   "[INFO] ultra_infer/runtime/runtime.cc(283)::CreateOpenVINOBackend       Runtime initialized with Backend::OPENVINO in Device::CPU.",
+   "Inference backend config: cpu_num_threads=10"
   ],
-  "containerLogEvidenceNote": "the OpenVINO selection line is emitted by the C++ layer and bypasses Python logging; captured programmatically from the tracked modal run stream, not in-band — in-band capture of the C++ backend choice remains open"
+  "containerStreamNote": "verbatim from the retained modal-run-stream.log (the C++ layer bypasses Python logging, so these are stream-captured, not in-band); interpretation: cpu_num_threads=10 is the ultra_infer backend-internal default — the pipeline cpu_threads=1 kwarg was accepted but does not reach that layer; the 1-vCPU cgroup caps actual parallelism regardless"
  },
  "pages": 90,
  "timings": {
@@ -70,6 +72,7 @@
    "massBelowFloor": 0.0053
   },
   "pairedDeltasOnMatches": {
+   "note": "pairs inherit the box-IoU loop’s best-match (non-consume-once) pairing — same diagnostic-only caveat",
    "count": 6662,
    "quantiles": {
     "p05": -0.0208,
