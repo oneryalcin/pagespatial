@@ -103,10 +103,18 @@ every number above is from the corrected run.
 | cold init (models + wasm) | ~0.6 s |
 
 ~0.24 pages/sec/worker at 4 threads on this laptop — the honest baseline
-the #22 service instruments against on server hardware. The browser's
-WebGPU path is several times faster per page; whether CPU fleets, more
-threads, onnxruntime-node's native EP, or a GPU wins at $/page is exactly
-the measurement #22 exists to make.
+the #22 service instruments against on server hardware. **This is the
+WASM-EP cost, not "the CPU cost"**: the native onnxruntime-node EP was
+deliberately not used because `@paddleocr/paddleocr-js` hard-depends on
+onnxruntime-web — swapping the EP means a different pipeline and weaker
+equivalence, so engine parity was bought at throughput's expense. Native
+EP over the same ONNX files is plausibly several-fold faster and is a
+named #22 measurement arm, alongside thread count and GPU. The browser's
+WebGPU path is several times faster per page today.
+
+Box IoU is diagnostic-only: it conditions on exact-text matches, so it
+characterizes geometric agreement of shared readings and says nothing
+about tokens only one witness read.
 
 Hardware: Apple Silicon (darwin arm64, this development machine);
 single adapter instance, 4 WASM threads. The #22 service decides GPU

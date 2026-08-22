@@ -67,6 +67,9 @@ for (const source of readdirSync(goldRoot)) {
       .filter(Boolean);
     const key = `${page.objectId}#${page.pageNumber}`;
     if (!gold.has(key)) gold.set(key, { tokens, sha256: page.sha256 });
+    else if (gold.get(key).sha256 !== page.sha256) {
+      throw new Error(`Gold sources disagree on sha256 for ${key}.`);
+    }
   }
 }
 
@@ -78,7 +81,13 @@ for (const doc of readdirSync(join(runRoot, 'documents'))) {
     const record = JSON.parse(readFileSync(join(runRoot, 'documents', doc, 'pages', file), 'utf8'));
     if (!record.pageSpatial) continue;
     const key = `${record.objectId}#${record.pageNumber}`;
-    if (gold.has(key)) records.push(record);
+    if (!gold.has(key)) continue;
+    // Hash-bound join, same rule as the committed evaluator: gold must
+    // describe the same document bytes the run parsed.
+    if (gold.get(key).sha256 !== record.pageSpatial.documentSha256) {
+      throw new Error(`SHA-256 mismatch for ${key}: gold=${gold.get(key).sha256} run=${record.pageSpatial.documentSha256}`);
+    }
+    records.push(record);
   }
 }
 records.sort((a, b) => `${a.objectId}#${a.pageNumber}`.localeCompare(`${b.objectId}#${b.pageNumber}`));
@@ -235,7 +244,7 @@ const goldPages = perPage.filter((p) => p.goldRecall);
 const sorted = [...timingsMs].sort((a, b) => a - b);
 const aggregate = {
   method: 'witness-equivalence-v1',
-  runRoot,
+  runRoot: runRoot.split('/').filter(Boolean).pop(),
   sampleFilter: 'all gold-labelled pages with a run record',
   serverWitness: { adapter: adapter.name, render: 'pdftoppm at the run dpi (rotation-aware), boxes mapped to record geometry', threads },
   browserWitness: 'run-record ocrObservations (pdf.js render + WebGPU PP-OCRv6 small)',
