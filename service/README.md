@@ -18,11 +18,25 @@ curl :8571/v1/metrics                   # per-stage p50/p95, pages/sec, rss
 node service/loadtest.mjs --base http://localhost:8571 a.pdf b.pdf   # bottleneck table
 ```
 
-Until issue #2 delivers the server-native PP-OCR adapter, the OCR slot runs
-a `canonical: false` stub: results carry stage timings and counts only —
-**never** a `pageSpatial` record (a stub witness must not produce
-evidence). Real records + the Tesseract second-opinion rung switch on when
-a canonical adapter is configured via `SERVICE_OCR_ADAPTER`.
+The canonical OCR witness is the server-native PP-OCRv6 adapter (issue #2,
+witness-equivalence verified — node-worse bounded at 0.5% of gold at 95%):
+
+```sh
+SERVICE_OCR_ADAPTER=ppocr-server \
+SERVICE_OCR_ASSETS_DIR=/path/to/ocr-assets-small \  # required, explicit
+SERVICE_OCR_VARIANT=small \      # default; the evaluation-parity tier
+SERVICE_OCR_THREADS=4 \          # default; measured better than 1 (trial doc)
+node service/server.mjs
+```
+
+The backend is **pinned** from this config — no `auto` anywhere — and every
+record's provenance carries the full descriptor
+(`ocrAdapter: "ppocrv6-small-node@0.4.2#ep=wasm;threads=4"` plus a
+machine-readable `configuration.ocrBackend`). The default adapter remains
+the `canonical: false` stub (tests/load scaffolding): stub results carry
+stage timings and counts only — **never** a `pageSpatial` record (a stub
+witness must not produce evidence). `GET .../pages/:n.svg` serves the #51
+deterministic reconstruction for canonical pages.
 
 Job state is on disk under `SERVICE_DATA_DIR` (restart-resumable; state
 writes are atomic temp+rename). Page failures are fail-closed per page

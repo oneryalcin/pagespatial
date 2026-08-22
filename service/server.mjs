@@ -7,29 +7,53 @@
  *                              -> {jobId, pageCount, sha256}
  *   GET  /v1/jobs/:id             status + per-page results AS THEY COMPLETE
  *   GET  /v1/jobs/:id/pages/:n    one page result
- *   GET  /v1/jobs/:id/pages/:n.svg  reserved for the #51 reconstructor (501)
+ *   GET  /v1/jobs/:id/pages/:n.svg  deterministic reconstruction (#51) —
+ *                                 canonical records only, image/svg+xml
  *   GET  /v1/metrics              per-stage aggregate since boot
  *
  * Env: PORT (default 8571), SERVICE_DATA_DIR (default service/data),
  * SERVICE_WORKERS (default 2), SERVICE_OCR_ADAPTER (default stub-ocr).
+ * For the canonical adapter (SERVICE_OCR_ADAPTER=ppocr-server):
+ *   SERVICE_OCR_ASSETS_DIR  required — model assets dir (explicit, no magic)
+ *   SERVICE_OCR_VARIANT     default 'small' (the evaluation-parity tier)
+ *   SERVICE_OCR_THREADS     default 4 (ORT WASM threads)
+ * The backend is PINNED from these at boot — never 'auto' — and the full
+ * descriptor lands in every record's provenance.
  */
 import { createServer } from 'node:http';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { ParseService } from './lib/queue.mjs';
+import { reconstructSvg } from '../dist/index.js';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.SERVICE_DATA_DIR ?? join(root, 'data');
 const uploadsDir = join(dataDir, 'uploads');
 mkdirSync(uploadsDir, { recursive: true });
 
+const adapterId = process.env.SERVICE_OCR_ADAPTER ?? 'stub-ocr';
+let ocr = {};
+if (adapterId === 'ppocr-server') {
+  const assetsDir = process.env.SERVICE_OCR_ASSETS_DIR;
+  if (!assetsDir || !existsSync(assetsDir)) {
+    console.error('SERVICE_OCR_ASSETS_DIR must point at an existing PP-OCR assets dir when SERVICE_OCR_ADAPTER=ppocr-server.');
+    process.exit(1);
+  }
+  ocr = {
+    assetsDir,
+    variant: process.env.SERVICE_OCR_VARIANT ?? 'small',
+    numThreads: Number(process.env.SERVICE_OCR_THREADS ?? 4)
+  };
+}
+
 const service = new ParseService({
   dataDir,
   workers: Number(process.env.SERVICE_WORKERS ?? 2),
-  adapterId: process.env.SERVICE_OCR_ADAPTER ?? 'stub-ocr'
+  adapterId,
+  ocr
 });
 
 const json = (res, status, body) => {
@@ -115,7 +139,13 @@ const server = createServer(async (req, res) => {
 
     if (req.method === 'GET' && parts[0] === 'v1' && parts[1] === 'jobs' && parts[3] === 'pages' && parts.length === 5) {
       if (parts[4].endsWith('.svg')) {
-        return json(res, 501, { error: 'SVG reconstruction lands with issue #51.' });
+        // Deterministic reconstruction (#51): drawn purely from the record,
+        // so it exists only for canonical pages that produced one.
+        const entry = service.page(parts[2], Number(parts[4].slice(0, -4)));
+        if (!entry?.ok || !entry.pageSpatial) return json(res, 404, { error: 'No canonical record for that page.' });
+        const svg = reconstructSvg(entry.pageSpatial);
+        res.writeHead(200, { 'content-type': 'image/svg+xml', 'content-length': Buffer.byteLength(svg) });
+        return res.end(svg);
       }
       const page = service.page(parts[2], Number(parts[4]));
       return page ? json(res, 200, page) : json(res, 404, { error: 'Page not ready or unknown.' });

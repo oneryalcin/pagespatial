@@ -35,9 +35,13 @@ function writeFileAtomic(path, contents) {
 }
 
 export class ParseService {
-  constructor({ dataDir, workers = 2, adapterId = 'stub-ocr', maxConsecutiveWorkerDeaths = MAX_CONSECUTIVE_WORKER_DEATHS }) {
+  constructor({ dataDir, workers = 2, adapterId = 'stub-ocr', ocr = {}, maxConsecutiveWorkerDeaths = MAX_CONSECUTIVE_WORKER_DEATHS }) {
     this.dataDir = dataDir;
     this.adapterId = adapterId;
+    // Adapter-specific config (ppocr-server: assetsDir/variant/numThreads).
+    // Travels with every task and is persisted per job, so resumed pages run
+    // under the same pinned backend the job started with.
+    this.ocr = ocr;
     this.maxConsecutiveWorkerDeaths = maxConsecutiveWorkerDeaths;
     this.jobs = new Map();
     this.pending = [];
@@ -117,7 +121,7 @@ export class ParseService {
       }
       this.jobs.set(jobId, job);
       for (let pageNumber = 1; pageNumber <= job.pageCount; pageNumber += 1) {
-        if (!done.has(pageNumber)) this.enqueue({ jobId, pdfPath: job.pdfPath, sha256: job.sha256, identity: job.identityOptions, pageNumber, runId: job.runId, adapterId: job.adapterId, attempts: 0 });
+        if (!done.has(pageNumber)) this.enqueue({ jobId, pdfPath: job.pdfPath, sha256: job.sha256, identity: job.identityOptions, pageNumber, runId: job.runId, adapterId: job.adapterId, ocr: job.ocr ?? {}, attempts: 0 });
       }
       this.checkCompletion(jobId);
     }
@@ -148,6 +152,7 @@ export class ParseService {
       pageCount: identity.pageCount,
       identityOptions: sourceUri ? { sourceUri } : {},
       adapterId: this.adapterId,
+      ocr: this.ocr,
       runId,
       submittedAt: new Date().toISOString(),
       startedMs: performance.now()
@@ -155,7 +160,7 @@ export class ParseService {
     writeFileAtomic(join(jobDir, 'job.json'), JSON.stringify(job, null, 1));
     this.jobs.set(jobId, job);
     for (let pageNumber = 1; pageNumber <= identity.pageCount; pageNumber += 1) {
-      this.enqueue({ jobId, pdfPath, sha256: identity.sha256, identity: job.identityOptions, pageNumber, runId, adapterId: this.adapterId, attempts: 0 });
+      this.enqueue({ jobId, pdfPath, sha256: identity.sha256, identity: job.identityOptions, pageNumber, runId, adapterId: this.adapterId, ocr: this.ocr, attempts: 0 });
     }
     this.drain();
     return { jobId, pageCount: identity.pageCount, sha256: identity.sha256 };

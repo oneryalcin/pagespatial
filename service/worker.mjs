@@ -10,12 +10,36 @@
  * {kind:'result', ...} or dies (parent treats death as a crashed attempt).
  */
 import { createStubOcrAdapter } from './adapters/stub-ocr.mjs';
+import { createPpOcrServerAdapter } from './adapters/ppocr-server.mjs';
 import { assemblyStage, nativeStage, ocrStage, openDocumentContext, renderStage, RENDER_SCALE } from './lib/stages.mjs';
+import { performance } from 'node:perf_hooks';
 
 const ADAPTERS = {
-  'stub-ocr': createStubOcrAdapter
-  // 'ppocr-server' arrives with issue #2 (canonical: true after equivalence).
+  'stub-ocr': createStubOcrAdapter,
+  // Canonical since the witness-equivalence run (PR #55/#59): node-worse
+  // bounded at 0.5% of gold at 95%.
+  'ppocr-server': createPpOcrServerAdapter
 };
+
+// The PP-OCR engine costs ~1s of init plus model load: create ONCE per
+// worker process, reuse across every page. Keyed by config so a worker can
+// never silently serve a different backend than the task pinned.
+const adapterInstances = new Map();
+let adapterColdInitMs;
+async function adapterFor(task) {
+  const factory = ADAPTERS[task.adapterId];
+  if (!factory) throw new Error(`Unknown OCR adapter '${task.adapterId}'.`);
+  const key = `${task.adapterId}|${JSON.stringify(task.ocr ?? {})}`;
+  if (adapterInstances.has(key)) return adapterInstances.get(key);
+  const adapter = factory(task.ocr ?? {});
+  if (typeof adapter.warmup === 'function') {
+    const start = performance.now();
+    await adapter.warmup();
+    adapterColdInitMs = Math.round(performance.now() - start);
+  }
+  adapterInstances.set(key, adapter);
+  return adapter;
+}
 
 // A worker mostly serves one job at a time; two slots absorb interleaving.
 // Keyed by (pdfPath, sha256): two jobs over one path with different pinned
@@ -35,9 +59,7 @@ async function contextFor(task) {
 }
 
 async function runPage(task) {
-  const adapterFactory = ADAPTERS[task.adapterId];
-  if (!adapterFactory) throw new Error(`Unknown OCR adapter '${task.adapterId}'.`);
-  const adapter = adapterFactory();
+  const adapter = await adapterFor(task);
   const context = await contextFor(task);
   // The submission probe pinned the document identity; the bytes on disk
   // must still be that document at work time. Fail the page closed on drift.
@@ -56,6 +78,12 @@ async function runPage(task) {
 
   const ocr = await ocrStage(adapter, rendered.value, task.pageNumber);
   stageTimingsMs.ocr = ocr.ms;
+  if (adapterColdInitMs !== undefined) {
+    // Engine init happens once per worker process; reported once so the
+    // aggregate can amortize it honestly instead of hiding it in page 1.
+    stageTimingsMs.ocrColdInit = adapterColdInitMs;
+    adapterColdInitMs = undefined;
+  }
 
   if (adapter.canonical !== true) {
     // A stub witness must never yield a schema-valid record: no assembly,
@@ -71,8 +99,14 @@ async function runPage(task) {
 
   const assembled = await assemblyStage(context, task.pageNumber, adapter, native.value, rendered.value.renderedPage, ocr.value, {
     runId: task.runId,
-    ocrAdapterId: `${adapter.name}@${adapter.version}`,
-    configuration: { renderScale: task.renderScale ?? RENDER_SCALE }
+    // The pinned backend descriptor, not just name@version: the owner's
+    // witness-swap condition is that no record can be ambiguous about which
+    // engine/EP/threading produced its OCR witness.
+    ocrAdapterId: adapter.descriptor ?? `${adapter.name}@${adapter.version}`,
+    configuration: {
+      renderScale: task.renderScale ?? RENDER_SCALE,
+      ...(adapter.backend ? { ocrBackend: adapter.backend } : {})
+    }
   });
   stageTimingsMs.assembly = assembled.ms;
   if (assembled.value.secondOpinionMs !== undefined) stageTimingsMs.secondOpinion = assembled.value.secondOpinionMs;
