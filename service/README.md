@@ -18,8 +18,46 @@ curl :8571/v1/metrics                   # per-stage p50/p95, pages/sec, rss
 node service/loadtest.mjs --base http://localhost:8571 a.pdf b.pdf   # bottleneck table
 ```
 
-The canonical OCR witness is the server-native PP-OCRv6 adapter (issue #2,
-witness-equivalence verified — node-worse bounded at 0.5% of gold at 95%):
+## OCR witnesses
+
+**The ADOPTED canonical witness is the PaddleOCR sidecar** (issue #2 owner
+decision; ceremony PR #67 — candidate-worse vs browser bounded at 0.74%
+of gold at 95%, 2/1,223 discordant vs the node port):
+
+```sh
+# once per host: fetch + verify the PINNED models (revisions + sha256 in
+# service/sidecar/model-pins.json — committed, validated by the ceremony
+# lineage; a mismatch refuses to serve)
+uv run --with huggingface_hub python service/sidecar/fetch_models.py \
+  --models-dir /path/to/sidecar-models
+
+SERVICE_OCR_ADAPTER=ppocr-sidecar \
+SERVICE_SIDECAR_MODELS_DIR=/path/to/sidecar-models \  # required, explicit
+SERVICE_SIDECAR_THREADS=1 \   # default; latency is flat vs cores (PR #66) — pack 1-vCPU workers
+node service/server.mjs
+```
+
+Each page-worker owns one Python child (JSONL over stdin/stdout, pages as
+tmpfiles). The child launcher defaults to
+`uv run --with paddleocr==3.7.0 --with paddlepaddle==3.2.1 python`
+(override: `SERVICE_SIDECAR_PYTHON="python3"` for a prepared venv — the
+first uv run on a cold cache downloads ~1 GB; pre-warm before serving).
+Boot fails closed: Node-side pin verification plus a real child `--check`
+(imports, child-side pin verification, pipeline construction;
+`SERVICE_SIDECAR_SKIP_BOOT_CHECK=1` for pre-warmed hosts that would rather
+fail on the first page). There is NO silent fallback from a configured
+sidecar to any other adapter.
+
+Provenance is truthful per host: `enable_hpi` engages on Linux
+(`ep=hpi`); elsewhere the pipeline runs paddle-default and the descriptor
+says so (`ppocrv6-small-sidecar@3.7.0#ep=paddle-default;threads=1`).
+`configuration.ocrBackend` carries the machine-readable block including
+`modelPins` (repo → revision) and `engineEvidence` (the C++
+backend-selection line, captured from child stderr and labeled
+log-derived — the C++ layer bypasses Python logging).
+
+The **validated fallback** is the server-native WASM adapter (node-worse
+bounded at 0.5% of gold at 95%):
 
 ```sh
 SERVICE_OCR_ADAPTER=ppocr-server \

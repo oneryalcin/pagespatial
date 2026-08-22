@@ -11,14 +11,19 @@
  */
 import { createStubOcrAdapter } from './adapters/stub-ocr.mjs';
 import { createPpOcrServerAdapter } from './adapters/ppocr-server.mjs';
+import { createPpOcrSidecarAdapter } from './adapters/ppocr-sidecar.mjs';
 import { assemblyStage, nativeStage, ocrStage, openDocumentContext, renderStage, RENDER_SCALE } from './lib/stages.mjs';
 import { performance } from 'node:perf_hooks';
 
 const ADAPTERS = {
   'stub-ocr': createStubOcrAdapter,
   // Canonical since the witness-equivalence run (PR #55/#59): node-worse
-  // bounded at 0.5% of gold at 95%.
-  'ppocr-server': createPpOcrServerAdapter
+  // bounded at 0.5% of gold at 95%. Retained as the validated fallback.
+  'ppocr-server': createPpOcrServerAdapter,
+  // ADOPTED canonical witness (PR #67 ceremony; owner decision on #2):
+  // candidate-worse vs browser bounded at 0.74% of gold at 95%, 2/1,223
+  // discordant vs ppocr-server. Pinned models, truthful per-host EP.
+  'ppocr-sidecar': createPpOcrSidecarAdapter
 };
 
 // The PP-OCR engine costs ~1s of init plus model load: create ONCE per
@@ -130,5 +135,12 @@ process.on('message', async (message) => {
     });
   }
 });
+
+// A SIGTERM'd worker must exit THROUGH process.exit so 'exit' hooks run —
+// the sidecar adapter kills its Python child from one (a signal's default
+// termination skips them and would orphan a ~1.5 GB engine per worker).
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => process.exit(0));
+}
 
 process.send({ kind: 'ready' });

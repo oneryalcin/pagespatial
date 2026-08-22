@@ -28,6 +28,36 @@ import { fileURLToPath } from 'node:url';
 
 import { ParseService } from './lib/queue.mjs';
 import { reconstructSvg } from '../dist/index.js';
+import { DEFAULT_PYTHON_CMD, verifyModelPins } from './adapters/ppocr-sidecar.mjs';
+import { spawn } from 'node:child_process';
+
+/**
+ * Boot-time sidecar health: run the real child with --check (imports,
+ * child-side pin verification, pipeline construction) so a misconfigured
+ * host refuses jobs instead of failing every page. First run on a cold uv
+ * cache downloads paddle (~1 GB) — generous timeout, and the README tells
+ * operators to pre-warm.
+ */
+function sidecarBootCheck(pythonCmd, modelsDir, threads, timeoutMs = 600_000) {
+  return new Promise((resolve, reject) => {
+    const [cmd, ...args] = pythonCmd;
+    const script = join(root, 'sidecar', 'ppocr_sidecar.py');
+    const child = spawn(cmd, [...args, script, '--check'], {
+      env: { ...process.env, SIDECAR_MODELS_DIR: modelsDir, SIDECAR_THREADS: String(threads) }
+    });
+    const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error(`--check timed out after ${timeoutMs}ms`)); }, timeoutMs);
+    let out = '';
+    let err = '';
+    child.stdout.on('data', (chunk) => { out += chunk; });
+    child.stderr.on('data', (chunk) => { err += chunk; });
+    child.on('error', (error) => { clearTimeout(timer); reject(error); });
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      if (code === 0 && out.includes('"kind": "meta"')) resolve(out);
+      else reject(new Error(`sidecar --check exited ${code}: ${(out + err).slice(-400)}`));
+    });
+  });
+}
 
 const root = dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.SERVICE_DATA_DIR ?? join(root, 'data');
@@ -36,7 +66,35 @@ mkdirSync(uploadsDir, { recursive: true });
 
 const adapterId = process.env.SERVICE_OCR_ADAPTER ?? 'stub-ocr';
 let ocr = {};
-if (adapterId === 'ppocr-server') {
+if (adapterId === 'ppocr-sidecar') {
+  // The adopted witness (issue #2). Fail closed at boot, before any job is
+  // accepted: pinned-model hash verification (Node side) plus a real child
+  // --check (imports, child-side pin verification, pipeline construction).
+  // There is NO silent fallback from a configured sidecar to anything else.
+  const modelsDir = process.env.SERVICE_SIDECAR_MODELS_DIR;
+  if (!modelsDir || !existsSync(modelsDir)) {
+    console.error('SERVICE_SIDECAR_MODELS_DIR must point at the pinned models dir (see service/sidecar/fetch_models.py) when SERVICE_OCR_ADAPTER=ppocr-sidecar.');
+    process.exit(1);
+  }
+  const threads = Number(process.env.SERVICE_SIDECAR_THREADS ?? 1);
+  if (!Number.isInteger(threads) || threads < 1) {
+    console.error(`SERVICE_SIDECAR_THREADS must be a positive integer, got '${process.env.SERVICE_SIDECAR_THREADS}'.`);
+    process.exit(1);
+  }
+  const pythonCmd = process.env.SERVICE_SIDECAR_PYTHON
+    ? process.env.SERVICE_SIDECAR_PYTHON.split(' ')
+    : DEFAULT_PYTHON_CMD;
+  try {
+    verifyModelPins(modelsDir);
+    if (process.env.SERVICE_SIDECAR_SKIP_BOOT_CHECK !== '1') {
+      await sidecarBootCheck(pythonCmd, modelsDir, threads);
+    }
+  } catch (error) {
+    console.error(`Sidecar boot check failed — refusing to start: ${error.message}`);
+    process.exit(1);
+  }
+  ocr = { modelsDir, threads, pythonCmd };
+} else if (adapterId === 'ppocr-server') {
   const assetsDir = process.env.SERVICE_OCR_ASSETS_DIR;
   if (!assetsDir || !existsSync(assetsDir)) {
     console.error('SERVICE_OCR_ASSETS_DIR must point at an existing PP-OCR assets dir when SERVICE_OCR_ADAPTER=ppocr-server.');
@@ -166,7 +224,13 @@ server.listen(port, () => {
   console.log(`parse-service listening on :${port} (adapter=${process.env.SERVICE_OCR_ADAPTER ?? 'stub-ocr'}, workers=${process.env.SERVICE_WORKERS ?? 2}, data=${dataDir})`);
 });
 
-process.on('SIGINT', async () => {
-  await service.shutdown();
-  server.close(() => process.exit(0));
-});
+// SIGTERM too: `kill <pid>` (and any supervisor) sends SIGTERM, and an
+// unhandled one terminates this process WITHOUT the pool shutdown — leaking
+// workers, each now holding a ~1.5 GB Python sidecar. Observed live during
+// the sidecar loadtest teardown; both signals now drain the pool.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, async () => {
+    await service.shutdown();
+    server.close(() => process.exit(0));
+  });
+}
