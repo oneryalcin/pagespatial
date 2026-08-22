@@ -140,3 +140,33 @@ Modal's 4-vCPU containers — a production box's number scales with cores.
 outputs (corpus text) live in gitignored `.evaluation/hpi-bench/`; the
 committed scripts (`hpi-bench-render.mjs`, `hpi_bench_modal.py`,
 `score-candidate-witness.mjs`) reproduce the whole run end to end.
+
+## Scaling curve addendum (2026-08-23, ceremony item answered early)
+
+Same 32 pages, HPI OpenVINO v6-small, four container sizes, threads matched
+to vCPUs (`cpu_threads` kwarg applied — captured in-band per result along
+with `osCpuCount`, closing the log-derived-evidence gap from the review):
+
+| vCPU | warm p50 ms/page | core-s/page |
+|---|---|---|
+| 1 | 1,448 | **1.45** |
+| 2 | 1,717 | 3.43 |
+| 4 | 1,533 | 6.13 |
+| 8 | 1,408 | 11.27 |
+
+**Latency is flat across 1→8 vCPU** — the model gains nothing from
+parallelism, so added cores are pure waste. Two consequences:
+
+- **Packing: 1-vCPU workers are the unit.** An N-core box runs N workers;
+  at ~1.45 core-s/page a 16-core box does ~11 pages/sec — ~4× the
+  throughput of packing the same box with 4-vCPU workers.
+- **Core-efficiency vs the WASM witness improves to ~18×** (1.45 vs ~26
+  core-s/page), better than the ~6× the 4-vCPU framing suggested.
+
+Honest variance note: this run's 4-vCPU p50 (1,533 ms) differs from the
+main table's 989 ms — separate containers on shared tenancy, and the main
+run's threads setting (10, oversubscribed) differed. Cross-run variance is
+large enough that per-config millisecond deltas within ~±50% should not be
+interpreted; the FLATNESS across sizes within one run, and the
+core-seconds trend, are the robust findings. The ceremony's production
+measurement should pin CPU generation and re-measure on the target host.
