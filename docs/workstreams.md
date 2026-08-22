@@ -104,14 +104,21 @@ test, principles §9):**
    on this workload** (T4 952 vs CPU 989 ms, same-container — a 1.5M-
    param model can't feed a GPU; L40 would not change this, only
    aggressive cross-page batching could, measure-if-ever). v6-medium:
-   no gold gain at 2× cost. Accuracy: sample-matched PARITY with both
-   existing witnesses (the initially-claimed "cross-pipeline daylight"
-   was a sample-composition artifact, retracted — 4th such class this
-   week). **Next: the adoption ceremony** (90-page equivalence,
-   McNemar, calibration diff, box-IoU, in-band backend capture, era
-   decision, per-core scaling curve) before the Python sidecar produces
-   any canonical record. Native-ORT port drops to fallback. LOW
-   follow-ups recorded on #22.
+   no gold gain at 2× cost. Scaling curve (PR #66): latency FLAT 1–8
+   vCPU → **1-vCPU workers are the packing unit, ~1.45 core-s/page
+   (~18× WASM core-efficiency)**.
+   **ADOPTION CEREMONY COMPLETE (PR #67, cold-reviewed, all gates
+   passed): recommendation = ADOPT, owner decision pending.** Three
+   witnesses on 90 pages: candidate ≡ server witness (2 discordant
+   tokens of 1,223; 98.7% byte-identical raw lines), candidate-worse
+   vs browser bounded at 0.74% at 95%; calibration drift negligible
+   (no re-tuning); box-IoU 0.915, no drift pages. Integration
+   preconditions (owed by the integration PR): model-revision PINNING
+   (ceremony only OBSERVED det, rec unverified), in-band C++ backend
+   capture, baked-model boot-cost measure, target-hardware re-measure,
+   provenance pins, canonical gate unchanged, dev-v13 on first
+   post-adoption corpus run. Output stability: ~±4 gold tokens across
+   containers, not bit-stable. LOW follow-ups recorded on #22.
    The p144 differential RESOLVED the hypothesis by dissolving it (PR
    #58): no witness ever missed the ink — the scorer did (sign-glue).
    The render-sensitivity hypothesis is dead; see item 1 above for the
