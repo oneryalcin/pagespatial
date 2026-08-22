@@ -121,11 +121,16 @@ single adapter instance, 4 WASM threads. The #22 service decides GPU
 purchases from these numbers re-measured on target server hardware —
 per the issue #2 gate, not from intuition.
 
-## Incidental finding
+## Incidental finding — RETRACTED (2026-08-22, see the p144 differential)
 
-On `osf … p144` — the batch-7 page whose two substantive `16` tokens
-("trials + 16 filler") neither engine read in the browser run — the
-server witness **reads both 16s** (pdftoppm render at 150 dpi input).
-One page proves nothing about rates (§8), but it confirms the p144 miss
-mechanism is input-sensitive rather than a model blind spot, and it is
-exactly the follow-up issue #29 asked for.
+The claim originally made here — that the server witness "reads both
+16s" on `osf … p144`, suggesting an input-sensitive miss mechanism —
+was **false**, contradicted by this trial's own committed data
+(`witness-equivalence-v2.json`: p144 `goldRecall {browser: 0, node: 0}`)
+and by direct reproduction at both 150 dpi and the equivalence dpi. The
+raw OCR text does contain `16` — but so does the browser run's; visible
+text was equated with scorer corroboration. The real mechanism is a
+tokenizer artifact (`"trials + 16 filler"` → `+16|filler`, sign-glued
+across a space, rejecting gold's bare `16`), and no witness ever missed
+the ink. Full analysis:
+`docs/trials/2026-08-22-p144-differential.md`.
