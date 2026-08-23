@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -281,6 +281,52 @@ test('degraded pool: queued pages fail closed and new submissions get 503', asyn
     await assert.rejects(service.submit({ pdfPath }), (error) => error.statusCode === 503);
   } finally {
     delete process.env.STUB_CRASH_ONCE_FILE;
+    await service.shutdown();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('maxPagesPerJob: over-limit document is refused 400 before job creation', async () => {
+  const { dir, pdfPath, dataDir } = fixture(3);
+  const service = new ParseService({ dataDir, workers: 1, maxPagesPerJob: 2 });
+  try {
+    await assert.rejects(service.submit({ pdfPath }), (error) => {
+      assert.equal(error.statusCode, 400);
+      assert.match(error.message, /3 pages/);
+      assert.match(error.message, /at most 2 pages/);
+      return true;
+    });
+    // Refused BEFORE job creation: no in-memory job, no job directory.
+    assert.equal(service.jobs.size, 0);
+    assert.deepEqual(readdirSync(dataDir), []);
+  } finally {
+    await service.shutdown();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('maxPagesPerJob: at-limit document is accepted and completes', async () => {
+  const { dir, pdfPath, dataDir } = fixture(3);
+  const service = new ParseService({ dataDir, workers: 1, maxPagesPerJob: 3 });
+  try {
+    const { jobId, pageCount } = await service.submit({ pdfPath });
+    assert.equal(pageCount, 3);
+    const status = await waitForCompletion(service, jobId);
+    assert.equal(status.completedPages, 3);
+  } finally {
+    await service.shutdown();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('maxPagesPerJob: unset (0) preserves the unlimited default', async () => {
+  const { dir, pdfPath, dataDir } = fixture(4);
+  const service = new ParseService({ dataDir, workers: 1 });
+  try {
+    const { jobId } = await service.submit({ pdfPath });
+    const status = await waitForCompletion(service, jobId);
+    assert.equal(status.completedPages, 4);
+  } finally {
     await service.shutdown();
     rmSync(dir, { recursive: true, force: true });
   }

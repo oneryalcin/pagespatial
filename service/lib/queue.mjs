@@ -28,9 +28,14 @@ const MAX_CONSECUTIVE_WORKER_DEATHS = 5;
 const pageFile = (dir, pageNumber) => join(dir, 'pages', `${String(pageNumber).padStart(6, '0')}.json`);
 
 export class ParseService {
-  constructor({ dataDir, workers = 2, adapterId = 'stub-ocr', ocr = {}, maxConsecutiveWorkerDeaths = MAX_CONSECUTIVE_WORKER_DEATHS, enrichment = {} }) {
+  constructor({ dataDir, workers = 2, adapterId = 'stub-ocr', ocr = {}, maxConsecutiveWorkerDeaths = MAX_CONSECUTIVE_WORKER_DEATHS, enrichment = {}, maxPagesPerJob = 0 }) {
     this.dataDir = dataDir;
     this.adapterId = adapterId;
+    // Per-job page cap (deployment neutral): 0/unset = unlimited (the
+    // historical local default). A deployment that must bound one job's
+    // work (e.g. a per-document execution queue) sets it; over-limit
+    // submissions are refused with a 4xx, never accepted.
+    this.maxPagesPerJob = maxPagesPerJob;
     // Adapter-specific config (ppocr-server: assetsDir/variant/numThreads).
     // Travels with every task and is persisted per job, so resumed pages run
     // under the same pinned backend the job started with.
@@ -155,6 +160,14 @@ export class ParseService {
     const probe = await openDocumentContext(pdfPath, sourceUri ? { sourceUri } : {});
     const identity = probe.identity;
     await probe.dispose();
+    // Page cap check sits immediately after the probe, before any job
+    // state or page enqueue exists: a refused document leaves nothing
+    // behind (Modal design 2026-08-23 §7.1).
+    if (this.maxPagesPerJob > 0 && identity.pageCount > this.maxPagesPerJob) {
+      const error = new Error(`Document has ${identity.pageCount} pages; this service accepts at most ${this.maxPagesPerJob} pages per job (SERVICE_MAX_PAGES_PER_JOB).`);
+      error.statusCode = 400;
+      throw error;
+    }
     const jobId = `job_${randomBytes(6).toString('hex')}`;
     const runId = `svc:${jobId}`;
     const jobDir = join(this.dataDir, jobId);

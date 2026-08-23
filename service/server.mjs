@@ -21,7 +21,9 @@
  *                                 (503 again if the pool degrades)
  *
  * Env: PORT (default 8571), SERVICE_DATA_DIR (default service/data),
- * SERVICE_WORKERS (default 2), SERVICE_OCR_ADAPTER (default stub-ocr).
+ * SERVICE_WORKERS (default 2), SERVICE_OCR_ADAPTER (default stub-ocr),
+ * SERVICE_MAX_PAGES_PER_JOB (default 0 = unlimited; a submission whose
+ * probed page count exceeds the cap is refused 400 before job creation).
  * Enrichment (design 2026-08-23): GEMINI_API_KEY (environment only — no
  * per-request keys), ENRICH_MAX_PAGES_PER_JOB (default 200),
  * ENRICH_MAX_CONCURRENT_CHUNKS (default 4), ENRICH_SPEND_CEILING_USD
@@ -162,11 +164,20 @@ if (adapterId === 'ppocr-sidecar') {
   };
 }
 
+// Per-job page cap: 0/unset = unlimited (historical default). A garbage
+// value must not silently mean "unlimited" — refuse to boot instead.
+const maxPagesPerJob = Number(process.env.SERVICE_MAX_PAGES_PER_JOB ?? 0);
+if (!Number.isInteger(maxPagesPerJob) || maxPagesPerJob < 0) {
+  console.error(`SERVICE_MAX_PAGES_PER_JOB must be a non-negative integer (0 = unlimited), got '${process.env.SERVICE_MAX_PAGES_PER_JOB}'.`);
+  process.exit(1);
+}
+
 const service = new ParseService({
   dataDir,
   workers: Number(process.env.SERVICE_WORKERS ?? 2),
   adapterId,
   ocr,
+  maxPagesPerJob,
   // Operational + test knob: how many consecutive worker deaths degrade
   // the pool (default lives in queue.mjs).
   ...(process.env.SERVICE_MAX_WORKER_DEATHS
