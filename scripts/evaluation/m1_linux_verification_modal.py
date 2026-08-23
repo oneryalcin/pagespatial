@@ -99,10 +99,29 @@ def _sidecar_run(name: str, pages: list, extra_env: dict) -> dict:
                     engine_lines.append(line.strip())
 
     threading.Thread(target=_drain, daemon=True).start()
+
+    def read_json(expect_kind=None):
+        # The C++ layer writes [INFO] lines to the RAW stdout fd, interleaved
+        # with the protocol JSONL — skip unparseable lines, exactly as the
+        # Node adapter does.
+        while True:
+            line = child.stdout.readline()
+            if not line:
+                raise RuntimeError(f"{name}: sidecar stdout closed unexpectedly")
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(message, dict):
+                continue
+            if message.get("kind") == "fatal":
+                raise RuntimeError(f"{name}: sidecar fatal: {message.get('error')}")
+            if expect_kind is not None and message.get("kind") != expect_kind:
+                continue
+            return message
+
     t0 = time.monotonic()
-    meta = json.loads(child.stdout.readline())
-    if meta.get("kind") != "meta":
-        raise RuntimeError(f"{name}: expected meta line, got {meta}")
+    meta = read_json(expect_kind="meta")
     init_s = time.monotonic() - t0
     per_page = []
     with tempfile.TemporaryDirectory() as tmp:
@@ -111,7 +130,7 @@ def _sidecar_run(name: str, pages: list, extra_env: dict) -> dict:
             path.write_bytes(png_bytes)
             child.stdin.write(json.dumps({"id": index, "path": str(path)}) + "\n")
             child.stdin.flush()
-            response = json.loads(child.stdout.readline())
+            response = read_json()
             if response.get("error"):
                 raise RuntimeError(f"{name} page {page_name}: {response['error']}")
             lines = []
@@ -131,7 +150,7 @@ def _sidecar_run(name: str, pages: list, extra_env: dict) -> dict:
             path.write_bytes(pages[0][1])
             child.stdin.write(json.dumps({"id": len(pages), "path": str(path)}) + "\n")
             child.stdin.flush()
-            response = json.loads(child.stdout.readline())
+            response = read_json()
             lines = per_page[0]["lines"]
             per_page[0] = {"page": pages[0][0], "ms": response["ms"], "lines": lines}
     child.stdin.close()
