@@ -47,7 +47,10 @@ import modal
 
 app = modal.App("pagespatial-m1-linux-verification")
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+# This module is re-imported INSIDE the container (at /root/<file>.py,
+# parentless); the Dockerfile path only matters client-side, where the
+# lazy image build actually reads it.
+REPO_ROOT = Path(__file__).resolve().parents[2] if modal.is_local() else Path("/app")
 
 image = modal.Image.from_dockerfile(
     REPO_ROOT / "Dockerfile",
@@ -151,6 +154,7 @@ def probe() -> dict:
          "import importlib.metadata as m, json; print(json.dumps({p: m.version(p) for p in ('paddleocr','paddlepaddle')}))"],
         capture_output=True, text=True,
     )
+    pip_list = subprocess.run(["/opt/paddle/bin/pip", "list"], capture_output=True, text=True).stdout
     check = subprocess.run(
         ["/opt/paddle/bin/python", "/app/service/sidecar/ppocr_sidecar.py", "--check"],
         capture_output=True, text=True, env={**os.environ, **SIDECAR_ENV}, timeout=1200,
@@ -172,6 +176,9 @@ def probe() -> dict:
         "modelRepos": sorted(p.name for p in Path("/opt/models").iterdir()) if Path("/opt/models").is_dir() else [],
         "sidecarCheckExit": check.returncode,
         "sidecarMeta": meta,
+        "sidecarCheckStdoutTail": check.stdout[-1500:],
+        "sidecarCheckStderrTail": check.stderr[-1500:],
+        "pipUltraInfer": [line for line in pip_list.splitlines() if "ultra" in line.lower() or "paddlex" in line.lower() or "paddle2onnx" in line.lower() or "openvino" in line.lower()],
         "env": {k: os.environ.get(k) for k in ("SERVICE_OCR_ADAPTER", "SERVICE_SIDECAR_PYTHON", "SERVICE_SIDECAR_MODELS_DIR", "SERVICE_SIDECAR_THREADS")},
     }
 
@@ -277,9 +284,14 @@ def _submit_and_drain(port: int, pdfs: list) -> dict:
         status, body = _http("POST", port, "/v1/jobs", pdf_bytes, "application/pdf")
         assert status == 202, (status, body)
         jobs.append({"name": name, "jobId": body["jobId"], "pageCount": body["pageCount"]})
+    # Poll only jobs still pending: GET /v1/jobs returns the FULL pages
+    # array every time (known quadratic), and re-fetching completed jobs
+    # each sweep would steal measurable CPU from the workers under test.
     while True:
         pending = 0
         for job in jobs:
+            if job.get("status") == "completed":
+                continue
             status, body = _http("GET", port, f"/v1/jobs/{job['jobId']}")
             job["status"] = body["status"]
             job["pages"] = body["pages"]
@@ -287,7 +299,7 @@ def _submit_and_drain(port: int, pdfs: list) -> dict:
                 pending += 1
         if pending == 0:
             break
-        time.sleep(5)
+        time.sleep(10)
     wall_s = time.monotonic() - t_first_submit
     pages = [page for job in jobs for page in job["pages"]]
     ok = [p for p in pages if p.get("ok")]

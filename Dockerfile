@@ -69,11 +69,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # drift fails the build (the ceremony validated weights AND engine).
 ARG PADDLEOCR_PIN=3.7.0
 ARG PADDLEPADDLE_PIN=3.2.1
+# install_hpi_deps shells out to a bare `paddlex`, so the venv bin must be
+# on PATH for THIS command. The subsequent import assertion makes the HPI
+# runtime a build-time guarantee: a build without ultra_infer (the OpenVINO
+# HPI engine) must fail loudly, never ship as a silent paddle-default image
+# (that exact silent failure happened once: a swallowed FileNotFoundError
+# behind an `|| true`).
 RUN python3.11 -m venv /opt/paddle \
     && /opt/paddle/bin/pip install --no-cache-dir setuptools \
        paddleocr==${PADDLEOCR_PIN} paddlepaddle==${PADDLEPADDLE_PIN} \
-    && /opt/paddle/bin/paddleocr install_hpi_deps cpu \
-    && /opt/paddle/bin/pip cache purge || true
+    && PATH="/opt/paddle/bin:$PATH" /opt/paddle/bin/paddleocr install_hpi_deps cpu \
+    && /opt/paddle/bin/python -c "import ultra_infer, paddle2onnx"
 
 WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
