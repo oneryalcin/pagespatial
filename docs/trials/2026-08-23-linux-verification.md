@@ -239,15 +239,18 @@ Two honest labels:
   `m1_linux_verification_modal.py` tasks → `score-ep-control.mjs` (its
   `rawLines_*` blocks are the bit-stability instrument) and
   `score-candidate-witness.mjs` per EP arm.
-- **Code state of the measured runs** (pre-rebase branch SHAs; the branch
-  was later rebased cleanly onto main after PR #80 merged — content
-  identical, post-rebase equivalents in parentheses): image content =
-  Dockerfile at `5ae1c2e` (`c372898`); probe, throughput 4×1 run A, 1×4
-  and failure runs at `5ae1c2e`; EP control at `3362e9a` (`25eec35`);
-  throughput 4×1 run B at `64c8917` (`5607be6`). The build context had no
-  untracked or modified files in any path the Dockerfile COPYs (the
-  in-progress trial doc and evaluation tooling are excluded by
-  `.dockerignore`). Modal image ids: the superseded pre-HPI-fix build was
+- **Code state of the measured runs.** The runs executed from the branch's
+  original commits (`5ae1c2e` image content + throughput 4×1 run A / 1×4 /
+  failure; `3362e9a` EP control; `64c8917` throughput 4×1 run B); the
+  branch was subsequently rebased cleanly onto main twice (after PRs #80
+  and #81 merged), so those SHAs are no longer reachable from the pushed
+  branch — the SAME content lives at the current branch commits
+  `66a7700`/`a34c49a`/`0d1e2aa`/`76accc4`/`e4c0390` (rebases were
+  content-clean for every file the Dockerfile COPYs; the only conflicts
+  were with M3's server/queue additions, resolved by composition). The
+  build context had no untracked or modified files in any path the
+  Dockerfile COPYs (the in-progress trial doc and evaluation tooling are
+  excluded by `.dockerignore`). Modal image ids: the superseded pre-HPI-fix build was
   `im-VLInVXYHAMVT5I2TNEaa4o`; the fixed build's id was printed to a
   truncated stream and not retained — the image is reproducible from the
   Dockerfile at the SHAs above.
