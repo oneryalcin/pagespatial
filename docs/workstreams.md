@@ -115,9 +115,11 @@ test, principles §9):**
    child lifecycle with per-page recognize deadline — two demonstrated
    lifecycle HIGHs fixed and re-verified by repro. Integration-path
    sanity: 438/438 gold parity with the ceremony. WASM witness =
-   explicit fallback; browser = dev environment. **Standing era items:
-   dev-v13 reference baseline at the first post-adoption corpus run;
-   target-hardware (Linux/OpenVINO) re-measure at deploy.**
+   explicit fallback; browser = dev environment. **dev-v13 CUT (PR #71)
+   — see the reference-baseline line below. Remaining era item:
+   target-hardware (Linux/OpenVINO) re-measure at deploy, which under
+   the new era rule also needs a same-host EP control before its
+   diagnostics are compared to the paddle-default reference.**
    Ceremony record (PR #67): Three
    witnesses on 90 pages: candidate ≡ server witness (2 discordant
    tokens of 1,223; 98.7% byte-identical raw lines), candidate-worse
@@ -148,8 +150,22 @@ current scorer; decides instrument-fix vs detector-project).
 - **Row 4 retraction**: "272/272 correct" did not survive independent
   audit (25/29 agree); **"zero wrong-side" stands** and is the only form
   the economics quote. Furniture test now in prompt + audit page.
-- **Reference baseline**: `dev-v12-cross-family-2026-08-20` (dirty:false;
-  starved 4, blocking 91, gold 464/468; summary committed).
+- **Reference baseline (sidecar era, current): `dev-v13-sidecar-2026-08-23`**
+  (PR #71; 162/162 pages, 0 failures, dirty:false with the workspace hash
+  reproducing from `git archive`, witness + model pins in every envelope,
+  `backend: {paddle-default: 162}`). Browser-era reference stays
+  `dev-v12-cross-family-2026-08-20`; **cross-era comparisons at gold level
+  only** — the trial doc publishes the diagnostics deltas as the swap's
+  fingerprint, and like-for-like most of them vanish (first-pass OCR counts
+  20 apart of ~15,100; sourceMatches 3 apart; association coverage
+  unchanged; native observations unchanged in count/text/geometry/identity).
+  Gold: the 18-token gap splits into **−11 from the absent region-recovery
+  layer** (worth ~0.9pp and missing server-side — #10/#13) and **−7 from the
+  witness swap**, with the renderer confound killed by two controls
+  (geometry identical on all 162 pages; Tesseract byte-identical on all 27
+  second-opinion pages). New follow-ups: #72 (dist/ outside the workspace
+  hash), #73 (schema fail-open seams), #74 (summary field duplication +
+  generator-hash regeneration obligation).
 - **Escalation economics CLOSED** (issues #17/#20): $0.0093 →
   **$0.000817/corpus page measured (11.4×; owner's 10× target exceeded)**
   under a test-enforced zero-interactive-calls invariant
