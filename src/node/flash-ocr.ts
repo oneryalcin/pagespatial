@@ -500,7 +500,19 @@ export async function awaitFlashBatch(options: {
   const pollInterval = options.pollIntervalMs ?? 15_000;
   for (;;) {
     if (Date.now() > deadline) throw new Error(`Batch ${operation.name} did not complete within the deadline.`);
-    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    // Abortable sleep: a shutting-down caller must not be pinned to the
+    // poll interval. Abort is NOT terminal for the batch — it keeps running
+    // (and billing) remotely; callers treat it like a deadline and rejoin.
+    await new Promise<void>((resolve) => {
+      if (options.signal?.aborted) return resolve();
+      const timer = setTimeout(resolve, pollInterval);
+      options.signal?.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
+    });
+    if (options.signal?.aborted) {
+      const aborted = new Error(`Batch poll aborted for ${operation.name}; the batch is still running.`);
+      aborted.name = 'AbortError';
+      throw aborted;
+    }
     const poll = await fetchImpl(`https://generativelanguage.googleapis.com/v1beta/${operation.name}`, {
       headers: { 'x-goog-api-key': options.apiKey },
       signal: options.signal ?? null
