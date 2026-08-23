@@ -449,10 +449,11 @@ embedded-verdict `rejudge-*.json`, plus `2026-08-24-criterion8/`).
 
 - sha256: `e8b0b8ae9e992c30916f2fa6c3c0a3b202f25b4bead597d4067884606b54f015`
 - location: private HF dataset `oneryalcin/pagespatial-qualification-evidence`
-  — **upload PENDING at this writing** (the publish action is
-  permission-gated for the agent; the owner performs it). Private
-  durable copy; integrity pinned by the committed SHA-256 digest above
-  (HF repositories are mutable — the digest provides tamper DETECTION,
-  not immutability).
+  — **uploaded and round-trip verified 2026-08-24** (owner-authorized;
+  HF commit `6c39559bddc7`; the file was downloaded back and its sha256
+  matched the committed digest byte-for-byte). Private durable copy;
+  integrity pinned by the committed SHA-256 digest above (HF
+  repositories are mutable — the digest provides tamper DETECTION, not
+  immutability).
 - retention: indefinite (qualification evidence for the adopted
   deployment; delete only when the adoption itself is superseded)
