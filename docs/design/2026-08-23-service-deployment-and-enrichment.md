@@ -65,10 +65,21 @@ crossed.
 `DEFAULT_PYTHON_CMD` is `['uv','run','--with','paddleocr==3.7.0',…]`; left
 at the default, every worker re-resolves the environment through `uv` at
 runtime — network at boot, in a container that already contains the
-packages. Build must also **assert the pip pins equal the versions
-recorded in `service/sidecar/model-pins.json`**, otherwise the
-"ceremony-validated" guarantee covers the weights but not the engine that
-loads them.
+packages.
+
+**Engine pins and weight pins currently live in different files.**
+`service/sidecar/model-pins.json` holds only `notes` and `repos` (each
+with a `revision` and per-file SHA-256s) — it contains no engine versions.
+The engine versions are in `DEFAULT_PYTHON_CMD`
+(`service/adapters/ppocr-sidecar.mjs`: `paddleocr==3.7.0`,
+`paddlepaddle==3.2.1`) and are reported at runtime as
+`meta.versions.*`. So: **the Dockerfile's pip pins must be asserted equal
+to `DEFAULT_PYTHON_CMD`'s versions at build time.** Optionally add a
+`runtime` block to `model-pins.json` carrying those versions so one file
+is the whole pin manifest; if you don't, say plainly in the README that
+weight pins and engine pins are pinned in separate places. Without the
+assertion the "ceremony-validated" guarantee covers the weights but not
+the engine that loads them.
 
 **Models are baked, not downloaded at boot.** Build runs
 `service/sidecar/fetch_models.py` against the committed pin manifest and
@@ -194,10 +205,17 @@ pixel dimensions.
 
 Reusing the parse raster is the obvious implementation and it silently
 invalidates the ladder. Therefore: **enrichment performs its own render
-pass at 150 dpi** (a second pdftoppm invocation with its own latency and
-temp-disk cost, which the throughput numbers must account for), or the
-economics are re-measured from scratch and every doc quoting them updated.
-Prefer the first.
+pass at 150 dpi** (a second pdftoppm invocation), or the economics are
+re-measured from scratch and every doc quoting them updated. Prefer the
+first.
+
+**That render must not run on the server's event loop.** The runner
+renders with `execFileSync`; copied into the server — which decision 5
+makes the polling owner — a 91-page job would block the HTTP loop for
+minutes, making `/v1/jobs` and `/health` unresponsive and flapping the
+readiness probe this design just introduced. Either use async `execFile`,
+or dispatch enrichment renders to the worker pool as a distinct task kind.
+State which in the implementation PR.
 
 ## Design decision 3: job-level second phase, batch-submitted, chunked
 
@@ -344,12 +362,14 @@ deferred — no consumer has complained, and #76 will revisit the transport
 - **Per job**: maximum pages to enrich (a page cap is easier to reason
   about than a USD estimate); exceeding it runs parse-only and reports
   why.
-- **Per service**: a concurrent-batch limit and an aggregate spend
-  ceiling. N concurrent jobs otherwise means N concurrent hour-long
-  batches, each within its own cap — bounded per document, unbounded per
-  caller. When saturated, phase B queues; **phase A of new jobs proceeds
-  normally** (disjoint resources — parse capacity is workers, enrichment
-  capacity is remote).
+- **Per service**: a concurrent-**chunk** limit (chunks, not jobs — chunks
+  are what consume API concurrency and memory, and chunking is mandatory
+  per decision 3) plus an aggregate spend ceiling. N concurrent jobs
+  otherwise means many concurrent hour-long batches, each within its own
+  per-job cap — bounded per document, unbounded per caller. When
+  saturated, phase B queues; **phase A of new jobs proceeds normally**
+  (disjoint resources — parse capacity is workers, enrichment capacity is
+  remote).
 - **API key from environment only.** Per-request keys are multi-tenancy
   (#76).
 - **Spend recorded per job** and aggregated in metrics, using the runner's
@@ -395,17 +415,32 @@ submission.
 
 Tests prove behaviour; these prove the thing works:
 
-1. **Routing distribution parity**: over the 162-page corpus, the
-   service's rung assignment matches the evaluation runner's page-for-page
-   (any difference is a bug in the extraction, not a tolerance).
-2. **Cost parity**: measured $/corpus-page lands within 10% of the
-   committed ladder figure at the same dpi and batch pricing; a larger gap
-   means the raster or routing drifted and must be explained before merge.
-3. **Recall parity**: enrichment's contribution to gold recall on
-   gold∩blocking pages matches the committed scorer's figure within its
-   stated variance.
+1. **Routing parity on replayed records.** Feed **both** the service and
+   the evaluation runner the *same fixed set of page records* — the
+   dev-v13 baseline records, replayed — and require identical request
+   plans page-for-page. This is essential: escalation reasons are a
+   property of the records, and W1 criterion 2 exists precisely because
+   the EP may change them. Compare freshly-produced records against the
+   runner's baseline records and the criterion fails while the extraction
+   is perfectly correct.
+2. **Cost per *enriched* page** (~$0.0015 in the committed ladder), not
+   per corpus page. $/corpus-page is spend ÷ 162 — a direct function of
+   how many pages escalate, which is era-dependent, and the ladder's
+   figure was measured on dev-v12's 91 blocking pages. Comparing across
+   eras is exactly what the dev-v13 doc forbids. Report the **dev-v13
+   blocking-page count as a new measurement**, not as a parity target.
+3. **Token gain on replayed gold pages**: enrichment produces at least the
+   committed scorer's token gain on the *same* 19 gold∩blocking pages,
+   replayed. Not "within stated variance" — the committed figure is
+   381 → 382, a one-token case-series signal with no variance band, where
+   a true regression to +0 would be indistinguishable from noise. Same
+   pages, same era, a checkable floor.
 4. Spend and per-rung counts appear in `/v1/metrics` and reconcile with
    the job records.
+5. **Enrichment's own cost accounted**: the M4 corpus run reports the
+   parse-vs-enrichment split of wall time and CPU, including the second
+   150 dpi render pass. (W1 criterion 3 measures parse throughput in M1,
+   before enrichment exists — so this accounting belongs here, not there.)
 
 ---
 
