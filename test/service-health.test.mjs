@@ -106,7 +106,9 @@ test('warmup through the sidecar path reports in-band meta and EP', async () => 
 function forkServer(env) {
   const port = 18000 + Math.floor(Math.random() * 2000);
   const child = fork(new URL('../service/server.mjs', import.meta.url), [], {
-    env: { ...process.env, PORT: String(port), ...env },
+    // SERVICE_ALLOW_PDF_PATH: these tests submit via JSON pdfPath, the
+    // explicit dev mode (off by default since the hardening PR).
+    env: { ...process.env, PORT: String(port), SERVICE_ALLOW_PDF_PATH: '1', ...env },
     stdio: ['ignore', 'pipe', 'pipe', 'ipc']
   });
   const listening = new Promise((resolve, reject) => {
@@ -197,6 +199,41 @@ test('GET /health flips back to 503 when the pool degrades (cold-review PR #82)'
     assert.equal(body.degraded, true);
     // Warm-up checks stay truthful: warm-up DID succeed earlier.
     assert.equal(body.checks.warmupInference, true);
+  } finally {
+    child.kill();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('pdfPath mode is refused (403) unless SERVICE_ALLOW_PDF_PATH=1', async () => {
+  // Hardening (cold review, 2026-08-23): pdfPath is an arbitrary
+  // server-file read + file-existence oracle, and the port was never
+  // localhost-only — so JSON mode must be an explicit dev opt-in.
+  const dir = mkdtempSync(join(tmpdir(), 'svc-health-'));
+  const pdfPath = join(dir, 'doc.pdf');
+  writeFileSync(pdfPath, minimalPdf(1));
+  const { child, port, listening } = forkServer({
+    SERVICE_DATA_DIR: join(dir, 'data'),
+    SERVICE_WORKERS: '1',
+    SERVICE_ALLOW_PDF_PATH: '' // override the helper's dev default
+  });
+  try {
+    await listening;
+    await waitFor(async () => (await fetch(`http://127.0.0.1:${port}/health`)).status === 200, 30_000);
+    const refused = await fetch(`http://127.0.0.1:${port}/v1/jobs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pdfPath })
+    });
+    assert.equal(refused.status, 403);
+    assert.match((await refused.json()).error, /SERVICE_ALLOW_PDF_PATH/u);
+    // Bytes upload stays open — the gate is on server paths, not uploads.
+    const upload = await fetch(`http://127.0.0.1:${port}/v1/jobs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/pdf' },
+      body: minimalPdf(1)
+    });
+    assert.equal(upload.status, 202);
   } finally {
     child.kill();
     rmSync(dir, { recursive: true, force: true });

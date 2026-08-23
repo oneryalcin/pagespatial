@@ -199,14 +199,20 @@ data-egress primitive. Bytes are re-verified against the job's
 
 ## Trust model (v1)
 
-This service binds to localhost for a **trusted caller** — there is no
-authentication, and none is pretended. Two consequences:
+This service is built for a **trusted caller** — there is no
+authentication, and none is pretended. Correction (2026-08-23, cold
+review): earlier versions of this section claimed the service "binds to
+localhost" while the code listened on **all interfaces**. The bind is now
+loopback (`127.0.0.1`) by default; set `HOST` explicitly to bind wider
+(the container image sets `HOST=0.0.0.0` because a loopback bind would
+make the published port unreachable — the trust boundary there is the
+container network, which you own). Two consequences:
 
-- **`pdfPath` mode is a dev convenience that MUST NOT survive to
-  production**: it is an arbitrary server-file read plus a file-existence
-  oracle for whoever can reach the port. The production ingress is bytes
-  upload (or a fetch-from-object-store variant), never a caller-supplied
-  server path.
+- **`pdfPath` mode is OFF by default** (`403` unless
+  `SERVICE_ALLOW_PDF_PATH=1`): it is an arbitrary server-file read plus a
+  file-existence oracle for whoever can reach the port, and it MUST NOT
+  survive to production. The production ingress is bytes upload (or a
+  fetch-from-object-store variant), never a caller-supplied server path.
 - Request bodies are capped at 100 MB (413 beyond); malformed JSON is a
   400; uploads that fail to open as PDFs are deleted immediately.
 

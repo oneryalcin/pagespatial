@@ -719,7 +719,7 @@ test('HTTP surface: enrichment field validated, endpoint 404s when no record exi
   const dir = mkdtempSync(join(tmpdir(), 'svc-enrich-http-'));
   const port = 18000 + Math.floor(Math.random() * 2000);
   const child = fork(new URL('../service/server.mjs', import.meta.url), [], {
-    env: { ...process.env, PORT: String(port), SERVICE_DATA_DIR: join(dir, 'data'), SERVICE_WORKERS: '0', GEMINI_API_KEY: '' },
+    env: { ...process.env, PORT: String(port), SERVICE_DATA_DIR: join(dir, 'data'), SERVICE_WORKERS: '0', GEMINI_API_KEY: '', SERVICE_ALLOW_PDF_PATH: '1' },
     stdio: ['ignore', 'pipe', 'pipe', 'ipc']
   });
   try {
