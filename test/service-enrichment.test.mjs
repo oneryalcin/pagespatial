@@ -92,6 +92,7 @@ function makeGemini(overrides = {}) {
     generateContent: 0, batchSubmit: 0, poll: 0,
     bodies: [], ops: {}, doneOps: new Set(), inflight: 0, maxInflight: 0,
     neverDone: false, submitStatus: undefined, release: true,
+    pollFailures: 0, pollBroken: false,
     ...overrides
   };
   state.fetch = async (url, init) => {
@@ -117,6 +118,15 @@ function makeGemini(overrides = {}) {
     if (match) {
       state.poll += 1;
       const op = match[1];
+      if (state.pollFailures > 0) {
+        // Transport-level rejection, the reviewer's repro: ECONNRESET-class.
+        state.pollFailures -= 1;
+        throw new TypeError('fetch failed');
+      }
+      if (state.pollBroken) {
+        // Response arrives but its body does not parse.
+        return { ok: true, status: 200, headers: { get: () => null }, json: async () => { throw new SyntaxError('Unexpected token < in JSON'); }, text: async () => '' };
+      }
       if (state.neverDone || !state.release) return okJson({ done: false });
       const keys = state.ops[op];
       if (!keys) throw new Error(`stub has no keys for ${op}`);
@@ -319,6 +329,54 @@ test('deadline reached while the batch still runs: chunk stays live, not closed 
   }
 });
 
+// ---- decision 6 regressions: transient errors never discard paid work ------
+
+test('a transient poll failure retries and the batch still completes (no paid work discarded)', async () => {
+  const fixture = fixtureJob();
+  const gemini = makeGemini({ pollFailures: 1 }); // poll #1 throws 'fetch failed', poll #2 succeeds
+  const service = makeService(fixture.dataDir, gemini);
+  try {
+    await waitFor(() => manifestOf(fixture.jobDir)?.status === 'complete', 'enrichment complete despite the blip');
+    assert.equal(gemini.batchSubmit, 1, 'single submission');
+    assert.ok(gemini.poll >= 2, 'polling continued past the failed attempt');
+    const record = JSON.parse(readFileSync(join(fixture.jobDir, 'enrichment', '000001.json'), 'utf8'));
+    assert.equal(record.adjudications[0].verdict, 'native');
+  } finally {
+    await service.shutdown();
+    rmSync(fixture.dir, { recursive: true, force: true });
+  }
+});
+
+test('an unclassified poll error leaves the chunk live and a restart sweep recovers it', async () => {
+  const fixture = fixtureJob();
+  // Poll responses arrive but their bodies do not parse: the error escapes
+  // awaitFlashBatch un-labelled. With an operation name persisted this must
+  // NOT close the chunk out — the batch is paid for and still running.
+  const gemini1 = makeGemini({ pollBroken: true });
+  const first = makeService(fixture.dataDir, gemini1);
+  let manifest;
+  try {
+    manifest = await waitFor(() => {
+      const current = manifestOf(fixture.jobDir);
+      return current?.chunks[0]?.lastError ? current : undefined;
+    }, 'unclassified error recorded');
+  } finally {
+    await first.shutdown();
+  }
+  assert.equal(manifest.chunks[0].state, 'submitted', 'chunk stays live, never failed');
+  assert.notEqual(manifest.pages['1'].state, 'unavailable', 'page not written off');
+  const gemini2 = makeGemini({ ops: { [manifest.chunks[0].operationName]: manifest.chunks[0].keys } });
+  const second = makeService(fixture.dataDir, gemini2);
+  try {
+    await waitFor(() => manifestOf(fixture.jobDir)?.status === 'complete', 'sweep recovered the paid batch');
+    assert.equal(gemini2.batchSubmit, 0, 'recovered, not repurchased');
+    assert.ok(existsSync(join(fixture.jobDir, 'enrichment', '000001.json')));
+  } finally {
+    await second.shutdown();
+    rmSync(fixture.dir, { recursive: true, force: true });
+  }
+});
+
 // ---- test plan item 7 (cost caps) ------------------------------------------
 
 test('per-job page cap exceeded: parse-only with a stated reason, nothing submitted', async () => {
@@ -333,6 +391,9 @@ test('per-job page cap exceeded: parse-only with a stated reason, nothing submit
     assert.match(manifest.reason, /ENRICH_MAX_PAGES_PER_JOB/u);
     assert.equal(gemini.batchSubmit, 0);
     assert.equal(service.jobStatus(fixture.jobId).status, 'completed');
+    // A cap-refused job must not inflate the rung counters: nothing was
+    // actually submitted.
+    assert.equal(service.metrics.snapshot().enrichment.pagesPerRung.adjudication, 0);
   } finally {
     await service.shutdown();
     rmSync(fixture.dir, { recursive: true, force: true });
@@ -517,6 +578,67 @@ test('egress: PDF bytes that no longer match the job sha are never transmitted',
   } finally {
     await service.shutdown();
     rmSync(fixture.dir, { recursive: true, force: true });
+  }
+});
+
+test('a builder-rejected page pulls the job to partial, never a silent complete', async () => {
+  const fixture = fixtureJob({
+    pageCount: 2,
+    pageEntries: (sha) => {
+      const broken = blockingPage(sha, 2, 2);
+      // A conflict referencing an unknown OCR observation: the plan builder
+      // fails this page closed (M2), and the job must say so.
+      broken.conflicts[0].ocrId = 'obs:bogus';
+      return [
+        { pageNumber: 1, ok: true, attempts: 1, wallMs: 5, stageTimingsMs: {}, pageSpatial: blockingPage(sha, 1, 2) },
+        { pageNumber: 2, ok: true, attempts: 1, wallMs: 5, stageTimingsMs: {}, pageSpatial: broken }
+      ];
+    }
+  });
+  const gemini = makeGemini();
+  const service = makeService(fixture.dataDir, gemini);
+  try {
+    const manifest = await waitFor(() => {
+      const current = manifestOf(fixture.jobDir);
+      return current?.status && !['pending', 'submitted'].includes(current.status) ? current : undefined;
+    }, 'settled');
+    assert.equal(manifest.pages['1'].state, 'complete');
+    assert.equal(manifest.pages['2'].state, 'unavailable');
+    assert.match(manifest.pages['2'].reason, /unknown OCR observation/u);
+    assert.equal(manifest.status, 'partial', 'a page-level refusal must not read as complete');
+  } finally {
+    await service.shutdown();
+    rmSync(fixture.dir, { recursive: true, force: true });
+  }
+});
+
+// ---- live production path (upload -> parse -> completion -> phase B) -------
+
+test('an uploaded job triggers phase B through real parse completion', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'svc-enrich-live-'));
+  const pdfPath = join(dir, 'doc.pdf');
+  writeFileSync(pdfPath, minimalPdf(1));
+  const gemini = makeGemini();
+  // Real workers (stub witness), real submit: this drives the
+  // checkCompletion -> enrichmentPhase.start trigger, not the boot sweep.
+  const service = new ParseService({
+    dataDir: join(dir, 'data'), workers: 1,
+    enrichment: { apiKey: 'stub-key', fetchImpl: gemini.fetch, pollIntervalMs: 5, batchTimeoutMs: 10_000 }
+  });
+  try {
+    const { jobId } = await service.submit({ pdfPath, enrichment: 'batch', source: 'upload' });
+    const jobDir = join(dir, 'data', jobId);
+    await waitFor(() => service.jobStatus(jobId)?.status === 'completed', 'parse completed', 60_000);
+    await waitFor(() => manifestOf(jobDir)?.status === 'complete', 'phase B ran after completion');
+    const status = service.jobStatus(jobId);
+    assert.equal(status.enrichmentStatus, 'complete');
+    // Stub witness pages are non-canonical: nothing qualifies, nothing is
+    // transmitted — but the phase demonstrably ran on the live path.
+    assert.equal(status.pages[0].enrichmentState, 'not-qualified');
+    assert.equal(gemini.batchSubmit, 0);
+  } finally {
+    await service.shutdown();
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

@@ -34,9 +34,11 @@
  */
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { createReadStream, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 
 import { writeFileAtomic } from './atomic.mjs';
@@ -153,7 +155,6 @@ export class EnrichmentPhase {
     this.chunkWaiters = [];
     this.tasks = new Set();
     this.abortController = new AbortController();
-    this.verifiedPdfSha = new Map();
   }
 
   get aborted() { return this.abortController.signal.aborted; }
@@ -170,21 +171,25 @@ export class EnrichmentPhase {
     writeFileAtomic(this.manifestPath(jobId), JSON.stringify(manifest, null, 1));
   }
 
-  readPageRecord(jobId, pageNumber) {
-    return readJson(join(this.jobDir(jobId), 'pages', `${padded(pageNumber)}.json`));
+  async readPageRecord(jobId, pageNumber) {
+    try {
+      return JSON.parse(await readFile(join(this.jobDir(jobId), 'pages', `${padded(pageNumber)}.json`), 'utf8'));
+    } catch {
+      return undefined;
+    }
   }
 
   /**
    * The runner's egress check, carried over: the bytes about to be rendered
-   * and transmitted must hash to the job's pinned documentSha256. Re-checked
-   * immediately before transmission, not only at submission.
+   * and transmitted must hash to the job's pinned documentSha256. Hashed
+   * FRESH before every chunk transmission — no memoization, so "re-verified
+   * immediately before transmission" holds for every chunk, not just the
+   * first — and streamed so a large PDF never blocks the event loop.
    */
-  assertPdfMatchesJob(pdfPath, expectedSha) {
-    let actual = this.verifiedPdfSha.get(pdfPath);
-    if (!actual) {
-      actual = createHash('sha256').update(readFileSync(pdfPath)).digest('hex');
-      this.verifiedPdfSha.set(pdfPath, actual);
-    }
+  async assertPdfMatchesJob(pdfPath, expectedSha) {
+    const hash = createHash('sha256');
+    await pipeline(createReadStream(pdfPath), hash);
+    const actual = hash.digest('hex');
     if (actual !== expectedSha) {
       throw new Error(`PDF bytes at ${pdfPath} (${actual.slice(0, 12)}…) do not match the job's documentSha256; refusing to transmit.`);
     }
@@ -281,7 +286,7 @@ export class EnrichmentPhase {
     let changed = false;
     for (const [pageNumber, entry] of Object.entries(manifest.pages)) {
       if (entry.state !== 'complete') continue;
-      const record = this.readPageRecord(jobId, Number(pageNumber));
+      const record = await this.readPageRecord(jobId, Number(pageNumber));
       const page = record?.ok === false ? undefined : record?.pageSpatial;
       const digest = page ? await pageDigest(page) : undefined;
       if (digest !== entry.digest) {
@@ -320,7 +325,7 @@ export class EnrichmentPhase {
   async record(jobId, pageNumber) {
     const stored = readJson(this.recordPath(jobId, pageNumber));
     if (!stored) return undefined;
-    const pageRecord = this.readPageRecord(jobId, pageNumber);
+    const pageRecord = await this.readPageRecord(jobId, pageNumber);
     const page = pageRecord?.ok === false ? undefined : pageRecord?.pageSpatial;
     if (!page || stored.basePageDigest !== await pageDigest(page)) {
       const manifest = this.readManifest(jobId);
@@ -370,8 +375,9 @@ export class EnrichmentPhase {
       spend: { promptTokens: 0, outputTokens: 0, estimatedCostUsd: 0 }
     };
     const targets = [];
+    let noEligibleRegionPages = 0;
     for (let pageNumber = 1; pageNumber <= job.pageCount; pageNumber += 1) {
-      const record = this.readPageRecord(jobId, pageNumber);
+      const record = await this.readPageRecord(jobId, pageNumber);
       if (!record) { manifest.pages[String(pageNumber)] = { state: 'not-qualified' }; continue; }
       let plan;
       try {
@@ -381,16 +387,15 @@ export class EnrichmentPhase {
         manifest.pages[String(pageNumber)] = { state: 'unavailable', reason: String(error?.message ?? error).slice(0, 200) };
         continue;
       }
-      if (plan.residueUnanswered) this.metrics?.recordEnrichmentNoEligibleRegion?.();
       const rungs = [];
       if (plan.fullTranscription) rungs.push('full');
       else if (plan.residueCrops) rungs.push('crops');
       if (plan.adjudication) rungs.push('adj');
+      if (plan.residueUnanswered) noEligibleRegionPages += 1;
       if (!rungs.length) {
         manifest.pages[String(pageNumber)] = { state: plan.residueUnanswered ? 'no-eligible-region' : 'not-qualified' };
         continue;
       }
-      this.metrics?.recordEnrichmentRouting?.(rungs);
       const digest = await pageDigest(record.pageSpatial);
       manifest.pages[String(pageNumber)] = { state: 'pending', digest };
       targets.push({ pageNumber, rungs });
@@ -412,8 +417,14 @@ export class EnrichmentPhase {
       this.writeManifest(jobId, manifest);
       return undefined;
     }
+    // Metrics land only for work that will actually be submitted — a job
+    // refused by the caps must not inflate the rung counters.
+    for (let i = 0; i < noEligibleRegionPages; i += 1) this.metrics?.recordEnrichmentNoEligibleRegion?.();
+    for (const target of targets) this.metrics?.recordEnrichmentRouting?.(target.rungs);
     if (!targets.length) {
-      manifest.status = 'complete';
+      // Not hard-coded 'complete': a builder-rejected page ('unavailable')
+      // must surface as partial/unavailable, not vanish behind a green job.
+      this.finalizeStatus(manifest);
       this.writeManifest(jobId, manifest);
       return undefined;
     }
@@ -443,10 +454,10 @@ export class EnrichmentPhase {
    */
   async buildChunkRequests(job, manifest, chunk) {
     // Egress: verify bytes immediately before transmission.
-    this.assertPdfMatchesJob(job.pdfPath, job.sha256);
+    await this.assertPdfMatchesJob(job.pdfPath, job.sha256);
     const requests = new Map();
     for (const pageNumber of chunk.pages) {
-      const record = this.readPageRecord(job.jobId, pageNumber);
+      const record = await this.readPageRecord(job.jobId, pageNumber);
       const page = record?.ok === false ? undefined : record?.pageSpatial;
       const entry = manifest.pages[String(pageNumber)];
       if (!page) throw new Error(`Page ${pageNumber} has no canonical record; cannot build enrichment requests.`);
@@ -461,6 +472,7 @@ export class EnrichmentPhase {
       const needsPagePng = kinds.has('full') || kinds.has('adj');
       const png = needsPagePng ? await renderPagePng(job.pdfPath, pageNumber, manifest.renderDpi) : undefined;
       if (kinds.has('full')) {
+        if (!plan.fullTranscription) throw new Error(`Page ${pageNumber} no longer plans full transcription; refusing to submit.`);
         requests.set(`${padded(pageNumber)}|full`, buildTranscriptionRequest([new Uint8Array(png)]));
       }
       if (kinds.has('crops')) {
@@ -528,16 +540,19 @@ export class EnrichmentPhase {
       await this.joinChunk(job, manifest, chunk, result);
     } catch (error) {
       const message = String(error?.message ?? error);
-      const stillRunning = /did not complete within the deadline/u.test(message)
-        || error?.name === 'AbortError' || this.aborted;
-      if (chunk.operationName && stillRunning) {
-        // Deadline-reached-while-running (decision 6): the batch is billed
-        // and still running remotely — the chunk stays live in the manifest
-        // for the boot sweep. Treating this as terminal would pay for work
-        // and discard it.
+      const aborted = error?.name === 'AbortError' || this.aborted;
+      // Decision 6: once an operation name exists, the batch is PAID and
+      // running remotely. Only explicitly terminal evidence may close it
+      // out — a terminal poll status (401/403/404) or an explicit batch
+      // error. Everything else (deadline, abort, transport blips, a
+      // malformed poll body) leaves the chunk live for the boot sweep:
+      // treating an unclassified error as terminal would pay for work and
+      // discard it.
+      const terminal = /Batch poll failed terminally/u.test(message) || /^Batch failed:/u.test(message);
+      if (chunk.operationName && !terminal) {
         chunk.state = 'submitted';
         chunk.lastError = message.slice(0, 300);
-      } else if (!chunk.operationName && stillRunning) {
+      } else if (!chunk.operationName && aborted) {
         chunk.state = 'pending'; // aborted before submission; sweep resubmits (unpaid)
       } else {
         // Terminal (auth failure, explicit batch error): close the chunk
@@ -564,7 +579,7 @@ export class EnrichmentPhase {
       const entry = manifest.pages[String(pageNumber)];
       const telemetry = { promptTokens: 0, outputTokens: 0, latencyMs: chunk.wallMs ?? 0 };
       try {
-        const record = this.readPageRecord(job.jobId, pageNumber);
+        const record = await this.readPageRecord(job.jobId, pageNumber);
         const page = record?.ok === false ? undefined : record?.pageSpatial;
         if (!page) throw new Error('canonical page record is missing or failed');
         // Fail closed on staleness: a page re-parsed since submission has a
@@ -631,7 +646,11 @@ export class EnrichmentPhase {
   finalizeStatus(manifest) {
     if (manifest.chunks.some((chunk) => chunk.state === 'submitted')) { manifest.status = 'submitted'; return; }
     if (manifest.chunks.some((chunk) => chunk.state === 'pending')) { manifest.status = 'pending'; return; }
-    const routed = Object.values(manifest.pages).filter((entry) => entry.digest !== undefined);
+    // "Routed" is every page with an OUTCOME — not just digest-bearing
+    // ones: a page the builder rejected carries 'unavailable' and no
+    // digest, and must still pull the job off 'complete'.
+    const routed = Object.values(manifest.pages)
+      .filter((entry) => entry.state !== 'not-qualified' && entry.state !== 'no-eligible-region');
     if (!routed.length || routed.every((entry) => entry.state === 'complete')) { manifest.status = 'complete'; return; }
     manifest.status = routed.some((entry) => entry.state === 'complete') ? 'partial' : 'unavailable';
   }
