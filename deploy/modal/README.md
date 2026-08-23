@@ -84,7 +84,7 @@ visible `ResultTooLarge` failure — never truncated pages.
 | `cpu` / `memory` | 4.0 physical cores / 24,576 MiB |
 | `startup_timeout` / method `timeout` | 1,200 s / 1,800 s (explicit) |
 | `retries` | 1 |
-| `min_containers` / `buffer_containers` / `max_containers` | 0 / 0 / 1 (M1; M3 arms use 1/4/16) |
+| `min_containers` / `buffer_containers` / `max_containers` | 0 / 0 / 1 (default; M3 arms set `PAGESPATIAL_MAX_CONTAINERS` to allowlisted 1/4/16 at deploy time — any other value refuses to deploy) |
 
 A dead Node child, degraded `/health`, low disk, or an exceeded parse
 deadline **retires** the warm instance (stop fetching inputs, then fail);
