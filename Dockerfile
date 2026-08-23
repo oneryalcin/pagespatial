@@ -10,7 +10,11 @@
 #
 # RUN WITH AN INIT THAT REAPS — this is part of the shutdown contract:
 #
-#   docker run --init -p 8571:8571 pagespatial-service
+#   docker run --init -p 127.0.0.1:8571:8571 pagespatial-service
+#
+# (-p 127.0.0.1:... — a bare `-p 8571:8571` publishes on ALL host
+# interfaces; the image binds HOST=0.0.0.0 inside, so the publish
+# address is the trust boundary. See service/README.md, Trust model.)
 #
 # (or a tini entrypoint / k8s shareProcessNamespace equivalent). PID 1
 # changes default signal handling and orphan reaping; the graceful path
