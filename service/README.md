@@ -75,9 +75,13 @@ because the OpenVINO engine cache survives); with the uv default it can
 additionally include a package resolution.
 
 Target-hardware performance (linux/amd64, OpenVINO `ep=hpi`; full
-162-page corpus; `docs/trials/2026-08-23-linux-verification.md`):
-**3.0–5.5 core-s/page full-pipeline** (shared-tenancy range), 4×1-vCPU
-workers beating 1×4-vCPU by 2.7–4.9× — pack single-vCPU workers. These
+162-page corpus; `docs/trials/2026-08-23-linux-verification.md`, unit
+correction applied — Modal's `cpu=N` is **N physical cores**, not
+vCPUs): **3.0–5.5 requested-physical-core-s/page full-pipeline**
+(shared-tenancy range). On one allocation of four physical cores, four
+one-thread workers beat one four-thread worker by 2.7–4.9×. That is a
+single-allocation result: it does **not** establish one-vCPU-per-worker
+packing on other platforms, and fleet linearity is unmeasured. These
 figures supersede the earlier Mac/WASM and ad-hoc Modal numbers.
 
 ## OCR witnesses
@@ -96,7 +100,7 @@ uv run --with huggingface_hub python service/sidecar/fetch_models.py \
 
 SERVICE_OCR_ADAPTER=ppocr-sidecar \
 SERVICE_SIDECAR_MODELS_DIR=/path/to/sidecar-models \  # required, explicit
-SERVICE_SIDECAR_THREADS=1 \   # default; latency is flat vs cores (PR #66) — pack 1-vCPU workers
+SERVICE_SIDECAR_THREADS=1 \   # default; latency is flat vs cores (PR #66) — one-thread workers won on the measured allocation
 node service/server.mjs
 ```
 

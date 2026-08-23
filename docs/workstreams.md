@@ -133,7 +133,10 @@ test, principles §9):**
    superseded by the M1 target-hardware block below.)*
    **HPI GATE RUN (PR #64, Modal, 2026-08-23): the sidecar earns it.**
    *(Gate-run OCR-only figures — superseded by the M1 full-pipeline
-   numbers below.)*
+   numbers below. Unit correction 2026-08-23: "vCPU" in this entry
+   means Modal `cpu=N` = N PHYSICAL cores; the "1-vCPU packing unit"
+   conclusion is retracted as a general claim — see the linux
+   verification trial's correction block.)*
    HPI CPU (OpenVINO, v6-small) = 989 ms/page on 4 vCPU (~4
    core-s/page vs WASM's ~26 — ~6× core-efficiency; the 6.6× latency
    multiplier is cross-machine, stated as approximate). **GPU is DEAD
@@ -163,10 +166,13 @@ test, principles §9):**
    variance, not EP variance. `ep=hpi` now lands IN-BAND in every
    record's provenance (`useHpip` introspected from the pipeline
    object), closing the #64/#67 follow-up. Target-hardware numbers
-   (which SUPERSEDE every Mac/WASM and ad-hoc Modal figure): 3.0–5.5
-   core-s/page full-pipeline on 4×1-vCPU packing (shared-tenancy
-   range), 4×1 beats 1×4 by 2.7–4.9× — the packing hypothesis measured,
-   not assumed; boot-to-ready 70–88 s cold (OpenVINO engine build),
+   (which SUPERSEDE every Mac/WASM and ad-hoc Modal figure; unit
+   correction 2026-08-23 — Modal `cpu=N` = N physical cores, not
+   vCPUs): 3.0–5.5 requested-physical-core-s/page full-pipeline
+   (shared-tenancy range); on one 4-physical-core allocation, four
+   one-thread workers beat one four-thread worker by 2.7–4.9× —
+   a single-allocation result, NOT a general packing unit, and fleet
+   linearity is unmeasured; boot-to-ready 70–88 s cold (OpenVINO engine build),
    ~5 s on worker respawn in a warm container; ~2.7 GB per worker-pair
    (cgroup, 10.9 GB for 4). The committed Dockerfile is the deployment
    unit — linux/amd64, engine+weight pins asserted at build time, baked

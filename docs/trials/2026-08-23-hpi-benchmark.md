@@ -2,6 +2,13 @@
 
 **Date:** 2026-08-23 · **Branch:** `hpi-benchmark` · **Issue:** #2 (speed-arm 2)
 
+> **Correction (2026-08-23):** "vCPU" here mislabels Modal's unit —
+> `cpu=N` requests **N physical cores** (~2N vCPU threads;
+> [Modal resources](https://modal.com/docs/guide/resources)). Measured
+> values stand; read every "N vCPU" as "N physical cores requested", and
+> "core-s/page" as requested-physical-core-seconds. Details:
+> `docs/design/2026-08-23-modal-scaling-and-deployment.md` §3.6.
+
 ## Question
 
 The service's OCR witness costs 6.5 s/page (WASM EP, 4-worker load; 3.7 s

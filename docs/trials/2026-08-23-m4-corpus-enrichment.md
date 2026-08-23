@@ -4,6 +4,15 @@
 `docs/design/2026-08-23-service-deployment-and-enrichment.md` (workstream 2)
 · **Milestone:** M4 (final)
 
+> **Correction (2026-08-23):** "4-vCPU container" and "4 vCPU × wall"
+> below mislabel Modal's unit — `cpu=4.0` requests **4 physical cores**
+> (~8 vCPU threads), so the container had more headroom than the label
+> implies (which also softens the "burst above 4 cores" surprise in
+> criterion 5's honest-labels note: bursting above the *request* is
+> expected under Modal's request-not-cap semantics either way). Measured
+> values stand. Details:
+> `docs/design/2026-08-23-modal-scaling-and-deployment.md` §3.6.
+
 First real-corpus run of the service's escalated-enrichment phase (M3) on
 the deployment unit (M1's container, Modal linux/amd64), plus the replayed
 dev-v13 acceptance measurements. Committed instruments:
