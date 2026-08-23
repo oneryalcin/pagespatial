@@ -188,8 +188,12 @@ as evidence, not as a hard-coded constant.)
 the marked input's `job_submitted` (19:49:54Z). Capture note: the stop
 command's own CLI output was not teed (the archived `stop-command.log` is
 empty), so "issued exactly once" is operator-attested; the stop's EFFECT is
-attested by the durable artifacts — the first container's log ends
-mid-document, the replacement container appears in the archived
+attested by the durable artifacts — the first container's log shows the
+marked input's `job_submitted` but no `job_terminal` — only a cleanup
+sweep (`cleanup_ok: true`, uploaded PDF and job state removed) and a
+clean `service_stopped` (drain 32 ms) at 19:50:07Z, so the document
+never completed there (and the swept scratch doubles as criterion-9
+evidence); the replacement container appears in the archived
 container-list, and the reconciler shows the retried input reaching a
 terminal result. Modal cancelled and
 rescheduled: replacement container `ta-01M0R2RQ9E0BB27XSHGYB43HSR` appeared,
