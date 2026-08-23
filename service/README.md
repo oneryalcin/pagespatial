@@ -41,7 +41,11 @@ graceful path is init-independent — SIGTERM makes `ParseService.shutdown()`
 await every worker child's exit (bounded, SIGKILL escalation), and each
 worker's exit hook group-kills its Python sidecar — but the SIGKILL
 fallback path reparents detached Python groups to PID 1, and a non-reaping
-Node PID 1 would accumulate zombies.
+Node PID 1 would accumulate zombies. **Honest caveat:** the M1 Linux
+verification ran on Modal, which skips `USER` and substitutes its own
+(gVisor) init — so the non-root user and the plain
+`docker run --init` reaping path are built but not yet exercised; smoke
+them on the first real Docker host (trial doc, criterion 4 notes).
 
 Baked into the image, failing the BUILD rather than the boot: pinned model
 weights (`fetch_models.py` verify mode — any hash mismatch aborts the

@@ -166,7 +166,12 @@ const service = new ParseService({
   dataDir,
   workers: Number(process.env.SERVICE_WORKERS ?? 2),
   adapterId,
-  ocr
+  ocr,
+  // Operational + test knob: how many consecutive worker deaths degrade
+  // the pool (default lives in queue.mjs).
+  ...(process.env.SERVICE_MAX_WORKER_DEATHS
+    ? { maxConsecutiveWorkerDeaths: Number(process.env.SERVICE_MAX_WORKER_DEATHS) }
+    : {})
 });
 
 const json = (res, status, body) => {
@@ -286,8 +291,15 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/health') {
-      // Readiness, not liveness: 503 until the warm-up sequence completed.
-      return json(res, health.ready ? 200 : 503, health);
+      // Readiness, not liveness: 503 until the warm-up sequence completed —
+      // AND 503 again if the pool has since degraded (consecutive worker
+      // deaths stop respawning and POST /v1/jobs already 503s; an
+      // orchestrator must stop routing here too, cold-review PR #82).
+      // Related edge, intended: a worker dying DURING warm-up leaves the
+      // service not-ready until restart — fail-closed, since a pool that
+      // cannot warm up must never advertise itself ready.
+      const ready = health.ready && !service.degraded;
+      return json(res, ready ? 200 : 503, { ...health, ready, degraded: service.degraded });
     }
 
     return json(res, 404, { error: 'Unknown route.' });

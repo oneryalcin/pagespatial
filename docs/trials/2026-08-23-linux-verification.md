@@ -95,7 +95,13 @@ true/true/false. Scored two ways (`score-ep-control.mjs`;
 | comparison | critical-token symmetric difference | raw lines differing |
 |---|---|---|
 | hpi run A vs hpi run B (**derived null tolerance**) | **0** of 2,319 | 0 of 3,890 — byte-identical texts AND scores |
-| hpi vs paddle-default (**cross-EP delta**) | **0** of 2,319 | 1 of 3,890 (non-critical text; max paired score delta 0.023) |
+| hpi vs paddle-default (**cross-EP delta**) | **0** of 2,319 | 1 of 3,890 (non-critical text; max paired score delta 0.023374) |
+
+The raw-line/score comparison is `score-ep-control.mjs`'s `rawLines_*`
+blocks (position-wise per page, byte equality on text, exact equality on
+scores) — first run ad-hoc during the review of the results, then
+committed as part of the scorer and re-run to reproduce these exact
+numbers (cold-review PR #82 provenance fix).
 
 Gold framing (same scorer as the ceremony, dev-v12 reference + 560 gold
 tokens on the 23 gold pages in-sample): **all three arms score identically
@@ -230,8 +236,21 @@ Two honest labels:
   console output — the rerun that added the RSS sampler overwrote run A's
   file), `throughput-1x4.json`, `failure.json`.
 - Reproduction: `build-corpus-subset-pdfs.mjs` → the four
-  `m1_linux_verification_modal.py` tasks → `score-ep-control.mjs` and
+  `m1_linux_verification_modal.py` tasks → `score-ep-control.mjs` (its
+  `rawLines_*` blocks are the bit-stability instrument) and
   `score-candidate-witness.mjs` per EP arm.
+- **Code state of the measured runs** (pre-rebase branch SHAs; the branch
+  was later rebased cleanly onto main after PR #80 merged — content
+  identical, post-rebase equivalents in parentheses): image content =
+  Dockerfile at `5ae1c2e` (`c372898`); probe, throughput 4×1 run A, 1×4
+  and failure runs at `5ae1c2e`; EP control at `3362e9a` (`25eec35`);
+  throughput 4×1 run B at `64c8917` (`5607be6`). The build context had no
+  untracked or modified files in any path the Dockerfile COPYs (the
+  in-progress trial doc and evaluation tooling are excluded by
+  `.dockerignore`). Modal image ids: the superseded pre-HPI-fix build was
+  `im-VLInVXYHAMVT5I2TNEaa4o`; the fixed build's id was printed to a
+  truncated stream and not retained — the image is reproducible from the
+  Dockerfile at the SHAs above.
 - Independence checklist: these are **operational measurements of the
   system's own behaviour** (throughput, RSS, process lifecycle), not
   accuracy rates — no gold denominator is quoted here. The EP control's

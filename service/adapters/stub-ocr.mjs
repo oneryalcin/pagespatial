@@ -22,8 +22,11 @@ export function createStubOcrAdapter() {
     version: '0',
     canonical: false,
     async recognize(page) {
+      // The health warm-up raster is pageNumber 0 (real pages are 1-based);
+      // the crash hook exempts it so tests can degrade the pool AFTER a
+      // successful warm-up (readiness-flip regression, PR #82 review).
       const crashFile = process.env.STUB_CRASH_ONCE_FILE;
-      if (crashFile && !existsSync(crashFile)) {
+      if (crashFile && !existsSync(crashFile) && page.pageNumber !== 0) {
         writeFileSync(crashFile, 'crashed');
         process.exit(17);
       }

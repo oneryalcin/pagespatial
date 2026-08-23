@@ -68,6 +68,49 @@ function diff(leftRun, rightRun) {
   return { leftTokens: total, leftOnly, rightOnly, symmetricDifference: leftOnly + rightOnly, pagesDiffering: perPage.length, perPage };
 }
 
+/**
+ * Raw-line comparison (position-wise, per page): counts lines whose TEXT
+ * differs byte-for-byte, whether the score sequences are identical, and
+ * the max |score delta| over position-matched lines. This is the
+ * bit-stability instrument behind the trial doc's "byte-identical" and
+ * "N raw lines of M" claims — committed so those claims are reproducible,
+ * not ad-hoc (cold-review PR #82).
+ */
+function rawLineDiff(leftRun, rightRun) {
+  const rightByPage = new Map(rightRun.perPage.map((page) => [page.page, page]));
+  let totalLines = 0;
+  let differingLines = 0;
+  let pagesDiffering = 0;
+  let scoresIdentical = true;
+  let maxScoreDelta = 0;
+  for (const leftPage of leftRun.perPage) {
+    const rightPage = rightByPage.get(leftPage.page) ?? { lines: [] };
+    const leftLines = leftPage.lines;
+    const rightLines = rightPage.lines;
+    totalLines += Math.max(leftLines.length, rightLines.length);
+    let pageDiff = Math.abs(leftLines.length - rightLines.length);
+    for (let index = 0; index < Math.min(leftLines.length, rightLines.length); index += 1) {
+      if (leftLines[index].text !== rightLines[index].text) pageDiff += 1;
+      const leftScore = leftLines[index].score;
+      const rightScore = rightLines[index].score;
+      if (leftScore !== rightScore) scoresIdentical = false;
+      if (Number.isFinite(leftScore) && Number.isFinite(rightScore)) {
+        maxScoreDelta = Math.max(maxScoreDelta, Math.abs(leftScore - rightScore));
+      }
+    }
+    if (pageDiff > 0) pagesDiffering += 1;
+    differingLines += pageDiff;
+  }
+  return {
+    totalLines,
+    differingLines,
+    pagesDiffering,
+    textsIdentical: differingLines === 0,
+    scoresIdentical,
+    maxScoreDelta: Math.round(maxScoreDelta * 1e6) / 1e6
+  };
+}
+
 const nullControl = diff(runs.hpi_a, runs.hpi_b);
 const crossEp = diff(runs.hpi_a, runs.default);
 const crossEpB = diff(runs.hpi_b, runs.default);
@@ -88,6 +131,8 @@ const summary = {
   nullControl_hpiA_vs_hpiB: nullControl,
   crossEp_hpiA_vs_default: crossEp,
   crossEp_hpiB_vs_default: crossEpB,
+  rawLines_hpiA_vs_hpiB: rawLineDiff(runs.hpi_a, runs.hpi_b),
+  rawLines_hpiA_vs_default: rawLineDiff(runs.hpi_a, runs.default),
   verdict: {
     derivedNullTolerance: nullControl.symmetricDifference,
     crossEpDelta: crossEp.symmetricDifference,

@@ -164,6 +164,67 @@ test('GET /health stays 503 when warm-up fails (broken engine never reports read
   }
 });
 
+test('GET /health flips back to 503 when the pool degrades (cold-review PR #82)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'svc-health-'));
+  const pdfPath = join(dir, 'doc.pdf');
+  writeFileSync(pdfPath, minimalPdf(1));
+  const crashFile = join(dir, 'crash-once');
+  // Threshold 1: the first worker death degrades the pool. The crash hook
+  // fires on the first PAGE task, after warm-up succeeded — so /health is
+  // ready first and must UN-ready when the pool dies.
+  const { child, port, listening } = forkServer({
+    SERVICE_DATA_DIR: join(dir, 'data'),
+    SERVICE_WORKERS: '1',
+    SERVICE_MAX_WORKER_DEATHS: '1',
+    STUB_CRASH_ONCE_FILE: crashFile
+  });
+  try {
+    await listening;
+    await waitFor(async () => (await fetch(`http://127.0.0.1:${port}/health`)).status === 200, 30_000);
+    const submit = await fetch(`http://127.0.0.1:${port}/v1/jobs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pdfPath })
+    });
+    assert.equal(submit.status, 202);
+    let body;
+    await waitFor(async () => {
+      const response = await fetch(`http://127.0.0.1:${port}/health`);
+      body = await response.json();
+      return response.status === 503;
+    }, 30_000);
+    assert.equal(body.ready, false);
+    assert.equal(body.degraded, true);
+    // Warm-up checks stay truthful: warm-up DID succeed earlier.
+    assert.equal(body.checks.warmupInference, true);
+  } finally {
+    child.kill();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Minimal N-page PDF with a valid xref (same construction as
+// service-skeleton.test.mjs).
+function minimalPdf(pageCount) {
+  const objects = ['<< /Type /Catalog /Pages 2 0 R >>'];
+  const kids = Array.from({ length: pageCount }, (_, index) => `${index + 3} 0 R`).join(' ');
+  objects.push(`<< /Type /Pages /Kids [${kids}] /Count ${pageCount} >>`);
+  for (let index = 0; index < pageCount; index += 1) {
+    objects.push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>');
+  }
+  let body = '%PDF-1.4\n';
+  const offsets = [];
+  objects.forEach((content, index) => {
+    offsets.push(body.length);
+    body += `${index + 1} 0 obj ${content} endobj\n`;
+  });
+  const xrefOffset = body.length;
+  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) body += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  body += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return Buffer.from(body);
+}
+
 async function waitFor(predicate, timeoutMs = 15_000) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {

@@ -116,8 +116,11 @@ test, principles §9):**
    witness end to end: 176/176 canonical records, SVG endpoint live,
    second opinion engaging on starved pages. **Full-pipeline profile:
    OCR = 88% of wall (6.5 s/page p50 WASM under load), 0.54 pages/sec,
-   budget ~2.3 GB OS-max RSS/worker (9 GB for 4).**
+   budget ~2.3 GB OS-max RSS/worker (9 GB for 4).** *(Mac/WASM figures —
+   superseded by the M1 target-hardware block below.)*
    **HPI GATE RUN (PR #64, Modal, 2026-08-23): the sidecar earns it.**
+   *(Gate-run OCR-only figures — superseded by the M1 full-pipeline
+   numbers below.)*
    HPI CPU (OpenVINO, v6-small) = 989 ms/page on 4 vCPU (~4
    core-s/page vs WASM's ~26 — ~6× core-efficiency; the 6.6× latency
    multiplier is cross-machine, stated as approximate). **GPU is DEAD
@@ -126,7 +129,8 @@ test, principles §9):**
    aggressive cross-page batching could, measure-if-ever). v6-medium:
    no gold gain at 2× cost. Scaling curve (PR #66): latency FLAT 1–8
    vCPU → **1-vCPU workers are the packing unit, ~1.45 core-s/page
-   (~18× WASM core-efficiency)**.
+   (~18× WASM core-efficiency)**. *(Ad-hoc Modal OCR-only figures —
+   superseded by the M1 full-pipeline numbers below.)*
    **ADOPTED AND INTEGRATED (owner decision 2026-08-22; PRs #67 + #69
    merged).** The sidecar is the service's canonical OCR witness:
    subprocess-per-worker JSONL protocol, hash-pinned models
@@ -155,7 +159,10 @@ test, principles §9):**
    unit — linux/amd64, engine+weight pins asserted at build time, baked
    models failing the build on hash mismatch, `/health` readiness
    gating traffic, SIGTERM drain verified to leave ZERO surviving
-   Python processes with the interrupted job resuming on restart.**
+   Python processes with the interrupted job resuming on restart —
+   verified under Modal's (gVisor) init, not plain `docker run --init`,
+   and with USER skipped by Modal, so the non-root user and the docker
+   `--init` reaping path await a first-real-host smoke.**
    Ceremony record (PR #67): Three
    witnesses on 90 pages: candidate ≡ server witness (2 discordant
    tokens of 1,223; 98.7% byte-identical raw lines), candidate-worse
