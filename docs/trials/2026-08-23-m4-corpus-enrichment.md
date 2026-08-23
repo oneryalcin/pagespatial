@@ -36,7 +36,11 @@ reference for criterion 2 is the ladder's **$0.001454 per enriched page**
    nothing here: these criteria are properties of the records and the
    routing/enrichment code, not of the OCR runtime — and replayed records
    cannot be injected through the container's HTTP ingress, which parses
-   fresh.
+   fresh. One platform residue: phase-B's 150 dpi crops/rasters in this
+   run came from the Mac's poppler build, not the container's — irrelevant
+   to routing (which reads only the stored record and the
+   `ENRICH_RENDER_DPI` constant), stated for completeness of the
+   "nothing container-dependent" claim.
 2. **Container corpus run (Modal, the committed Dockerfile, the real
    service over HTTP).** The 162-page development corpus (M1's 23
    qpdf-lossless subset PDFs — page numbering remapped, so this run
@@ -102,6 +106,14 @@ pages dev-v13 actually has. Absolute recalls are not comparable across
 eras or scorer mechanisms; the checkable claim is the same-era gain,
 same scorer, same replayed records.
 
+The cross-check that closes the question (cold review, PR #84): overlay
+this replay's enrichment records on the **dev-v12 run-root** — the
+original 19 pages, 417 gold tokens — and the committed scorer returns
+exactly **381→382 (+1)**, meeting the committed floor under the
+design's literal wording too. The re-basing hides nothing; the criterion
+passes on both readings. (The 19th page sits at 41/47 unenriched either
+way.)
+
 Replay-side spend: 219,710 prompt + 20,275 output tokens, **$0.1204**
 (batch pricing), $0.001433 per enriched page — an independent
 corroboration of criterion 2's ladder figure from a second code path.
@@ -127,7 +139,8 @@ and no `enrichment/` directory in its job dir.
 **dev-v13-era blocking count, new measurements, not parity targets**:
 the replayed dev-v13 records qualify **84** pages (80 adj + 4 full); the
 container's fresh first-pass records on the same page images qualify
-**83** (78 adj + 5 full). The one-page delta is cross-container
+**83** (78 adj + 5 full) — a count delta of one, with the composition
+also shifting (one page adj→full). The delta is cross-container
 first-pass variance of the conflict set (the ceremony's ±4-token
 container variance, M1 criterion 2), not a routing difference — routing
 parity on FIXED records is criterion 1's zero-mismatch result. dev-v12's
