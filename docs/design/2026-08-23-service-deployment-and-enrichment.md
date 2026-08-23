@@ -459,15 +459,23 @@ depends on both.
 Each milestone follows the house pattern: PR, cold adversarial review,
 findings fixed with the reviewer's repro as the regression test, merge.
 
-# Open questions for the owner
+# Open questions — ANSWERED (owner, 2026-08-23)
 
-1. **Enrichment default**: `off` (recommended — explicit opt-in for a paid
-   feature) or `batch`?
-2. **Cost caps**: what per-job page ceiling, and what service-level
-   concurrent-batch limit and aggregate spend ceiling?
-3. **If the EP control shows differences beyond the derived tolerance**:
-   cut `dev-v14` on Linux/OpenVINO as the deploy-era reference, or treat
-   `dev-v13` as authoritative and document the delta?
+1. **Enrichment default: `off`.** Explicit opt-in for a paid feature.
+2. **Cost caps** (delegated to implementation; conservative,
+   env-overridable defaults):
+   - Per-job page ceiling: `ENRICH_MAX_PAGES_PER_JOB`, default **200**
+     enriched pages. Exceeding it runs parse-only with a stated reason.
+   - Service concurrent-chunk limit: `ENRICH_MAX_CONCURRENT_CHUNKS`,
+     default **4**. When saturated, phase B queues; phase A proceeds.
+   - Aggregate spend ceiling: `ENRICH_SPEND_CEILING_USD`, default **$10**
+     per service process lifetime, estimated from the runner's per-source
+     accounting. Reaching it marks further enrichment `unavailable`
+     (fail-open) and surfaces prominently in `/v1/metrics`.
+3. **EP control surprises: `dev-v13` stays authoritative** and the delta
+   is documented in the trial record. No `dev-v14` cut on Linux/OpenVINO;
+   the era rule (same-host EP control before comparing diagnostics)
+   stands unchanged.
 
 # Numbers cited here, and what they measure
 
