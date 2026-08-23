@@ -7,7 +7,9 @@ browser. Exists to measure per-stage cost; see
 
 ```
 npm run build                  # service consumes dist/
-node service/server.mjs        # PORT=8571 SERVICE_WORKERS=2 SERVICE_DATA_DIR=service/data
+SERVICE_ALLOW_PDF_PATH=1 node service/server.mjs   # PORT=8571 SERVICE_WORKERS=2 SERVICE_DATA_DIR=service/data
+# (SERVICE_ALLOW_PDF_PATH=1 enables the JSON pdfPath dev mode used by the
+# first curl below and by loadtest.mjs; default-off — see Trust model.)
 
 curl -X POST :8571/v1/jobs -H 'content-type: application/json' -d '{"pdfPath":"/abs/doc.pdf"}'
 curl -X POST :8571/v1/jobs -H 'content-type: application/pdf' --data-binary @doc.pdf
@@ -32,7 +34,10 @@ control):
 
 ```sh
 docker build --platform=linux/amd64 -t pagespatial-service .
-docker run --init -p 8571:8571 pagespatial-service
+# -p 127.0.0.1:8571:8571 — a bare `-p 8571:8571` publishes on ALL of the
+# HOST's interfaces, re-opening exactly the exposure the loopback default
+# closed. Bind wider only behind your own gateway.
+docker run --init -p 127.0.0.1:8571:8571 pagespatial-service
 ```
 
 `--init` (or a tini entrypoint) is **part of the shutdown contract**, not a
@@ -203,10 +208,12 @@ This service is built for a **trusted caller** — there is no
 authentication, and none is pretended. Correction (2026-08-23, cold
 review): earlier versions of this section claimed the service "binds to
 localhost" while the code listened on **all interfaces**. The bind is now
-loopback (`127.0.0.1`) by default; set `HOST` explicitly to bind wider
-(the container image sets `HOST=0.0.0.0` because a loopback bind would
-make the published port unreachable — the trust boundary there is the
-container network, which you own). Two consequences:
+loopback (`127.0.0.1`) by default; set `HOST` explicitly to bind wider.
+The container image sets `HOST=0.0.0.0` because a loopback bind would
+make the published port unreachable — and note the boundary is then
+wherever docker publishes it: a bare `-p 8571:8571` binds ALL of the
+host's interfaces, so publish as `-p 127.0.0.1:8571:8571` unless a
+gateway you control fronts the port. Two consequences:
 
 - **`pdfPath` mode is OFF by default** (`403` unless
   `SERVICE_ALLOW_PDF_PATH=1`): it is an arbitrary server-file read plus a
