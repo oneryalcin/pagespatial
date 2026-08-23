@@ -395,7 +395,7 @@ scaling sublinear (2.9× at 4, 6.1× at 16)
 and stated as such. The production remote API and distributed
 enrichment remain gated exactly as §15/§13 specify.
 
-## Criterion-8 closure addendum (2026-08-24): the four reparented processes were zombies
+## Criterion-8 closure addendum (2026-08-24): direct drain evidence; the M3 four remain unclassified
 
 An external review of the adoption correctly refused "zero orphans" as
 proven: the arm-8 `probe-exit-drain.json` listed four `python` processes
@@ -429,12 +429,16 @@ document parsed first so the full service tree existed; artifact
   processes of ANY kind in the namespace; no survivors, no zombies, no
   indeterminates; scratch removed; `clean: true` under the strict rule.
 
-Conclusion: the M3 scan's four processes were **corpses pending pid 1's
-reap at the instant of a point-in-time scan**, not leaks — given a
-bounded reap window the namespace empties completely. **Criterion 8
-stands as a genuine PASS; the 12/12 result is closed with direct
-evidence.** The app was stopped after the probe (zero pagespatial
-containers).
+Conclusion (worded per the second external review — the old probe
+recorded no state field, so the M3 four **remain unclassified**; the
+zombie explanation is consistent with kernel semantics — `/proc`
+cmdline is freed at exit, and the baseline proves live sidecars keep
+their argv — but it is an inference, not an observation): **the closure
+run observed the complete live service tree before drain and an empty
+PID namespace after drain. That directly satisfies criterion 8 without
+any claim about the old processes. Criterion 8 stands as a genuine
+PASS; the 12/12 result is closed with direct evidence.** The app was
+stopped after the probe (zero pagespatial containers).
 
 ## Evidence archive sealing (2026-08-24)
 
@@ -445,7 +449,10 @@ embedded-verdict `rejudge-*.json`, plus `2026-08-24-criterion8/`).
 
 - sha256: `e8b0b8ae9e992c30916f2fa6c3c0a3b202f25b4bead597d4067884606b54f015`
 - location: private HF dataset `oneryalcin/pagespatial-qualification-evidence`
-  (upload performed by the owner; private, immutable by convention —
-  never force-push this repo)
+  — **upload PENDING at this writing** (the publish action is
+  permission-gated for the agent; the owner performs it). Private
+  durable copy; integrity pinned by the committed SHA-256 digest above
+  (HF repositories are mutable — the digest provides tamper DETECTION,
+  not immutability).
 - retention: indefinite (qualification evidence for the adopted
   deployment; delete only when the adoption itself is superseded)
