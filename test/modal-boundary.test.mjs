@@ -65,3 +65,26 @@ test('adapter config invariants (§7): parse-only, loopback, bounded', () => {
   const callSites = adapter.match(/modal\.experimental\.stop_fetching_inputs\(\)/g) ?? [];
   assert.equal(callSites.length, 1);
 });
+
+test('test-only failure injection cannot reach the production deployment (§14.2)', () => {
+  const adapter = readFileSync(join(root, 'deploy', 'modal', 'modal_app.py'), 'utf8');
+  // Double gate: the runtime check requires BOTH the explicit env flag AND
+  // a dev/test app name; either missing is a visible InputRejected.
+  assert.match(adapter, /def injection_allowed[\s\S]*?PAGESPATIAL_ENABLE_TEST_FAILURES.*== "1"[\s\S]*?_is_dev_app/);
+  assert.match(adapter, /raise InputRejected\("test_failure is not available on this deployment"\)/);
+  // The env flag is baked into the image ONLY under modal.is_local() when
+  // an operator sets it at deploy time, and deploying it to a non-dev app
+  // name refuses outright — the flag has no default anywhere.
+  const bakes = adapter.match(/_baked_env\["PAGESPATIAL_ENABLE_TEST_FAILURES"\] = "1"/g) ?? [];
+  assert.equal(bakes.length, 1, 'exactly one conditional bake site');
+  assert.match(adapter, /if _enable_test_failures and not _is_dev_app\(APP_NAME\):\s*\n\s*raise RuntimeError/);
+  assert.doesNotMatch(adapter, /PAGESPATIAL_ENABLE_TEST_FAILURES.*=.*"1".*#.*default/);
+  // Injection modes are a closed set with NO container self-kill: §14.2
+  // requires container failure to be injected externally and one-shot (a
+  // self-kill input would be rescheduled and could crash-loop).
+  assert.match(adapter, /INJECTION_MODES = \("exception", "timeout", "kill-node"\)/);
+  assert.doesNotMatch(adapter, /"kill-container"|os\.kill\(\s*1\b|sys\.exit\(.*\)\s*#.*inject/);
+  // Lifecycle probes sit behind the same gate.
+  const probeGates = adapter.match(/self\._require_dev_instrument\("probe_/g) ?? [];
+  assert.equal(probeGates.length, 2, 'both probes are dev-gated');
+});
