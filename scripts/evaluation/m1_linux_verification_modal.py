@@ -275,23 +275,66 @@ def _proc_scan(needles: tuple) -> list:
     return found
 
 
-def _vmhwm(pid: int):
+def _proc_mem(pid: int):
+    """All Vm* fields (kB) from /proc/<pid>/status — gVisor's procfs omits
+    some (VmHWM was observed absent), so return whatever the kernel offers
+    and let the caller say which field it is quoting."""
+    fields = {}
     try:
         for line in (Path("/proc") / str(pid) / "status").read_text().splitlines():
-            if line.startswith("VmHWM"):
-                return int(line.split()[1])  # kB
-    except OSError:
-        return None
-    return None
+            if line.startswith("Vm") or line.startswith("Rss"):
+                parts = line.split()
+                if len(parts) >= 2 and parts[1].isdigit():
+                    fields[parts[0].rstrip(":")] = int(parts[1])
+    except OSError as error:
+        fields["error"] = str(error)
+    return fields
 
 
-def _cgroup_peak():
-    for path in ("/sys/fs/cgroup/memory.peak", "/sys/fs/cgroup/memory/memory.max_usage_in_bytes"):
+class _PeakSampler:
+    """OS-derived peak RSS by 2 s /proc sampling — used where the kernel
+    surfaces no VmHWM/cgroup peak (gVisor). A sampled max LOWER-BOUNDS the
+    true high-water mark; labeled as such in the results."""
+
+    def __init__(self, needles):
+        import threading
+
+        self.needles = needles
+        self.peaks = {}  # pid -> {"match", "maxVmRssKb", "lastVmRssKb", "vmHwmKb"}
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def _loop(self):
+        while not self._stop.is_set():
+            for proc in _proc_scan(self.needles):
+                mem = _proc_mem(proc["pid"])
+                rss = mem.get("VmRSS")
+                if rss is None:
+                    continue
+                entry = self.peaks.setdefault(proc["pid"], {"match": proc["match"], "maxVmRssKb": 0, "vmHwmKb": None})
+                entry["maxVmRssKb"] = max(entry["maxVmRssKb"], rss)
+                entry["lastVmRssKb"] = rss
+                if mem.get("VmHWM") is not None:
+                    entry["vmHwmKb"] = mem["VmHWM"]
+            self._stop.wait(2)
+
+    def stop(self):
+        self._stop.set()
+        self._thread.join(timeout=5)
+        return [{"pid": pid, **entry} for pid, entry in sorted(self.peaks.items())]
+
+
+def _cgroup_probe():
+    out = {}
+    for path in ("/sys/fs/cgroup/memory.peak", "/sys/fs/cgroup/memory.current",
+                 "/sys/fs/cgroup/memory/memory.max_usage_in_bytes",
+                 "/sys/fs/cgroup/memory/memory.usage_in_bytes"):
         try:
-            return int(Path(path).read_text().strip())
+            out[path] = int(Path(path).read_text().strip())
         except (OSError, ValueError):
             continue
-    return None
+    return out
 
 
 def _submit_and_drain(port: int, pdfs: list) -> dict:
@@ -388,17 +431,20 @@ def _shutdown_and_probe(server, timeout_s: float = 60.0) -> dict:
 def throughput(pdfs: list, workers: int, threads: int) -> dict:
     """Criterion 3 (one packing) + criterion 1 evidence + drain probe."""
     port = 8571
+    sampler = _PeakSampler(("worker.mjs", "ppocr_sidecar", "server.mjs"))
     server = _start_server(port, {"SERVICE_WORKERS": str(workers), "SERVICE_SIDECAR_THREADS": str(threads)})
     health = _wait_health(port, 1500)
     run = _submit_and_drain(port, pdfs)
     pages_raw = run.pop("_pagesRaw")
     provenance = _provenance_from(pages_raw)
-    # OS-max RSS BEFORE shutdown, from /proc (never process.memoryUsage).
+    # OS-max RSS BEFORE shutdown, from /proc (never process.memoryUsage):
+    # VmHWM where the kernel offers it; otherwise the 2 s-sampled VmRSS max
+    # (a lower bound on the true peak, labeled).
     rss = {
-        "workersVmHwmKb": [{"pid": p["pid"], "vmHwmKb": _vmhwm(p["pid"])} for p in _proc_scan(("worker.mjs",))],
-        "sidecarsVmHwmKb": [{"pid": p["pid"], "vmHwmKb": _vmhwm(p["pid"])} for p in _proc_scan(("ppocr_sidecar",))],
-        "serverVmHwmKb": _vmhwm(server.pid),
-        "cgroupPeakBytes": _cgroup_peak(),
+        "method": "/proc/<pid>/status VmHWM where present; else max of 2s-sampled VmRSS (lower bound)",
+        "processes": sampler.stop(),
+        "statusFieldsExample": _proc_mem(server.pid),
+        "cgroup": _cgroup_probe(),
     }
     status, metrics = _http("GET", port, "/v1/metrics")
     drain = _shutdown_and_probe(server)
