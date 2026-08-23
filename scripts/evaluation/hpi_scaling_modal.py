@@ -1,7 +1,11 @@
 """Per-core scaling curve for the HPI CPU sidecar candidate (issue #2,
 adoption-ceremony item): the same 32-page sample and HPI OpenVINO v6-small
-config as hpi_bench_modal.py, run at 1 / 2 / 4 / 8 vCPU with
-cpu_num_threads matched to the vCPU count (no oversubscription).
+config as hpi_bench_modal.py, run at cpu=1/2/4/8. Unit correction
+2026-08-23: Modal cpu=N is N PHYSICAL cores (~2N vCPU threads), so
+"vCPU" below is mislabeled and cpu_num_threads=N matched the PHYSICAL
+core count (i.e. half the hardware threads — not the "no
+oversubscription" pairing originally claimed). Measured values stand;
+see docs/design/2026-08-23-modal-scaling-and-deployment.md §3.6.
 
 The decision it feeds: worker packing density. If core-seconds/page is
 ~flat across sizes, many 1-vCPU workers maximize throughput per box; if

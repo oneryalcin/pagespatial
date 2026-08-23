@@ -88,7 +88,12 @@ container that starts is one whose weights the adoption ceremony
 validated.
 
 **Worker topology: one container runs N single-vCPU workers, sized N
-vCPU** — keeping the in-process queue means the hardened machinery
+vCPU** *(unit correction 2026-08-23: the measurements behind this were
+Modal `cpu=N` = N PHYSICAL cores, not vCPUs, and the packing-unit
+generalization is retracted — the implemented M1 result is "four
+one-thread workers beat one four-thread worker on one 4-physical-core
+allocation"; see `2026-08-23-modal-scaling-and-deployment.md` §3.6)* —
+keeping the in-process queue means the hardened machinery
 (resumable disk-backed jobs, crash requeue, degraded-pool 503, SIGTERM
 drain) works unchanged. *Rejected for now:* one-worker-per-container with
 an external queue — the right k8s-native shape eventually, but it replaces
