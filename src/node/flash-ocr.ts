@@ -500,11 +500,36 @@ export async function awaitFlashBatch(options: {
   const pollInterval = options.pollIntervalMs ?? 15_000;
   for (;;) {
     if (Date.now() > deadline) throw new Error(`Batch ${operation.name} did not complete within the deadline.`);
-    await new Promise((resolve) => setTimeout(resolve, pollInterval));
-    const poll = await fetchImpl(`https://generativelanguage.googleapis.com/v1beta/${operation.name}`, {
-      headers: { 'x-goog-api-key': options.apiKey },
-      signal: options.signal ?? null
+    // Abortable sleep: a shutting-down caller must not be pinned to the
+    // poll interval. Abort is NOT terminal for the batch — it keeps running
+    // (and billing) remotely; callers treat it like a deadline and rejoin.
+    // The abort listener is removed when the timer fires: a long-lived
+    // signal must not accumulate one listener per poll iteration.
+    await new Promise<void>((resolve) => {
+      if (options.signal?.aborted) return resolve();
+      const onAbort = () => { clearTimeout(timer); resolve(); };
+      const timer = setTimeout(() => { options.signal?.removeEventListener('abort', onAbort); resolve(); }, pollInterval);
+      options.signal?.addEventListener('abort', onAbort, { once: true });
     });
+    if (options.signal?.aborted) {
+      const aborted = new Error(`Batch poll aborted for ${operation.name}; the batch is still running.`);
+      aborted.name = 'AbortError';
+      throw aborted;
+    }
+    let poll: Response;
+    try {
+      poll = await fetchImpl(`https://generativelanguage.googleapis.com/v1beta/${operation.name}`, {
+        headers: { 'x-goog-api-key': options.apiKey },
+        signal: options.signal ?? null
+      });
+    } catch (error) {
+      // A transport-level rejection (ECONNRESET, DNS blip, 'fetch failed')
+      // is transient: the batch is paid for and still running remotely, so
+      // one bad poll must never discard it. Keep polling until the
+      // deadline; only a caller abort is surfaced.
+      if (options.signal?.aborted) throw error;
+      continue;
+    }
     if (!poll.ok) {
       // Auth/permission failures will never heal; only transient statuses
       // keep waiting.

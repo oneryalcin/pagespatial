@@ -90,6 +90,45 @@ writes are atomic temp+rename). Page failures are fail-closed per page
 contain corpus-derived text — keep the data dir out of git and treat it
 as private.
 
+## Escalated-tier enrichment (opt-in, paid)
+
+Design: `docs/design/2026-08-23-service-deployment-and-enrichment.md`
+(workstream 2). Submit with `?enrichment=batch` (bytes mode) to run a
+second phase after parse: qualifying pages (blocking escalation reasons
+only) are routed through the shared request-plan builder, rendered at
+**150 dpi** (a second pdftoppm pass — never the parse raster), and
+submitted to Gemini through the **Batch API only** (50% pricing; zero
+interactive calls, test-enforced). Results land as separate digest-bound
+revision records under `<jobDir>/enrichment/` — canonical page records
+are never touched, and `pages/` never gains a non-page file.
+
+```
+curl -X POST ':8571/v1/jobs?enrichment=batch' -H 'content-type: application/pdf' --data-binary @doc.pdf
+curl :8571/v1/jobs/<jobId>                      # + enrichmentStatus, per-page enrichmentState
+curl :8571/v1/jobs/<jobId>/pages/3/enrichment   # the revision record; 404 when none
+```
+
+Enrichment is **fail-open**: Gemini down, over budget, or malformed means
+the job still completes with `enrichmentStatus: unavailable`. Inside it,
+staleness fails closed: a re-parsed page's stored enrichment goes
+`stale` and is never served. The server owns batch polling; a restart's
+boot sweep rejoins persisted batch operations from the manifest and never
+resubmits paid work.
+
+Env: `GEMINI_API_KEY` (environment only), `ENRICH_MAX_PAGES_PER_JOB`
+(default 200; beyond it the job runs parse-only with a stated reason),
+`ENRICH_MAX_CONCURRENT_CHUNKS` (default 4, service-wide; phase B queues,
+phase A of new jobs proceeds), `ENRICH_SPEND_CEILING_USD` (default 10 per
+process lifetime; surfaced in `/v1/metrics`), `ENRICH_MAX_ENTRIES_PER_CHUNK`
+(default 24 requests per batch submission).
+
+**Privacy/egress**: enrichment transmits rendered page images to the
+Gemini API — use only where remote processing of the documents is
+authorized. `enrichment=batch` is refused (400) for `pdfPath`-submitted
+jobs: with enrichment on, a caller-named server path would become a
+data-egress primitive. Bytes are re-verified against the job's
+`documentSha256` immediately before transmission.
+
 ## Trust model (v1)
 
 This service binds to localhost for a **trusted caller** — there is no

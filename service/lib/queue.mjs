@@ -8,13 +8,15 @@
  */
 import { fork } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 
 import { openDocumentContext } from './stages.mjs';
 import { Metrics } from './metrics.mjs';
+import { writeFileAtomic } from './atomic.mjs';
+import { EnrichmentPhase } from './enrichment.mjs';
 
 const WORKER_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'worker.mjs');
 const MAX_ATTEMPTS = 2;
@@ -25,17 +27,8 @@ const MAX_CONSECUTIVE_WORKER_DEATHS = 5;
 
 const pageFile = (dir, pageNumber) => join(dir, 'pages', `${String(pageNumber).padStart(6, '0')}.json`);
 
-// State files are completion markers: resume() and checkCompletion() treat
-// their PRESENCE as truth, so a torn write must never leave a partial file
-// behind. Write-to-temp + rename is atomic on the same filesystem.
-function writeFileAtomic(path, contents) {
-  const temp = `${path}.tmp-${randomBytes(4).toString('hex')}`;
-  writeFileSync(temp, contents);
-  renameSync(temp, path);
-}
-
 export class ParseService {
-  constructor({ dataDir, workers = 2, adapterId = 'stub-ocr', ocr = {}, maxConsecutiveWorkerDeaths = MAX_CONSECUTIVE_WORKER_DEATHS }) {
+  constructor({ dataDir, workers = 2, adapterId = 'stub-ocr', ocr = {}, maxConsecutiveWorkerDeaths = MAX_CONSECUTIVE_WORKER_DEATHS, enrichment = {} }) {
     this.dataDir = dataDir;
     this.adapterId = adapterId;
     // Adapter-specific config (ppocr-server: assetsDir/variant/numThreads).
@@ -50,7 +43,16 @@ export class ParseService {
     this.consecutiveWorkerDeaths = 0;
     this.degraded = false;
     mkdirSync(dataDir, { recursive: true });
+    // Phase B executor (design 2026-08-23 workstream 2). The SERVER process
+    // owns batch polling — workers are per-page children that die and
+    // respawn; this is the only long-lived process.
+    this.enrichmentPhase = new EnrichmentPhase({ dataDir, metrics: this.metrics, options: enrichment });
     this.resume();
+    // Boot sweep, deliberately separate from resume(): resume short-circuits
+    // on completed jobs, and a job whose parse finished is exactly the job
+    // whose enrichment may still be in flight. Fire-and-forget; fail-open.
+    this.enrichmentSweep = this.enrichmentPhase.sweep(this.jobs)
+      .catch((error) => console.error(`enrichment boot sweep: ${String(error?.message ?? error)}`));
     for (let index = 0; index < workers; index += 1) this.spawnWorker();
   }
 
@@ -127,7 +129,20 @@ export class ParseService {
     }
   }
 
-  async submit({ pdfPath, sourceUri }) {
+  async submit({ pdfPath, sourceUri, enrichment = 'off', source = 'path' }) {
+    if (enrichment !== 'off' && enrichment !== 'batch') {
+      const error = new Error(`enrichment must be "off" or "batch", got '${enrichment}'.`);
+      error.statusCode = 400;
+      throw error;
+    }
+    // Egress (design): with enrichment on, pdfPath mode stops being an
+    // access-control gap and becomes a data-egress primitive — name a local
+    // file and the service ships it to Google. Refused outright.
+    if (enrichment === 'batch' && source !== 'upload') {
+      const error = new Error('enrichment: "batch" is refused for jobs submitted via pdfPath — upload the PDF bytes instead (remote transmission of arbitrary local paths is a data-egress primitive).');
+      error.statusCode = 400;
+      throw error;
+    }
     if (this.degraded) {
       // A degraded pool has no workers and never will: accepting the job
       // would 202 into a silent forever-hang.
@@ -153,6 +168,7 @@ export class ParseService {
       identityOptions: sourceUri ? { sourceUri } : {},
       adapterId: this.adapterId,
       ocr: this.ocr,
+      enrichment,
       runId,
       submittedAt: new Date().toISOString(),
       startedMs: performance.now()
@@ -232,6 +248,10 @@ export class ParseService {
       job.status = 'completed';
       job.completedAt = new Date().toISOString();
       writeFileAtomic(join(this.dataDir, jobId, 'job.json'), JSON.stringify(job, null, 1));
+      // Phase B (design decision 3): only when the job asked for it, only
+      // after parse completion. Fire-and-forget: enrichment failures never
+      // touch the parse result (fail-open, decision 6).
+      if (job.enrichment === 'batch') this.enrichmentPhase.start(job);
     }
   }
 
@@ -247,14 +267,28 @@ export class ParseService {
         // 500 the whole job over one unreadable file.
         try { return [JSON.parse(readFileSync(join(jobDir, 'pages', name), 'utf8'))]; } catch { return []; }
       });
+    // Enrichment state is COMPOSED into the response at read time — stored
+    // canonical page records are never touched (design decision 7), and the
+    // completedPages count above stays scoped to pages/ (decision 4).
+    const enrichment = this.enrichmentPhase.view(job);
     return {
       jobId,
       status: job.status,
       sha256: job.sha256,
       pageCount: job.pageCount,
       completedPages: pages.length,
-      pages
+      enrichmentStatus: enrichment.status,
+      ...(enrichment.reason ? { enrichmentReason: enrichment.reason } : {}),
+      pages: job.enrichment === 'batch'
+        ? pages.map((page) => ({ ...page, enrichmentState: enrichment.pageState(page.pageNumber) }))
+        : pages
     };
+  }
+
+  /** Enrichment record for one page (undefined = none/stale -> 404). */
+  async enrichmentRecord(jobId, pageNumber) {
+    if (!this.jobs.has(jobId)) return undefined;
+    return this.enrichmentPhase.record(jobId, pageNumber);
   }
 
   page(jobId, pageNumber) {
@@ -269,6 +303,10 @@ export class ParseService {
   }
 
   async shutdown() {
+    // Abort batch polling first: in-flight chunks persist as 'submitted' in
+    // their manifests and the next boot's sweep rejoins them (never
+    // resubmits). The remote batch keeps running; paid work is not lost.
+    await this.enrichmentPhase.shutdown();
     for (const slot of this.workers) {
       slot.child.removeAllListeners('exit');
       slot.child.kill();

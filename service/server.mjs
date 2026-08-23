@@ -5,14 +5,24 @@
  *   POST /v1/jobs                 PDF bytes (application/pdf), or JSON
  *                                 {"pdfPath": "..."} for local testing
  *                              -> {jobId, pageCount, sha256}
+ *                                 ?enrichment=batch (or JSON field) opts in
+ *                                 to the escalated tier — default off;
+ *                                 refused (400) for pdfPath submissions.
  *   GET  /v1/jobs/:id             status + per-page results AS THEY COMPLETE
+ *                                 (+ enrichmentStatus / per-page enrichmentState)
  *   GET  /v1/jobs/:id/pages/:n    one page result
  *   GET  /v1/jobs/:id/pages/:n.svg  deterministic reconstruction (#51) —
  *                                 canonical records only, image/svg+xml
- *   GET  /v1/metrics              per-stage aggregate since boot
+ *   GET  /v1/jobs/:id/pages/:n/enrichment  enrichment revision record (404 when none)
+ *   GET  /v1/metrics              per-stage aggregate since boot + enrichment counters
  *
  * Env: PORT (default 8571), SERVICE_DATA_DIR (default service/data),
  * SERVICE_WORKERS (default 2), SERVICE_OCR_ADAPTER (default stub-ocr).
+ * Enrichment (design 2026-08-23): GEMINI_API_KEY (environment only — no
+ * per-request keys), ENRICH_MAX_PAGES_PER_JOB (default 200),
+ * ENRICH_MAX_CONCURRENT_CHUNKS (default 4), ENRICH_SPEND_CEILING_USD
+ * (default 10, per process lifetime), ENRICH_MAX_ENTRIES_PER_CHUNK
+ * (default 24).
  * For the canonical adapter (SERVICE_OCR_ADAPTER=ppocr-server):
  *   SERVICE_OCR_ASSETS_DIR  required — model assets dir (explicit, no magic)
  *   SERVICE_OCR_VARIANT     default 'small' (the evaluation-parity tier)
@@ -180,6 +190,12 @@ const server = createServer(async (req, res) => {
       let pdfPath;
       let sourceUri;
       let uploaded = false;
+      // enrichment: "off" | "batch" (default off — paid feature, explicit
+      // opt-in). Bytes mode reads the query string (the body is the PDF);
+      // JSON mode reads the field. Batch is refused for pdfPath jobs in
+      // ParseService.submit (egress: a local path must never be shipped to
+      // a remote model).
+      let enrichment = url.searchParams.get('enrichment') ?? 'off';
       if ((req.headers['content-type'] ?? '').includes('application/json')) {
         let parsed;
         try {
@@ -189,6 +205,7 @@ const server = createServer(async (req, res) => {
         }
         pdfPath = parsed.pdfPath;
         sourceUri = parsed.sourceUri;
+        enrichment = parsed.enrichment ?? enrichment;
         if (typeof pdfPath !== 'string' || !pdfPath) return json(res, 400, { error: 'pdfPath (string) is required in JSON mode.' });
       } else {
         if (!body.length) return json(res, 400, { error: 'Send PDF bytes, or JSON {"pdfPath": "..."}.' });
@@ -197,11 +214,12 @@ const server = createServer(async (req, res) => {
         uploaded = true;
       }
       try {
-        const submitted = await service.submit({ pdfPath, sourceUri });
+        const submitted = await service.submit({ pdfPath, sourceUri, enrichment, source: uploaded ? 'upload' : 'path' });
         return json(res, 202, submitted);
       } catch (error) {
         // A rejected upload is dead weight (and its bytes may be sensitive).
         if (uploaded) rmSync(pdfPath, { force: true });
+        if (error.statusCode === 400) return json(res, 400, { error: error.message });
         if (error.statusCode === 503) return json(res, 503, { error: error.message });
         return json(res, 422, { error: `Could not open PDF: ${error.message}` });
       }
@@ -210,6 +228,15 @@ const server = createServer(async (req, res) => {
     if (req.method === 'GET' && parts[0] === 'v1' && parts[1] === 'jobs' && parts.length === 3) {
       const status = service.jobStatus(parts[2]);
       return status ? json(res, 200, status) : json(res, 404, { error: 'Unknown job.' });
+    }
+
+    if (req.method === 'GET' && parts[0] === 'v1' && parts[1] === 'jobs' && parts[3] === 'pages' && parts[5] === 'enrichment' && parts.length === 6) {
+      // Deliberately its own endpoint, never folded into the page endpoint:
+      // enrichment is a separate digest-bound revision artifact (decision 7)
+      // and the client composes. 404 when none (not qualified, not landed,
+      // stale, or unavailable).
+      const record = await service.enrichmentRecord(parts[2], Number(parts[4]));
+      return record ? json(res, 200, record) : json(res, 404, { error: 'No enrichment record for that page.' });
     }
 
     if (req.method === 'GET' && parts[0] === 'v1' && parts[1] === 'jobs' && parts[3] === 'pages' && parts.length === 5) {
