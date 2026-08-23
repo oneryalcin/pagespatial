@@ -1,0 +1,1089 @@
+{
+ "schemaVersion": "pagespatial-modal-qualification-v1",
+ "source": {
+  "corpus": "evaluation/corpus.v1.json",
+  "subset_builder": "scripts/evaluation/build-corpus-subset-pdfs.mjs",
+  "note": "Subset PDFs live outside git; this manifest carries hashes and counts only."
+ },
+ "correctness": [
+  {
+   "request_id": "m3-corr-01-public_comps_monotaro_2025_fy_004",
+   "object_id": "public-comps:monotaro:2025-fy:004",
+   "sha256": "c0acd4f272d035608fb3ff7cb5198cfb99c1855386c39f965b51243ddb6f6a04",
+   "bytes": 2169988,
+   "pages": 9,
+   "class_labels": [
+    "chart",
+    "dense-table",
+    "mixed-raster-native",
+    "multi-column",
+    "multilingual",
+    "native-text",
+    "translation-sibling"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-02-public_comps_monotaro_2025_fy_003",
+   "object_id": "public-comps:monotaro:2025-fy:003",
+   "sha256": "0afe5afdaee641c62a8dcceff4ba3d5679c278a136e0af68fb23991648e0fb3e",
+   "bytes": 2569321,
+   "pages": 9,
+   "class_labels": [
+    "chart",
+    "dense-table",
+    "mixed-raster-native",
+    "multi-column",
+    "multilingual",
+    "native-text",
+    "translation-sibling"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-03-public_comps_asseco_poland_2025_fy_001",
+   "object_id": "public-comps:asseco-poland:2025-fy:001",
+   "sha256": "02e6151e00374f91b435c8029272f638e70d984b38399ac1ba6e14b28615b097",
+   "bytes": 1207975,
+   "pages": 27,
+   "class_labels": [
+    "dense-table",
+    "long-document",
+    "mixed-raster-native",
+    "multi-column",
+    "multilingual",
+    "native-text"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-04-public_comps_ares_2026_q1_002",
+   "object_id": "public-comps:ares:2026-q1:002",
+   "sha256": "b4a849615b00297af6a9b8a2d9fd3a8b7f57867511b5ed2ed1c2fe81f2cfbf13",
+   "bytes": 983158,
+   "pages": 31,
+   "class_labels": [
+    "dense-table",
+    "long-document",
+    "mixed-raster-native",
+    "native-text"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-05-public_comps_blackstone_2026_q1_002",
+   "object_id": "public-comps:blackstone:2026-q1:002",
+   "sha256": "41b004c97abeca6733cdc8d811ab2e9b9efe295a024cc1f92c7ed14fd925c5ac",
+   "bytes": 151682,
+   "pages": 12,
+   "class_labels": [
+    "chart",
+    "dense-table",
+    "mixed-raster-native",
+    "native-text"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-06-pa_sers_2024_09_24_llr_vii_staff_memo",
+   "object_id": "pa-sers:2024-09-24:llr-vii:staff-memo",
+   "sha256": "1cc6ab0840c36a72c4d30d67f502f1d10ae6f3a011311f7c6d0af19a915df561",
+   "bytes": 597193,
+   "pages": 1,
+   "class_labels": [
+    "mixed-raster-native",
+    "native-text",
+    "packet-sibling"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-07-pa_sers_2024_09_24_llr_vii_consultant_memo",
+   "object_id": "pa-sers:2024-09-24:llr-vii:consultant-memo",
+   "sha256": "9f4773c2028697f328bdc7b8416d1b9598ee140f2d9f5fb8f1b9194c9cf9f714",
+   "bytes": 123619,
+   "pages": 2,
+   "class_labels": [
+    "dense-table",
+    "mixed-raster-native",
+    "native-text",
+    "packet-sibling",
+    "slides"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-08-pa_sers_2024_09_24_llr_vii_manager_presentation",
+   "object_id": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+   "sha256": "5034ed53e4aeeae197c4919a5326d1b69a1c9660ede21ee9d9230ff1335169c1",
+   "bytes": 2206937,
+   "pages": 11,
+   "class_labels": [
+    "chart",
+    "mixed-raster-native",
+    "native-text",
+    "packet-sibling",
+    "slides"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-09-pa_sers_2026_06_09_skyknight_capital_fund_v_l_p_3_5ffb7a77f66c",
+   "object_id": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+   "sha256": "5b37777b9a8c46f2ca1a97d6831bba74474e7132a0f2c4e5b2a97304411ce271",
+   "bytes": 1154577,
+   "pages": 11,
+   "class_labels": [
+    "chart",
+    "mixed-raster-native",
+    "native-text",
+    "slides"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-10-legistar_seattle_2438_v0_attachment_6113",
+   "object_id": "legistar:seattle:2438:v0:attachment:6113",
+   "sha256": "6f5e51eebb2b5945b85488af99b24ff0443fe237c015975582c7362bcb035056",
+   "bytes": 308814,
+   "pages": 3,
+   "class_labels": [
+    "image-only"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-11-legistar_seattle_1794_v0_attachment_3283",
+   "object_id": "legistar:seattle:1794:v0:attachment:3283",
+   "sha256": "e1f5e273c865c1e3cb357e600345b5ad363b9ff83d02e3208328697d46ddd13b",
+   "bytes": 673750,
+   "pages": 3,
+   "class_labels": [
+    "image-only",
+    "landscape"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-12-legistar_seattle_2159_v0_attachment_3326",
+   "object_id": "legistar:seattle:2159:v0:attachment:3326",
+   "sha256": "a47eca800e8347b33d7def3555fc991418ce96db50b8c52b1b385177c13b993c",
+   "bytes": 244862,
+   "pages": 3,
+   "class_labels": [
+    "mixed-raster-native",
+    "native-text",
+    "sparse-overlay"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-13-legistar_seattle_1859_v0_attachment_3318",
+   "object_id": "legistar:seattle:1859:v0:attachment:3318",
+   "sha256": "a1eb84b648551dc8cf491dd1e8520d823e8be02510770d25d5ab18cb46a4b564",
+   "bytes": 202996,
+   "pages": 3,
+   "class_labels": [
+    "image-only"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-14-world_bank_P170734_document_34222345",
+   "object_id": "world-bank:P170734:document:34222345",
+   "sha256": "a2878cd9feaae81354b195463d76296ccb41d73c46462b6e5262bd0e7ecc667e",
+   "bytes": 142510,
+   "pages": 3,
+   "class_labels": [
+    "dense-table",
+    "mixed-raster-native",
+    "native-text"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-15-world_bank_P178566_document_34223652",
+   "object_id": "world-bank:P178566:document:34223652",
+   "sha256": "ac294995a4f19d8a3f8d51a34dce6d8c812c71b81f943ecc2ba9a47b465d4052",
+   "bytes": 158269,
+   "pages": 3,
+   "class_labels": [
+    "dense-table",
+    "native-text"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-16-osf_file_64a59e4ea2a2f4140943711a_v1",
+   "object_id": "osf:file:64a59e4ea2a2f4140943711a:v1",
+   "sha256": "867c0a30d5f8475cae6573a4a493f59fc8bf77ede1cc1f8a81e007aa2c586e9e",
+   "bytes": 475066,
+   "pages": 6,
+   "class_labels": [
+    "dense-table",
+    "form",
+    "long-document",
+    "mixed-raster-native",
+    "native-text"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-17-osf_file_686ffb54a56d843965a6c614_v1",
+   "object_id": "osf:file:686ffb54a56d843965a6c614:v1",
+   "sha256": "75394a68825c501f2f5658055d7669bd927d8ccede4a0c11cd06969b6b916935",
+   "bytes": 458531,
+   "pages": 6,
+   "class_labels": [
+    "chart",
+    "dense-table",
+    "mixed-raster-native",
+    "multi-column",
+    "native-text"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-18-osf_file_607883db0c818200885135da_v1",
+   "object_id": "osf:file:607883db0c818200885135da:v1",
+   "sha256": "17031c281f5c0271661309138439ec804f89d53ceb5c76e929f6bdc1a157b87a",
+   "bytes": 946924,
+   "pages": 3,
+   "class_labels": [
+    "image-only",
+    "landscape",
+    "mixed-raster-native",
+    "native-text",
+    "slides"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-19-osf_file_6046e27ec7e7e6002f6ae7ee_v1",
+   "object_id": "osf:file:6046e27ec7e7e6002f6ae7ee:v1",
+   "sha256": "794f3938442765b90f5eeb4e3224a73674adf5f6375b33cd698dbaec48d4c1de",
+   "bytes": 274227,
+   "pages": 3,
+   "class_labels": [
+    "dense-table",
+    "native-text"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-20-osf_file_6a74c836f0cba432843c7153_v1",
+   "object_id": "osf:file:6a74c836f0cba432843c7153:v1",
+   "sha256": "1e29af83d37fb9c20e61fff39fa63197a6e834fc075f20c01e0e1829ef984584",
+   "bytes": 122807,
+   "pages": 3,
+   "class_labels": [
+    "native-text"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-21-osf_file_670e77f61b29952574a5e7a2_v1",
+   "object_id": "osf:file:670e77f61b29952574a5e7a2:v1",
+   "sha256": "adc7bf42b61a34e5ec21adca33b7a9419288973759b839f5fc881733bf8f4895",
+   "bytes": 598717,
+   "pages": 4,
+   "class_labels": [
+    "chart",
+    "landscape",
+    "long-document",
+    "mixed-raster-native",
+    "native-text",
+    "slides"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-22-osf_file_6826158a05236079589c42c3_v1",
+   "object_id": "osf:file:6826158a05236079589c42c3:v1",
+   "sha256": "3af7937ab89fbbf64c4bf3d628182db6434c9485bc1ef72fc690379031230dfd",
+   "bytes": 195567,
+   "pages": 3,
+   "class_labels": [
+    "multi-column",
+    "native-text",
+    "version-sibling"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  },
+  {
+   "request_id": "m3-corr-23-osf_file_6826162a05236079589c42d8_v1",
+   "object_id": "osf:file:6826162a05236079589c42d8:v1",
+   "sha256": "b4c50d55d24c3ebab98475c323f23cce4a1da73f8140cc843e0af098208a1ecd",
+   "bytes": 194403,
+   "pages": 3,
+   "class_labels": [
+    "native-text",
+    "version-sibling"
+   ],
+   "expected_disposition": "completed",
+   "permission": "approved-public-evaluation"
+  }
+ ],
+ "scaling": [
+  {
+   "request_id": "m3-scale-001-public_comps_monotaro_2025_fy_004",
+   "object_id": "public-comps:monotaro:2025-fy:004",
+   "sha256": "c0acd4f272d035608fb3ff7cb5198cfb99c1855386c39f965b51243ddb6f6a04",
+   "bytes": 2169988,
+   "pages": 9
+  },
+  {
+   "request_id": "m3-scale-002-public_comps_monotaro_2025_fy_003",
+   "object_id": "public-comps:monotaro:2025-fy:003",
+   "sha256": "0afe5afdaee641c62a8dcceff4ba3d5679c278a136e0af68fb23991648e0fb3e",
+   "bytes": 2569321,
+   "pages": 9
+  },
+  {
+   "request_id": "m3-scale-003-public_comps_asseco_poland_2025_fy_001",
+   "object_id": "public-comps:asseco-poland:2025-fy:001",
+   "sha256": "02e6151e00374f91b435c8029272f638e70d984b38399ac1ba6e14b28615b097",
+   "bytes": 1207975,
+   "pages": 27
+  },
+  {
+   "request_id": "m3-scale-004-public_comps_ares_2026_q1_002",
+   "object_id": "public-comps:ares:2026-q1:002",
+   "sha256": "b4a849615b00297af6a9b8a2d9fd3a8b7f57867511b5ed2ed1c2fe81f2cfbf13",
+   "bytes": 983158,
+   "pages": 31
+  },
+  {
+   "request_id": "m3-scale-005-public_comps_blackstone_2026_q1_002",
+   "object_id": "public-comps:blackstone:2026-q1:002",
+   "sha256": "41b004c97abeca6733cdc8d811ab2e9b9efe295a024cc1f92c7ed14fd925c5ac",
+   "bytes": 151682,
+   "pages": 12
+  },
+  {
+   "request_id": "m3-scale-006-pa_sers_2024_09_24_llr_vii_staff_memo",
+   "object_id": "pa-sers:2024-09-24:llr-vii:staff-memo",
+   "sha256": "1cc6ab0840c36a72c4d30d67f502f1d10ae6f3a011311f7c6d0af19a915df561",
+   "bytes": 597193,
+   "pages": 1
+  },
+  {
+   "request_id": "m3-scale-007-pa_sers_2024_09_24_llr_vii_consultant_memo",
+   "object_id": "pa-sers:2024-09-24:llr-vii:consultant-memo",
+   "sha256": "9f4773c2028697f328bdc7b8416d1b9598ee140f2d9f5fb8f1b9194c9cf9f714",
+   "bytes": 123619,
+   "pages": 2
+  },
+  {
+   "request_id": "m3-scale-008-pa_sers_2024_09_24_llr_vii_manager_presentation",
+   "object_id": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+   "sha256": "5034ed53e4aeeae197c4919a5326d1b69a1c9660ede21ee9d9230ff1335169c1",
+   "bytes": 2206937,
+   "pages": 11
+  },
+  {
+   "request_id": "m3-scale-009-pa_sers_2026_06_09_skyknight_capital_fund_v_l_p_3_5ffb7a77f66c",
+   "object_id": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+   "sha256": "5b37777b9a8c46f2ca1a97d6831bba74474e7132a0f2c4e5b2a97304411ce271",
+   "bytes": 1154577,
+   "pages": 11
+  },
+  {
+   "request_id": "m3-scale-010-legistar_seattle_2438_v0_attachment_6113",
+   "object_id": "legistar:seattle:2438:v0:attachment:6113",
+   "sha256": "6f5e51eebb2b5945b85488af99b24ff0443fe237c015975582c7362bcb035056",
+   "bytes": 308814,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-011-legistar_seattle_1794_v0_attachment_3283",
+   "object_id": "legistar:seattle:1794:v0:attachment:3283",
+   "sha256": "e1f5e273c865c1e3cb357e600345b5ad363b9ff83d02e3208328697d46ddd13b",
+   "bytes": 673750,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-012-legistar_seattle_2159_v0_attachment_3326",
+   "object_id": "legistar:seattle:2159:v0:attachment:3326",
+   "sha256": "a47eca800e8347b33d7def3555fc991418ce96db50b8c52b1b385177c13b993c",
+   "bytes": 244862,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-013-legistar_seattle_1859_v0_attachment_3318",
+   "object_id": "legistar:seattle:1859:v0:attachment:3318",
+   "sha256": "a1eb84b648551dc8cf491dd1e8520d823e8be02510770d25d5ab18cb46a4b564",
+   "bytes": 202996,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-014-world_bank_P170734_document_34222345",
+   "object_id": "world-bank:P170734:document:34222345",
+   "sha256": "a2878cd9feaae81354b195463d76296ccb41d73c46462b6e5262bd0e7ecc667e",
+   "bytes": 142510,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-015-world_bank_P178566_document_34223652",
+   "object_id": "world-bank:P178566:document:34223652",
+   "sha256": "ac294995a4f19d8a3f8d51a34dce6d8c812c71b81f943ecc2ba9a47b465d4052",
+   "bytes": 158269,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-016-osf_file_64a59e4ea2a2f4140943711a_v1",
+   "object_id": "osf:file:64a59e4ea2a2f4140943711a:v1",
+   "sha256": "867c0a30d5f8475cae6573a4a493f59fc8bf77ede1cc1f8a81e007aa2c586e9e",
+   "bytes": 475066,
+   "pages": 6
+  },
+  {
+   "request_id": "m3-scale-017-osf_file_686ffb54a56d843965a6c614_v1",
+   "object_id": "osf:file:686ffb54a56d843965a6c614:v1",
+   "sha256": "75394a68825c501f2f5658055d7669bd927d8ccede4a0c11cd06969b6b916935",
+   "bytes": 458531,
+   "pages": 6
+  },
+  {
+   "request_id": "m3-scale-018-osf_file_607883db0c818200885135da_v1",
+   "object_id": "osf:file:607883db0c818200885135da:v1",
+   "sha256": "17031c281f5c0271661309138439ec804f89d53ceb5c76e929f6bdc1a157b87a",
+   "bytes": 946924,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-019-osf_file_6046e27ec7e7e6002f6ae7ee_v1",
+   "object_id": "osf:file:6046e27ec7e7e6002f6ae7ee:v1",
+   "sha256": "794f3938442765b90f5eeb4e3224a73674adf5f6375b33cd698dbaec48d4c1de",
+   "bytes": 274227,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-020-osf_file_6a74c836f0cba432843c7153_v1",
+   "object_id": "osf:file:6a74c836f0cba432843c7153:v1",
+   "sha256": "1e29af83d37fb9c20e61fff39fa63197a6e834fc075f20c01e0e1829ef984584",
+   "bytes": 122807,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-021-osf_file_670e77f61b29952574a5e7a2_v1",
+   "object_id": "osf:file:670e77f61b29952574a5e7a2:v1",
+   "sha256": "adc7bf42b61a34e5ec21adca33b7a9419288973759b839f5fc881733bf8f4895",
+   "bytes": 598717,
+   "pages": 4
+  },
+  {
+   "request_id": "m3-scale-022-osf_file_6826158a05236079589c42c3_v1",
+   "object_id": "osf:file:6826158a05236079589c42c3:v1",
+   "sha256": "3af7937ab89fbbf64c4bf3d628182db6434c9485bc1ef72fc690379031230dfd",
+   "bytes": 195567,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-023-osf_file_6826162a05236079589c42d8_v1",
+   "object_id": "osf:file:6826162a05236079589c42d8:v1",
+   "sha256": "b4c50d55d24c3ebab98475c323f23cce4a1da73f8140cc843e0af098208a1ecd",
+   "bytes": 194403,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-024-public_comps_monotaro_2025_fy_004",
+   "object_id": "public-comps:monotaro:2025-fy:004",
+   "sha256": "c0acd4f272d035608fb3ff7cb5198cfb99c1855386c39f965b51243ddb6f6a04",
+   "bytes": 2169988,
+   "pages": 9
+  },
+  {
+   "request_id": "m3-scale-025-public_comps_monotaro_2025_fy_003",
+   "object_id": "public-comps:monotaro:2025-fy:003",
+   "sha256": "0afe5afdaee641c62a8dcceff4ba3d5679c278a136e0af68fb23991648e0fb3e",
+   "bytes": 2569321,
+   "pages": 9
+  },
+  {
+   "request_id": "m3-scale-026-public_comps_asseco_poland_2025_fy_001",
+   "object_id": "public-comps:asseco-poland:2025-fy:001",
+   "sha256": "02e6151e00374f91b435c8029272f638e70d984b38399ac1ba6e14b28615b097",
+   "bytes": 1207975,
+   "pages": 27
+  },
+  {
+   "request_id": "m3-scale-027-public_comps_ares_2026_q1_002",
+   "object_id": "public-comps:ares:2026-q1:002",
+   "sha256": "b4a849615b00297af6a9b8a2d9fd3a8b7f57867511b5ed2ed1c2fe81f2cfbf13",
+   "bytes": 983158,
+   "pages": 31
+  },
+  {
+   "request_id": "m3-scale-028-public_comps_blackstone_2026_q1_002",
+   "object_id": "public-comps:blackstone:2026-q1:002",
+   "sha256": "41b004c97abeca6733cdc8d811ab2e9b9efe295a024cc1f92c7ed14fd925c5ac",
+   "bytes": 151682,
+   "pages": 12
+  },
+  {
+   "request_id": "m3-scale-029-pa_sers_2024_09_24_llr_vii_staff_memo",
+   "object_id": "pa-sers:2024-09-24:llr-vii:staff-memo",
+   "sha256": "1cc6ab0840c36a72c4d30d67f502f1d10ae6f3a011311f7c6d0af19a915df561",
+   "bytes": 597193,
+   "pages": 1
+  },
+  {
+   "request_id": "m3-scale-030-pa_sers_2024_09_24_llr_vii_consultant_memo",
+   "object_id": "pa-sers:2024-09-24:llr-vii:consultant-memo",
+   "sha256": "9f4773c2028697f328bdc7b8416d1b9598ee140f2d9f5fb8f1b9194c9cf9f714",
+   "bytes": 123619,
+   "pages": 2
+  },
+  {
+   "request_id": "m3-scale-031-pa_sers_2024_09_24_llr_vii_manager_presentation",
+   "object_id": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+   "sha256": "5034ed53e4aeeae197c4919a5326d1b69a1c9660ede21ee9d9230ff1335169c1",
+   "bytes": 2206937,
+   "pages": 11
+  },
+  {
+   "request_id": "m3-scale-032-pa_sers_2026_06_09_skyknight_capital_fund_v_l_p_3_5ffb7a77f66c",
+   "object_id": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+   "sha256": "5b37777b9a8c46f2ca1a97d6831bba74474e7132a0f2c4e5b2a97304411ce271",
+   "bytes": 1154577,
+   "pages": 11
+  },
+  {
+   "request_id": "m3-scale-033-legistar_seattle_2438_v0_attachment_6113",
+   "object_id": "legistar:seattle:2438:v0:attachment:6113",
+   "sha256": "6f5e51eebb2b5945b85488af99b24ff0443fe237c015975582c7362bcb035056",
+   "bytes": 308814,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-034-legistar_seattle_1794_v0_attachment_3283",
+   "object_id": "legistar:seattle:1794:v0:attachment:3283",
+   "sha256": "e1f5e273c865c1e3cb357e600345b5ad363b9ff83d02e3208328697d46ddd13b",
+   "bytes": 673750,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-035-legistar_seattle_2159_v0_attachment_3326",
+   "object_id": "legistar:seattle:2159:v0:attachment:3326",
+   "sha256": "a47eca800e8347b33d7def3555fc991418ce96db50b8c52b1b385177c13b993c",
+   "bytes": 244862,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-036-legistar_seattle_1859_v0_attachment_3318",
+   "object_id": "legistar:seattle:1859:v0:attachment:3318",
+   "sha256": "a1eb84b648551dc8cf491dd1e8520d823e8be02510770d25d5ab18cb46a4b564",
+   "bytes": 202996,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-037-world_bank_P170734_document_34222345",
+   "object_id": "world-bank:P170734:document:34222345",
+   "sha256": "a2878cd9feaae81354b195463d76296ccb41d73c46462b6e5262bd0e7ecc667e",
+   "bytes": 142510,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-038-world_bank_P178566_document_34223652",
+   "object_id": "world-bank:P178566:document:34223652",
+   "sha256": "ac294995a4f19d8a3f8d51a34dce6d8c812c71b81f943ecc2ba9a47b465d4052",
+   "bytes": 158269,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-039-osf_file_64a59e4ea2a2f4140943711a_v1",
+   "object_id": "osf:file:64a59e4ea2a2f4140943711a:v1",
+   "sha256": "867c0a30d5f8475cae6573a4a493f59fc8bf77ede1cc1f8a81e007aa2c586e9e",
+   "bytes": 475066,
+   "pages": 6
+  },
+  {
+   "request_id": "m3-scale-040-osf_file_686ffb54a56d843965a6c614_v1",
+   "object_id": "osf:file:686ffb54a56d843965a6c614:v1",
+   "sha256": "75394a68825c501f2f5658055d7669bd927d8ccede4a0c11cd06969b6b916935",
+   "bytes": 458531,
+   "pages": 6
+  },
+  {
+   "request_id": "m3-scale-041-osf_file_607883db0c818200885135da_v1",
+   "object_id": "osf:file:607883db0c818200885135da:v1",
+   "sha256": "17031c281f5c0271661309138439ec804f89d53ceb5c76e929f6bdc1a157b87a",
+   "bytes": 946924,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-042-osf_file_6046e27ec7e7e6002f6ae7ee_v1",
+   "object_id": "osf:file:6046e27ec7e7e6002f6ae7ee:v1",
+   "sha256": "794f3938442765b90f5eeb4e3224a73674adf5f6375b33cd698dbaec48d4c1de",
+   "bytes": 274227,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-043-osf_file_6a74c836f0cba432843c7153_v1",
+   "object_id": "osf:file:6a74c836f0cba432843c7153:v1",
+   "sha256": "1e29af83d37fb9c20e61fff39fa63197a6e834fc075f20c01e0e1829ef984584",
+   "bytes": 122807,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-044-osf_file_670e77f61b29952574a5e7a2_v1",
+   "object_id": "osf:file:670e77f61b29952574a5e7a2:v1",
+   "sha256": "adc7bf42b61a34e5ec21adca33b7a9419288973759b839f5fc881733bf8f4895",
+   "bytes": 598717,
+   "pages": 4
+  },
+  {
+   "request_id": "m3-scale-045-osf_file_6826158a05236079589c42c3_v1",
+   "object_id": "osf:file:6826158a05236079589c42c3:v1",
+   "sha256": "3af7937ab89fbbf64c4bf3d628182db6434c9485bc1ef72fc690379031230dfd",
+   "bytes": 195567,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-046-osf_file_6826162a05236079589c42d8_v1",
+   "object_id": "osf:file:6826162a05236079589c42d8:v1",
+   "sha256": "b4c50d55d24c3ebab98475c323f23cce4a1da73f8140cc843e0af098208a1ecd",
+   "bytes": 194403,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-047-public_comps_monotaro_2025_fy_004",
+   "object_id": "public-comps:monotaro:2025-fy:004",
+   "sha256": "c0acd4f272d035608fb3ff7cb5198cfb99c1855386c39f965b51243ddb6f6a04",
+   "bytes": 2169988,
+   "pages": 9
+  },
+  {
+   "request_id": "m3-scale-048-public_comps_monotaro_2025_fy_003",
+   "object_id": "public-comps:monotaro:2025-fy:003",
+   "sha256": "0afe5afdaee641c62a8dcceff4ba3d5679c278a136e0af68fb23991648e0fb3e",
+   "bytes": 2569321,
+   "pages": 9
+  },
+  {
+   "request_id": "m3-scale-049-public_comps_asseco_poland_2025_fy_001",
+   "object_id": "public-comps:asseco-poland:2025-fy:001",
+   "sha256": "02e6151e00374f91b435c8029272f638e70d984b38399ac1ba6e14b28615b097",
+   "bytes": 1207975,
+   "pages": 27
+  },
+  {
+   "request_id": "m3-scale-050-public_comps_ares_2026_q1_002",
+   "object_id": "public-comps:ares:2026-q1:002",
+   "sha256": "b4a849615b00297af6a9b8a2d9fd3a8b7f57867511b5ed2ed1c2fe81f2cfbf13",
+   "bytes": 983158,
+   "pages": 31
+  },
+  {
+   "request_id": "m3-scale-051-public_comps_blackstone_2026_q1_002",
+   "object_id": "public-comps:blackstone:2026-q1:002",
+   "sha256": "41b004c97abeca6733cdc8d811ab2e9b9efe295a024cc1f92c7ed14fd925c5ac",
+   "bytes": 151682,
+   "pages": 12
+  },
+  {
+   "request_id": "m3-scale-052-pa_sers_2024_09_24_llr_vii_staff_memo",
+   "object_id": "pa-sers:2024-09-24:llr-vii:staff-memo",
+   "sha256": "1cc6ab0840c36a72c4d30d67f502f1d10ae6f3a011311f7c6d0af19a915df561",
+   "bytes": 597193,
+   "pages": 1
+  },
+  {
+   "request_id": "m3-scale-053-pa_sers_2024_09_24_llr_vii_consultant_memo",
+   "object_id": "pa-sers:2024-09-24:llr-vii:consultant-memo",
+   "sha256": "9f4773c2028697f328bdc7b8416d1b9598ee140f2d9f5fb8f1b9194c9cf9f714",
+   "bytes": 123619,
+   "pages": 2
+  },
+  {
+   "request_id": "m3-scale-054-pa_sers_2024_09_24_llr_vii_manager_presentation",
+   "object_id": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+   "sha256": "5034ed53e4aeeae197c4919a5326d1b69a1c9660ede21ee9d9230ff1335169c1",
+   "bytes": 2206937,
+   "pages": 11
+  },
+  {
+   "request_id": "m3-scale-055-pa_sers_2026_06_09_skyknight_capital_fund_v_l_p_3_5ffb7a77f66c",
+   "object_id": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+   "sha256": "5b37777b9a8c46f2ca1a97d6831bba74474e7132a0f2c4e5b2a97304411ce271",
+   "bytes": 1154577,
+   "pages": 11
+  },
+  {
+   "request_id": "m3-scale-056-legistar_seattle_2438_v0_attachment_6113",
+   "object_id": "legistar:seattle:2438:v0:attachment:6113",
+   "sha256": "6f5e51eebb2b5945b85488af99b24ff0443fe237c015975582c7362bcb035056",
+   "bytes": 308814,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-057-legistar_seattle_1794_v0_attachment_3283",
+   "object_id": "legistar:seattle:1794:v0:attachment:3283",
+   "sha256": "e1f5e273c865c1e3cb357e600345b5ad363b9ff83d02e3208328697d46ddd13b",
+   "bytes": 673750,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-058-legistar_seattle_2159_v0_attachment_3326",
+   "object_id": "legistar:seattle:2159:v0:attachment:3326",
+   "sha256": "a47eca800e8347b33d7def3555fc991418ce96db50b8c52b1b385177c13b993c",
+   "bytes": 244862,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-059-legistar_seattle_1859_v0_attachment_3318",
+   "object_id": "legistar:seattle:1859:v0:attachment:3318",
+   "sha256": "a1eb84b648551dc8cf491dd1e8520d823e8be02510770d25d5ab18cb46a4b564",
+   "bytes": 202996,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-060-world_bank_P170734_document_34222345",
+   "object_id": "world-bank:P170734:document:34222345",
+   "sha256": "a2878cd9feaae81354b195463d76296ccb41d73c46462b6e5262bd0e7ecc667e",
+   "bytes": 142510,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-061-world_bank_P178566_document_34223652",
+   "object_id": "world-bank:P178566:document:34223652",
+   "sha256": "ac294995a4f19d8a3f8d51a34dce6d8c812c71b81f943ecc2ba9a47b465d4052",
+   "bytes": 158269,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-062-osf_file_64a59e4ea2a2f4140943711a_v1",
+   "object_id": "osf:file:64a59e4ea2a2f4140943711a:v1",
+   "sha256": "867c0a30d5f8475cae6573a4a493f59fc8bf77ede1cc1f8a81e007aa2c586e9e",
+   "bytes": 475066,
+   "pages": 6
+  },
+  {
+   "request_id": "m3-scale-063-osf_file_686ffb54a56d843965a6c614_v1",
+   "object_id": "osf:file:686ffb54a56d843965a6c614:v1",
+   "sha256": "75394a68825c501f2f5658055d7669bd927d8ccede4a0c11cd06969b6b916935",
+   "bytes": 458531,
+   "pages": 6
+  },
+  {
+   "request_id": "m3-scale-064-osf_file_607883db0c818200885135da_v1",
+   "object_id": "osf:file:607883db0c818200885135da:v1",
+   "sha256": "17031c281f5c0271661309138439ec804f89d53ceb5c76e929f6bdc1a157b87a",
+   "bytes": 946924,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-065-osf_file_6046e27ec7e7e6002f6ae7ee_v1",
+   "object_id": "osf:file:6046e27ec7e7e6002f6ae7ee:v1",
+   "sha256": "794f3938442765b90f5eeb4e3224a73674adf5f6375b33cd698dbaec48d4c1de",
+   "bytes": 274227,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-066-osf_file_6a74c836f0cba432843c7153_v1",
+   "object_id": "osf:file:6a74c836f0cba432843c7153:v1",
+   "sha256": "1e29af83d37fb9c20e61fff39fa63197a6e834fc075f20c01e0e1829ef984584",
+   "bytes": 122807,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-067-osf_file_670e77f61b29952574a5e7a2_v1",
+   "object_id": "osf:file:670e77f61b29952574a5e7a2:v1",
+   "sha256": "adc7bf42b61a34e5ec21adca33b7a9419288973759b839f5fc881733bf8f4895",
+   "bytes": 598717,
+   "pages": 4
+  },
+  {
+   "request_id": "m3-scale-068-osf_file_6826158a05236079589c42c3_v1",
+   "object_id": "osf:file:6826158a05236079589c42c3:v1",
+   "sha256": "3af7937ab89fbbf64c4bf3d628182db6434c9485bc1ef72fc690379031230dfd",
+   "bytes": 195567,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-069-osf_file_6826162a05236079589c42d8_v1",
+   "object_id": "osf:file:6826162a05236079589c42d8:v1",
+   "sha256": "b4c50d55d24c3ebab98475c323f23cce4a1da73f8140cc843e0af098208a1ecd",
+   "bytes": 194403,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-070-public_comps_monotaro_2025_fy_004",
+   "object_id": "public-comps:monotaro:2025-fy:004",
+   "sha256": "c0acd4f272d035608fb3ff7cb5198cfb99c1855386c39f965b51243ddb6f6a04",
+   "bytes": 2169988,
+   "pages": 9
+  },
+  {
+   "request_id": "m3-scale-071-public_comps_monotaro_2025_fy_003",
+   "object_id": "public-comps:monotaro:2025-fy:003",
+   "sha256": "0afe5afdaee641c62a8dcceff4ba3d5679c278a136e0af68fb23991648e0fb3e",
+   "bytes": 2569321,
+   "pages": 9
+  },
+  {
+   "request_id": "m3-scale-072-public_comps_asseco_poland_2025_fy_001",
+   "object_id": "public-comps:asseco-poland:2025-fy:001",
+   "sha256": "02e6151e00374f91b435c8029272f638e70d984b38399ac1ba6e14b28615b097",
+   "bytes": 1207975,
+   "pages": 27
+  },
+  {
+   "request_id": "m3-scale-073-public_comps_ares_2026_q1_002",
+   "object_id": "public-comps:ares:2026-q1:002",
+   "sha256": "b4a849615b00297af6a9b8a2d9fd3a8b7f57867511b5ed2ed1c2fe81f2cfbf13",
+   "bytes": 983158,
+   "pages": 31
+  },
+  {
+   "request_id": "m3-scale-074-public_comps_blackstone_2026_q1_002",
+   "object_id": "public-comps:blackstone:2026-q1:002",
+   "sha256": "41b004c97abeca6733cdc8d811ab2e9b9efe295a024cc1f92c7ed14fd925c5ac",
+   "bytes": 151682,
+   "pages": 12
+  },
+  {
+   "request_id": "m3-scale-075-pa_sers_2024_09_24_llr_vii_staff_memo",
+   "object_id": "pa-sers:2024-09-24:llr-vii:staff-memo",
+   "sha256": "1cc6ab0840c36a72c4d30d67f502f1d10ae6f3a011311f7c6d0af19a915df561",
+   "bytes": 597193,
+   "pages": 1
+  },
+  {
+   "request_id": "m3-scale-076-pa_sers_2024_09_24_llr_vii_consultant_memo",
+   "object_id": "pa-sers:2024-09-24:llr-vii:consultant-memo",
+   "sha256": "9f4773c2028697f328bdc7b8416d1b9598ee140f2d9f5fb8f1b9194c9cf9f714",
+   "bytes": 123619,
+   "pages": 2
+  },
+  {
+   "request_id": "m3-scale-077-pa_sers_2024_09_24_llr_vii_manager_presentation",
+   "object_id": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+   "sha256": "5034ed53e4aeeae197c4919a5326d1b69a1c9660ede21ee9d9230ff1335169c1",
+   "bytes": 2206937,
+   "pages": 11
+  },
+  {
+   "request_id": "m3-scale-078-pa_sers_2026_06_09_skyknight_capital_fund_v_l_p_3_5ffb7a77f66c",
+   "object_id": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+   "sha256": "5b37777b9a8c46f2ca1a97d6831bba74474e7132a0f2c4e5b2a97304411ce271",
+   "bytes": 1154577,
+   "pages": 11
+  },
+  {
+   "request_id": "m3-scale-079-legistar_seattle_2438_v0_attachment_6113",
+   "object_id": "legistar:seattle:2438:v0:attachment:6113",
+   "sha256": "6f5e51eebb2b5945b85488af99b24ff0443fe237c015975582c7362bcb035056",
+   "bytes": 308814,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-080-legistar_seattle_1794_v0_attachment_3283",
+   "object_id": "legistar:seattle:1794:v0:attachment:3283",
+   "sha256": "e1f5e273c865c1e3cb357e600345b5ad363b9ff83d02e3208328697d46ddd13b",
+   "bytes": 673750,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-081-legistar_seattle_2159_v0_attachment_3326",
+   "object_id": "legistar:seattle:2159:v0:attachment:3326",
+   "sha256": "a47eca800e8347b33d7def3555fc991418ce96db50b8c52b1b385177c13b993c",
+   "bytes": 244862,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-082-legistar_seattle_1859_v0_attachment_3318",
+   "object_id": "legistar:seattle:1859:v0:attachment:3318",
+   "sha256": "a1eb84b648551dc8cf491dd1e8520d823e8be02510770d25d5ab18cb46a4b564",
+   "bytes": 202996,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-083-world_bank_P170734_document_34222345",
+   "object_id": "world-bank:P170734:document:34222345",
+   "sha256": "a2878cd9feaae81354b195463d76296ccb41d73c46462b6e5262bd0e7ecc667e",
+   "bytes": 142510,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-084-world_bank_P178566_document_34223652",
+   "object_id": "world-bank:P178566:document:34223652",
+   "sha256": "ac294995a4f19d8a3f8d51a34dce6d8c812c71b81f943ecc2ba9a47b465d4052",
+   "bytes": 158269,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-085-osf_file_64a59e4ea2a2f4140943711a_v1",
+   "object_id": "osf:file:64a59e4ea2a2f4140943711a:v1",
+   "sha256": "867c0a30d5f8475cae6573a4a493f59fc8bf77ede1cc1f8a81e007aa2c586e9e",
+   "bytes": 475066,
+   "pages": 6
+  },
+  {
+   "request_id": "m3-scale-086-osf_file_686ffb54a56d843965a6c614_v1",
+   "object_id": "osf:file:686ffb54a56d843965a6c614:v1",
+   "sha256": "75394a68825c501f2f5658055d7669bd927d8ccede4a0c11cd06969b6b916935",
+   "bytes": 458531,
+   "pages": 6
+  },
+  {
+   "request_id": "m3-scale-087-osf_file_607883db0c818200885135da_v1",
+   "object_id": "osf:file:607883db0c818200885135da:v1",
+   "sha256": "17031c281f5c0271661309138439ec804f89d53ceb5c76e929f6bdc1a157b87a",
+   "bytes": 946924,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-088-osf_file_6046e27ec7e7e6002f6ae7ee_v1",
+   "object_id": "osf:file:6046e27ec7e7e6002f6ae7ee:v1",
+   "sha256": "794f3938442765b90f5eeb4e3224a73674adf5f6375b33cd698dbaec48d4c1de",
+   "bytes": 274227,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-089-osf_file_6a74c836f0cba432843c7153_v1",
+   "object_id": "osf:file:6a74c836f0cba432843c7153:v1",
+   "sha256": "1e29af83d37fb9c20e61fff39fa63197a6e834fc075f20c01e0e1829ef984584",
+   "bytes": 122807,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-090-osf_file_670e77f61b29952574a5e7a2_v1",
+   "object_id": "osf:file:670e77f61b29952574a5e7a2:v1",
+   "sha256": "adc7bf42b61a34e5ec21adca33b7a9419288973759b839f5fc881733bf8f4895",
+   "bytes": 598717,
+   "pages": 4
+  },
+  {
+   "request_id": "m3-scale-091-osf_file_6826158a05236079589c42c3_v1",
+   "object_id": "osf:file:6826158a05236079589c42c3:v1",
+   "sha256": "3af7937ab89fbbf64c4bf3d628182db6434c9485bc1ef72fc690379031230dfd",
+   "bytes": 195567,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-092-osf_file_6826162a05236079589c42d8_v1",
+   "object_id": "osf:file:6826162a05236079589c42d8:v1",
+   "sha256": "b4c50d55d24c3ebab98475c323f23cce4a1da73f8140cc843e0af098208a1ecd",
+   "bytes": 194403,
+   "pages": 3
+  },
+  {
+   "request_id": "m3-scale-093-public_comps_monotaro_2025_fy_004",
+   "object_id": "public-comps:monotaro:2025-fy:004",
+   "sha256": "c0acd4f272d035608fb3ff7cb5198cfb99c1855386c39f965b51243ddb6f6a04",
+   "bytes": 2169988,
+   "pages": 9
+  },
+  {
+   "request_id": "m3-scale-094-public_comps_monotaro_2025_fy_003",
+   "object_id": "public-comps:monotaro:2025-fy:003",
+   "sha256": "0afe5afdaee641c62a8dcceff4ba3d5679c278a136e0af68fb23991648e0fb3e",
+   "bytes": 2569321,
+   "pages": 9
+  },
+  {
+   "request_id": "m3-scale-095-public_comps_asseco_poland_2025_fy_001",
+   "object_id": "public-comps:asseco-poland:2025-fy:001",
+   "sha256": "02e6151e00374f91b435c8029272f638e70d984b38399ac1ba6e14b28615b097",
+   "bytes": 1207975,
+   "pages": 27
+  },
+  {
+   "request_id": "m3-scale-096-public_comps_ares_2026_q1_002",
+   "object_id": "public-comps:ares:2026-q1:002",
+   "sha256": "b4a849615b00297af6a9b8a2d9fd3a8b7f57867511b5ed2ed1c2fe81f2cfbf13",
+   "bytes": 983158,
+   "pages": 31
+  },
+  {
+   "request_id": "m3-scale-097-public_comps_blackstone_2026_q1_002",
+   "object_id": "public-comps:blackstone:2026-q1:002",
+   "sha256": "41b004c97abeca6733cdc8d811ab2e9b9efe295a024cc1f92c7ed14fd925c5ac",
+   "bytes": 151682,
+   "pages": 12
+  },
+  {
+   "request_id": "m3-scale-098-pa_sers_2024_09_24_llr_vii_staff_memo",
+   "object_id": "pa-sers:2024-09-24:llr-vii:staff-memo",
+   "sha256": "1cc6ab0840c36a72c4d30d67f502f1d10ae6f3a011311f7c6d0af19a915df561",
+   "bytes": 597193,
+   "pages": 1
+  },
+  {
+   "request_id": "m3-scale-099-pa_sers_2024_09_24_llr_vii_consultant_memo",
+   "object_id": "pa-sers:2024-09-24:llr-vii:consultant-memo",
+   "sha256": "9f4773c2028697f328bdc7b8416d1b9598ee140f2d9f5fb8f1b9194c9cf9f714",
+   "bytes": 123619,
+   "pages": 2
+  },
+  {
+   "request_id": "m3-scale-100-pa_sers_2024_09_24_llr_vii_manager_presentation",
+   "object_id": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+   "sha256": "5034ed53e4aeeae197c4919a5326d1b69a1c9660ede21ee9d9230ff1335169c1",
+   "bytes": 2206937,
+   "pages": 11
+  }
+ ],
+ "distributions": {
+  "documents": 23,
+  "total_pages": 162,
+  "bytes": {
+   "min": 122807,
+   "p50": 458531,
+   "max": 2569321
+  },
+  "pages": {
+   "min": 1,
+   "p50": 3,
+   "max": 31
+  },
+  "content": {
+   "native_text_documents": 20,
+   "image_only_documents": 4,
+   "mixed_raster_native_documents": 15
+  },
+  "rotation_landscape_documents": 3,
+  "known_malformed_documents": 0,
+  "documents_with_label": {
+   "chart": 7,
+   "dense-table": 11,
+   "mixed-raster-native": 15,
+   "multi-column": 5,
+   "multilingual": 3,
+   "native-text": 20,
+   "translation-sibling": 2,
+   "long-document": 4,
+   "packet-sibling": 3,
+   "slides": 5,
+   "image-only": 4,
+   "landscape": 3,
+   "sparse-overlay": 1,
+   "form": 1,
+   "version-sibling": 2
+  }
+ }
+}

@@ -169,5 +169,146 @@ class SweepScratchTest(unittest.TestCase):
         self.assertEqual(modal_app.sweep_scratch("/nonexistent/path"), [])
 
 
+class InjectionGateTest(unittest.TestCase):
+    """§14.2 hard rule: the production deployment configuration cannot
+    reach an injected failure. Both gates (explicit env flag AND dev/test
+    app name) must be present; either missing is a visible rejection."""
+
+    DEV_ENV = {"PAGESPATIAL_ENABLE_TEST_FAILURES": "1",
+               "PAGESPATIAL_APP_NAME": "pagespatial-parse-m1-dev"}
+
+    def test_no_injection_requested_is_a_no_op_everywhere(self):
+        self.assertIsNone(modal_app.validate_injection(_payload(), environ={}))
+        self.assertIsNone(modal_app.validate_injection(_payload(), environ=self.DEV_ENV))
+
+    def test_production_env_without_flag_rejects_injection(self):
+        env = {"PAGESPATIAL_APP_NAME": "pagespatial-parse-m1-dev"}  # flag never set in prod config
+        with self.assertRaises(modal_app.InputRejected):
+            modal_app.validate_injection(_payload(test_failure="exception"), environ=env)
+
+    def test_flag_on_a_non_dev_app_name_rejects_injection(self):
+        env = {"PAGESPATIAL_ENABLE_TEST_FAILURES": "1",
+               "PAGESPATIAL_APP_NAME": "pagespatial-parse"}
+        with self.assertRaises(modal_app.InputRejected):
+            modal_app.validate_injection(_payload(test_failure="exception"), environ=env)
+
+    def test_both_gates_open_accepts_only_known_modes(self):
+        for mode in modal_app.INJECTION_MODES:
+            self.assertEqual(
+                modal_app.validate_injection(_payload(test_failure=mode), environ=self.DEV_ENV),
+                mode)
+        with self.assertRaises(modal_app.InputRejected):
+            modal_app.validate_injection(_payload(test_failure="kill-container"), environ=self.DEV_ENV)
+
+    def test_no_container_self_kill_mode_exists(self):
+        # §14.2: container failure is injected externally and one-shot;
+        # a self-kill input would be rescheduled and could crash-loop.
+        self.assertEqual(modal_app.INJECTION_MODES, ("exception", "timeout", "kill-node"))
+
+    def test_dev_app_name_rule_is_an_anchored_allowlist(self):
+        for good in ("pagespatial-parse-dev", "pagespatial-parse-test",
+                     "pagespatial-parse-m1-dev", "pagespatial-parse-arm16-dev"):
+            self.assertTrue(modal_app._is_dev_app(good), good)
+        # A bare '-dev' suffix on an arbitrary name must NOT qualify.
+        for bad in ("pagespatial-parse", "dev-parse", "x-dev", "x-test",
+                    "pagespatial-parse-prod-dev", "evil-pagespatial-parse-m1-dev",
+                    "pagespatial-parse-m1-dev-prod", "", None):
+            self.assertFalse(modal_app._is_dev_app(bad), repr(bad))
+
+
+class DeployTimeGateTest(unittest.TestCase):
+    """Deploy-time half of the §14.2 double gate: enabling injection for a
+    non-dev app name must refuse to even build the deployment."""
+
+    @staticmethod
+    def _import_adapter(extra_env):
+        import os
+        import subprocess
+        env = {**os.environ, **extra_env}
+        return subprocess.run(
+            [sys.executable, "-c",
+             f"import sys; sys.path.insert(0, {str(Path(__file__).resolve().parent)!r}); "
+             "import test_modal_app; print('import-ok')"],
+            capture_output=True, text=True, timeout=60, env=env)
+
+    def test_injection_flag_with_non_dev_app_name_refuses_at_deploy_time(self):
+        result = self._import_adapter({
+            "PAGESPATIAL_ENABLE_TEST_FAILURES": "1",
+            "PAGESPATIAL_MODAL_APP_NAME": "pagespatial-parse"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("refusing for 'pagespatial-parse'", result.stderr)
+
+    def test_injection_flag_with_dev_app_name_deploys(self):
+        result = self._import_adapter({
+            "PAGESPATIAL_ENABLE_TEST_FAILURES": "1",
+            "PAGESPATIAL_MODAL_APP_NAME": "pagespatial-parse-arm9-dev"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("import-ok", result.stdout)
+
+
+class SurvivingChildrenTest(unittest.TestCase):
+    """§14.4 criterion 8 instrument, exercised against a fake /proc."""
+
+    @staticmethod
+    def _fake_proc(base, pid, comm, ppid, cmdline=""):
+        d = Path(base) / str(pid)
+        d.mkdir()
+        (d / "stat").write_text(f"{pid} ({comm}) S {ppid} 1 1 0 -1")
+        (d / "cmdline").write_bytes(cmdline.replace(" ", "\0").encode())
+
+    def test_lists_everything_except_pid1_and_self(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._fake_proc(tmp, 1, "init", 0)
+            self._fake_proc(tmp, 40, "python3", 1)      # the adapter (self)
+            self._fake_proc(tmp, 41, "node", 40, "node service/server.mjs")
+            self._fake_proc(tmp, 42, "pdf worker", 41)  # comm with a space
+            procs = modal_app.surviving_children(proc_root=tmp, self_pid=40)
+            self.assertEqual(procs, [
+                {"pid": 41, "ppid": 40, "comm": "node", "cmdline": "node service/server.mjs"},
+                {"pid": 42, "ppid": 41, "comm": "pdf worker", "cmdline": ""},
+            ])
+
+    def test_leak_filter_flags_node_and_orphaned_workers_only(self):
+        procs = [
+            {"pid": 41, "ppid": 40, "comm": "node", "cmdline": "node service/server.mjs"},
+            {"pid": 42, "ppid": 41, "comm": "python3", "cmdline": ""},  # child of dead service
+            {"pid": 50, "ppid": 1, "comm": "modal-runtime", "cmdline": "modal-runtime supervise"},
+        ]
+        leaked = modal_app.leaked_service_processes(procs, service_pid=41, self_pid=40)
+        self.assertEqual([p["pid"] for p in leaked], [41, 42])
+
+    def test_orphaned_sidecar_reparented_to_pid1_is_caught_by_cmdline_marker(self):
+        # The realistic criterion-8 leak: a Python sidecar escapes its
+        # worker's group-kill and reparents to pid 1 — comm "python3",
+        # ppid 1, indistinguishable from platform processes except by argv.
+        with tempfile.TemporaryDirectory() as tmp:
+            self._fake_proc(tmp, 1, "init", 0)
+            self._fake_proc(tmp, 40, "python3", 1)  # the adapter (self)
+            self._fake_proc(tmp, 60, "python3", 1,
+                            "python3 /app/service/sidecar/ppocr_sidecar.py --threads 1")
+            self._fake_proc(tmp, 61, "python3", 1,
+                            "python3 -m modal._container_entrypoint")  # platform proc
+            procs = modal_app.surviving_children(proc_root=tmp, self_pid=40)
+            leaked = modal_app.leaked_service_processes(
+                procs, service_pid=41, self_pid=40,
+                markers=("ppocr_sidecar.py", "/tmp/psvc-abc123"))
+            self.assertEqual([p["pid"] for p in leaked], [60])
+            # Without the cmdline markers this orphan is invisible — the
+            # exact vacuous-pass the marker check exists to prevent.
+            self.assertEqual(modal_app.leaked_service_processes(
+                procs, service_pid=41, self_pid=40), [])
+
+    def test_clean_container_reports_zero_survivors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._fake_proc(tmp, 1, "init", 0)
+            self._fake_proc(tmp, 40, "python3", 1)
+            procs = modal_app.surviving_children(proc_root=tmp, self_pid=40)
+            self.assertEqual(procs, [])
+            self.assertEqual(modal_app.leaked_service_processes(procs, service_pid=41), [])
+
+    def test_missing_proc_root_is_empty_not_fatal(self):
+        self.assertEqual(modal_app.surviving_children(proc_root="/nonexistent"), [])
+
+
 if __name__ == "__main__":
     unittest.main()

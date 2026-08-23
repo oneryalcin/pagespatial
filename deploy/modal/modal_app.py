@@ -1,10 +1,19 @@
-"""Modal adapter for the PageSpatial parse service — M1 skeleton.
+"""Modal adapter for the PageSpatial parse service — M1 skeleton + M2
+failure and measurement instruments.
 
 Source of truth: docs/design/2026-08-23-modal-scaling-and-deployment.md.
 One Modal asynchronous input owns one document (§2). A warm `modal.Cls`
 container starts the existing Node service once (@enter), methods drive it
 over loopback HTTP, and @exit drains it. No public URL, no web endpoint,
 enrichment forced off, private ephemeral scratch only.
+
+M2 adds (§16 M2): the full §12 identity/timing field set on results and
+structured log events; test-only failure injection (§14.2 arm 8/9) that is
+double-gated so the production deployment configuration cannot reach it;
+and dev-only cleanup / child-exit probes (§14.4 criteria 8/9 instruments).
+Container-kill injection is deliberately NOT here: §14.2 requires it to be
+external and one-shot (`modal container stop`), because a self-kill input
+would be rescheduled and could crash-loop.
 
 Deploy (repo root, Modal SDK pinned in deploy/modal/README.md):
 
@@ -50,10 +59,46 @@ METHOD_TIMEOUT_S = 1800                    # explicit (§7.3): 200-page max docu
 PARSE_DEADLINE_S = 1500                    # loopback poll deadline, inside METHOD_TIMEOUT_S
 EXIT_SIGTERM_GRACE_S = 22                  # SIGTERM drain wait; + force-kill fits Modal's 30 s @exit window
 MIN_FREE_DISK_BYTES = 2 * 1024 * 1024 * 1024  # method-level free-space check (§7.4)
+TIMEOUT_INJECTION_SLEEP_S = METHOD_TIMEOUT_S + 120  # bounded even if the platform misses the kill
+
+# Resource configuration (§12: every result/log event carries it).
+CPU_CORES = 4.0                            # physical cores — measured trial topology
+MEMORY_MIB = 24576
+SERVICE_WORKERS = 4
+SERVICE_SIDECAR_THREADS = 1
+RESOURCES = {
+    "cpu": CPU_CORES,
+    "memory_mib": MEMORY_MIB,
+    "workers": SERVICE_WORKERS,
+    "sidecar_threads": SERVICE_SIDECAR_THREADS,
+}
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
-app = modal.App("pagespatial-parse-m1-dev")
+DEFAULT_APP_NAME = "pagespatial-parse-m1-dev"
+
+
+_DEV_APP_RE = re.compile(r"pagespatial-parse(-m\d+|-arm\d+)?-(dev|test)")
+
+
+def _is_dev_app(name) -> bool:
+    """Test-only instruments are refused unless the app name is one of the
+    KNOWN dev/test app shapes (§14.2 hard rule). Anchored full-match — a
+    bare '-dev' suffix on an arbitrary name (e.g. '…-prod-dev') does not
+    qualify."""
+    return isinstance(name, str) and _DEV_APP_RE.fullmatch(name) is not None
+
+
+if modal.is_local():
+    # Deploy-time app identity. §10: each trial arm gets a unique app tag
+    # (e.g. PAGESPATIAL_MODAL_APP_NAME=pagespatial-parse-arm4-dev).
+    APP_NAME = os.environ.get("PAGESPATIAL_MODAL_APP_NAME", DEFAULT_APP_NAME)
+else:
+    # Inside the container the module re-imports; identity was baked into
+    # the image env at deploy time.
+    APP_NAME = os.environ.get("PAGESPATIAL_APP_NAME", DEFAULT_APP_NAME)
+
+app = modal.App(APP_NAME)
 
 REPO_ROOT = Path(__file__).resolve().parents[2] if modal.is_local() else Path("/app")
 
@@ -76,13 +121,47 @@ def _git_revision() -> str:
         return "unknown"
 
 
+def _image_pin_revision() -> str:
+    """Immutable image/model-pin revision (§12): a digest over the files
+    that pin the runtime image, engine versions, AND the OCR model pins
+    (service/sidecar/model-pins.json + its fetcher) — a model-pin-only
+    commit must change this revision. Client-side only; baked into the
+    image env at deploy time."""
+    try:
+        digest = hashlib.sha256()
+        for name in ("Dockerfile", "package-lock.json",
+                      "service/sidecar/model-pins.json",
+                      "service/sidecar/fetch_models.py"):
+            digest.update(name.encode())
+            digest.update((REPO_ROOT / name).read_bytes())
+        return digest.hexdigest()[:12]
+    except Exception:
+        return "unknown"
+
+
 image = modal.Image.from_dockerfile(
     REPO_ROOT / "Dockerfile",
     context_dir=REPO_ROOT,
     add_python="3.11",
 )
 if modal.is_local():
-    image = image.env({"PAGESPATIAL_GIT_REV": _git_revision()})
+    # Test-only failure injection (§14.2) is enabled ONLY here, at deploy
+    # time, by an operator explicitly setting the env var — the production
+    # deployment configuration never sets it, and enabling it on a non-dev
+    # app name refuses to deploy. The container double-checks both gates.
+    _enable_test_failures = os.environ.get("PAGESPATIAL_ENABLE_TEST_FAILURES") == "1"
+    if _enable_test_failures and not _is_dev_app(APP_NAME):
+        raise RuntimeError(
+            "PAGESPATIAL_ENABLE_TEST_FAILURES=1 is only deployable to a "
+            f"'-dev'/'-test' app name; refusing for {APP_NAME!r}")
+    _baked_env = {
+        "PAGESPATIAL_GIT_REV": _git_revision(),
+        "PAGESPATIAL_IMAGE_PIN_REV": _image_pin_revision(),
+        "PAGESPATIAL_APP_NAME": APP_NAME,
+    }
+    if _enable_test_failures:
+        _baked_env["PAGESPATIAL_ENABLE_TEST_FAILURES"] = "1"
+    image = image.env(_baked_env)
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +198,95 @@ def validate_input(payload) -> bytes:
     if actual != expected:
         raise InputRejected("sha256 mismatch between expected_sha256 and pdf_bytes")
     return bytes(pdf_bytes)
+
+
+# ---------------------------------------------------------------------------
+# Test-only failure injection (§14.2 arms 8/9). Double-gated: the env var is
+# baked into the image only when an operator explicitly sets it at deploy
+# time (never in the production deployment configuration), AND the baked app
+# name must be a dev/test app. Either gate missing -> visible InputRejected.
+# There is deliberately NO container self-kill mode: §14.2 requires container
+# failure to be injected externally and one-shot.
+# ---------------------------------------------------------------------------
+
+INJECTION_MODES = ("exception", "timeout", "kill-node")
+
+
+class InjectedFailure(RuntimeError):
+    """Deliberate test-only application exception (§14.2 arm 9)."""
+
+
+def injection_allowed(environ=None) -> bool:
+    env = os.environ if environ is None else environ
+    return (env.get("PAGESPATIAL_ENABLE_TEST_FAILURES") == "1"
+            and _is_dev_app(env.get("PAGESPATIAL_APP_NAME")))
+
+
+def validate_injection(payload, environ=None):
+    """Returns the requested injection mode or None. Any `test_failure`
+    request on a deployment without both gates is a visible rejection —
+    the production path cannot reach an injected failure."""
+    mode = payload.get("test_failure")
+    if mode is None:
+        return None
+    if not injection_allowed(environ):
+        raise InputRejected("test_failure is not available on this deployment")
+    if mode not in INJECTION_MODES:
+        raise InputRejected(f"unknown test_failure mode (expected one of {INJECTION_MODES})")
+    return mode
+
+
+def surviving_children(proc_root="/proc", self_pid=None) -> list:
+    """§14.4 criterion 8 instrument: every process visible in this PID
+    namespace except pid 1 and the caller — [{pid, ppid, comm, cmdline}].
+    cmdline (argv joined) is required because the realistic leak — a
+    Python sidecar escaping its worker's group-kill — reparents to pid 1
+    with comm "python3", indistinguishable from platform processes by
+    comm/ppid alone. Names/argv only, never content. Parameterized for
+    tests (no /proc on macOS)."""
+    self_pid = os.getpid() if self_pid is None else self_pid
+    procs = []
+    root = Path(proc_root)
+    if not root.is_dir():
+        return procs
+    for entry in root.iterdir():
+        if not entry.name.isdigit():
+            continue
+        pid = int(entry.name)
+        if pid in (1, self_pid):
+            continue
+        try:
+            stat = (entry / "stat").read_text()
+            # pid (comm) state ppid ... — comm may contain spaces/parens;
+            # split at the LAST ')'.
+            head, _, tail = stat.rpartition(")")
+            comm = head.split("(", 1)[1]
+            ppid = int(tail.split()[1])
+        except (OSError, IndexError, ValueError):
+            continue
+        try:
+            cmdline = (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode(
+                "utf-8", "replace").strip()
+        except OSError:
+            cmdline = ""
+        procs.append({"pid": pid, "ppid": ppid, "comm": comm, "cmdline": cmdline})
+    return sorted(procs, key=lambda p: p["pid"])
+
+
+def leaked_service_processes(procs, service_pid=None, self_pid=None, markers=()) -> list:
+    """Filter `surviving_children()` output down to what counts as a leak
+    after service drain: any `node` process, anything parented to the
+    adapter process or the (now dead) service pid, or — the case comm/ppid
+    cannot see — any process whose argv carries one of `markers` (the
+    sidecar script name or this container's private data dir), which
+    catches an escaped sidecar reparented to pid 1."""
+    self_pid = os.getpid() if self_pid is None else self_pid
+    live_markers = [marker for marker in markers if marker]
+    return [p for p in procs
+            if p["comm"] == "node"
+            or p["ppid"] == self_pid
+            or (service_pid is not None and p["ppid"] == service_pid)
+            or any(marker in p.get("cmdline", "") for marker in live_markers)]
 
 
 def stop_fetching_inputs() -> None:
@@ -193,8 +361,8 @@ def _minimal_pdf(page_count: int) -> bytes:
 
 @app.cls(
     image=image,
-    cpu=4.0,                    # physical cores — matches the measured trial topology
-    memory=24576,               # MiB
+    cpu=CPU_CORES,              # physical cores — matches the measured trial topology
+    memory=MEMORY_MIB,          # MiB
     timeout=METHOD_TIMEOUT_S,
     startup_timeout=STARTUP_TIMEOUT_S,
     retries=1,                  # §7.3 table: 1 application retry for the failure trial
@@ -209,6 +377,14 @@ class ParseContainer:
         self.cold = True
         self.budget = JobBudget()
         self.retired = False
+        # §12 identity context: attached to EVERY structured log event.
+        self.log_context = {
+            "app_name": os.environ.get("PAGESPATIAL_APP_NAME", APP_NAME),
+            "adapter_revision": os.environ.get("PAGESPATIAL_GIT_REV", "unknown"),
+            "image_pin_revision": os.environ.get("PAGESPATIAL_IMAGE_PIN_REV", "unknown"),
+            "resources": RESOURCES,
+        }
+        self.method_context = {}
         # Private ephemeral scratch (§7.4): no Volume, no shared state.
         self.data_dir = tempfile.mkdtemp(prefix="psvc-", dir="/tmp")
         # Node's stdout/stderr go to a FILE, not a PIPE: an undrained pipe
@@ -224,8 +400,8 @@ class ParseContainer:
             "HOST": "127.0.0.1",
             "PORT": str(SERVICE_PORT),
             "SERVICE_DATA_DIR": self.data_dir,
-            "SERVICE_WORKERS": "4",              # measured topology: 4 workers x 1 thread
-            "SERVICE_SIDECAR_THREADS": "1",
+            "SERVICE_WORKERS": str(SERVICE_WORKERS),   # measured topology: 4 workers x 1 thread
+            "SERVICE_SIDECAR_THREADS": str(SERVICE_SIDECAR_THREADS),
             "SERVICE_MAX_PAGES_PER_JOB": str(MAX_PAGES_PER_JOB),
         })
         t0 = time.monotonic()
@@ -239,7 +415,12 @@ class ParseContainer:
         )
         self._wait_health(deadline_s=STARTUP_TIMEOUT_S - 60)
         self.service_ready_ms = int((time.monotonic() - t0) * 1000)
+        # `service_started` is the CANONICAL carrier of cold readiness:
+        # after a rejected first call the next result reports
+        # service_ready_ms=0, so aggregation must read readiness from this
+        # log event, never from results (§12; PR #89 closure).
         self._log_event("service_started", node_pid=self.node.pid,
+                        container_cold=True,
                         service_ready_ms=self.service_ready_ms)
 
     def _wait_health(self, deadline_s: float):
@@ -295,10 +476,41 @@ class ParseContainer:
         except urllib.error.HTTPError as error:
             return error.code, json.loads(error.read())
 
-    @staticmethod
-    def _log_event(event: str, **fields):
+    def _log_event(self, event: str, **fields):
         # Structured, content-free (§11, §12): ids, durations, counts only.
-        print(json.dumps({"event": event, **fields}, sort_keys=True), flush=True)
+        # Every event carries the container identity context (revision,
+        # resources, app name) plus the current method context (request id,
+        # sha prefix, cold/warm, call/input ids) so any single log line is
+        # attributable on its own.
+        # ts (epoch ms, wall clock) makes §12's time-derived aggregation
+        # rows (completion percentiles, containers over time, pages/s)
+        # reconstructable from logs alone.
+        record = {"event": event,
+                  "ts": int(time.time() * 1000),
+                  **getattr(self, "log_context", {}),
+                  **getattr(self, "method_context", {}),
+                  **fields}
+        print(json.dumps(record, sort_keys=True), flush=True)
+
+    @staticmethod
+    def _modal_ids() -> dict:
+        """Best-effort Modal call/input identity (§12 'retry attempt when
+        available'): the pinned SDK exposes no per-input attempt counter,
+        but retries of one input reuse its function_call_id, so the
+        reconciler derives attempt counts from repeated log events sharing
+        one call id across containers."""
+        ids = {"function_call_id": None, "input_id": None}
+        try:
+            ids["function_call_id"] = modal.current_function_call_id()
+            ids["input_id"] = modal.current_input_id()
+        except Exception:
+            pass
+        return ids
+
+    def _require_dev_instrument(self, what: str):
+        """Probes and injection are dev/test-app-only (§14.2 hard rule)."""
+        if not injection_allowed():
+            raise InputRejected(f"{what} is not available on this deployment")
 
     @modal.method()
     def parse_document(self, payload: dict) -> dict:
@@ -311,8 +523,32 @@ class ParseContainer:
         service_ready_ms = self.service_ready_ms if self.cold else 0
         self.cold = False
         pdf_bytes = validate_input(payload)  # raises InputRejected before Node work
+        injection = validate_injection(payload)  # test-only; double-gated (§14.2)
         request_id = payload["request_id"]
         sha256 = payload["expected_sha256"]
+        # §12 method identity context — merged into every log event below.
+        self.method_context = {
+            "request_id": request_id,
+            "sha_prefix": sha256[:12],
+            "container_cold": container_cold,
+            **self._modal_ids(),
+        }
+
+        if injection == "exception":
+            # Arm 9a: one forced application exception — retries per the
+            # configured `retries`, then a visible failed FunctionCall.
+            self._log_event("injected_failure", mode=injection)
+            raise InjectedFailure(f"injected application exception for {request_id}")
+        if injection == "timeout":
+            # Arm 9b: a forced method timeout — hang past the configured
+            # method timeout so the platform kills the call visibly. The
+            # sleep is bounded so the path terminates even without the
+            # platform kill (local/stub runs).
+            self._log_event("injected_failure", mode=injection,
+                            sleep_s=TIMEOUT_INJECTION_SLEEP_S)
+            time.sleep(TIMEOUT_INJECTION_SLEEP_S)
+            raise RuntimeError(
+                f"timeout injection outlived the {METHOD_TIMEOUT_S}s method timeout")
 
         # §7.4: sweep abandoned state from a prior exception/timeout, and
         # refuse to start on a nearly-full disk.
@@ -355,9 +591,19 @@ class ParseContainer:
                 job_id = body["jobId"]
                 if self.budget.record_created():
                     self._retire("job_budget_exhausted")
-            self._log_event("job_submitted", request_id=request_id,
-                            sha_prefix=sha256[:12], http_status=status,
+            self._log_event("job_submitted", http_status=status,
                             job_id=job_id, jobs_created=self.budget.created)
+            if injection == "kill-node" and status == 202:
+                # Arm 8: terminate the Node child MID-DOCUMENT — the poll
+                # loop below must classify it and retire this instance
+                # bounded, not hang until the method timeout.
+                self._log_event("injected_failure", mode=injection,
+                                node_pid=self.node.pid, job_id=job_id)
+                self.node.kill()
+                try:  # reap so the poll loop classifies the death promptly
+                    self.node.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    pass
             if status != 202:
                 # Visible client-side refusal (e.g. page cap) — a terminal
                 # failed result, not an exception: the input was validly
@@ -391,6 +637,9 @@ class ParseContainer:
                                   service_ready_ms, method_t0,
                                   page_count=page_count, pages=job["pages"],
                                   failure=None, parse_ms=parse_ms)
+            # json.dumps length is a PROXY for Modal's own (pickle-based)
+            # result serialization — close enough for a 64 MiB order-of-
+            # magnitude guard, not an exact byte-for-byte bound (PR #89 LOW).
             serialized = len(json.dumps(result).encode())
             if serialized > MAX_RESULT_BYTES:
                 # Visible bound (§7.1): never truncate pages.
@@ -400,26 +649,42 @@ class ParseContainer:
                                     failure={"class": "ResultTooLarge",
                                              "message": f"serialized result {serialized} bytes exceeds {MAX_RESULT_BYTES}"},
                                     parse_ms=parse_ms)
-            self._log_event("job_terminal", request_id=request_id, job_id=job_id,
+            self._log_event("job_terminal", job_id=job_id,
                             page_count=page_count, parse_ms=parse_ms,
-                            result_bytes=serialized, container_cold=container_cold)
+                            total_method_ms=result["timing"]["total_method_ms"],
+                            pages_ok=result["pages_ok"],
+                            pages_failed=result["pages_failed"],
+                            result_bytes=serialized)
             return result
         finally:
             # §7.4: job dir + uploaded PDF removed after every terminal
             # method; a crash skips this, and the next method's sweep (or
-            # container disposal) covers it.
-            cleaned = sweep_scratch(self.data_dir)
-            self._log_event("cleanup", request_id=request_id, removed=cleaned)
+            # container disposal) covers it. Outcome is a §12 field: a
+            # cleanup failure must be visible, never silent.
+            try:
+                cleaned = sweep_scratch(self.data_dir)
+                self._log_event("cleanup", cleanup_ok=True, removed=cleaned)
+            except Exception as error:
+                self._log_event("cleanup", cleanup_ok=False,
+                                error=f"{type(error).__name__}: {error}"[:200])
+            # Reset method identity so later container-scope events
+            # (service_stopped, probes) are not misattributed to this input.
+            self.method_context = {}
 
-    @staticmethod
-    def _result(request_id, sha256, container_cold, service_ready_ms, method_t0,
+    def _result(self, request_id, sha256, container_cold, service_ready_ms, method_t0,
                 *, page_count, pages, failure, parse_ms):
+        # Full §12 field set. Note the cold-readiness caveat: after a
+        # rejected first call, the next successful result carries
+        # service_ready_ms=0 — cold readiness lives ONLY in the
+        # `service_started` log event; aggregation reads it from logs.
         return {
             "request_id": request_id,
             "document_sha256": sha256,
             "page_count": page_count,
             "status": "failed" if failure else "completed",
             "pages": pages,
+            "pages_ok": sum(1 for page in pages if page.get("ok")),
+            "pages_failed": sum(1 for page in pages if not page.get("ok")),
             "failure": failure,
             "timing": {
                 "container_cold": container_cold,
@@ -428,14 +693,24 @@ class ParseContainer:
                 "parse_ms": parse_ms,
                 "total_method_ms": int((time.monotonic() - method_t0) * 1000),
             },
+            "retry": {
+                # No stable per-input attempt counter in the pinned SDK;
+                # the reconciler counts attempts from repeated log events
+                # sharing one function_call_id (§12 'when available').
+                "attempt": None,
+                **self._modal_ids(),
+            },
+            "resources": RESOURCES,
+            "app_name": os.environ.get("PAGESPATIAL_APP_NAME", APP_NAME),
             "adapter_revision": os.environ.get("PAGESPATIAL_GIT_REV", "unknown"),
+            "image_pin_revision": os.environ.get("PAGESPATIAL_IMAGE_PIN_REV", "unknown"),
         }
 
-    @modal.exit()
-    def stop_service(self):
+    def _drain_service(self):
         # SIGTERM -> bounded wait -> SIGKILL fallback; total fits Modal's
         # 30 s exit window with margin (§7.2). The server's own graceful
         # path drains workers (which group-kill their Python sidecars).
+        # Shared by @exit and the dev-only exit-drain probe below.
         if getattr(self, "node", None) is None:
             return
         t0 = time.monotonic()
@@ -454,6 +729,70 @@ class ParseContainer:
         self.node_log.close()
         shutil.rmtree(self.data_dir, ignore_errors=True)
 
+    @modal.exit()
+    def stop_service(self):
+        self._drain_service()
+
+    # -----------------------------------------------------------------
+    # Dev-only lifecycle probes (§14.4 criteria 8/9 instruments). Gated
+    # exactly like failure injection: unavailable on any deployment that
+    # is not an explicit dev/test app with the env flag baked.
+    # -----------------------------------------------------------------
+
+    @modal.method()
+    def probe_scratch(self) -> dict:
+        """Criterion 9 instrument: scratch content (names only) and disk
+        use after terminal methods. `clean` means no job state and no
+        uploaded PDF bytes survive — only the Node log and the empty
+        uploads/ directory may remain."""
+        self._require_dev_instrument("probe_scratch")
+        base = Path(self.data_dir)
+        entries = sorted(entry.name for entry in base.iterdir()) if base.is_dir() else []
+        uploads = sorted(
+            f"uploads/{item.name}" for item in (base / "uploads").iterdir()
+        ) if (base / "uploads").is_dir() else []
+        leftovers = [name for name in entries if name not in ("node.log", "uploads")] + uploads
+        usage = shutil.disk_usage(self.data_dir)
+        report = {
+            "data_dir_entries": entries,
+            "upload_entries": uploads,
+            "leftovers": leftovers,
+            "clean": not leftovers,
+            "disk_used_bytes": usage.used,
+            "disk_free_bytes": usage.free,
+        }
+        self._log_event("probe_scratch", **report)
+        return report
+
+    @modal.method()
+    def probe_exit_drain(self) -> dict:
+        """Criterion 8 instrument: run the @exit drain NOW, then assert
+        zero surviving Node/worker processes and removed scratch. This
+        kills the warm Node on purpose, so the instance retires first and
+        never accepts another document."""
+        self._require_dev_instrument("probe_exit_drain")
+        self._retire("exit_drain_probe")
+        node_pid = self.node.pid if getattr(self, "node", None) else None
+        data_dir = self.data_dir
+        self._drain_service()
+        procs = surviving_children()
+        # Markers catch the sidecar-escaped-the-group-kill case: argv holds
+        # the sidecar script and/or this container's private data dir even
+        # after the orphan reparents to pid 1 as a bare "python3".
+        survivors = leaked_service_processes(
+            procs, service_pid=node_pid,
+            markers=("ppocr_sidecar.py", data_dir))
+        report = {
+            "node_pid": node_pid,
+            "node_exit_code": self.node.returncode if node_pid else None,
+            "processes_seen": procs,
+            "survivors": survivors,
+            "scratch_removed": not Path(self.data_dir).exists(),
+            "clean": not survivors and not Path(self.data_dir).exists(),
+        }
+        self._log_event("probe_exit_drain", **report)
+        return report
+
 
 # ---------------------------------------------------------------------------
 # M1 acceptance entrypoint (§16): one real deployed asynchronous call, then
@@ -468,7 +807,7 @@ def acceptance(pages: int = 3):
     sha = hashlib.sha256(pdf).hexdigest()
     # Target the DEPLOYED app (modal deploy deploy/modal/modal_app.py), not
     # this run's ephemeral copy: M1 acceptance requires a real deployed call.
-    deployed = modal.Cls.from_name("pagespatial-parse-m1-dev", "ParseContainer")
+    deployed = modal.Cls.from_name(APP_NAME, "ParseContainer")
     parser = deployed()
     results = []
     for call in (1, 2):
