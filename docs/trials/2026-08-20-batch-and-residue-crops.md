@@ -57,6 +57,20 @@ the rotation-damaged first artifacts.
 | cross-family second opinion (starved 27→4) | $0.00307 | 3.0× |
 | **+ residue crops + batch API** | **$0.000825** | **11.3×** |
 
+**Correction (2026-08-23, M4 reconciliation):** the final row above is
+wrong; the correct figures are **$0.000817/corpus page and 11.4×**. The
+design doc flagged the discrepancy with `docs/workstreams.md` (11.4× at
+$0.000817) and assigned M4 the reconciliation. Recomputed from this run's
+persisted ledger (`enrichment/aggregate.json`: 250,107 prompt + 20,529
+output tokens, batch pricing → $0.132282 exact): $0.132282 / 162 =
+$0.000817, and $0.0093 / $0.000817 = 11.39 → 11.4×. Those are the same
+values the measurement table above already reports ($0.1323 total,
+$0.000817/corpus page); the scoreboard row's $0.000825 / 11.3× follows
+from no artifact of the run. `docs/workstreams.md` is correct and
+unchanged. Per *enriched* (blocking) page the ledger gives
+**$0.001454** (91 pages), rounded to $0.0015 in the table — M4
+acceptance criterion 2 uses $0.001454 as its reference figure.
+
 The owner's 10× production constraint is met on the deliberately hard dev
 corpus (65%→56% blocking). On typical born-digital mixes (5–20% blocking)
 the same ladder lands at ~$0.0001–0.0003/corpus page. Remaining headroom
