@@ -302,16 +302,73 @@ export class ParseService {
     }
   }
 
-  async shutdown() {
-    // Abort batch polling first: in-flight chunks persist as 'submitted' in
-    // their manifests and the next boot's sweep rejoins them (never
-    // resubmits). The remote batch keeps running; paid work is not lost.
+  /**
+   * Health warm-up (GET /health readiness): ask every current worker to
+   * construct its OCR adapter and run ONE real inference on a tiny blank
+   * raster. For the sidecar adapter that means: child spawned, meta line
+   * received (in-band useHpip and versions), one predict round-tripped.
+   * Resolves with per-worker results — the caller decides readiness; this
+   * method never throws. Budget honestly: a sidecar warm-up includes engine
+   * construction (ensureChild's meta timeout is 300 s), hence the default.
+   */
+  async warmup({ timeoutMs = 330_000 } = {}) {
+    const slots = this.workers.slice();
+    return Promise.all(slots.map((slot) => new Promise((resolve) => {
+      const timer = setTimeout(() => { cleanup(); resolve({ ok: false, error: `warm-up timed out after ${timeoutMs}ms` }); }, timeoutMs);
+      timer.unref?.();
+      const onMessage = (message) => {
+        if (message?.kind !== 'warmup-result') return;
+        cleanup();
+        resolve(message);
+      };
+      const onExit = () => { cleanup(); resolve({ ok: false, error: 'worker exited during warm-up' }); };
+      const cleanup = () => {
+        clearTimeout(timer);
+        slot.child.removeListener('message', onMessage);
+        slot.child.removeListener('exit', onExit);
+      };
+      slot.child.on('message', onMessage);
+      slot.child.on('exit', onExit);
+      try {
+        slot.child.send({ kind: 'warmup', task: { adapterId: this.adapterId, ocr: this.ocr } });
+      } catch (error) {
+        cleanup();
+        resolve({ ok: false, error: `could not reach worker: ${error.message}` });
+      }
+    })));
+  }
+
+  /**
+   * Drain the pool and AWAIT each child's exit. Returning before the workers
+   * die (the pre-M1 behaviour) let server.mjs call process.exit(0) while
+   * children were still alive — a worker must reach its own exit handler for
+   * the sidecar adapter's 'exit' hook to group-kill its Python engine, and a
+   * parent that exits first hands the orphan to PID 1 (which, in a container
+   * without an init that reaps, is this very Node process — hence the
+   * README's --init/tini requirement). Bounded: a worker that ignores
+   * SIGTERM past the timeout is SIGKILLed; its sidecar then exits via the
+   * stdin-EOF fallback documented in the adapter.
+   */
+  async shutdown({ timeoutMs = 15_000 } = {}) {
+    // Abort batch polling first (M3): in-flight chunks persist as
+    // 'submitted' in their manifests and the next boot's sweep rejoins them
+    // (never resubmits). The remote batch keeps running; paid work is not
+    // lost.
     await this.enrichmentPhase.shutdown();
-    for (const slot of this.workers) {
-      slot.child.removeAllListeners('exit');
-      slot.child.kill();
-    }
+    const slots = this.workers;
     this.workers = [];
+    await Promise.all(slots.map(({ child }) => new Promise((resolve) => {
+      child.removeAllListeners('exit');
+      if (child.exitCode !== null || child.signalCode !== null) return resolve();
+      const timer = setTimeout(() => {
+        // Escalation, not success: SIGKILL still produces an 'exit' event,
+        // which is what resolves this slot.
+        child.kill('SIGKILL');
+      }, timeoutMs);
+      timer.unref?.();
+      child.once('exit', () => { clearTimeout(timer); resolve(); });
+      child.kill();
+    })));
   }
 }
 
