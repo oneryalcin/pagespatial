@@ -109,7 +109,9 @@ def dump_container_logs(container_ids, logs_dir: Path):
     logs_dir.mkdir(parents=True, exist_ok=True)
     for cid in sorted(container_ids):
         try:
-            out = subprocess.run(["modal", "container", "logs", "--timestamps", cid],
+            # --all: the default fetches only the LAST 100 entries, which
+            # loses service_started (cold readiness lives ONLY in logs).
+            out = subprocess.run(["modal", "container", "logs", "--all", "--timestamps", cid],
                                  capture_output=True, text=True, timeout=300)
             (logs_dir / f"{cid}.log").write_text(out.stdout + (out.stderr or ""))
         except Exception as error:
