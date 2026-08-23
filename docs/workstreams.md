@@ -61,8 +61,13 @@ Gemini bills by pixels — reusing the parse raster silently invalidates the
 cost ladder), enrichment artifacts must not live in `pages/`
 (`checkCompletion` counts files there), and `pdfPath` + enrichment is a
 data-egress primitive and is refused. **Three open questions for the owner
-are listed at the end of the doc.** The commercial API surface (auth,
-quotas, storage, tenancy) is tracked-not-scheduled as **#76**.
+are listed at the end of the doc — ANSWERED 2026-08-23** (enrichment
+default off; cost-cap env defaults; dev-v13 stays authoritative on EP
+surprises). The commercial API surface (auth, quotas, storage, tenancy)
+is tracked-not-scheduled as **#76**. **M1 is IMPLEMENTED and verified on
+Linux (branch `m1-container-linux`,
+`docs/trials/2026-08-23-linux-verification.md`): all four acceptance
+criteria measured — see the M1 result block in the sidecar entry below.**
 
 **Next actions (owner-confirmed 2026-08-22; ranked by the rabbit-hole
 test, principles §9):**
@@ -131,10 +136,26 @@ test, principles §9):**
    lifecycle HIGHs fixed and re-verified by repro. Integration-path
    sanity: 438/438 gold parity with the ceremony. WASM witness =
    explicit fallback; browser = dev environment. **dev-v13 CUT (PR #71)
-   — see the reference-baseline line below. Remaining era item:
-   target-hardware (Linux/OpenVINO) re-measure at deploy, which under
-   the new era rule also needs a same-host EP control before its
-   diagnostics are compared to the paddle-default reference.**
+   — see the reference-baseline line below. ~~Remaining era item:
+   target-hardware (Linux/OpenVINO) re-measure at deploy + same-host EP
+   control~~ **DONE (M1, 2026-08-23 —
+   `docs/trials/2026-08-23-linux-verification.md`): same-host EP control
+   is CLEAN — hpi/hpi bit-identical (null tolerance 0), cross-EP delta 0
+   critical tokens / 1 raw line of 3,890, gold identical (413/560) in
+   all three arms; the ceremony's ±4-token spread was container
+   variance, not EP variance. `ep=hpi` now lands IN-BAND in every
+   record's provenance (`useHpip` introspected from the pipeline
+   object), closing the #64/#67 follow-up. Target-hardware numbers
+   (which SUPERSEDE every Mac/WASM and ad-hoc Modal figure): 3.0–5.5
+   core-s/page full-pipeline on 4×1-vCPU packing (shared-tenancy
+   range), 4×1 beats 1×4 by 2.7–4.9× — the packing hypothesis measured,
+   not assumed; boot-to-ready 70–88 s cold (OpenVINO engine build),
+   ~5 s on worker respawn in a warm container; ~2.7 GB per worker-pair
+   (cgroup, 10.9 GB for 4). The committed Dockerfile is the deployment
+   unit — linux/amd64, engine+weight pins asserted at build time, baked
+   models failing the build on hash mismatch, `/health` readiness
+   gating traffic, SIGTERM drain verified to leave ZERO surviving
+   Python processes with the interrupted job resuming on restart.**
    Ceremony record (PR #67): Three
    witnesses on 90 pages: candidate ≡ server witness (2 discordant
    tokens of 1,223; 98.7% byte-identical raw lines), candidate-worse

@@ -83,9 +83,94 @@ image's stderr); that channel is now corroboration, not the evidence.
 `GET /health` additionally exposes each worker's `executionProvider: hpi`
 before any job runs.
 
-## Criterion 2 — same-host EP control (placeholder)
+## Criterion 2 — same-host EP control: PASS, delta zero
 
-## Criterion 3 — throughput and footprint on target hardware (placeholder)
+One container (1 vCPU), one fixed page set (the 32-page hpi-bench set),
+three passes through the REAL sidecar script with fresh engine instances:
+`ep=hpi` twice, then `ep=paddle-default` once (`SIDECAR_DISABLE_HPI=1`,
+the knob added for this control). In-band meta per run: `useHpip`
+true/true/false. Scored two ways (`score-ep-control.mjs`;
+`score-candidate-witness.mjs` per arm):
+
+| comparison | critical-token symmetric difference | raw lines differing |
+|---|---|---|
+| hpi run A vs hpi run B (**derived null tolerance**) | **0** of 2,319 | 0 of 3,890 — byte-identical texts AND scores |
+| hpi vs paddle-default (**cross-EP delta**) | **0** of 2,319 | 1 of 3,890 (non-critical text; max paired score delta 0.023) |
+
+Gold framing (same scorer as the ceremony, dev-v12 reference + 560 gold
+tokens on the 23 gold pages in-sample): **all three arms score identically
+— 413/560 gold, 1966/2319 agreement, IoU 0.926 (default 0.924)**.
+
+Verdict: on one host the EP changes **speed only** — hpi/hpi is
+bit-stable, and the cross-EP delta (0 critical tokens, 1 raw line) sits at
+the derived tolerance. The ceremony's "~±4 tokens across containers" was
+therefore **container-to-container variance, not EP variance** — this
+control separates the two for the first time. No era decision is
+triggered; `dev-v13` remains authoritative (owner's standing answer), and
+`ep=hpi` diagnostics may now be compared against the `paddle-default`
+reference under the era rule, this control being on record.
+
+Speed, same container (warm p50 ms/page, 1 vCPU): hpi 1,547 / 1,677 vs
+paddle-default 8,519 — **~5.4× same-host**, the first clean same-host EP
+multiplier (the benchmark's 6.6×/3.7× were cross-machine). Engine-build
+cost: first hpi construction 70.4 s; the second **5.0 s** — the OpenVINO
+engine cache is warm within a container, so a worker respawn after the
+first boot does NOT re-pay the build (answering the restart-storm concern
+from the benchmark's operational notes; a fresh container still pays it
+once, see `/health` readiness times below).
+
+## Criterion 3 — throughput and footprint on target hardware: measured, with stated variance
+
+Full 162-page development corpus (23 per-document subset PDFs, qpdf-
+lossless page copies — page numbering remapped, so these runs measure
+throughput, never record-level parity), submitted to the real service over
+HTTP, all records canonical, **162/162 ok, zero failures, zero retries**
+in every run. Configuration stated per the criterion: 4-vCPU container,
+worker count × `SERVICE_SIDECAR_THREADS` as below.
+
+| packing | wall s | pages/sec | pages/sec/core | core-s/page | OCR p50 ms |
+|---|---|---|---|---|---|
+| **4×1 vCPU, run A** | 122.2 | 1.326 | 0.331 | 3.0 | 1,174 |
+| **4×1 vCPU, run B** | 224.1 | 0.723 | 0.181 | 5.5 | 2,533 |
+| **1×4 vCPU** | 605.0 | 0.268 | 0.067 | 14.9 | 1,980 |
+
+- **The topology hypothesis is confirmed as a hypothesis-test, not
+  assumed**: 4×1 beats 1×4 by **2.7–4.9×** on identical hardware — the
+  model gains almost nothing from 4 threads (1×4's OCR p50 1,980 ms vs
+  4×1's contended 1,174–2,533 ms), so N single-vCPU workers remain the
+  packing unit.
+- **Run-to-run variance on shared tenancy is large (run A vs run B: 1.8×
+  same config, minutes apart)** — consistent with the benchmark's ±50%
+  caveat. The honest target-hardware statement is a RANGE:
+  **~3.0–5.5 core-s/page full-pipeline** (render + native + OCR +
+  assembly + second opinions on 27 pages), i.e. **0.7–1.3 pages/sec on a
+  4-vCPU box**. A production deployment on pinned hardware should
+  re-measure once and record its own number; these figures replace the
+  Mac/Modal figures in the living docs until then.
+- Boot-to-ready (`/health`, includes model verification, sidecar `--check`,
+  and a warm-up inference on every worker with the HPI engine build):
+  **70–88 s cold container** across all runs. `saw503BeforeReady: true`
+  in every run — readiness gating observed doing its job on Linux.
+- Stage profile (4×1 run A p50): render 319 ms, native 44 ms, OCR
+  1,174 ms, assembly 30 ms; Tesseract second opinion engaged on 27/162
+  pages (the same 27-page count as dev-v13 — subsetting did not change
+  escalation-driven engagement), p50 3,975 ms.
+
+**Footprint (OS-derived, not process.memoryUsage).** gVisor's procfs
+exposes no `VmHWM` and no cgroup peak file, so the numbers are 2 s-sampled
+maxima of `/proc/<pid>/status VmRSS` (a **lower bound** on the true
+high-water mark) plus the cgroup's live usage:
+
+- cgroup total at end of the 4×1 run: **10.95 GB** for the whole container
+  (server + 4 workers + 4 sidecars) — **~2.7 GB per worker-pair**
+  amortized, in line with the ~2 GB/worker Mac budget plus contingency.
+- Sampled per-process VmRSS maxima: sidecar Python 6.4–7.3 GB each,
+  worker Node ~0.69–0.71 GB, server 0.37 GB. The per-process sidecar
+  figures **sum to far more than the cgroup total**, so gVisor's per-
+  process VmRSS multiply counts shared mappings; the cgroup figure is the
+  deployable number, the per-process ones are labeled ranges only. A
+  cgroup-v2 `memory.peak` reading on plain Docker/k8s remains the cleaner
+  instrument — noted for the production host's one-time re-measure.
 
 ## Criterion 4 — failure behaviour under containerisation: PASS
 
@@ -120,10 +205,33 @@ Two honest labels:
   (`ParseService.shutdown()` awaiting every child's exit) is
   init-independent and regression-tested in `test/service-health.test.mjs`.
 
+## Summary — the four criteria in one line each
+
+1. **In-band EP**: PASS — `ep=hpi` inside every record's provenance,
+   introspected from the pipeline object, log lines demoted to
+   corroboration.
+2. **Same-host EP control**: PASS — null tolerance 0 (hpi/hpi
+   bit-identical), cross-EP delta 0 critical tokens / 1 raw line of
+   3,890; gold identical (413/560) in all three arms; no era action.
+3. **Throughput/footprint**: 162/162 pages, 4×1 packing wins 2.7–4.9×
+   over 1×4; **3.0–5.5 core-s/page** (shared-tenancy range), container
+   total ~10.9 GB for 4 workers; boot-to-ready 70–88 s.
+4. **Failure behaviour**: PASS — worker SIGKILL requeues, sidecar SIGKILL
+   respawns, SIGTERM drains in 3–5 s with zero surviving processes and
+   the interrupted job resumes on restart; corrupt-page fail-closed
+   verified via the queue's machinery (stub hook; honest label above).
+
 ## Provenance (§8)
 
 - Every number above states its source run; raw JSON in
-  `.evaluation/m1-linux/` (gitignored, corpus-derived).
+  `.evaluation/m1-linux/` (gitignored, corpus-derived):
+  `ep-control.json` + `score-*.json` (criterion 2),
+  `throughput-4x1.json` (run B; run A's summary is quoted from its
+  console output — the rerun that added the RSS sampler overwrote run A's
+  file), `throughput-1x4.json`, `failure.json`.
+- Reproduction: `build-corpus-subset-pdfs.mjs` → the four
+  `m1_linux_verification_modal.py` tasks → `score-ep-control.mjs` and
+  `score-candidate-witness.mjs` per EP arm.
 - Independence checklist: these are **operational measurements of the
   system's own behaviour** (throughput, RSS, process lifecycle), not
   accuracy rates — no gold denominator is quoted here. The EP control's

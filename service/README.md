@@ -14,11 +14,67 @@ curl -X POST :8571/v1/jobs -H 'content-type: application/pdf' --data-binary @doc
 curl :8571/v1/jobs/<jobId>              # status + pages as they complete
 curl :8571/v1/jobs/<jobId>/pages/3      # one page
 curl :8571/v1/metrics                   # per-stage p50/p95, pages/sec, rss
+curl :8571/health                       # readiness (below); 503 until ready
 # NB: metrics rss is the NODE worker only — the sidecar's Python engine is
-# a separate process (~1.4-1.8 GB); budget ~2 GB combined per worker.
+# a separate process. Measured on target hardware (linux/amd64, OpenVINO;
+# docs/trials/2026-08-23-linux-verification.md): ~2.7 GB per worker-pair
+# amortized (cgroup total 10.9 GB for server + 4 workers + 4 sidecars).
 
 node service/loadtest.mjs --base http://localhost:8571 a.pdf b.pdf   # bottleneck table
 ```
+
+## Container (the deployment unit)
+
+The committed `Dockerfile` is the deployment unit — **linux/amd64 only**
+(OpenVINO HPI is x86-only; an arm64 build truthfully reports
+`ep=paddle-default` and must never serve as the production image or the EP
+control):
+
+```sh
+docker build --platform=linux/amd64 -t pagespatial-service .
+docker run --init -p 8571:8571 pagespatial-service
+```
+
+`--init` (or a tini entrypoint) is **part of the shutdown contract**, not a
+nicety: PID 1 changes default signal handling and orphan reaping. The
+graceful path is init-independent — SIGTERM makes `ParseService.shutdown()`
+await every worker child's exit (bounded, SIGKILL escalation), and each
+worker's exit hook group-kills its Python sidecar — but the SIGKILL
+fallback path reparents detached Python groups to PID 1, and a non-reaping
+Node PID 1 would accumulate zombies.
+
+Baked into the image, failing the BUILD rather than the boot: pinned model
+weights (`fetch_models.py` verify mode — any hash mismatch aborts the
+build) and the engine-pin assertion (`scripts/assert-engine-pins.mjs` —
+the pip pins must equal `DEFAULT_PYTHON_CMD`'s versions, so weights AND
+engine stay inside the ceremony-validated lineage). The image sets
+`SERVICE_SIDECAR_PYTHON` to the baked venv interpreter — no uv, no network
+at boot. Non-root user; `.dockerignore` keeps `.evaluation/` and all
+corpus-derived data out of the build context. Engine pins and weight pins
+live in different files by design: versions in `DEFAULT_PYTHON_CMD`
+(`service/adapters/ppocr-sidecar.mjs`), weight hashes in
+`service/sidecar/model-pins.json` — the build asserts they travel
+together.
+
+## GET /health — readiness gates traffic
+
+`/health` answers 200 only after, in order: model pin hashes verified, a
+sidecar child spawned per worker and its meta line received (in-band
+`useHpip` — this is where `ep=` comes from), and one real warm-up
+inference round-tripped per worker. Until then (and on warm-up failure) it
+answers 503 with the failure detail in `error`. Point the orchestrator's
+readiness probe here: a container must never receive work with a broken
+engine. Budget the warm-up honestly — measured boot-to-ready with the
+baked interpreter is **70–88 s** on a cold Linux container (HPI engine
+build dominates; a respawned worker in a warm container re-warms in ~5 s
+because the OpenVINO engine cache survives); with the uv default it can
+additionally include a package resolution.
+
+Target-hardware performance (linux/amd64, OpenVINO `ep=hpi`; full
+162-page corpus; `docs/trials/2026-08-23-linux-verification.md`):
+**3.0–5.5 core-s/page full-pipeline** (shared-tenancy range), 4×1-vCPU
+workers beating 1×4-vCPU by 2.7–4.9× — pack single-vCPU workers. These
+figures supersede the earlier Mac/WASM and ad-hoc Modal numbers.
 
 ## OCR witnesses
 
