@@ -4,7 +4,7 @@
 
 **Design:** [Modal scaling and deployment](../design/2026-08-23-modal-scaling-and-deployment.md) §14, run unchanged per §16 M3.
 
-**Verdict: DOES NOT PASS as specified — 10 of 12 acceptance criteria PASS; criteria 3 and 7 FAIL as written, with one shared, fully isolated root cause** (the pdf.js font `loadedName` embeds a process-lifetime document counter; see §Finding — OCR deltas were zero everywhere and document hashes always matched). Every delivery, failure-semantics, cleanup, and cost criterion passed. No tuning or rerun was attempted: per §16 M4 that decision belongs to the checkpoint, not this trial.
+**Verdict: DOES NOT PASS as specified — 10 of 12 acceptance criteria PASS; criteria 3 and 7 FAIL as written, with one shared, fully isolated root cause** (the pdf.js font `loadedName` embeds a process-lifetime document counter; see §Finding — OCR token/raw-line deltas were 0/0 everywhere and document hashes always matched). Every delivery, failure-semantics, cleanup, and cost criterion passed. No tuning or rerun was attempted: per §16 M4 that decision belongs to the checkpoint, not this trial.
 
 ## Provenance
 
@@ -127,13 +127,24 @@ counter — how many documents that worker process has opened before this
 one — so it is process-lifetime state, not document content. It varies with
 scheduling even under one configuration; it is the same class of volatile
 identity as `runId`, but §14.3 fixed the exclusion list and this trial
-applies §14.3 as written. OCR content, geometry, text, page identity, and
-all derived evidence were exact.
+applies §14.3 as written. OCR TEXT and token/raw-line deltas were 0/0 in
+every comparison; OCR confidences and derived geometry showed small float
+jitter within the §14.3 rules (quantified under Null tolerance below);
+native text, page identity, and document hashes were exact.
 
 Consequence: criteria 3 and 7 fail as specified. The candidate remedy —
 name `font` (or its `g_d<N>` prefix) volatile identity, or normalize the
 label at record time — is a §16 M4 "tune once" decision. It was **not**
 applied here.
+
+Independent verification (cold review of this PR): a reviewer-built
+path-level diff, independent of this trial's comparator and mask scripts,
+found **100% of leaf differences in the deterministic projection at
+`nativeObservations[].font` across all pairings, and 0 differing pages
+with that label masked** — supporting the volatile-identity
+classification. The reviewer's recommended remedy shape for M4 is a
+field-level comparator exclusion (not record-time normalization, not a
+global regex over serialized records).
 
 ## Null tolerance (§14.3)
 
@@ -142,17 +153,29 @@ deployed configuration (arm 3 and arm 10, both mc=1, identical resource
 settings), compared before judging arms 4/5:
 
 - critical-token null tolerance: **0** (symmetric difference over 47,191 tokens)
-- raw-line null tolerance: **0** (differing lines of 70,588; score sequences identical)
+- raw-line null tolerance: **0** (line-TEXT differences of 70,588 lines)
+
+OCR was not byte-for-byte identical everywhere: text and score-sequence
+TOKEN/RAW-LINE deltas were 0/0 in every comparison, but confidence floats
+and derived geometry jittered — arm3-vs-arm4 was fully bit-identical,
+while arm3-vs-arm5 had OCR-derived differences on 317/750 pages and the
+null pair itself on 746/750 (confidence jitter up to 0.005535, 40 polygon
+coordinates, 20 boxes, 5 observation ids, projection/markdown on 19
+pages). §14.3 permits OCR-derived variation when OCR varies, and the
+score projection was inexact on exactly those pages, so every criterion
+outcome stands; the point is that sub-1e-2 float jitter is the measured
+null behavior of this OCR stack across containers.
 
 The null pair itself, however, showed the deterministic-projection font
 difference on **172/750 pages** — establishing that the criterion-3 failure
 occurs under ONE deployed configuration, not only across scaling arms.
 
 Judged against it: arm 4 deltas 0/0 → within tolerance; arm 5 deltas 0/0 →
-within tolerance; arm 6 duplicate pairs 0/0 → within tolerance. (OCR was
-bit-identical across every comparison in this trial; the previous same-host
-control's zero/zero is thereby reproduced on Modal, as evidence, not as a
-hard-coded constant.)
+within tolerance; arm 6 duplicate pairs 0/0 → within tolerance. (OCR text
+and score-sequence token/raw-line deltas were 0/0 across every comparison,
+with the confidence/geometry float jitter quantified above; the previous
+same-host control's zero/zero token result is thereby reproduced on Modal,
+as evidence, not as a hard-coded constant.)
 
 ## Failure arms
 
@@ -162,7 +185,13 @@ hard-coded constant.)
 `ta-01M0R2NHCKX7QC7X45XPET3G5R` via `modal container list --json` and
 `modal container logs --search` (archived in `arm7/kill-evidence/`);
 `modal container stop --yes` issued exactly once at 19:50:06Z, ~12 s after
-the marked input's `job_submitted` (19:49:54Z). Modal cancelled and
+the marked input's `job_submitted` (19:49:54Z). Capture note: the stop
+command's own CLI output was not teed (the archived `stop-command.log` is
+empty), so "issued exactly once" is operator-attested; the stop's EFFECT is
+attested by the durable artifacts — the first container's log ends
+mid-document, the replacement container appears in the archived
+container-list, and the reconciler shows the retried input reaching a
+terminal result. Modal cancelled and
 rescheduled: replacement container `ta-01M0R2RQ9E0BB27XSHGYB43HSR` appeared,
 the marked input re-submitted there (reconciler: retried inputs = 1) and
 completed on the SAME FunctionCall id with all 31 pages; the two queued
@@ -204,8 +233,9 @@ input, not the container), served the exception attempts in between, and
 drained cleanly at scaledown (`service_stopped`, drain 31 ms).
 
 **Probes (criteria 8/9 instruments, dev-gated).** `probe_scratch` during
-arm 8's run: `clean: true`, disk used 201,785,344 bytes (≈0.19 GiB of the
-512 GiB documented quota); after the run: `clean: true`, 193,978,368 bytes.
+arm 8's run: `clean: true`, sampled disk use 201,785,344 bytes (≈0.19 GiB
+of the 512 GiB documented quota); after the run: `clean: true`,
+193,978,368 bytes. Two point samples, not a continuous maximum.
 `probe_exit_drain` on a live arm-8 container: Node terminated by the @exit
 drain, **survivors: [] (zero Node/worker/sidecar processes), scratch
 removed, clean: true**.
@@ -214,10 +244,14 @@ removed, clean: true**.
 
 Whole-qualification billing report (MANDATORY, criterion 12): captured with
 `modal billing report --start 2026-08-23 --end 2026-08-24 [-r h]
---show-resources --json` at 21:36Z (archived under
-`.evaluation/modal-qualification/2026-08-23/billing/`). The report is
-per-app, so each arm's app tag isolates its billed cost even though the
-workspace ran unrelated workloads:
+--show-resources --json` (archived under
+`.evaluation/modal-qualification/2026-08-23/billing/`). Two captures
+exist: an in-run snapshot at 21:06Z (`day-hourly-snapshot-2106Z.json`,
+taken while arm 10's hour was still accruing — its arm10 row is $0.00001)
+and the archived post-close re-read (`day-hourly-final.json`), which the
+table below matches to the cent. The report is per-app, so each arm's app
+tag isolates its billed cost even though the workspace ran unrelated
+workloads:
 
 | arm app | billed USD |
 |---|---|
@@ -233,12 +267,14 @@ workspace ran unrelated workloads:
 | **total** | **$1.9284** (CPU $1.2008 + memory $0.7276) |
 
 Pricing basis: https://modal.com/pricing retrieved 2026-08-23. No free
-credits are netted into these figures. Caveat: the 21:00–22:00 UTC interval
-was still open at capture time; the arm9/arm10 shares of that hour could
-adjust marginally on a post-day re-read (state of capture honestly labeled
-per §10). Billed cost runs well above the pure resource-time estimates
-below because short runs are dominated by image pull, readiness, and
-scaledown idle.
+credits are netted into these figures. One row precedes its arm's run
+window: **arm2 has $0.00443 (CPU $0.00421 + memory $0.00022) in the 18:00
+UTC interval**, before its 19:00:01Z window — arm 2's was the first deploy
+of the day and its ~211 s deployment (image build/verification on Modal)
+started before 19:00; every other billed row falls inside its arm's
+recorded window hours. Billed cost runs well above the pure resource-time
+estimates below because short runs are dominated by image pull, readiness,
+and scaledown idle.
 
 Resource-time cross-check (container activity from log timestamps +
 measured readiness, at the dated provisioned rate $0.380448/container-h;
@@ -283,10 +319,10 @@ including its boot and idle).
 | 6 | exception and timeout match configured retry count and are visible | **PASS** | both ran exactly 2 attempts (`retries=1`); timeout killed at 1,800 s each attempt → visible `FunctionTimeoutError`; exception → visible terminal exception; log-attested attempt ids |
 | 7 | duplicates pass all three §14.3 projections; digests differ; duplicate compute counted; no paid enrichment | **FAIL (as written)** | duplicate compute counted (10 duplicate terminals, 232 pages billed-time); OCR rules passed 0/0; pageDigest values differ as expected; no enrichment call exists in the adapter (enrichment=off enforced; no GEMINI_API_KEY in the app) — but the deterministic projection differed on 108/116 pages, same single font-label cause as criterion 3 |
 | 8 | zero surviving child processes after container exit (explicit probe) | **PASS** | probe_exit_drain: survivors [], scratch removed, clean |
-| 9 | job state + uploaded PDF removed after every terminal method; recovered after forced timeout; peak disk below limit | **PASS** | cleanup failures 0 across all arms; probe_scratch clean during and after; the injected timeout fires pre-submit (M2 design) so it creates no job state — after both timeout kills the same container served later methods normally and its @exit drain removed scratch; mid-parse state disposal under kill is covered by arms 7/8 (fresh containers, entry sweep, 0 leftovers); peak observed disk 0.19 GiB ≪ 512 GiB |
+| 9 | job state + uploaded PDF removed after every terminal method; recovered after forced timeout; peak disk below limit | **PASS** | cleanup failures 0 across all arms; probe_scratch clean during and after; the injected timeout fires pre-submit (M2 design) so it creates no job state — after both timeout kills the same container served later methods normally and its @exit drain removed scratch; mid-parse state disposal under kill is covered by arms 7/8 (fresh containers, entry sweep, 0 leftovers); sampled disk use 0.19 GiB (two probe_scratch samples, during and after arm 8 — a sample, not a continuous peak) ≪ 512 GiB |
 | 10 | cold readiness, warm latency, throughput, queue wait, cost reported per arm; per-arm cost labeled billed vs estimate | **PASS** | tables above; per-arm cost is BILLED (the report is per-app, so arm app tags isolate it), with the resource-time table as a labeled cross-check; queue wait reported as the stated proxy (no platform per-input metric) |
 | 11 | 1/4/16 arms show actual container counts; no unsupported linear claim | **PASS** | 1/4/16 actual; 0.599/1.731/3.678 pages/s reported as sublinear; no linear claim |
-| 12 | billing reconciles with run window and terminal pages; total spend + cost/page stated | **PASS** | per-app billed rows all fall in the 19:00–22:00 UTC intervals of 2026-08-23, matching the recorded arm windows; total **$1.9284**, **$0.000572 per terminal page** ($572/M); open-interval caveat stated |
+| 12 | billing reconciles with run window and terminal pages; total spend + cost/page stated | **PASS** | per-app billed rows reconcile with the recorded arm windows (19:00–22:00 UTC of 2026-08-23, plus arm2's named $0.00443 pre-window deploy-build row in the 18:00 interval); figures from the archived post-close re-read; total **$1.9284**, **$0.000572 per terminal page** ($572/M) |
 
 ## Retention
 
@@ -301,8 +337,9 @@ running containers and `modal app list` shows **zero** deployed
 
 - Workspace plan limits: not exposed by the pinned CLI; nothing in the run
   approached a platform limit (max 16 containers requested and observed).
-- The 21:00–22:00 UTC billing interval was still open at the 21:36Z
-  capture; the arm9/arm10 rows could adjust marginally after day close.
-  Everything else in the billing table comes from closed hourly intervals.
+- The arm-7 stop command's own CLI output was not teed (empty
+  `stop-command.log`); the one-shot issuance is operator-attested, the
+  kill→reschedule→terminal effect is durable-log-attested (see arm 7).
 - Arm 9's local capture wall clocks are reconstructed (see arm 9 above);
   its two outcomes and retry counts are log- and FunctionCall-attested.
+- Disk use is a two-point probe sample, not a continuous peak.
