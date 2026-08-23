@@ -18,7 +18,8 @@
  */
 import { blockingReasons } from './enrichment.js';
 import { renderedPixelsPerPoint } from './geometry.js';
-import { INK_RESIDUE_MIN_SIDE_PT, RECOVERY_REGION_MARGIN_PT } from './tuning.js';
+import { regionEligibleForResidue } from './ink.js';
+import { RECOVERY_REGION_MARGIN_PT } from './tuning.js';
 import type { Box, PageSpatial, UnreadInkRegion } from './types.js';
 
 /** One conflict, shaped for the adjudication prompt (normalizedBox is
@@ -44,6 +45,13 @@ export interface ResidueCropPlan {
 
 /** Which rungs to run for one page, with their request inputs. */
 export interface EnrichmentRequestPlan {
+  /**
+   * The dpi the crop windows were computed at. A caller MUST render crops
+   * at this dpi — rendering at any other silently shifts every window.
+   * Echoed on every plan (even without crops) so the contract is
+   * self-describing for the service (M3).
+   */
+  renderDpi: number;
   /** Present iff a conflict/omission reason fired AND the page carries conflicts. */
   adjudication?: { conflicts: AdjudicationConflictInput[] };
   /** Present iff the page is coverage-starved (unknown missing content anywhere). */
@@ -74,7 +82,7 @@ export function residueRegions(page: PageSpatial): UnreadInkRegion[] {
     region.kind === 'structured'
     && region.recoveredObservationCount === 0
     && region.confirmations.length === 0
-    && Math.min(region.box[2] - region.box[0], region.box[3] - region.box[1]) >= INK_RESIDUE_MIN_SIDE_PT * ppp);
+    && regionEligibleForResidue(region, ppp));
 }
 
 /** Conflicts shaped for the adjudication prompt. Fails closed on a
@@ -126,8 +134,8 @@ export function buildEnrichmentRequestPlan(
   options: { renderDpi: number }
 ): EnrichmentRequestPlan {
   const page = record.ok === false ? undefined : record.pageSpatial;
-  if (!page) return {};
-  const plan: EnrichmentRequestPlan = {};
+  if (!page) return { renderDpi: options.renderDpi };
+  const plan: EnrichmentRequestPlan = { renderDpi: options.renderDpi };
   const reasons = new Set(blockingReasons(page));
   const needsFullTranscription = reasons.has('uncorroborated-ocr');
   if (needsFullTranscription) {

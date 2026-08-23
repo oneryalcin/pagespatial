@@ -64,7 +64,8 @@ test('multi-reason page gets multiple rungs with their inputs', () => {
 
 test('conflict reason without conflicts on the record gets no adjudication rung', () => {
   const page = syntheticPage({ pageId: 'synthetic:noconf:1', reasons: ['critical-token-conflict'] });
-  assert.deepEqual(buildEnrichmentRequestPlan({ pageSpatial: page }, { renderDpi: RENDER_DPI }), {});
+  assert.deepEqual(buildEnrichmentRequestPlan({ pageSpatial: page }, { renderDpi: RENDER_DPI }),
+    { renderDpi: RENDER_DPI });
 });
 
 test('residue page below the minimum side gets no crops and is reported unanswered', () => {
@@ -74,7 +75,7 @@ test('residue page below the minimum side gets no crops and is reported unanswer
     unreadInkRegions: [residueRegion([100, 100, 105, 300])] // 5pt narrow side < INK_RESIDUE_MIN_SIDE_PT
   });
   assert.deepEqual(buildEnrichmentRequestPlan({ pageSpatial: page }, { renderDpi: RENDER_DPI }),
-    { residueUnanswered: true });
+    { renderDpi: RENDER_DPI, residueUnanswered: true });
 });
 
 test('eligible residue region yields a margin-padded crop window at the render dpi', () => {
@@ -99,7 +100,7 @@ test('full transcription subsumes residue crops on a page carrying both reasons'
     unreadInkRegions: [residueRegion([100, 100, 200, 160])]
   });
   const plan = buildEnrichmentRequestPlan({ pageSpatial: page }, { renderDpi: RENDER_DPI });
-  assert.deepEqual(plan, { fullTranscription: {} });
+  assert.deepEqual(plan, { renderDpi: RENDER_DPI, fullTranscription: {} });
 });
 
 test('failed page (ok:false) is never routed to any rung', () => {
@@ -112,8 +113,10 @@ test('failed page (ok:false) is never routed to any rung', () => {
     conflicts: [{ id: 'c1', ocrId: 'o1', nativeText: '647', ocrText: '641' }],
     unreadInkRegions: [residueRegion([100, 100, 200, 160])]
   });
-  assert.deepEqual(buildEnrichmentRequestPlan({ ok: false, pageSpatial: page }, { renderDpi: RENDER_DPI }), {});
-  assert.deepEqual(buildEnrichmentRequestPlan({}, { renderDpi: RENDER_DPI }), {});
+  assert.deepEqual(buildEnrichmentRequestPlan({ ok: false, pageSpatial: page }, { renderDpi: RENDER_DPI }),
+    { renderDpi: RENDER_DPI });
+  assert.deepEqual(buildEnrichmentRequestPlan({}, { renderDpi: RENDER_DPI }),
+    { renderDpi: RENDER_DPI });
 });
 
 // ---------------------------------------------------------------------------
@@ -139,9 +142,14 @@ startxref
 
 const PRELOAD = `
 const okJson = (body) => ({ ok: true, status: 200, headers: { get: () => null }, json: async () => body, text: async () => '' });
-globalThis.fetch = async (url) => {
+globalThis.fetch = async (url, init) => {
   const u = String(url);
-  if (u.includes(':batchGenerateContent')) return okJson({ name: 'batches/stub-op' });
+  if (u.includes(':batchGenerateContent')) {
+    // Persist the submit body so the parity test can compare request
+    // PAYLOADS (image part counts, conflict prompts), not just key sets.
+    if (process.env.PLAN_TEST_CAPTURE) require('node:fs').writeFileSync(process.env.PLAN_TEST_CAPTURE, init?.body ?? '');
+    return okJson({ name: 'batches/stub-op' });
+  }
   if (u.includes('batches/stub-op')) return okJson({
     done: true,
     metadata: { state: 'BATCH_STATE_SUCCEEDED' },
@@ -177,7 +185,12 @@ test('parity: runner batch manifest matches library-built plans for a mixed fixt
         pageId: 'synthetic:starved-conflict:1', sha,
         reasons: ['uncorroborated-ocr', 'critical-token-conflict'],
         ocrObservations: [{ id: 'o1', pageNumber: 1, text: '641', box: [20, 20, 200, 40], confidence: 0.99 }],
-        conflicts: [{ id: 'c1', ocrId: 'o1', nativeText: '647', ocrText: '641' }]
+        // Two conflicts so payload parity below can detect a runner that
+        // drifted the conflict inputs while emitting the right key set.
+        conflicts: [
+          { id: 'c1', ocrId: 'o1', nativeText: '647', ocrText: '641' },
+          { id: 'c2', ocrId: 'o1', nativeText: '1,250', ocrText: '1,256' }
+        ]
       }),
       syntheticPage({
         pageId: 'synthetic:residue:1', sha,
@@ -203,12 +216,13 @@ test('parity: runner batch manifest matches library-built plans for a mixed fixt
     const preloadPath = join(dir, 'preload.cjs');
     writeFileSync(preloadPath, PRELOAD);
     const output = join(dir, 'out');
+    const capturePath = join(dir, 'submit-body.json');
     const stdout = execFileSync(process.execPath, [
       '--require', preloadPath,
       join(root, 'scripts/evaluation/run-flash-enrichment.mjs'),
       '--run-root', runRoot, '--output', output, '--corpus-root', corpusRoot,
       '--concurrency', '1', '--batch'
-    ], { env: { ...process.env, GEMINI_API_KEY: 'stub-key' }, encoding: 'utf8' });
+    ], { env: { ...process.env, GEMINI_API_KEY: 'stub-key', PLAN_TEST_CAPTURE: capturePath }, encoding: 'utf8' });
 
     // Library side: identical records, identical plan builder call.
     const expectedKeys = [];
@@ -225,9 +239,90 @@ test('parity: runner batch manifest matches library-built plans for a mixed fixt
     const manifest = JSON.parse(readFileSync(join(output, 'batch-manifest.json'), 'utf8'));
     assert.deepEqual([...manifest.keys].sort(), expectedKeys.sort());
     assert.equal(expectedUnanswered, 1, 'thin-residue fixture must exercise the unanswered path');
+
+    // Payload parity: the submitted request BODIES must match the library
+    // plans, not just the key set — a runner that drifted conflict inputs
+    // or crop counts while emitting the right keys must fail here.
+    const submitted = JSON.parse(readFileSync(capturePath, 'utf8'));
+    const byKey = new Map(submitted.batch.input_config.requests.requests
+      .map((item) => [item.metadata.key, item.request]));
+    assert.deepEqual([...byKey.keys()].sort(), expectedKeys.sort());
+    const partsOf = (request) => request.contents[0].parts;
+    const images = (request) => partsOf(request).filter((part) => part.inline_data).length;
+    for (const page of pages) {
+      const name = `${page.pageId.replaceAll(':', '_')}.json`;
+      const plan = buildEnrichmentRequestPlan({ pageSpatial: page }, { renderDpi: RENDER_DPI });
+      if (plan.residueCrops) {
+        assert.equal(images(byKey.get(`${name}|crops`)), plan.residueCrops.crops.length,
+          `${name}: one crop image per planned crop window`);
+      }
+      if (plan.adjudication) {
+        const prompt = partsOf(byKey.get(`${name}|adj`)).find((part) => part.text).text;
+        for (const conflict of plan.adjudication.conflicts) {
+          assert.ok(prompt.includes(JSON.stringify(conflict.nativeText))
+            && prompt.includes(JSON.stringify(conflict.ocrText))
+            && prompt.includes(JSON.stringify(conflict.normalizedBox)),
+            `${name}: adjudication prompt carries conflict ${conflict.conflictId}`);
+        }
+        assert.equal(images(byKey.get(`${name}|adj`)), 1);
+      }
+      if (plan.fullTranscription) assert.equal(images(byKey.get(`${name}|full`)), 1);
+    }
     const aggregate = JSON.parse(readFileSync(join(output, 'aggregate.json'), 'utf8'));
     assert.equal(aggregate.residuePagesWithoutCropRequests, expectedUnanswered);
     assert.match(stdout, /Batch done/u);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a record the plan builder rejects fails that one page, never the run', () => {
+  // Regression (PR #80 cold review, blocker): the plan build initially sat
+  // OUTSIDE the runner's per-page try — a conflict with a dangling ocrId
+  // crashed the whole run before any manifest or ledger was written,
+  // instead of recording one page failure as the pre-extraction runner did.
+  const dir = mkdtempSync(join(tmpdir(), 'plan-dangling-'));
+  try {
+    const corpusRoot = join(dir, 'corpus');
+    mkdirSync(join(corpusRoot, 'docs'), { recursive: true });
+    const pdfPath = join(corpusRoot, 'docs', 'fixture.pdf');
+    writeFileSync(pdfPath, MINIMAL_PDF);
+    const sha = createHash('sha256').update(MINIMAL_PDF).digest('hex');
+    const pages = [
+      syntheticPage({
+        pageId: 'synthetic:dangling:1', sha,
+        reasons: ['critical-token-conflict'],
+        // No observation with id 'ghost' — the builder must throw for this
+        // page and the runner must contain it.
+        conflicts: [{ id: 'c1', ocrId: 'ghost', nativeText: '647', ocrText: '641' }]
+      }),
+      syntheticPage({ pageId: 'synthetic:healthy:1', sha, reasons: ['uncorroborated-ocr'] })
+    ];
+    const runRoot = join(dir, 'run');
+    pages.forEach((page, index) => {
+      const docDir = join(runRoot, 'documents', `doc-${index}`, 'pages');
+      mkdirSync(docDir, { recursive: true });
+      writeFileSync(join(docDir, '000001.json'), JSON.stringify({
+        pageSpatial: page, objectId: page.documentId, pageNumber: 1, path: 'docs/fixture.pdf'
+      }));
+    });
+    const preloadPath = join(dir, 'preload.cjs');
+    writeFileSync(preloadPath, PRELOAD);
+    const output = join(dir, 'out');
+    // execFileSync throws on a non-zero exit: the run surviving IS the assertion.
+    execFileSync(process.execPath, [
+      '--require', preloadPath,
+      join(root, 'scripts/evaluation/run-flash-enrichment.mjs'),
+      '--run-root', runRoot, '--output', output, '--corpus-root', corpusRoot,
+      '--concurrency', '1', '--batch'
+    ], { env: { ...process.env, GEMINI_API_KEY: 'stub-key' }, encoding: 'utf8' });
+    const manifest = JSON.parse(readFileSync(join(output, 'batch-manifest.json'), 'utf8'));
+    assert.deepEqual(manifest.keys, ['synthetic_healthy_1.json|full'],
+      'healthy page still submitted');
+    const aggregate = JSON.parse(readFileSync(join(output, 'aggregate.json'), 'utf8'));
+    const danglingFailure = aggregate.failures.find((failure) => failure.pageId === 'synthetic:dangling:1');
+    assert.ok(danglingFailure, 'dangling-ocrId page recorded as a page failure');
+    assert.match(danglingFailure.error, /unknown OCR observation/u);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

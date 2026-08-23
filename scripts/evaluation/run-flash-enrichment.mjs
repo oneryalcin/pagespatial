@@ -140,11 +140,6 @@ async function worker() {
     const target = selected[cursor];
     cursor += 1;
     const name = `${target.page.pageId.replaceAll(':', '_')}.json`;
-    // Routing (which rungs, with what inputs) lives in the library plan
-    // builder — src/enrichment-plan.ts — shared with the service so the
-    // measured cost ladder describes production. The runner only executes
-    // the plan.
-    const plan = buildEnrichmentRequestPlan({ pageSpatial: target.page }, { renderDpi });
     let partialTelemetry;
     try {
       if (skipExisting && existsSync(join(outputDir, name))) {
@@ -157,6 +152,15 @@ async function worker() {
         }
         console.warn(`${target.page.pageId}: stored enrichment stale/invalid (${verdict.issues[0]}); re-enriching.`);
       }
+      // Routing (which rungs, with what inputs) lives in the library plan
+      // builder — src/enrichment-plan.ts — shared with the service so the
+      // measured cost ladder describes production. The runner only executes
+      // the plan. Built INSIDE the per-page failure boundary and AFTER the
+      // skip-existing reuse: a record the builder rejects (e.g. a conflict
+      // with a dangling ocrId) fails that one page, never the run — and a
+      // valid stored enrichment is reused at zero cost without ever
+      // computing plan inputs.
+      const plan = buildEnrichmentRequestPlan({ pageSpatial: target.page }, { renderDpi });
       assertPdfMatchesRecord(target.pdfPath, target.page.documentSha256);
       const png = renderPng(target.pdfPath, target.pageNumber);
       if (batchMode) {
