@@ -283,13 +283,14 @@ class ParseContainer:
         except Exception as error:  # never mask the original failure path
             self._log_event("stop_fetching_inputs_failed", error=str(error))
 
-    def _http(self, method: str, path: str, body: bytes = None, content_type: str = None):
+    def _http(self, method: str, path: str, body: bytes = None, content_type: str = None,
+              timeout: int = 120):
         request = urllib.request.Request(
             f"http://127.0.0.1:{SERVICE_PORT}{path}", data=body, method=method)
         if content_type:
             request.add_header("content-type", content_type)
         try:
-            with urllib.request.urlopen(request, timeout=120) as response:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
                 return response.status, json.loads(response.read())
         except urllib.error.HTTPError as error:
             return error.code, json.loads(error.read())
@@ -302,12 +303,16 @@ class ParseContainer:
     @modal.method()
     def parse_document(self, payload: dict) -> dict:
         method_t0 = time.monotonic()
-        pdf_bytes = validate_input(payload)  # raises InputRejected before Node work
-        request_id = payload["request_id"]
-        sha256 = payload["expected_sha256"]
+        # Cold/warm attribution is a property of the CONTAINER, not of the
+        # input: capture and clear it before validation, or a rejected
+        # first call would make the next successful call misreport
+        # container_cold=true (cold review PR #89, finding 2 — §8).
         container_cold = self.cold
         service_ready_ms = self.service_ready_ms if self.cold else 0
         self.cold = False
+        pdf_bytes = validate_input(payload)  # raises InputRejected before Node work
+        request_id = payload["request_id"]
+        sha256 = payload["expected_sha256"]
 
         # §7.4: sweep abandoned state from a prior exception/timeout, and
         # refuse to start on a nearly-full disk.
@@ -328,8 +333,24 @@ class ParseContainer:
         job_id = None
         try:
             parse_t0 = time.monotonic()
-            status, body = self._http(
-                "POST", "/v1/jobs?enrichment=off", pdf_bytes, "application/pdf")
+            # Submit transport failure retires the container (cold review
+            # PR #89, finding 1): the service may have ACCEPTED the job
+            # while the response was lost — a later method's entry sweep
+            # would then delete a still-processing job's directory out from
+            # under active workers. Retiring hands the retry a fresh
+            # container instead. Timeout is generous because 202 arrives
+            # only after upload + hash + probe of a potentially-90 MiB PDF
+            # (design §3.1).
+            try:
+                status, body = self._http(
+                    "POST", "/v1/jobs?enrichment=off", pdf_bytes,
+                    "application/pdf", timeout=600)
+            except Exception as error:
+                self._retire("submit_transport_failure")
+                raise RuntimeError(
+                    f"loopback submit transport failure ({type(error).__name__}); "
+                    "container retired — job state on this instance is unknowable"
+                ) from error
             if status == 202:
                 job_id = body["jobId"]
                 if self.budget.record_created():

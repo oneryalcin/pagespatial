@@ -166,11 +166,15 @@ if (adapterId === 'ppocr-sidecar') {
 
 // Per-job page cap: 0/unset = unlimited (historical default). A garbage
 // value must not silently mean "unlimited" — refuse to boot instead.
-const maxPagesPerJob = Number(process.env.SERVICE_MAX_PAGES_PER_JOB ?? 0);
-if (!Number.isInteger(maxPagesPerJob) || maxPagesPerJob < 0) {
-  console.error(`SERVICE_MAX_PAGES_PER_JOB must be a non-negative integer (0 = unlimited), got '${process.env.SERVICE_MAX_PAGES_PER_JOB}'.`);
+// Digits-only parse: Number('') is 0 and Number('1e2') is 100, both of
+// which would boot on a value the operator plainly mistyped (cold review
+// PR #89, finding 3).
+const rawMaxPages = process.env.SERVICE_MAX_PAGES_PER_JOB;
+if (rawMaxPages !== undefined && !/^\d+$/u.test(rawMaxPages)) {
+  console.error(`SERVICE_MAX_PAGES_PER_JOB must be a non-negative integer in digits (0 = unlimited), got '${rawMaxPages}'.`);
   process.exit(1);
 }
+const maxPagesPerJob = Number(rawMaxPages ?? 0);
 
 const service = new ParseService({
   dataDir,
