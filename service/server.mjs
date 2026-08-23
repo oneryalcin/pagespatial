@@ -15,6 +15,10 @@
  *                                 canonical records only, image/svg+xml
  *   GET  /v1/jobs/:id/pages/:n/enrichment  enrichment revision record (404 when none)
  *   GET  /v1/metrics              per-stage aggregate since boot + enrichment counters
+ *   GET  /health                  readiness: 200 only after model pins
+ *                                 verified, a sidecar child reported meta,
+ *                                 and one warm-up inference completed
+ *                                 (503 again if the pool degrades)
  *
  * Env: PORT (default 8571), SERVICE_DATA_DIR (default service/data),
  * SERVICE_WORKERS (default 2), SERVICE_OCR_ADAPTER (default stub-ocr).
@@ -75,6 +79,29 @@ const uploadsDir = join(dataDir, 'uploads');
 mkdirSync(uploadsDir, { recursive: true });
 
 const adapterId = process.env.SERVICE_OCR_ADAPTER ?? 'stub-ocr';
+
+/**
+ * Readiness state for GET /health (workstream 1). Ready ONLY after:
+ *  1. model hashes verified (sidecar adapters; boot exits on mismatch, so a
+ *     running sidecar process implies true — surfaced here for the probe),
+ *  2. every worker's OCR adapter constructed — for the sidecar that means a
+ *     Python child spawned and its meta line received (in-band useHpip),
+ *  3. one warm-up inference round-tripped per worker.
+ * Readiness must gate traffic: point the orchestrator's readiness probe at
+ * /health so a container with a broken engine never receives work.
+ */
+const health = {
+  ready: false,
+  adapter: adapterId,
+  checks: {
+    modelPinsVerified: adapterId === 'ppocr-sidecar' ? false : null,
+    workersWarmedUp: false,
+    warmupInference: false
+  },
+  workers: [],
+  error: null
+};
+
 let ocr = {};
 if (adapterId === 'ppocr-sidecar') {
   // The adopted witness (issue #2). Fail closed at boot, before any job is
@@ -113,6 +140,7 @@ if (adapterId === 'ppocr-sidecar') {
   }
   try {
     verifyModelPins(modelsDir);
+    health.checks.modelPinsVerified = true;
     if (process.env.SERVICE_SIDECAR_SKIP_BOOT_CHECK !== '1') {
       await sidecarBootCheck(pythonCmd, modelsDir, threads);
     }
@@ -138,7 +166,12 @@ const service = new ParseService({
   dataDir,
   workers: Number(process.env.SERVICE_WORKERS ?? 2),
   adapterId,
-  ocr
+  ocr,
+  // Operational + test knob: how many consecutive worker deaths degrade
+  // the pool (default lives in queue.mjs).
+  ...(process.env.SERVICE_MAX_WORKER_DEATHS
+    ? { maxConsecutiveWorkerDeaths: Number(process.env.SERVICE_MAX_WORKER_DEATHS) }
+    : {})
 });
 
 const json = (res, status, body) => {
@@ -257,6 +290,18 @@ const server = createServer(async (req, res) => {
       return json(res, 200, service.metrics.snapshot());
     }
 
+    if (req.method === 'GET' && url.pathname === '/health') {
+      // Readiness, not liveness: 503 until the warm-up sequence completed —
+      // AND 503 again if the pool has since degraded (consecutive worker
+      // deaths stop respawning and POST /v1/jobs already 503s; an
+      // orchestrator must stop routing here too, cold-review PR #82).
+      // Related edge, intended: a worker dying DURING warm-up leaves the
+      // service not-ready until restart — fail-closed, since a pool that
+      // cannot warm up must never advertise itself ready.
+      const ready = health.ready && !service.degraded;
+      return json(res, ready ? 200 : 503, { ...health, ready, degraded: service.degraded });
+    }
+
     return json(res, 404, { error: 'Unknown route.' });
   } catch (error) {
     return json(res, 500, { error: String(error?.message ?? error) });
@@ -268,18 +313,47 @@ server.listen(port, () => {
   console.log(`parse-service listening on :${port} (adapter=${process.env.SERVICE_OCR_ADAPTER ?? 'stub-ocr'}, workers=${process.env.SERVICE_WORKERS ?? 2}, data=${dataDir})`);
 });
 
+// Warm-up runs AFTER listen so /health can answer 503 during it (a probe
+// that connection-refuses is indistinguishable from a dead container).
+// A failed warm-up leaves the service not-ready — the probe keeps traffic
+// away — rather than exiting: the failure detail stays inspectable.
+(async () => {
+  const results = await service.warmup();
+  health.workers = results.map((result) => result.ok
+    ? { ok: true, descriptor: result.descriptor, executionProvider: result.backend?.executionProvider ?? null }
+    : { ok: false, error: result.error });
+  const failures = results.filter((result) => !result.ok);
+  if (!results.length) {
+    health.error = 'no workers to warm up (SERVICE_WORKERS=0?)';
+  } else if (failures.length) {
+    health.error = `warm-up failed on ${failures.length}/${results.length} workers: ${failures[0].error}`;
+    console.error(`parse-service: ${health.error}`);
+  } else {
+    health.checks.workersWarmedUp = true;
+    health.checks.warmupInference = true;
+    health.ready = true;
+    console.log(`parse-service ready: ${results.length} workers warmed up (${health.workers[0].descriptor})`);
+  }
+})();
+
 // SIGTERM too: `kill <pid>` (and any supervisor) sends SIGTERM, and an
 // unhandled one terminates this process WITHOUT the pool shutdown — leaking
 // workers, each now holding a ~1.5 GB Python sidecar. Observed live during
 // the sidecar loadtest teardown; both signals now drain the pool.
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, async () => {
-    // Force-exit deadline: if a keep-alive connection or a wedged worker
-    // stalls the graceful path, exiting OURSELVES (running 'exit' hooks in
-    // the workers' parents is moot here, but process.exit lets close
-    // callbacks flush) beats the supervisor escalating to SIGKILL — which
-    // would orphan workers and their ~2 GB sidecar engines.
-    setTimeout(() => process.exit(0), 10_000).unref();
+    // Force-exit deadline: if a keep-alive connection stalls the graceful
+    // path, exiting OURSELVES beats the supervisor escalating to SIGKILL.
+    // Sized ABOVE shutdown()'s own 15 s per-worker SIGKILL escalation so the
+    // normal path — shutdown awaiting every child's exit — always wins;
+    // this deadline only fires if the exit-await itself wedges.
+    setTimeout(() => process.exit(0), 25_000).unref();
+    // shutdown() resolves only after every worker child has EXITED (bounded
+    // by its own timeout): each worker's exit hook group-kills its Python
+    // sidecar, so no engine can outlive this process on the graceful path.
+    // The container must still run under an init that reaps (docker --init
+    // or tini): PID 1 changes signal defaults and orphan reaping, and a
+    // non-reaping Node PID 1 would accumulate zombies on the SIGKILL path.
     await service.shutdown();
     server.closeIdleConnections?.();
     server.close(() => process.exit(0));

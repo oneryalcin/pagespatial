@@ -1,0 +1,23 @@
+# Private corpus and derived text — must NEVER enter the image or context.
+.evaluation/
+service/data/
+# Job state, local artifacts, tooling.
+node_modules/
+dist/
+coverage/
+.git/
+.github/
+.claude/
+.omx/
+test/
+examples/
+evaluation/
+# The image needs only generate-schema.mjs and assert-engine-pins.mjs from
+# scripts/ — keep the evaluation tooling out of the context so editing it
+# never invalidates the image build cache.
+scripts/evaluation/
+assets/
+docs/
+*.md
+.env
+.env.*

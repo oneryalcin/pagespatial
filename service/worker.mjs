@@ -118,7 +118,42 @@ async function runPage(task) {
   return { pageSpatial: assembled.value.pageSpatial, stageTimingsMs };
 }
 
+// 80x40 all-white grayscale PNG (generated with node:zlib, embedded so the
+// runtime image needs no image library). The health warm-up runs a REAL
+// inference through the configured adapter on this raster: for the sidecar
+// that spawns the Python child, waits for its meta line, and round-trips one
+// predict — zero observations on blank ink is the honest, correct result.
+const WARMUP_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAFAAAAAoCAAAAABMCyLdAAAAJUlEQVR4nO3MMQEAAAwCIPuX1hDbCQFIn0UoFAqFQqFQKBQKbwaQyXQ1muFazgAAAABJRU5ErkJggg==',
+  'base64'
+);
+
+async function runWarmup(task) {
+  const adapter = await adapterFor(task);
+  const result = await adapter.recognize({
+    pageNumber: 0,
+    geometry: { width: 80, height: 40 },
+    data: WARMUP_PNG,
+    mimeType: 'image/png'
+  });
+  return {
+    observations: result.observations.length,
+    descriptor: adapter.descriptor ?? `${adapter.name}@${adapter.version}`,
+    backend: adapter.backend ?? null,
+    sidecarMeta: adapter.sidecarMeta ?? null
+  };
+}
+
 process.on('message', async (message) => {
+  if (message?.kind === 'warmup') {
+    try {
+      const outcome = await runWarmup(message.task);
+      process.send({ kind: 'warmup-result', ok: true, ...outcome });
+    } catch (error) {
+      process.send({ kind: 'warmup-result', ok: false, error: String(error?.message ?? error) });
+    }
+    return;
+  }
   if (message?.kind !== 'page') return;
   const { task } = message;
   try {
