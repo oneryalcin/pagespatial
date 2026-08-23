@@ -105,6 +105,31 @@ test('a NATIVE-field mutation fails regardless of OCR score', async () => {
   assert.match(verdict.reasons.join('; '), /deterministic projection differs.*regardless of OCR score/u);
 });
 
+test('a font-label-ONLY change passes: nativeObservations[].font is volatile identity (M4 tune-once)', async () => {
+  // pdf.js assigns session-local `g_d<N>_f<M>` labels (per-worker-process
+  // document counter): the M3 trial's criteria-3/7 failures were 100%
+  // this field, present even in the same-config null pair. Excluded
+  // field-level per the amended §14.3.
+  const first = (await createValidDocument()).pages[0];
+  // The synthetic fixture carries no font labels; plant the session-local
+  // shape the real pipeline produces, differing across "processes".
+  first.nativeObservations.forEach((observation, index) => { observation.font = `g_d0_f${index + 2}`; });
+  const relabeled = clone(first);
+  relabeled.provenance.runId = 'another-run';
+  relabeled.nativeObservations.forEach((observation, index) => { observation.font = `g_d18_f${index + 2}`; });
+  assert.ok(first.nativeObservations.length > 0,
+    'fixture must carry native observations or this test is vacuous');
+  const comparison = comparePages([first], [relabeled]);
+  assert.equal(comparison.deterministic.exact, true,
+    'font relabeling alone must not fail the deterministic projection');
+  // ANY other native change still fails — the exclusion is one field wide.
+  const alsoMutated = clone(relabeled);
+  alsoMutated.nativeObservations[0].text = 'Revenue 900';
+  const failing = comparePages([first], [alsoMutated]);
+  assert.equal(failing.deterministic.exact, false,
+    'a native text change must still fail with fonts excluded');
+});
+
 test('OCR score exact but OCR-derived differing is a failure (derived state must be a function of OCR)', async () => {
   const first = (await createValidDocument()).pages[0];
   const drifted = clone(first);

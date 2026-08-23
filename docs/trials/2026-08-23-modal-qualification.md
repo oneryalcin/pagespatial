@@ -347,3 +347,45 @@ running containers and `modal app list` shows **zero** deployed
 - Arm 9's local capture wall clocks are reconstructed (see arm 9 above);
   its two outcomes and retry counts are log- and FunctionCall-attested.
 - Disk use is a two-point probe sample, not a continuous peak.
+
+## M4 addendum (2026-08-23): tune once — re-judged 12/12 — ADOPTED
+
+Owner decision at the §16 M4 checkpoint: **tune once**, per the PR #91
+cold review's recommendation.
+
+The tune: §14.3 amended to name `nativeObservations[].font` volatile
+identity (pdf.js's session-local `g_d<N>_f<M>` resource label, a
+per-worker-process document counter — the sole leaf at which every
+criteria-3/7 difference sat, per both this trial's finding and the
+review's independent path-diff; dev-v13 precedent: "metadata, not
+evidence"). Implemented as a field-level exclusion in
+`stableDeterministicProjection` only — records, digests, and eras are
+untouched. New comparator test: a font-relabel-only reparse passes; any
+other native-field change still fails.
+
+The re-judgment ran over the **existing archived captures — no new
+deploy, no new spend**, with the amended committed comparator
+(`compare-modal-runs.mjs`, artifacts `rejudge-*.json` beside the
+original unmasked `verdict-*.json`, which remain the record of the run
+as first judged):
+
+| comparison | pairs | deterministic exact | derived fn of OCR | tokens / raw lines |
+|---|---:|---|---|---|
+| null (arm3 vs arm10) | 100 | **true** | true | 0 / 0 |
+| arm3 vs arm4 | 100 | **true** | true | 0 / 0 |
+| arm3 vs arm5 | 100 | **true** | true | 0 / 0 |
+| arm6 duplicates (self) | 10 | **true** | true | 0 / 0 |
+
+Criteria 3 and 7 therefore PASS under the amended §14.3; all other
+criteria are unchanged from the tables above. **The qualification stands
+at 12/12.**
+
+**Decision: adopt internal Modal parse** — the adapter is qualified for
+controlled internal parse jobs within its stated prototype limits
+(90 MiB / 200 pages / 64 MiB / 100 jobs per warm lifetime /
+`max_containers` ∈ {1, 4, 16}; enrichment off; no public ingress).
+Measured basis: every delivery and failure criterion bounded and
+visible; $0.000572/terminal page gauntlet-inclusive, ~$440/M steady
+arms, ~$300/M marginal warm; scaling sublinear (2.9× at 4, 6.1× at 16)
+and stated as such. The production remote API and distributed
+enrichment remain gated exactly as §15/§13 specify.
