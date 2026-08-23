@@ -49,6 +49,21 @@ Onboarding order: [principles](principles.md) →
   excludes silver-only clean successes, so **no rate is trustworthy yet**.
   See ledger row 9.
 
+**READY FOR HANDOFF (2026-08-23): `docs/design/2026-08-23-service-deployment-and-enrichment.md`**
+— the implementation brief for the two gaps between today's service and a
+deployable one: **M1** container + Linux verification (`linux/amd64`;
+OpenVINO is x86-only), **M2** request-plan extraction to the library,
+**M3** service enrichment phase, **M4** real-corpus run. M1 and M2 are
+parallel; each milestone has measurable acceptance criteria. Survived two
+cold-review rounds (6 blockers + 6 follow-ups), notably: enrichment must
+render its **own 150 dpi** raster (the service parses at 115.2 dpi and
+Gemini bills by pixels — reusing the parse raster silently invalidates the
+cost ladder), enrichment artifacts must not live in `pages/`
+(`checkCompletion` counts files there), and `pdfPath` + enrichment is a
+data-egress primitive and is refused. **Three open questions for the owner
+are listed at the end of the doc.** The commercial API surface (auth,
+quotas, storage, tenancy) is tracked-not-scheduled as **#76**.
+
 **Next actions (owner-confirmed 2026-08-22; ranked by the rabbit-hole
 test, principles §9):**
 
