@@ -272,17 +272,17 @@ class SurvivingChildrenTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self._fake_proc(tmp, 1, "init", 0)
             self._fake_proc(tmp, 40, "python3", 1)      # the adapter (self)
-            self._fake_proc(tmp, 41, "node", 40, "node service/server.mjs")
+            self._fake_proc(tmp, 41, "node-MainThread", 40, "node service/server.mjs")
             self._fake_proc(tmp, 42, "pdf worker", 41)  # comm with a space
             procs = modal_app.surviving_children(proc_root=tmp, self_pid=40)
             self.assertEqual(procs, [
-                {"pid": 41, "ppid": 40, "comm": "node", "state": "S", "cmdline": "node service/server.mjs"},
+                {"pid": 41, "ppid": 40, "comm": "node-MainThread", "state": "S", "cmdline": "node service/server.mjs"},
                 {"pid": 42, "ppid": 41, "comm": "pdf worker", "state": "S", "cmdline": ""},
             ])
 
     def test_leak_filter_flags_node_and_orphaned_workers_only(self):
         procs = [
-            {"pid": 41, "ppid": 40, "comm": "node", "cmdline": "node service/server.mjs"},
+            {"pid": 41, "ppid": 40, "comm": "node-MainThread", "cmdline": "node service/server.mjs"},
             {"pid": 42, "ppid": 41, "comm": "python3", "cmdline": ""},  # child of dead service
             {"pid": 50, "ppid": 1, "comm": "modal-runtime", "cmdline": "modal-runtime supervise"},
         ]
@@ -321,6 +321,31 @@ class SurvivingChildrenTest(unittest.TestCase):
     def test_missing_proc_root_is_empty_not_fatal(self):
         self.assertEqual(modal_app.surviving_children(proc_root="/nonexistent"), [])
 
+    def test_leaked_live_worker_with_real_comm_is_caught(self):
+        # PR #93 review, HIGH: the real container's Node comm is
+        # "node-MainThread" (closure-probe baseline), so a comm EQUALITY
+        # check was dead code in production. The reviewer's exact repro:
+        # server dead, a wedged worker with intact argv reparents to
+        # pid 1 — it must be a survivor via the comm prefix AND via the
+        # worker.mjs argv marker independently.
+        wedged = {"pid": 117, "ppid": 1, "comm": "node-MainThread",
+                  "state": "S", "cmdline": "/usr/local/bin/node /app/service/worker.mjs"}
+        procs = [wedged,
+                 {"pid": 200, "ppid": 1, "comm": "python3", "state": "S",
+                  "cmdline": "python3 -m modal._container_entrypoint"}]
+        by_comm = modal_app.leaked_service_processes(procs, service_pid=5, self_pid=40)
+        self.assertEqual([p["pid"] for p in by_comm], [117])
+        # And with comm hypothetically renamed, the argv marker still catches it.
+        renamed = [{**wedged, "comm": "MainThread"}, procs[1]]
+        by_marker = modal_app.leaked_service_processes(
+            renamed, service_pid=5, self_pid=40,
+            markers=("ppocr_sidecar.py", "service/worker.mjs", "service/server.mjs", "/tmp/psvc-x"))
+        self.assertEqual([p["pid"] for p in by_marker], [117])
+        # The pre-fix behavior (equality + no worker marker) is the pinned
+        # vacuous pass: nothing would have been flagged.
+        equality_only = [p for p in renamed if p["comm"] == "node"]
+        self.assertEqual(equality_only, [])
+
     def test_empty_cmdline_python_is_indeterminate_never_silently_clean(self):
         # Criterion-8 closure (external review, 2026-08-24): the M3 arm-8
         # artifact listed four `python` processes at ppid 1 with EMPTY
@@ -347,7 +372,7 @@ class SurvivingChildrenTest(unittest.TestCase):
         self.assertEqual(modal_app.leaked_service_processes(
             procs, service_pid=41, self_pid=40,
             markers=("ppocr_sidecar.py", "/tmp/psvc-abc")), [
-            procs[2]])  # only via comm=="node"; the pythons stay invisible
+            procs[2]])  # only via the node comm prefix; the pythons stay invisible
 
 
 if __name__ == "__main__":

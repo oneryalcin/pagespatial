@@ -300,8 +300,11 @@ def leaked_service_processes(procs, service_pid=None, self_pid=None, markers=())
     catches an escaped sidecar reparented to pid 1."""
     self_pid = os.getpid() if self_pid is None else self_pid
     live_markers = [marker for marker in markers if marker]
+    # comm PREFIX, not equality: the real container's Node processes carry
+    # comm "node-MainThread" (closure-probe baseline), so an equality
+    # check was dead code in production (PR #93 review, HIGH).
     return [p for p in procs
-            if p["comm"] == "node"
+            if p["comm"].startswith("node")
             or p["ppid"] == self_pid
             or (service_pid is not None and p["ppid"] == service_pid)
             or any(marker in p.get("cmdline", "") for marker in live_markers)]
@@ -839,7 +842,8 @@ class ParseContainer:
             procs = surviving_children()
             survivors = leaked_service_processes(
                 procs, service_pid=node_pid,
-                markers=("ppocr_sidecar.py", data_dir))
+                markers=("ppocr_sidecar.py", "service/worker.mjs",
+                         "service/server.mjs", data_dir))
             unattributed = indeterminate_processes(procs)
             live_unattributed = [p for p in unattributed
                                  if p["classification"] == "indeterminate-live"]
