@@ -1,5 +1,11 @@
 # Sidecar adoption ceremony: the evidence package
 
+> **Correction (2026-08-23):** "vCPU" in this document mislabels Modal's
+> unit — `cpu=N` requests **N physical cores** (~2N vCPU threads), so
+> "1-vCPU" means one physical core. Measured values stand; the
+> "packing unit" phrasing is retracted as a general claim. See
+> `docs/design/2026-08-23-modal-scaling-and-deployment.md` §3.6.
+
 **Date:** 2026-08-22 (run artifacts timestamped same day) · **Branch:**
 `sidecar-adoption-ceremony` · **Issue:** #2
 **Candidate:** official PaddleOCR pipeline (paddleocr 3.7.0 / paddlepaddle

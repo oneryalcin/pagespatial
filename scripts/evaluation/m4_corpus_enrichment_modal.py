@@ -147,6 +147,8 @@ def corpus_enrichment(pdfs: list, workers: int, threads: int, deadline_s: int) -
            "SERVICE_WORKERS": str(workers), "SERVICE_SIDECAR_THREADS": str(threads)}
     server = subprocess.Popen(["node", "service/server.mjs"], cwd="/app", env=env,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    # containerVCpu: name kept for artifact comparability; the value is
+    # Modal cpu=4.0 = 4 PHYSICAL cores (unit correction 2026-08-23).
     result = {"packing": {"containerVCpu": 4, "workers": workers, "threadsPerSidecar": threads,
                           "osCpuCount": os.cpu_count()}}
     result["health"] = {k: _wait_health(port, 1500)[k] for k in ("readyAfterS", "saw503BeforeReady")}

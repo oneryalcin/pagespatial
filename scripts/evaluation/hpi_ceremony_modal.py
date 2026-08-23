@@ -1,6 +1,8 @@
 """Adoption-ceremony run (issue #2): the HPI sidecar candidate — official
 PaddleOCR pipeline, OpenVINO CPU, PP-OCRv6 small — over the FULL 90-page
-gold∩record sample, at the adopted packing unit (1 vCPU, threads=1).
+gold∩record sample, at cpu=1.0, threads=1 (unit correction 2026-08-23:
+Modal cpu=1.0 is ONE PHYSICAL core, not one vCPU, and "packing unit" is
+retracted as a general claim — see modal-scaling design §3.6).
 
 Differences from hpi_bench_modal.py:
   - full observation dumps (text/box/score) per page, for box-IoU and

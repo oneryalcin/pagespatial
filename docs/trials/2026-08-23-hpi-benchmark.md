@@ -2,6 +2,19 @@
 
 **Date:** 2026-08-23 · **Branch:** `hpi-benchmark` · **Issue:** #2 (speed-arm 2)
 
+> **Correction (2026-08-23):** "vCPU" here mislabels Modal's unit —
+> `cpu=N` requests **N physical cores** (~2N vCPU threads;
+> [Modal resources](https://modal.com/docs/guide/resources)). Measured
+> values stand; read every "N vCPU" as "N physical cores requested", and
+> "core-s/page" as requested-physical-core-seconds. Two conclusions
+> below are additionally **retracted as general claims**: "1-vCPU
+> workers are the unit" (a single-allocation observation on Modal
+> shared tenancy, not a packing law — the M1 trial's correction block
+> and `docs/design/2026-08-23-modal-scaling-and-deployment.md` §3.6
+> carry the corrected statement) and its "~4× the throughput of a
+> 16-core box" projection, which was derived from that generalization,
+> never measured. The flat 1→8 latency measurement itself stands.
+
 ## Question
 
 The service's OCR witness costs 6.5 s/page (WASM EP, 4-worker load; 3.7 s

@@ -57,7 +57,7 @@ ceremonial path, scorer and gold held constant:
 
 | | gold hits |
 |---|---|
-| ceremony (Modal, 1 vCPU, HPI/OpenVINO) | 438 |
+| ceremony (Modal, 1 vCPU — unit correction 2026-08-23: `cpu=1.0` = one PHYSICAL core, see design 2026-08-23-modal-scaling §3.6; HPI/OpenVINO) | 438 |
 | integrated sidecar (this Mac, paddle-default) | **438** |
 
 **Delta 0 of a ±4 allowance — parity.** The tmpfile protocol, adapter

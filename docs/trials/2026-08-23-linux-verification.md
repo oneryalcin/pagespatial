@@ -4,6 +4,24 @@
 `docs/design/2026-08-23-service-deployment-and-enrichment.md` (workstream 1)
 · **Issue:** deployment milestone M1
 
+> **Correction (2026-08-23, cold review of the Modal scaling design):**
+> every "vCPU" label in this document is wrong as a unit. Modal's `cpu=N`
+> requests **N physical cores** (each shown as two vCPU threads on
+> Modal's pricing page — [resources](https://modal.com/docs/guide/resources),
+> [pricing](https://modal.com/pricing)), so "1 vCPU" below means
+> `cpu=1.0` = one physical core, and "4-vCPU container" means `cpu=4.0`
+> = four physical cores with 24 GiB. The **measured values stand** (wall
+> times, pages/s, `/proc` CPU-seconds, and the within-allocation
+> comparison), but the corrected, limited conclusions are:
+> four one-thread service workers beat one four-thread worker by
+> 2.7–4.9× **on the same Modal allocation of four physical cores**;
+> "3.0–5.5 core-s/page" is **requested-physical-core-seconds per page**,
+> not vCPU-seconds; and the result does **not** establish
+> one-vCPU-per-worker packing on other platforms — the packing unit
+> claim is retracted. Single-container measurements; fleet linearity
+> unmeasured. Authoritative statement:
+> `docs/design/2026-08-23-modal-scaling-and-deployment.md` §3.6.
+
 First run of the parse service on its target platform (linux/amd64,
 OpenVINO HPI). Four acceptance criteria from the design doc, each a
 measurement. Committed instruments reproduce the whole run:

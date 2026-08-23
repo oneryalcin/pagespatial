@@ -449,6 +449,8 @@ def throughput(pdfs: list, workers: int, threads: int) -> dict:
     status, metrics = _http("GET", port, "/v1/metrics")
     drain = _shutdown_and_probe(server)
     return {
+        # Field name kept for artifact comparability; unit correction
+        # 2026-08-23: the value is Modal cpu=4.0 = 4 PHYSICAL cores.
         "packing": {"containerVCpu": 4, "workers": workers, "threadsPerSidecar": threads, "osCpuCount": os.cpu_count()},
         "health": {k: health[k] for k in ("readyAfterS", "saw503BeforeReady")},
         "healthBody": health["body"],
