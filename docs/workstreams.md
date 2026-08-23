@@ -182,6 +182,21 @@ test, principles §9):**
    verified under Modal's (gVisor) init, not plain `docker run --init`,
    and with USER skipped by Modal, so the non-root user and the docker
    `--init` reaping path await a first-real-host smoke.**
+   **MODAL DEPLOYMENT ADOPTED for internal parse jobs (owner decision
+   2026-08-23, M4 tune-once)** — the warm-Cls adapter
+   (`deploy/modal/`, PRs #88/#89/#90/#91) passed the §14 qualification
+   **12/12** after one spec amendment (`nativeObservations[].font` is
+   volatile identity — the two initial FAILs were 100% that field;
+   re-judged from archived captures at zero cost). Measured: $1.93
+   total gauntlet, $0.000572/terminal page (~$440/M steady, ~$300/M
+   marginal warm); 0.60/1.73/3.68 pages/s at 1/4/16 containers
+   (sublinear, stated); every failure mode bounded and visible
+   (platform timeout at exactly 1,800 s; container-kill reschedule
+   clean; zero surviving processes). Prototype limits stand (90 MiB /
+   200 pages / 64 MiB / 100 jobs/lifetime; enrichment OFF; no public
+   ingress). Trial: `docs/trials/2026-08-23-modal-qualification.md`
+   (+ M4 addendum). Production remote API (#76) and distributed
+   enrichment remain gated per the design's §15/§13.
    Ceremony record (PR #67): Three
    witnesses on 90 pages: candidate ≡ server witness (2 discordant
    tokens of 1,223; 98.7% byte-identical raw lines), candidate-worse

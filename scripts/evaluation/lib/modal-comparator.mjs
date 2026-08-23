@@ -48,7 +48,20 @@ export function canonicalJson(value) {
 }
 
 /** Projection 1: geometry, native observations/lines, document/page
- * identity, and non-volatile provenance. Must be exact across reparses. */
+ * identity, and non-volatile provenance. Must be exact across reparses.
+ *
+ * M4 tune-once amendment (design §14.3; M3 trial criteria 3/7):
+ * `nativeObservations[].font` is VOLATILE IDENTITY, not content — pdf.js
+ * assigns session-local resource labels (`g_d<N>_f<M>`, a per-worker-
+ * process document counter), so a valid reparse legitimately relabels
+ * every font. The M3 run's independent path-diff found 100% of
+ * deterministic-projection differences at exactly this leaf (0 pages
+ * differ with it excluded), and dev-v13's baseline review adjudicated
+ * the same field as "metadata, not evidence". Excluded FIELD-LEVEL here
+ * in the comparator only — never normalized in the record itself (that
+ * would change digests and open a comparability era for no evidential
+ * gain), and never via a serialized-JSON regex (a document could
+ * legitimately contain `g_d1_f2` as text). */
 export function stableDeterministicProjection(page) {
   const projection = {};
   for (const [key, value] of Object.entries(page)) {
@@ -56,6 +69,13 @@ export function stableDeterministicProjection(page) {
     if (key === 'provenance') {
       const { runId, createdAt, ...stable } = value ?? {};
       projection.provenance = stable;
+      continue;
+    }
+    if (key === 'nativeObservations') {
+      projection.nativeObservations = (value ?? []).map((observation) => {
+        const { font, ...stable } = observation ?? {};
+        return stable;
+      });
       continue;
     }
     projection[key] = value;

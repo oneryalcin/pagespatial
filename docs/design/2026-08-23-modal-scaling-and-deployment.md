@@ -707,8 +707,17 @@ a new digest.
 Implement three named test projections:
 
 1. `stableDeterministicProjection(page)` removes
-   `provenance.runId`, `provenance.createdAt`, and the OCR-dependent roots
-   listed below. Its canonical JSON must be exact.
+   `provenance.runId`, `provenance.createdAt`, `nativeObservations[].font`,
+   and the OCR-dependent roots listed below. Its canonical JSON must be
+   exact. *(Amended 2026-08-23, M4 tune-once: the qualification run failed
+   criteria 3/7 solely on `nativeObservations[].font` — pdf.js's
+   session-local `g_d<N>_f<M>` resource label, a per-worker-process
+   document counter present even in the same-config null pair; an
+   independent path-diff put 100% of leaf differences at that field, and
+   dev-v13's baseline review had already adjudicated it "metadata, not
+   evidence". Excluded field-level in the comparator only — never
+   normalized in the record (digest-era-breaking) and never via a
+   serialized-JSON regex (could match legitimate document text).)*
 2. `ocrScoreProjection(pages)` converts PageSpatial records to the existing
    EP scorer shape without changing observation order:
 
