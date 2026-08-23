@@ -168,6 +168,14 @@ curl :8571/v1/jobs/<jobId>                      # + enrichmentStatus, per-page e
 curl :8571/v1/jobs/<jobId>/pages/3/enrichment   # the revision record; 404 when none
 ```
 
+Measured on the container over the full development corpus
+(`docs/trials/2026-08-23-m4-corpus-enrichment.md`): **$0.001458 per
+enriched page** (150 dpi, batch pricing — within 0.3% of the committed
+ladder), enrichment CPU ~3% of parse CPU (the second 150 dpi render pass
+~0.34 core-s/page), wall time dominated by Gemini batch turnaround
+(chunk p50 ~3.5 min), `/v1/metrics` counters exactly equal to the job
+manifests.
+
 Enrichment is **fail-open**: Gemini down, over budget, or malformed means
 the job still completes with `enrichmentStatus: unavailable`. Inside it,
 staleness fails closed: a re-parsed page's stored enrichment goes
