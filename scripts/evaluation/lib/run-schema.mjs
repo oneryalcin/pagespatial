@@ -4,13 +4,28 @@ const hash = z.string().regex(/^[a-f0-9]{64}$/u);
 const gitOid = z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u);
 const relativePath = z.string().min(1).refine((value) => !value.startsWith('/') && !value.includes('..'), 'Expected a safe relative path.');
 const dataset = z.object({ repoType: z.literal('dataset'), repoId: z.string().min(1), revision: z.string().min(1) }).strict();
-const backend = z.object({ actual: z.enum(['wasm', 'webgpu']), events: z.array(z.unknown()) }).strict();
+// Backend names span both witness eras: 'wasm'/'webgpu' are the browser
+// witness (dev-v12 and earlier), 'paddle-default'/'hpi' are the adopted
+// sidecar witness's truthful per-host execution providers (dev-v13+).
+// Additive only — every browser-era artifact validates exactly as before.
+const backend = z.object({ actual: z.enum(['wasm', 'webgpu', 'paddle-default', 'hpi']), events: z.array(z.unknown()) }).strict();
 const browserSession = z.object({
   sessionId: z.string().min(1), startedAt: z.iso.datetime(), browser: z.string().min(1), browserVersion: z.string().min(1),
   executablePath: z.string().min(1), userAgent: z.string().nullable(),
   gpu: z.object({ vendor: z.string().nullable(), architecture: z.string().nullable(), device: z.string().nullable(), description: z.string().nullable() }).strict().nullable(),
   warmupMs: z.number().nonnegative(), backend: z.enum(['wasm', 'webgpu'])
 }).strict();
+// Sidecar-era runtime session (PR #67 ceremony, PR #69 integration): the
+// Python child's own testimony — versions, truthful EP, pinned models.
+const sidecarSession = z.object({
+  sessionId: z.string().min(1), startedAt: z.iso.datetime(), kind: z.literal('sidecar'),
+  launcher: z.string().min(1), platform: z.string().min(1),
+  paddleocr: z.string().min(1), paddlepaddle: z.string().min(1),
+  ep: z.enum(['paddle-default', 'hpi']), threads: z.number().int().positive(),
+  modelPins: z.record(z.string(), z.unknown()),
+  warmupMs: z.number().nonnegative(), backend: z.enum(['paddle-default', 'hpi'])
+}).strict();
+const runtimeSession = z.union([browserSession, sidecarSession]);
 const failure = z.object({
   stage: z.string().min(1), errorClass: z.string().min(1), message: z.string().max(8_192), partialEvidence: z.boolean()
 }).strict();
@@ -23,8 +38,11 @@ const commonEnvelope = z.object({
 });
 
 const successEnvelope = commonEnvelope.extend({
-  status: z.literal('succeeded'), backend, runtime: browserSession,
-  timings: z.object({ inspectorPageMs: z.number().nonnegative(), renderMs: z.number().nonnegative(), ocrMs: z.number().nonnegative(), pageTotalMs: z.number().nonnegative() }).strict(),
+  status: z.literal('succeeded'), backend, runtime: runtimeSession,
+  // assemblyMs/secondOpinionMs exist only for sidecar-era (service-path)
+  // envelopes, where assembly runs in the same process; optional so every
+  // browser-era envelope validates unchanged.
+  timings: z.object({ inspectorPageMs: z.number().nonnegative(), renderMs: z.number().nonnegative(), ocrMs: z.number().nonnegative(), pageTotalMs: z.number().nonnegative(), assemblyMs: z.number().nonnegative().optional(), secondOpinionMs: z.number().nonnegative().optional() }).strict(),
   memory: z.object({ nodeRssBytes: z.number().int().nonnegative(), browser: z.unknown() }).strict(),
   goldMetrics: z.literal('not_evaluated'), pageSpatial: z.unknown()
 }).strict();
@@ -33,7 +51,7 @@ const failedEnvelope = commonEnvelope.extend({
   status: z.enum(['failed', 'timed_out', 'aborted']),
   backend: backend.optional(), timings: z.record(z.string(), z.number().nonnegative()).optional(),
   partialEvidence: z.object({ renderedPage: z.unknown().optional(), ocrPage: z.unknown().optional(), nativePage: z.unknown().optional() }).strict().optional(),
-  runtime: browserSession.optional(), failure
+  runtime: runtimeSession.optional(), failure
 }).strict();
 
 export const attemptEnvelopeSchema = z.discriminatedUnion('status', [successEnvelope, failedEnvelope]);
@@ -71,7 +89,8 @@ export const runInvocationSchema = z.object({
     node: z.string(), platform: z.string(), arch: z.string(),
     cpu: z.object({ model: z.string().min(1), logicalCores: z.number().int().positive() }).strict(),
     totalMemoryBytes: z.number().int().positive(),
-    browserSessions: z.array(browserSession)
+    browserSessions: z.array(browserSession),
+    sidecarSessions: z.array(sidecarSession).optional()
   }).strict(),
   packages: z.record(z.string(), z.string()), profile: z.record(z.string(), z.unknown()),
   documents: z.array(z.object({ objectId: z.string().min(1), summary: relativePath, sha256: hash }).strict()),

@@ -1,0 +1,112 @@
+{
+  "schemaVersion": "pagespatial-development-baseline-summary-v2",
+  "generator": {
+    "version": 1,
+    "scriptSha256": "6138f99099d931c671459cfd6f3d25539d82d2d064ddd521251895b63505e29d",
+    "runImplementation": {
+      "commit": "04c2043313a2eca1669a104a6232aa1825efc642",
+      "dirty": false,
+      "workspaceHash": "b7f6f7b1a606cb4ff264212abe5084f906ecb2dbc89401be3b45314fd3073792",
+      "files": 191
+    }
+  },
+  "runId": "dev-v13-sidecar-2026-08-23",
+  "datasetRevision": "e3ee38f067588644b11574ccc566843ca45f6d33",
+  "manifestSha256": "14520a4f4ef3396b362e24d3a172cf8f855d263f3fbc70ec92766d70d9de4418",
+  "workspaceSha256": "b7f6f7b1a606cb4ff264212abe5084f906ecb2dbc89401be3b45314fd3073792",
+  "privateRunSummarySha256": "50e8ef1c1eb822ed6ea2a22665a4531932aa1638ec58598746f8b6e722aae2f8",
+  "privateRunSummaryPath": "invocations/1787440986630-74371-faac4db0c68f.json",
+  "artifactGraph": {
+    "documents": 23,
+    "terminalPageAttempts": 162,
+    "contentHashesVerified": true
+  },
+  "startedAt": "2026-08-22T23:23:11.086Z",
+  "endedAt": "2026-08-22T23:47:26.689Z",
+  "environment": {
+    "node": "v25.8.2",
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": {
+      "model": "Apple M4 Max",
+      "logicalCores": 14
+    },
+    "totalMemoryBytes": 38654705664,
+    "browserSessions": [
+      {
+        "sessionId": "1787440991086-42469c31fd82",
+        "startedAt": "2026-08-22T23:23:11.086Z",
+        "kind": "sidecar",
+        "launcher": "uv run --with paddleocr==3.7.0 --with paddlepaddle==3.2.1 python",
+        "platform": "Darwin",
+        "paddleocr": "3.7.0",
+        "paddlepaddle": "3.2.1",
+        "ep": "paddle-default",
+        "threads": 1,
+        "modelPins": {
+          "PaddlePaddle/PP-OCRv6_small_det": "106c97591b235f607453300d9fc8c1cad1b25488",
+          "PaddlePaddle/PP-OCRv6_small_rec": "bd619643acac4b9650c040234da8d944476ee3f1"
+        },
+        "warmupMs": 4232,
+        "backend": "paddle-default",
+        "executableLabel": "uv run --with paddleocr==3.7.0 --with paddlepaddle==3.2.1 python"
+      }
+    ],
+    "sidecarSessions": [
+      {
+        "sessionId": "1787440991086-42469c31fd82",
+        "startedAt": "2026-08-22T23:23:11.086Z",
+        "kind": "sidecar",
+        "launcher": "uv run --with paddleocr==3.7.0 --with paddlepaddle==3.2.1 python",
+        "platform": "Darwin",
+        "paddleocr": "3.7.0",
+        "paddlepaddle": "3.2.1",
+        "ep": "paddle-default",
+        "threads": 1,
+        "modelPins": {
+          "PaddlePaddle/PP-OCRv6_small_det": "106c97591b235f607453300d9fc8c1cad1b25488",
+          "PaddlePaddle/PP-OCRv6_small_rec": "bd619643acac4b9650c040234da8d944476ee3f1"
+        },
+        "warmupMs": 4232,
+        "backend": "paddle-default"
+      }
+    ]
+  },
+  "execution": {
+    "executed": 162,
+    "resumed": 0
+  },
+  "documents": 23,
+  "pages": {
+    "expected": 162,
+    "ocrCompleted": 162,
+    "pageSpatialSucceeded": 162,
+    "failedClosed": 0
+  },
+  "backend": {
+    "paddle-default": 162
+  },
+  "successfulPageEvidence": {
+    "nativeObservations": 17393,
+    "ocrObservations": 15132,
+    "sourceMatches": 12280,
+    "criticalConflicts": 454,
+    "pagesRequiringEscalation": 95
+  },
+  "ocrTimingMs": {
+    "total": 1302385.9000000008,
+    "p50": 6682.9,
+    "p95": 17386.2,
+    "max": 25868.9
+  },
+  "associationCoverageDiagnostic": {
+    "pages": 162,
+    "mean": 0.7421610421191496,
+    "p50": 0.900523560209424,
+    "min": 0,
+    "max": 1,
+    "isAccuracy": false
+  },
+  "failures": [],
+  "goldMetrics": "not_evaluated"
+}
