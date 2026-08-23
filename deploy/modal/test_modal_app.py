@@ -238,6 +238,18 @@ class DeployTimeGateTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("refusing for 'pagespatial-parse'", result.stderr)
 
+    def test_unlisted_max_containers_refuses_at_deploy_time(self):
+        # §7.3/§10: the M3 arm knob is an ALLOWLIST (1/4/16), never a free
+        # integer — a fat-fingered 160 or 0 must refuse to build.
+        result = self._import_adapter({"PAGESPATIAL_MAX_CONTAINERS": "160"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("PAGESPATIAL_MAX_CONTAINERS must be one of", result.stderr)
+
+    def test_allowlisted_max_containers_deploys(self):
+        result = self._import_adapter({"PAGESPATIAL_MAX_CONTAINERS": "16"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("import-ok", result.stdout)
+
     def test_injection_flag_with_dev_app_name_deploys(self):
         result = self._import_adapter({
             "PAGESPATIAL_ENABLE_TEST_FAILURES": "1",

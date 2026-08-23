@@ -100,6 +100,21 @@ else:
 
 app = modal.App(APP_NAME)
 
+# §7.3/§10: max_containers is 1, 4, or 16 in separate M3 trial arms — never
+# unbounded. The bound is baked at deploy time from an ALLOWLISTED value;
+# any other value refuses to deploy. In-container re-imports ignore the
+# decorator arguments, so the container branch pins the default.
+ALLOWED_MAX_CONTAINERS = (1, 4, 16)
+if modal.is_local():
+    _raw_max_containers = os.environ.get("PAGESPATIAL_MAX_CONTAINERS", "1")
+    if _raw_max_containers not in {str(n) for n in ALLOWED_MAX_CONTAINERS}:
+        raise RuntimeError(
+            "PAGESPATIAL_MAX_CONTAINERS must be one of "
+            f"{ALLOWED_MAX_CONTAINERS}; refusing {_raw_max_containers!r}")
+    MAX_CONTAINERS = int(_raw_max_containers)
+else:
+    MAX_CONTAINERS = 1
+
 REPO_ROOT = Path(__file__).resolve().parents[2] if modal.is_local() else Path("/app")
 
 
@@ -368,7 +383,7 @@ def _minimal_pdf(page_count: int) -> bytes:
     retries=1,                  # §7.3 table: 1 application retry for the failure trial
     min_containers=0,
     buffer_containers=0,
-    max_containers=1,           # M1 skeleton; M3 trial arms use 1/4/16 — never unbounded
+    max_containers=MAX_CONTAINERS,  # allowlisted 1/4/16 per M3 trial arm — never unbounded
     # Input concurrency is 1 by default for a Modal Cls (no @modal.concurrent).
 )
 class ParseContainer:
