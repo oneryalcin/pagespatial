@@ -73,7 +73,11 @@ def main() -> None:
 
     from paddleocr import PaddleOCR
 
-    hpi_requested = platform.system() == "Linux"
+    # SIDECAR_DISABLE_HPI=1 forces paddle-default on Linux — the EP-control
+    # knob the era rule requires (same host, same models, HPI off). Meta and
+    # the descriptor stay truthful either way: useHpip is introspected, not
+    # asserted.
+    hpi_requested = platform.system() == "Linux" and os.environ.get("SIDECAR_DISABLE_HPI") != "1"
     kwargs = dict(
         text_detection_model_name="PP-OCRv6_small_det",
         text_detection_model_dir=str(models_dir / "PP-OCRv6_small_det"),
