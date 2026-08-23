@@ -18,7 +18,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildEscalatedOcrEnrichment, pageQualifiesForEscalatedEnrichment, renderedPixelsPerPoint, validateEnrichmentAgainstPage } from '../../dist/index.js';
+import { buildEnrichmentRequestPlan, buildEscalatedOcrEnrichment, pageQualifiesForEscalatedEnrichment, validateEnrichmentAgainstPage } from '../../dist/index.js';
 import {
   adjudicatePageConflicts,
   adjudicationProvenance,
@@ -97,62 +97,21 @@ function assertPdfMatchesRecord(pdfPath, expectedSha) {
   }
 }
 
-const RESIDUE_MIN_SIDE_PT = 8; // mirrors INK_RESIDUE_MIN_SIDE_PT (src/tuning.ts)
-// Rotation-correct pixels-per-point: width/pointWidth is wrong for 90/270
-// pages (rendered width corresponds to point HEIGHT there). The library
-// helper prefers the viewport-transform magnitude and swaps axes on
-// rotation — single source of truth.
-const CROP_MARGIN_PT = 8;      // mirrors RECOVERY_REGION_MARGIN_PT
-
-// Structured unread-ink regions that fired the residue alarm: nothing
-// recovered, nothing confirmed, text-capable geometry. Boxes are in the
-// browser-rendered pixel space of page.geometry.
-function residueRegions(page) {
-  const ppp = renderedPixelsPerPoint(page.geometry);
-  return (page.unreadInkRegions ?? []).filter((region) =>
-    region.kind === 'structured'
-    && region.recoveredObservationCount === 0
-    && region.confirmations.length === 0
-    && Math.min(region.box[2] - region.box[0], region.box[3] - region.box[1]) >= RESIDUE_MIN_SIDE_PT * ppp);
-}
-
-// Render just one residue region as a PNG crop: pdftoppm's -x/-y/-W/-H
-// take pixels at the requested dpi, so rendered-px boxes convert through
-// points. Margin keeps boundary glyphs whole.
-function renderCrop(pdfPath, pageNumber, page, box) {
-  const ppp = renderedPixelsPerPoint(page.geometry);
-  const toDpiPx = (px) => Math.round(((px / ppp) * renderDpi) / 72);
-  const x = Math.max(0, toDpiPx(box[0]) - toDpiPx(CROP_MARGIN_PT * ppp));
-  const y = Math.max(0, toDpiPx(box[1]) - toDpiPx(CROP_MARGIN_PT * ppp));
-  const w = toDpiPx(box[2]) - toDpiPx(box[0]) + 2 * toDpiPx(CROP_MARGIN_PT * ppp);
-  const h = toDpiPx(box[3]) - toDpiPx(box[1]) + 2 * toDpiPx(CROP_MARGIN_PT * ppp);
+// Render just one residue region as a PNG crop. The crop window comes
+// pre-computed on the request plan (pdftoppm's -x/-y/-W/-H take pixels at
+// the requested dpi; the plan converts rendered-px boxes through points
+// and applies the boundary-glyph margin).
+function renderCrop(pdfPath, pageNumber, crop) {
   const dir = mkdtempSync(join(tmpdir(), 'flash-crop-'));
   try {
     execFileSync('pdftoppm', ['-f', String(pageNumber), '-l', String(pageNumber), '-r', String(renderDpi),
-      '-x', String(x), '-y', String(y), '-W', String(w), '-H', String(h), '-png', pdfPath, join(dir, 'c')]);
+      '-x', String(crop.x), '-y', String(crop.y), '-W', String(crop.w), '-H', String(crop.h), '-png', pdfPath, join(dir, 'c')]);
     const file = readdirSync(dir).find((name) => name.endsWith('.png'));
     if (!file) throw new Error('pdftoppm produced no crop output.');
     return readFileSync(join(dir, file));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
-
-function conflictInputs(page) {
-  const { width, height } = page.geometry;
-  const obsBox = new Map(page.ocrObservations.map((observation) => [observation.id, observation.box]));
-  return page.conflicts.map((conflict) => {
-    const box = obsBox.get(conflict.ocrId);
-    return {
-      conflictId: conflict.id,
-      nativeText: conflict.nativeText,
-      ocrText: conflict.ocrText,
-      normalizedBox: [
-        Math.round((box[1] / height) * 1000), Math.round((box[0] / width) * 1000),
-        Math.round((box[3] / height) * 1000), Math.round((box[2] / width) * 1000)
-      ]
-    };
-  });
 }
 
 function renderPng(pdfPath, pageNumber) {
@@ -181,19 +140,11 @@ async function worker() {
     const target = selected[cursor];
     cursor += 1;
     const name = `${target.page.pageId.replaceAll(':', '_')}.json`;
-    // Escalation ladder (issue #17), measured decision:
-    // - conflict/omission reasons -> page-batched adjudication (~$0.0023)
-    // - starved/residue reasons  -> full-page transcription at HIGH (~$0.0085)
-    // A page carrying both reason kinds gets both calls; telemetry sums.
-    const reasons = new Set(target.page.diagnostics.escalationReasons
-      .filter((reason) => reason.severity === 'blocking')
-      .map((reason) => reason.type));
-    const needsAdjudication = reasons.has('critical-token-conflict') || reasons.has('critical-token-omission');
-    // Ladder rung split (issue #20): starved pages need FULL transcription
-    // (unknown missing content anywhere); residue-only pages transcribe
-    // just their unread-ink region crops — the boxes are on the record.
-    const needsFullTranscription = reasons.has('uncorroborated-ocr');
-    const needsCrops = !needsFullTranscription && reasons.has('unread-ink-region');
+    // Routing (which rungs, with what inputs) lives in the library plan
+    // builder — src/enrichment-plan.ts — shared with the service so the
+    // measured cost ladder describes production. The runner only executes
+    // the plan.
+    const plan = buildEnrichmentRequestPlan({ pageSpatial: target.page }, { renderDpi });
     let partialTelemetry;
     try {
       if (skipExisting && existsSync(join(outputDir, name))) {
@@ -215,20 +166,17 @@ async function worker() {
         // test/enrichment-runner.test.mjs asserts zero generateContent
         // calls fire under --batch.
         const entry = { target, name, requests: {}, conflicts: undefined };
-        if (needsFullTranscription) {
+        if (plan.fullTranscription) {
           entry.requests.full = buildTranscriptionRequest([new Uint8Array(png)]);
-        } else if (needsCrops) {
-          const regions = residueRegions(target.page);
-          if (regions.length) {
-            const pngs = regions.map((region) => new Uint8Array(renderCrop(target.pdfPath, target.pageNumber, target.page, region.box)));
-            entry.requests.crops = buildResidueCropsRequest(pngs);
-          } else {
-            console.warn(`${target.page.pageId}: unread-ink alarm fired but no crop-eligible regions; residue goes unanswered.`);
-            residueWithoutCrops += 1;
-          }
+        } else if (plan.residueCrops) {
+          const pngs = plan.residueCrops.crops.map((item) => new Uint8Array(renderCrop(target.pdfPath, target.pageNumber, item.crop)));
+          entry.requests.crops = buildResidueCropsRequest(pngs);
+        } else if (plan.residueUnanswered) {
+          console.warn(`${target.page.pageId}: unread-ink alarm fired but no crop-eligible regions; residue goes unanswered.`);
+          residueWithoutCrops += 1;
         }
-        if (needsAdjudication && target.page.conflicts.length) {
-          entry.conflicts = conflictInputs(target.page);
+        if (plan.adjudication) {
+          entry.conflicts = plan.adjudication.conflicts;
           entry.requests.adj = buildAdjudicationRequest(new Uint8Array(png), entry.conflicts);
         }
         prepared.push(entry);
@@ -238,31 +186,28 @@ async function worker() {
       let adjudications = [];
       const provenance = {};
       const telemetry = { promptTokens: 0, outputTokens: 0, latencyMs: 0 };
-      if (needsFullTranscription) {
+      if (plan.fullTranscription) {
         const transcription = await transcribePageImage({ apiKey, png: new Uint8Array(png) });
         proposals = transcription.proposals;
         provenance.transcription = transcription.provenance;
         telemetry.promptTokens += transcription.telemetry.promptTokens;
         telemetry.outputTokens += transcription.telemetry.outputTokens;
         telemetry.latencyMs += transcription.telemetry.latencyMs;
-      } else if (needsCrops) {
-        const regions = residueRegions(target.page);
-        if (regions.length) {
-          const pngs = regions.map((region) => new Uint8Array(renderCrop(target.pdfPath, target.pageNumber, target.page, region.box)));
-          const transcription = await transcribeResidueCrops({ apiKey, pngs });
-          // Crops are text-only by schema; strip any hint defensively.
-          proposals = transcription.proposals.map(({ text }) => ({ text }));
-          provenance.transcription = transcription.provenance;
-          telemetry.promptTokens += transcription.telemetry.promptTokens;
-          telemetry.outputTokens += transcription.telemetry.outputTokens;
-          telemetry.latencyMs += transcription.telemetry.latencyMs;
-        } else {
-          console.warn(`${target.page.pageId}: unread-ink alarm fired but no crop-eligible regions; residue goes unanswered.`);
-          residueWithoutCrops += 1;
-        }
+      } else if (plan.residueCrops) {
+        const pngs = plan.residueCrops.crops.map((item) => new Uint8Array(renderCrop(target.pdfPath, target.pageNumber, item.crop)));
+        const transcription = await transcribeResidueCrops({ apiKey, pngs });
+        // Crops are text-only by schema; strip any hint defensively.
+        proposals = transcription.proposals.map(({ text }) => ({ text }));
+        provenance.transcription = transcription.provenance;
+        telemetry.promptTokens += transcription.telemetry.promptTokens;
+        telemetry.outputTokens += transcription.telemetry.outputTokens;
+        telemetry.latencyMs += transcription.telemetry.latencyMs;
+      } else if (plan.residueUnanswered) {
+        console.warn(`${target.page.pageId}: unread-ink alarm fired but no crop-eligible regions; residue goes unanswered.`);
+        residueWithoutCrops += 1;
       }
-      if (needsAdjudication && target.page.conflicts.length) {
-        const conflicts = conflictInputs(target.page);
+      if (plan.adjudication) {
+        const conflicts = plan.adjudication.conflicts;
         // Partial-spend honesty: if this second rung fails, the outer
         // catch records the telemetry already accumulated — spend is never
         // invisible just because a later rung failed.

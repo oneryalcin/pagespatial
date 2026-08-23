@@ -19,6 +19,8 @@ export {
   validateEnrichmentAgainstPage
 } from './enrichment.js';
 export type { EnrichmentProposal, EscalatedOcrEnrichment, ProposalCorroboration } from './enrichment.js';
+export { adjudicationConflictInputs, buildEnrichmentRequestPlan, residueRegions } from './enrichment-plan.js';
+export type { AdjudicationConflictInput, EnrichmentRequestPlan, ResidueCropPlan } from './enrichment-plan.js';
 export { inferSimpleYearValueRelations } from './relations.js';
 export { buildDiagnostics, resolveDiagnosticOptions } from './diagnostics.js';
 export { attributeConfirmations, countConfirmedRegions, countRecoveredObservations, duplicatesFirstPass, findUnreadInkRegions, mapRecoveredBox, pruneConfirmations } from './ink.js';

@@ -71,6 +71,10 @@ export const INK_REGION_MIN_AREA_PT2 = 1600;
  * underlines). Such regions are still detected and re-read (real tiny text
  * gets its zoomed second look, and any recovery or confirmation records
  * normally); only the nothing-found alarm requires text-capable geometry.
+ * Also gates which residue regions get an enrichment crop request
+ * (src/enrichment-plan.ts): a region too thin to alarm is too thin to
+ * transcribe. Formerly mirrored as RESIDUE_MIN_SIDE_PT in the enrichment
+ * runner; reunified here (§9) so the two cannot drift.
  */
 export const INK_RESIDUE_MIN_SIDE_PT = 8;
 /** Midtone fraction at or above which a region is pictorial, not structured. */
@@ -87,7 +91,11 @@ export const RECOVERY_DUPLICATE_OVERLAP = 0.5;
 export const INK_CLOSE_RADIUS_CELLS = 1;
 /** Post-CC same-kind region merge distance (points). */
 export const INK_REGION_MERGE_GAP_PT = 18;
-/** Margin added around a region before the recovery crop (points). */
+/** Margin added around a region before a crop is cut (points): boundary
+ * glyphs must land whole inside the crop. Used by the in-browser recovery
+ * re-render and by enrichment residue-crop windows
+ * (src/enrichment-plan.ts; formerly mirrored there as CROP_MARGIN_PT,
+ * reunified here per §9). */
 export const RECOVERY_REGION_MARGIN_PT = 8;
 /** Max crop tile side (px) fed to OCR, mirroring the detector's input cap. */
 export const RECOVERY_TILE_MAX_PX = 900;
