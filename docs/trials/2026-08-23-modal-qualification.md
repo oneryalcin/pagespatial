@@ -307,9 +307,12 @@ terminal pages** for the whole qualification including all failure arms
 steady 100-call parse arms (3/4/5/10): $1.3204 / 3,000 pages ≈ **$440 per
 million terminal pages** — above the design doc's $80–146/M steady-compute
 estimate because these short runs are cold-start- and idle-dominated; a
-long-lived warm fleet would sit closer to the estimate (arm 3's marginal
-warm-window rate: its billed $0.2249 over 750 pages ≈ $300/M, still
-including its boot and idle).
+long-lived warm fleet would sit closer to the estimate. The cheapest
+observed figure is the **single-container 100-call billed arm** (arm 3:
+$0.2249 / 750 pages ≈ $300/M) — that is a whole-arm billed cost still
+including its 80 s boot and inter-call idle, NOT a measured marginal
+warm-fleet rate (correction 2026-08-24, external review: no long-running
+warm-fleet cost has been measured).
 
 ## §14.4 acceptance criteria
 
@@ -386,6 +389,70 @@ controlled internal parse jobs within its stated prototype limits
 `max_containers` ∈ {1, 4, 16}; enrichment off; no public ingress).
 Measured basis: every delivery and failure criterion bounded and
 visible; $0.000572/terminal page gauntlet-inclusive, ~$440/M steady
-arms, ~$300/M marginal warm; scaling sublinear (2.9× at 4, 6.1× at 16)
+arms, ~$300/M single-container 100-call billed arm (still
+boot/idle-inclusive — no marginal warm-fleet rate has been measured);
+scaling sublinear (2.9× at 4, 6.1× at 16)
 and stated as such. The production remote API and distributed
 enrichment remain gated exactly as §15/§13 specify.
+
+## Criterion-8 closure addendum (2026-08-24): direct drain evidence; the M3 four remain unclassified
+
+An external review of the adoption correctly refused "zero orphans" as
+proven: the arm-8 `probe-exit-drain.json` listed four `python` processes
+at ppid 1 with EMPTY cmdlines in `processes_seen` while reporting
+`survivors: []` and `clean: true` — the marker filter cannot attribute a
+process whose argv the kernel has freed, so the pass was vacuous for
+exactly that class. Criterion 8 was therefore 11/12 + one pending
+measurement until the following probe.
+
+**The probe was hardened** (deploy/modal/modal_app.py):
+`surviving_children` now records the `/proc/<pid>/stat` state field; a
+new `indeterminate_processes` classifier names every empty-cmdline
+service-class process either `zombie` (state `Z` — provably dead,
+awaiting pid 1's reap; reported, never a leak) or `indeterminate-live`
+(anything else — FAILS the probe rather than passing silently);
+`probe_exit_drain` captures a pre-drain baseline of the live attributable
+service tree and re-polls through a bounded 10 s reap window. Unit test
+models the M3 artifact verbatim (ppid 1, comm `python`, empty cmdline)
+and asserts the marker filter alone still cannot see it.
+
+**The closure run** (2026-08-24, app `pagespatial-parse-arm8-dev`
+redeployed with the dev instrument gate; one real 9-page manifest
+document parsed first so the full service tree existed; artifact
+`.evaluation/modal-qualification/2026-08-24-criterion8/probe-exit-drain.json`):
+
+- pre-drain baseline: Node server (pid 5), four `node worker.mjs`
+  processes, and **four sidecars fully attributable by argv**
+  (`/opt/paddle/bin/python /app/service/sidecar/ppocr_sidecar.py`, each
+  parented to its worker) — the complete expected tree, nothing else;
+- post-drain, within the reap window: `processes_seen: []` — zero
+  processes of ANY kind in the namespace; no survivors, no zombies, no
+  indeterminates; scratch removed; `clean: true` under the strict rule.
+
+Conclusion (worded per the second external review — the old probe
+recorded no state field, so the M3 four **remain unclassified**; the
+zombie explanation is consistent with kernel semantics — `/proc`
+cmdline is freed at exit, and the baseline proves live sidecars keep
+their argv — but it is an inference, not an observation): **the closure
+run observed the complete live service tree before drain and an empty
+PID namespace after drain. That directly satisfies criterion 8 without
+any claim about the old processes. Criterion 8 stands as a genuine
+PASS; the 12/12 result is closed with direct evidence.** The app was
+stopped after the probe (zero pagespatial containers).
+
+## Evidence archive sealing (2026-08-24)
+
+The raw evidence (414 MiB, gitignored) is sealed as
+`modal-qualification-evidence-2026-08-24.tar.zst` (45.5 MiB, zstd-9;
+contains the full `2026-08-23/` qualification archive including the
+embedded-verdict `rejudge-*.json`, plus `2026-08-24-criterion8/`).
+
+- sha256: `e8b0b8ae9e992c30916f2fa6c3c0a3b202f25b4bead597d4067884606b54f015`
+- location: private HF dataset `oneryalcin/pagespatial-qualification-evidence`
+  — **upload PENDING at this writing** (the publish action is
+  permission-gated for the agent; the owner performs it). Private
+  durable copy; integrity pinned by the committed SHA-256 digest above
+  (HF repositories are mutable — the digest provides tamper DETECTION,
+  not immutability).
+- retention: indefinite (qualification evidence for the adopted
+  deployment; delete only when the adoption itself is superseded)

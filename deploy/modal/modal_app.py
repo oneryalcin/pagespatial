@@ -276,7 +276,9 @@ def surviving_children(proc_root="/proc", self_pid=None) -> list:
             # split at the LAST ')'.
             head, _, tail = stat.rpartition(")")
             comm = head.split("(", 1)[1]
-            ppid = int(tail.split()[1])
+            fields = tail.split()
+            state = fields[0]
+            ppid = int(fields[1])
         except (OSError, IndexError, ValueError):
             continue
         try:
@@ -284,7 +286,8 @@ def surviving_children(proc_root="/proc", self_pid=None) -> list:
                 "utf-8", "replace").strip()
         except OSError:
             cmdline = ""
-        procs.append({"pid": pid, "ppid": ppid, "comm": comm, "cmdline": cmdline})
+        procs.append({"pid": pid, "ppid": ppid, "comm": comm, "state": state,
+                      "cmdline": cmdline})
     return sorted(procs, key=lambda p: p["pid"])
 
 
@@ -297,11 +300,45 @@ def leaked_service_processes(procs, service_pid=None, self_pid=None, markers=())
     catches an escaped sidecar reparented to pid 1."""
     self_pid = os.getpid() if self_pid is None else self_pid
     live_markers = [marker for marker in markers if marker]
+    # comm PREFIX, not equality: the real container's Node processes carry
+    # comm "node-MainThread" (closure-probe baseline), so an equality
+    # check was dead code in production (PR #93 review, HIGH).
     return [p for p in procs
-            if p["comm"] == "node"
+            if p["comm"].startswith("node")
             or p["ppid"] == self_pid
             or (service_pid is not None and p["ppid"] == service_pid)
             or any(marker in p.get("cmdline", "") for marker in live_markers)]
+
+
+# Comm prefixes whose unattributable remnants matter for criterion 8: the
+# service tree is Node plus Python sidecars; anything else at pid 1 is the
+# platform's.
+_SERVICE_COMM_PREFIXES = ("node", "python")
+
+
+def indeterminate_processes(procs) -> list:
+    """Criterion-8 closure (external review, 2026-08-23): a process whose
+    argv the kernel has already freed reads an EMPTY cmdline — so the
+    marker filter above can never attribute it, and the M3 arm-8 probe
+    listed four such `python` processes while reporting `survivors: []`
+    and `clean: true` (a vacuous pass). The state field settles it:
+
+      - state 'Z' (zombie): PROVABLY DEAD — the group-kill worked and the
+        corpse merely awaits pid 1's reap. Reported, never a leak.
+      - any other state with a service-class comm and no cmdline:
+        INDETERMINATE-LIVE — cannot be told apart from a leaked sidecar
+        that zeroed its argv, so it must fail the probe rather than pass
+        it silently.
+    """
+    out = []
+    for p in procs:
+        if p.get("cmdline"):
+            continue
+        if not any(p["comm"].startswith(prefix) for prefix in _SERVICE_COMM_PREFIXES):
+            continue
+        kind = "zombie" if p.get("state") == "Z" else "indeterminate-live"
+        out.append({**p, "classification": kind})
+    return out
 
 
 def stop_fetching_inputs() -> None:
@@ -789,21 +826,47 @@ class ParseContainer:
         self._retire("exit_drain_probe")
         node_pid = self.node.pid if getattr(self, "node", None) else None
         data_dir = self.data_dir
+        # Pre-drain baseline: the full attributable service tree while it
+        # is alive (ancestry + argv intact), so the post-drain scan can be
+        # compared against what actually existed.
+        baseline = surviving_children()
         self._drain_service()
-        procs = surviving_children()
         # Markers catch the sidecar-escaped-the-group-kill case: argv holds
         # the sidecar script and/or this container's private data dir even
-        # after the orphan reparents to pid 1 as a bare "python3".
-        survivors = leaked_service_processes(
-            procs, service_pid=node_pid,
-            markers=("ppocr_sidecar.py", data_dir))
+        # after the orphan reparents to pid 1 as a bare "python3". The
+        # bounded re-poll gives pid 1 a reap window: zombies (provably
+        # dead) that vanish were reaped; anything indeterminate-live that
+        # PERSISTS is treated as a leak, never passed silently.
+        deadline = time.monotonic() + 10.0
+        while True:
+            procs = surviving_children()
+            survivors = leaked_service_processes(
+                procs, service_pid=node_pid,
+                markers=("ppocr_sidecar.py", "service/worker.mjs",
+                         "service/server.mjs", data_dir))
+            unattributed = indeterminate_processes(procs)
+            live_unattributed = [p for p in unattributed
+                                 if p["classification"] == "indeterminate-live"]
+            if not survivors and not live_unattributed:
+                break
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(0.5)
+        zombies = [p for p in unattributed if p["classification"] == "zombie"]
         report = {
             "node_pid": node_pid,
             "node_exit_code": self.node.returncode if node_pid else None,
+            "baseline_processes": baseline,
             "processes_seen": procs,
             "survivors": survivors,
+            "zombies": zombies,
+            "indeterminate_live": live_unattributed,
             "scratch_removed": not Path(self.data_dir).exists(),
-            "clean": not survivors and not Path(self.data_dir).exists(),
+            # Zombies are dead by definition (state Z) and merely await
+            # pid 1's reap — reported, never failed on. Anything live and
+            # unattributable fails the probe.
+            "clean": (not survivors and not live_unattributed
+                      and not Path(self.data_dir).exists()),
         }
         self._log_event("probe_exit_drain", **report)
         return report
