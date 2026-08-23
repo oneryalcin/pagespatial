@@ -236,6 +236,13 @@ const server = createServer(async (req, res) => {
         } catch {
           return json(res, 400, { error: 'Request body is not valid JSON.' });
         }
+        // pdfPath is an arbitrary server-file read plus a file-existence
+        // oracle: OFF unless explicitly enabled for local development.
+        // (Cold review, 2026-08-23: the port was never localhost-only —
+        // see the listen() note below — so this cannot default open.)
+        if (process.env.SERVICE_ALLOW_PDF_PATH !== '1') {
+          return json(res, 403, { error: 'pdfPath mode is disabled. Set SERVICE_ALLOW_PDF_PATH=1 to enable it for local development, or submit PDF bytes.' });
+        }
         pdfPath = parsed.pdfPath;
         sourceUri = parsed.sourceUri;
         enrichment = parsed.enrichment ?? enrichment;
@@ -309,8 +316,13 @@ const server = createServer(async (req, res) => {
 });
 
 const port = Number(process.env.PORT ?? 8571);
-server.listen(port, () => {
-  console.log(`parse-service listening on :${port} (adapter=${process.env.SERVICE_OCR_ADAPTER ?? 'stub-ocr'}, workers=${process.env.SERVICE_WORKERS ?? 2}, data=${dataDir})`);
+// Default to loopback: the README's trust model ("localhost, trusted
+// caller") was previously a false claim — listen(port) binds every
+// interface. Wider binding (e.g. inside a container, where loopback
+// would make the published port unreachable) is an explicit opt-in.
+const host = process.env.HOST ?? '127.0.0.1';
+server.listen(port, host, () => {
+  console.log(`parse-service listening on ${host}:${port} (adapter=${process.env.SERVICE_OCR_ADAPTER ?? 'stub-ocr'}, workers=${process.env.SERVICE_WORKERS ?? 2}, data=${dataDir})`);
 });
 
 // Warm-up runs AFTER listen so /health can answer 503 during it (a probe

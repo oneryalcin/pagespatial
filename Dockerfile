@@ -109,6 +109,7 @@ ENV SERVICE_OCR_ADAPTER=ppocr-sidecar \
     SERVICE_SIDECAR_THREADS=1 \
     SERVICE_DATA_DIR=/data \
     PORT=8571 \
+    HOST=0.0.0.0 \
     PATH=/opt/paddle/bin:$PATH
 
 RUN useradd --create-home --uid 10001 pagespatial \
