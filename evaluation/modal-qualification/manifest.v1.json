@@ -1061,6 +1061,13 @@
    "p50": 3,
    "max": 31
   },
+  "content": {
+   "native_text_documents": 20,
+   "image_only_documents": 4,
+   "mixed_raster_native_documents": 15
+  },
+  "rotation_landscape_documents": 3,
+  "known_malformed_documents": 0,
   "documents_with_label": {
    "chart": 7,
    "dense-table": 11,

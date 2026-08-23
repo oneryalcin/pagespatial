@@ -6,8 +6,11 @@
  * Inputs:
  *  - captured results: a JSON array, or a JSONL file, or a directory of
  *    .json files — each entry is either a raw adapter result object or a
- *    wrapper {"request_id", "kind": "exception", "error": "..."} written by
- *    the capture harness for calls that ended in a visible exception;
+ *    wrapper {"request_id", "kind": "result"|"exception", "result"?,
+ *    "error"?, "spawned_at_ms"?, "result_at_ms"?}; the two optional epoch-ms
+ *    wall clocks (recorded by the M3 harness at spawn() and at
+ *    result/exception receipt) enable the completion-percentile and
+ *    aggregate pages/s rows;
  *  - container logs: a directory of per-container log files (or single
  *    files); structured adapter events are extracted from JSON log lines
  *    and tagged with their source file name as the container id.
@@ -84,6 +87,8 @@ if (outPath) {
   console.log('\nwrote', outPath);
 }
 const clean = aggregation.documents.missing.length === 0
+  && aggregation.documents.duplicates.length === 0
+  && aggregation.documents.unexpected.length === 0
   && aggregation.pages.count_mismatches.length === 0
   && aggregation.pages.sha_mismatches.length === 0;
 process.exitCode = clean ? 0 : 1;

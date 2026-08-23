@@ -78,10 +78,15 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 DEFAULT_APP_NAME = "pagespatial-parse-m1-dev"
 
 
+_DEV_APP_RE = re.compile(r"pagespatial-parse(-m\d+|-arm\d+)?-(dev|test)")
+
+
 def _is_dev_app(name) -> bool:
-    """Test-only instruments are refused unless the app name is explicitly
-    a dev/test app (§14.2 hard rule)."""
-    return isinstance(name, str) and (name.endswith("-dev") or name.endswith("-test"))
+    """Test-only instruments are refused unless the app name is one of the
+    KNOWN dev/test app shapes (§14.2 hard rule). Anchored full-match — a
+    bare '-dev' suffix on an arbitrary name (e.g. '…-prod-dev') does not
+    qualify."""
+    return isinstance(name, str) and _DEV_APP_RE.fullmatch(name) is not None
 
 
 if modal.is_local():
@@ -118,11 +123,15 @@ def _git_revision() -> str:
 
 def _image_pin_revision() -> str:
     """Immutable image/model-pin revision (§12): a digest over the files
-    that pin the runtime image and engine/model versions. Client-side only;
-    baked into the image env at deploy time."""
+    that pin the runtime image, engine versions, AND the OCR model pins
+    (service/sidecar/model-pins.json + its fetcher) — a model-pin-only
+    commit must change this revision. Client-side only; baked into the
+    image env at deploy time."""
     try:
         digest = hashlib.sha256()
-        for name in ("Dockerfile", "package-lock.json"):
+        for name in ("Dockerfile", "package-lock.json",
+                      "service/sidecar/model-pins.json",
+                      "service/sidecar/fetch_models.py"):
             digest.update(name.encode())
             digest.update((REPO_ROOT / name).read_bytes())
         return digest.hexdigest()[:12]
@@ -229,8 +238,12 @@ def validate_injection(payload, environ=None):
 
 def surviving_children(proc_root="/proc", self_pid=None) -> list:
     """§14.4 criterion 8 instrument: every process visible in this PID
-    namespace except pid 1 and the caller — [{pid, ppid, comm}], names
-    only, never content. Parameterized for tests (no /proc on macOS)."""
+    namespace except pid 1 and the caller — [{pid, ppid, comm, cmdline}].
+    cmdline (argv joined) is required because the realistic leak — a
+    Python sidecar escaping its worker's group-kill — reparents to pid 1
+    with comm "python3", indistinguishable from platform processes by
+    comm/ppid alone. Names/argv only, never content. Parameterized for
+    tests (no /proc on macOS)."""
     self_pid = os.getpid() if self_pid is None else self_pid
     procs = []
     root = Path(proc_root)
@@ -251,19 +264,29 @@ def surviving_children(proc_root="/proc", self_pid=None) -> list:
             ppid = int(tail.split()[1])
         except (OSError, IndexError, ValueError):
             continue
-        procs.append({"pid": pid, "ppid": ppid, "comm": comm})
+        try:
+            cmdline = (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode(
+                "utf-8", "replace").strip()
+        except OSError:
+            cmdline = ""
+        procs.append({"pid": pid, "ppid": ppid, "comm": comm, "cmdline": cmdline})
     return sorted(procs, key=lambda p: p["pid"])
 
 
-def leaked_service_processes(procs, service_pid=None, self_pid=None) -> list:
+def leaked_service_processes(procs, service_pid=None, self_pid=None, markers=()) -> list:
     """Filter `surviving_children()` output down to what counts as a leak
     after service drain: any `node` process, anything parented to the
-    adapter process, or anything parented to the (now dead) service pid."""
+    adapter process or the (now dead) service pid, or — the case comm/ppid
+    cannot see — any process whose argv carries one of `markers` (the
+    sidecar script name or this container's private data dir), which
+    catches an escaped sidecar reparented to pid 1."""
     self_pid = os.getpid() if self_pid is None else self_pid
+    live_markers = [marker for marker in markers if marker]
     return [p for p in procs
             if p["comm"] == "node"
             or p["ppid"] == self_pid
-            or (service_pid is not None and p["ppid"] == service_pid)]
+            or (service_pid is not None and p["ppid"] == service_pid)
+            or any(marker in p.get("cmdline", "") for marker in live_markers)]
 
 
 def stop_fetching_inputs() -> None:
@@ -459,7 +482,11 @@ class ParseContainer:
         # resources, app name) plus the current method context (request id,
         # sha prefix, cold/warm, call/input ids) so any single log line is
         # attributable on its own.
+        # ts (epoch ms, wall clock) makes §12's time-derived aggregation
+        # rows (completion percentiles, containers over time, pages/s)
+        # reconstructable from logs alone.
         record = {"event": event,
+                  "ts": int(time.time() * 1000),
                   **getattr(self, "log_context", {}),
                   **getattr(self, "method_context", {}),
                   **fields}
@@ -746,9 +773,15 @@ class ParseContainer:
         self._require_dev_instrument("probe_exit_drain")
         self._retire("exit_drain_probe")
         node_pid = self.node.pid if getattr(self, "node", None) else None
+        data_dir = self.data_dir
         self._drain_service()
         procs = surviving_children()
-        survivors = leaked_service_processes(procs, service_pid=node_pid)
+        # Markers catch the sidecar-escaped-the-group-kill case: argv holds
+        # the sidecar script and/or this container's private data dir even
+        # after the orphan reparents to pid 1 as a bare "python3".
+        survivors = leaked_service_processes(
+            procs, service_pid=node_pid,
+            markers=("ppocr_sidecar.py", data_dir))
         report = {
             "node_pid": node_pid,
             "node_exit_code": self.node.returncode if node_pid else None,

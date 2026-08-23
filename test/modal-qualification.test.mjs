@@ -77,6 +77,11 @@ test('manifest carries no document text — hashes, counts, and labels only', ()
   }
   assert.ok(manifest.distributions.total_pages > 0);
   assert.ok(manifest.distributions.documents_with_label['native-text'] > 0);
+  // §14.1 content/rotation/malformed counts are explicit — zero stated
+  // as zero, never omitted.
+  assert.ok('native_text_documents' in manifest.distributions.content);
+  assert.ok('rotation_landscape_documents' in manifest.distributions);
+  assert.equal(manifest.distributions.known_malformed_documents, 0);
 });
 
 test('the committed qualification manifest exists and is structurally valid', () => {
@@ -87,6 +92,8 @@ test('the committed qualification manifest exists and is structurally valid', ()
   assert.equal(committed.correctness.length, 23);
   assert.equal(committed.scaling.length, 100);
   assert.equal(committed.distributions.total_pages, 162);
+  assert.equal(committed.distributions.known_malformed_documents, 0);
+  assert.equal(committed.distributions.rotation_landscape_documents, 3);
   for (const entry of committed.correctness) assert.match(entry.sha256, /^[0-9a-f]{64}$/u);
   // The fixed order must be self-consistent (scaling wraps the 23).
   assert.equal(committed.scaling[23].object_id, committed.correctness[0].object_id);
@@ -191,4 +198,52 @@ test('readiness, reuse, retries, and cleanup outcomes come from LOGS, not result
   const table = renderAggregationTable(aggregation);
   assert.match(table, /cold readiness ms \(from logs\) \| 80172, 70500/u);
   assert.match(table, /silent missing inputs \| 0/u);
+});
+
+test('capture wall clocks derive completion percentiles and aggregate pages/s', () => {
+  const t0 = 1_700_000_000_000;
+  const captures = [
+    { kind: 'result', result: resultFor(expected[0]), spawned_at_ms: t0, result_at_ms: t0 + 90_000 },
+    { kind: 'result', result: resultFor(expected[1]), spawned_at_ms: t0 + 1_000, result_at_ms: t0 + 11_000 },
+    { kind: 'exception', request_id: expected[2].request_id, error: 'boom', spawned_at_ms: t0 + 2_000, result_at_ms: t0 + 6_000 },
+    resultFor(expected[3]), // raw result, no clocks — excluded from timing, still reconciled
+  ];
+  const aggregation = reconcileRun({ expected: expected.slice(0, 4), captures });
+  assert.equal(aggregation.throughput.timed_calls, 3);
+  assert.equal(aggregation.throughput.completion_wall_ms.max, 90_000);
+  assert.equal(aggregation.throughput.run_window_ms, 90_000); // t0 .. t0+90s
+  // terminal pages = pages_ok over the two clocked + one unclocked result.
+  const terminalPages = expected[0].pages + expected[1].pages + expected[3].pages;
+  assert.equal(aggregation.throughput.aggregate_pages_per_s, terminalPages / 90);
+  assert.equal(aggregation.documents.missing.length, 0);
+  const table = renderAggregationTable(aggregation);
+  assert.match(table, /aggregate pages\/s over run window \| \d/u);
+  // The rows this artifact set cannot produce are declared, not silently
+  // missing (§12: crash/OOM, peak disk, queue wait, billing).
+  assert.ok(aggregation.not_derivable.some((row) => /OOM/u.test(row)));
+  assert.match(table, /NOT DERIVABLE here/u);
+});
+
+test('log timestamps: adapter ts preferred, --timestamps prefix preserved as fallback', () => {
+  const logText = [
+    // Modern adapter event: carries its own ts; prefix also present.
+    '2026-08-23T10:00:05.123456789+00:00 {"event":"service_started","ts":1700000000123,"service_ready_ms":80172}',
+    // Pre-ts adapter revision: only the `modal container logs --timestamps` prefix.
+    '2026-08-23T10:00:09.000000000+00:00 {"event":"job_submitted","request_id":"r1","http_status":202}',
+    // No prefix, no ts: still parsed, just untimed.
+    '{"event":"cleanup","request_id":"r1","cleanup_ok":true,"removed":[]}',
+  ].join('\n');
+  const events = parseLogText(logText, 'ta-C');
+  assert.equal(events.length, 3);
+  assert.equal(events[0].ts, 1700000000123);
+  assert.equal(events[0].log_ts, Date.parse('2026-08-23T10:00:05.123456789+00:00'));
+  assert.equal(events[1].ts, undefined);
+  assert.equal(events[1].log_ts, Date.parse('2026-08-23T10:00:09.000000000+00:00'));
+  assert.equal(events[2].log_ts, undefined);
+  // Containers-over-time uses those clocks: one container, both timed
+  // events inside its window.
+  const aggregation = reconcileRun({ expected: [], captures: [], logEvents: events });
+  assert.equal(aggregation.containers.max_concurrent, 1);
+  assert.equal(aggregation.containers.activity['ta-C'].events, 2);
+  assert.equal(aggregation.containers.activity['ta-C'].first_ts, 1700000000123);
 });

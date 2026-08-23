@@ -99,7 +99,11 @@ Every method result carries: `request_id`, `document_sha256`, `page_count`,
 `total_method_ms`), `retry` (`attempt`, `function_call_id`, `input_id`),
 `resources` (`cpu`, `memory_mib`, `workers`, `sidecar_threads`),
 `app_name`, `adapter_revision` (deploy-time git rev), and
-`image_pin_revision` (digest of Dockerfile + package-lock.json).
+`image_pin_revision` (digest of Dockerfile + package-lock.json +
+service/sidecar/model-pins.json + fetch_models.py — a model-pin-only
+commit changes it). Note: the Dockerfile's base images are pinned by
+mutable tag, not digest, so `image_pin_revision` covers repo-controlled
+pins only; a silently-moved base tag is not detectable from it.
 
 Every structured log event carries the same identity context (app name,
 both revisions, resources) plus the current method context (request id,
@@ -115,7 +119,11 @@ Two documented caveats:
   permits it).
 - **No per-input retry counter.** The pinned SDK exposes none, so
   `retry.attempt` is always `null`; the reconciler counts attempts from
-  repeated `job_submitted` log events sharing one request id.
+  repeated `job_submitted` log events sharing one request id. That means
+  only retries that reached the loopback POST are counted — a retry that
+  fails BEFORE submit (e.g. the injected application exception) surfaces
+  only in the `injected_failure`/`retiring` event counts, not as a
+  retried input.
 
 ## Test-only failure injection (§14.2 arms 8/9)
 
@@ -167,9 +175,21 @@ node scripts/evaluation/reconcile-modal-run.mjs \
 ```
 
 The capture harness stores, per spawned call, either the raw result object
-or `{"request_id": ..., "kind": "exception", "error": "..."}`. Container
-logs are one file per container (`modal container logs <id> > <id>.log`);
-the file name becomes the container tag for reuse counting.
+or a wrapper `{"request_id", "kind": "result"|"exception", "result"?,
+"error"?, "spawned_at_ms"?, "result_at_ms"?}`. The M3 harness MUST record
+the two epoch-ms wall clocks (at `spawn()` and at result/exception
+receipt): they are what makes document-completion p50/p95/max and
+aggregate pages/s derivable. Container logs are one file per container —
+capture them with `modal container logs --timestamps <id> > <id>.log`; the
+file name becomes the container tag, the adapter's own `ts` field (or the
+`--timestamps` prefix as fallback) drives containers-over-time.
+
+Rows the reconciler cannot derive and the M3 harness must capture
+alongside (the table prints them as `NOT DERIVABLE here`): container
+crash/OOM counts (`modal container list/logs` + FunctionCall history),
+peak ephemeral disk (`probe_scratch` during the run), queue wait (no
+per-input platform metric; the spawn→first-log-event gap is the proxy),
+and billed cost (billing section below).
 
 ## Billing capture (§10)
 

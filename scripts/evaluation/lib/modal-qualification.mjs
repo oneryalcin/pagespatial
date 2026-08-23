@@ -99,11 +99,22 @@ export function manifestDistributions(correctness) {
   }
   const bytesList = correctness.map((document) => document.bytes).sort((a, b) => a - b);
   const pagesList = correctness.map((document) => document.pages).sort((a, b) => a - b);
+  const docsWith = (label) => correctness.filter((document) => document.class_labels.includes(label)).length;
   return {
     documents: correctness.length,
     total_pages: pagesList.reduce((sum, value) => sum + value, 0),
     bytes: { min: bytesList[0], p50: percentile(bytesList, 50), max: bytesList.at(-1) },
     pages: { min: pagesList[0], p50: percentile(pagesList, 50), max: pagesList.at(-1) },
+    // §14.1 explicit content/rotation/malformed counts (zero stated as zero).
+    content: {
+      native_text_documents: docsWith('native-text'),
+      image_only_documents: docsWith('image-only'),
+      mixed_raster_native_documents: docsWith('mixed-raster-native'),
+    },
+    rotation_landscape_documents: docsWith('landscape'),
+    // The corpus label vocabulary has no malformed marker and no corpus
+    // document is known-malformed: explicitly zero, not omitted.
+    known_malformed_documents: docsWith('malformed'),
     documents_with_label: labelPages,
   };
 }
@@ -129,19 +140,30 @@ const summarize = (values) => {
 
 /**
  * Normalize one captured entry. Accepts either a raw adapter result object
- * or a wrapper {request_id, kind: 'result'|'exception', result?, error?}
- * written by the capture harness for calls that ended in an exception.
+ * or a wrapper {request_id, kind: 'result'|'exception', result?, error?,
+ * spawned_at_ms?, result_at_ms?} written by the capture harness. The two
+ * optional wall clocks (epoch ms at spawn() and at result/exception
+ * receipt) are what make §12's completion percentiles and aggregate
+ * pages/s derivable — the M3 harness must record them.
  */
 function normalizeCapture(entry) {
+  const clocks = {
+    spawned_at_ms: Number.isFinite(entry?.spawned_at_ms) ? entry.spawned_at_ms : null,
+    result_at_ms: Number.isFinite(entry?.result_at_ms) ? entry.result_at_ms : null,
+  };
   if (entry && entry.kind === 'exception') {
-    return { request_id: entry.request_id ?? null, kind: 'exception', error: String(entry.error ?? '') };
+    return { request_id: entry.request_id ?? null, kind: 'exception', error: String(entry.error ?? ''), ...clocks };
   }
   const result = entry?.kind === 'result' ? entry.result : entry;
   if (!result || typeof result.request_id !== 'string' || typeof result.status !== 'string') {
     throw new Error(`Unrecognized capture entry: ${JSON.stringify(entry)?.slice(0, 120)}`);
   }
-  return { request_id: result.request_id, kind: 'result', result };
+  return { request_id: result.request_id, kind: 'result', result, ...clocks };
 }
+
+/** Best event wall clock: the adapter's own ts, else the log-line prefix. */
+const eventTs = (event) => Number.isFinite(event.ts) ? event.ts
+  : Number.isFinite(event.log_ts) ? event.log_ts : null;
 
 /**
  * Reconcile captured results + container log events against the manifest
@@ -231,6 +253,46 @@ export function reconcileRun({ expected, captures, logEvents = [] }) {
     injected[event.mode ?? 'unknown'] = (injected[event.mode ?? 'unknown'] ?? 0) + 1;
   }
 
+  // ---- wall-clock-derived measures (§12) ----
+  const terminalPages = results.reduce((sum, result) =>
+    sum + (result.pages_ok ?? 0) + (result.pages_failed ?? 0), 0);
+  const timed = normalized.filter((capture) =>
+    Number.isFinite(capture.spawned_at_ms) && Number.isFinite(capture.result_at_ms));
+  const spawnClocks = normalized.map((capture) => capture.spawned_at_ms).filter(Number.isFinite);
+  const resultClocks = normalized.map((capture) => capture.result_at_ms).filter(Number.isFinite);
+  const runWindowMs = spawnClocks.length && resultClocks.length
+    ? Math.max(...resultClocks) - Math.min(...spawnClocks) : null;
+  const throughput = {
+    timed_calls: timed.length,
+    completion_wall_ms: summarize(timed.map((capture) => capture.result_at_ms - capture.spawned_at_ms)),
+    run_window_ms: runWindowMs,
+    aggregate_pages_per_s: runWindowMs > 0 ? terminalPages / (runWindowMs / 1000) : null,
+    source: 'capture-wrapper spawned_at_ms/result_at_ms wall clocks (M3 harness records them)',
+  };
+
+  // Container activity over time from event timestamps (the adapter's own
+  // `ts`, else the `modal container logs --timestamps` prefix).
+  const activity = {};
+  for (const event of logEvents) {
+    const ts = eventTs(event);
+    if (ts === null) continue;
+    const key = event.container ?? 'unknown';
+    const window = activity[key] ?? { first_ts: ts, last_ts: ts, events: 0 };
+    window.first_ts = Math.min(window.first_ts, ts);
+    window.last_ts = Math.max(window.last_ts, ts);
+    window.events += 1;
+    activity[key] = window;
+  }
+  const edges = Object.values(activity)
+    .flatMap((window) => [[window.first_ts, 1], [window.last_ts, -1]])
+    .sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+  let live = 0;
+  let maxConcurrent = 0;
+  for (const [, delta] of edges) {
+    live += delta;
+    maxConcurrent = Math.max(maxConcurrent, live);
+  }
+
   return {
     documents: {
       expected: expected.length,
@@ -258,11 +320,23 @@ export function reconcileRun({ expected, captures, logEvents = [] }) {
       readiness_source: 'service_started log events (results under-report after a rejected first call)',
       jobs_per_container: jobsByContainer,
       reused: Object.values(jobsByContainer).filter((count) => count > 1).length,
+      activity,
+      max_concurrent: maxConcurrent,
     },
+    throughput,
     retries: { retried_inputs: retriedInputs },
     cleanup: { failures: cleanupFailures.length },
     retirements,
     injected_failures: injected,
+    // §12 rows this reconciler cannot derive from results+logs alone —
+    // the M3 harness must capture these alongside (never claim them
+    // from dashboard glances):
+    not_derivable: [
+      'container crash / OOM counts — capture `modal container list/logs` + FunctionCall history per arm',
+      'peak ephemeral-disk use — capture probe_scratch disk_used_bytes during the run',
+      'queue wait p50/p95/max — platform does not expose per-input queue wait; derive spawn->first-event gap from capture clocks + log ts as a proxy',
+      'billed CPU/memory/USD — capture `modal billing report` per README',
+    ],
   };
 }
 
@@ -285,15 +359,24 @@ export function renderAggregationTable(aggregation) {
     `| cold starts (service_started logs) | ${containers.cold_starts} |`,
     `| cold readiness ms (from logs) | ${containers.readiness_ms.join(', ') || 'n/a'} |`,
     `| containers reused (>1 job) | ${containers.reused} |`,
+    `| document completion wall ms | ${fmt(aggregation.throughput.completion_wall_ms)} |`,
+    `| aggregate pages/s over run window | ${aggregation.throughput.aggregate_pages_per_s === null ? 'n/a (no capture clocks)' : aggregation.throughput.aggregate_pages_per_s.toFixed(3)} |`,
+    `| max concurrent containers (log ts) | ${aggregation.containers.max_concurrent} |`,
     `| retried inputs | ${aggregation.retries.retried_inputs.length} |`,
     `| cleanup failures | ${aggregation.cleanup.failures} |`,
     `| retirements by reason | ${Object.entries(aggregation.retirements).map(([k, v]) => `${k}:${v}`).join(' ') || 'none'} |`,
     `| injected failures by mode | ${Object.entries(aggregation.injected_failures).map(([k, v]) => `${k}:${v}`).join(' ') || 'none'} |`,
+    ...aggregation.not_derivable.map((row) => `| NOT DERIVABLE here | ${row} |`),
   ];
   return lines.join('\n');
 }
 
-/** Extract structured adapter events from raw container log text. */
+/**
+ * Extract structured adapter events from raw container log text. A leading
+ * `modal container logs --timestamps` prefix (ISO date before the JSON) is
+ * preserved as `log_ts` (epoch ms) — the fallback wall clock for events
+ * from adapter revisions that predate the `ts` field.
+ */
 export function parseLogText(text, container = 'unknown') {
   const events = [];
   for (const line of text.split('\n')) {
@@ -301,7 +384,11 @@ export function parseLogText(text, container = 'unknown') {
     if (start < 0) continue;
     try {
       const parsed = JSON.parse(line.slice(start));
-      if (parsed && typeof parsed.event === 'string') events.push({ ...parsed, container });
+      if (!parsed || typeof parsed.event !== 'string') continue;
+      const prefix = line.slice(0, start).trim().split(/\s+/u)[0] ?? '';
+      const prefixMs = /^\d{4}-\d{2}-\d{2}T/u.test(prefix) ? Date.parse(prefix) : NaN;
+      if (Number.isFinite(prefixMs)) parsed.log_ts = prefixMs;
+      events.push({ ...parsed, container });
     } catch {
       // non-JSON log line — ignore
     }
