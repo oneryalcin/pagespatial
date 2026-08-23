@@ -189,7 +189,8 @@ test, principles §9):**
    volatile identity — the two initial FAILs were 100% that field;
    re-judged from archived captures at zero cost). Measured: $1.93
    total gauntlet, $0.000572/terminal page (~$440/M steady, ~$300/M
-   marginal warm); 0.60/1.73/3.68 pages/s at 1/4/16 containers
+   single-container 100-call billed arm — boot/idle-inclusive, not a
+   measured warm-fleet marginal); 0.60/1.73/3.68 pages/s at 1/4/16 containers
    (sublinear, stated); every failure mode bounded and visible
    (platform timeout at exactly 1,800 s; container-kill reschedule
    clean; zero surviving processes). Prototype limits stand (90 MiB /
