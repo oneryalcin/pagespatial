@@ -64,10 +64,23 @@ data-egress primitive and is refused. **Three open questions for the owner
 are listed at the end of the doc — ANSWERED 2026-08-23** (enrichment
 default off; cost-cap env defaults; dev-v13 stays authoritative on EP
 surprises). The commercial API surface (auth, quotas, storage, tenancy)
-is tracked-not-scheduled as **#76**. **M1 is IMPLEMENTED and verified on
-Linux (branch `m1-container-linux`,
-`docs/trials/2026-08-23-linux-verification.md`): all four acceptance
-criteria measured — see the M1 result block in the sidecar entry below.**
+is tracked-not-scheduled as **#76**. **ALL FOUR MILESTONES ARE
+IMPLEMENTED AND MEASURED (2026-08-23)**: M1 container + Linux
+verification (PR #82, `docs/trials/2026-08-23-linux-verification.md` —
+all four criteria; see the M1 result block in the sidecar entry below);
+M2 request-plan extraction (PR #80); M3 service enrichment phase
+(PR #81); **M4 real-corpus enrichment run + all five workstream-2
+acceptance criteria (`docs/trials/2026-08-23-m4-corpus-enrichment.md`):
+routing parity zero-mismatch on the replayed dev-v13 records (84
+qualifying of 162; 80 adj + 4 full), $0.001458/enriched page on the
+container vs the reconciled ladder's $0.001454 (+0.3%), gold∩blocking
+gain 332→338 (+6, committed floor +1), /v1/metrics exactly equal to the
+job manifests, and enrichment costing ~3% of parse CPU (second 150 dpi
+render pass ~0.34 core-s/page; enrichment wall is Gemini batch
+turnaround). Total milestone spend $0.24. The cost-ladder discrepancy
+the design flagged is reconciled: 11.4× at $0.000817 is correct (this
+file was already right); the batch trial doc now carries the dated
+correction.**
 
 **Next actions (owner-confirmed 2026-08-22; ranked by the rabbit-hole
 test, principles §9):**
