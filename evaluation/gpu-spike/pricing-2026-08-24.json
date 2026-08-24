@@ -1,0 +1,19 @@
+{
+ "schemaVersion": "pagespatial-modal-pricing-capture-v1",
+ "capturedAt": "2026-08-24",
+ "currency": "USD",
+ "billingUnit": "second",
+ "source": "https://modal.com/pricing",
+ "rates": {
+  "physicalCpuCore": 0.0000131,
+  "memoryGiB": 0.00000222,
+  "gpuT4": 0.000164,
+  "gpuL4": 0.000222,
+  "gpuA10040GiB": 0.000583,
+  "gpuH100": 0.001097
+ },
+ "notes": [
+  "Dated experiment input; recapture before a later qualification run.",
+  "Actual Modal billing remains authoritative when it can isolate an arm."
+ ]
+}

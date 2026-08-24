@@ -139,10 +139,23 @@ test, principles §9):**
    verification trial's correction block.)*
    HPI CPU (OpenVINO, v6-small) = 989 ms/page on 4 vCPU (~4
    core-s/page vs WASM's ~26 — ~6× core-efficiency; the 6.6× latency
-   multiplier is cross-machine, stated as approximate). **GPU is DEAD
-   on this workload** (T4 952 vs CPU 989 ms, same-container — a 1.5M-
-   param model can't feed a GPU; L40 would not change this, only
-   aggressive cross-page batching could, measure-if-ever). v6-medium:
+   multiplier is cross-machine, stated as approximate). **GPU scope
+   correction 2026-08-24:** the T4 arm was sequential default Paddle GPU in
+   a separate function/container; it did not beat the tested OpenVINO arm.
+   GPU HPI/FP16/batching/L4 were untested, and Small is ~7.7M combined
+   parameters (1.5M is Tiny). The general “GPU dead” and L40 claims are
+   retracted. **Bounded follow-up completed 2026-08-24:** on one L4, serial
+   Tiny was 1.71x the CPU control and serial Small 1.13x. Recognition batching
+   made Tiny another 1.72x faster within one window, but every faster batched
+   arm failed the predeclared output-equivalence gate. CUDA 12.6 HPI selected
+   default Paddle Inference and was slower; ONNX Runtime GPU was about 40%
+   slower and non-equivalent. The official CUDA 11.8/TRT 8.6 image produced
+   zero tasks in two bounded import attempts, so TensorRT is unmeasured, not
+   declared slow. No correct engine advanced to A2; CPU remains
+   the deployment default and the candidate holdout stayed unopened. Design:
+   `docs/design/2026-08-24-gpu-ocr-spike.md`; trial:
+   `docs/trials/2026-08-24-gpu-ocr-spike.md`.
+   v6-medium:
    no gold gain at 2× cost. Scaling curve (PR #66): latency FLAT 1–8
    vCPU → **1-vCPU workers are the packing unit, ~1.45 core-s/page
    (~18× WASM core-efficiency)**. *(Ad-hoc Modal OCR-only figures —

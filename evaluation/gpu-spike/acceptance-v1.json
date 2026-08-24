@@ -1,0 +1,30 @@
+{
+ "schemaVersion": "pagespatial-gpu-spike-acceptance-v1",
+ "frozenAt": "2026-08-24",
+ "scope": "English development screening before candidate output is viewed",
+ "smallEngineScreen": {
+  "criticalTokenSymmetricDifference": "no greater than the maximum same-configuration double-run null",
+  "rawLineDifferences": "no greater than the maximum same-configuration double-run null",
+  "batchCompanionRule": "each page stays inside the same derived null under B1/C1 and B8/C8",
+  "boxRule": "report every unmatched box and exact-text matched-box IoU; no silent thresholding",
+  "confidenceRule": "report maximum and distribution of shifts; no routing decision may change without review"
+ },
+ "tinyScreen": {
+  "rule": "speed can advance Tiny to development scoring but cannot adopt it",
+  "adoption": "requires the complete section 13.2 ceremony and one sealed English holdout evaluation"
+ },
+ "m1_5Stop": {
+  "serialL4SpeedupMax": 1.3,
+  "batchGainMin": 1.2,
+  "optimisticEndToEndSpeedupMin": 2.0,
+  "allConditionsRequiredToStop": true
+ },
+ "productionCandidate": {
+  "smallEndToEndSpeedupMin": 3.0,
+  "costPerTerminalPageMaxRatioToCpu": 1.0
+ },
+ "optionalFastLane": {
+  "endToEndSpeedupMin": 2.0,
+  "costPremiumMustBeExplicit": true
+ }
+}
