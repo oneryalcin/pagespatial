@@ -6,8 +6,8 @@
 
 **Status:** merged-output safety complete; A2 B1 measured; effective B8 retry pending
 
-**Current decision:** **DEFER: A2 E1 MEASUREMENT PENDING; CPU REMAINS THE
-PRODUCTION DEFAULT.**
+**Current decision:** **A2 MISSES THE 2X GATE: B1 IS FASTEST; CPU REMAINS THE
+PRODUCTION DEFAULT; CONCURRENT-OWNER ATTRIBUTION IS NEXT.**
 The rejection below is the completed pre-A2 result. The owner later supplied a
 50 terminal pages/s target and an initial USD 50 experiment ceiling, raised to
 USD 75 after an infrastructure-only aborted startup. This authorizes
@@ -648,6 +648,45 @@ TensorRT cold startup after the local client heartbeat timed out. It produced
 zero page results and posted about USD 0.062. The paid launcher now uses
 `modal run --detach`; it still resolves and stops the exact app in `finally`.
 
+### Effective B8 complete-document result — 2026-08-24
+
+App `ap-hthLjw1aBbXUlAjQovzO31` completed one cold and three warm 50-page
+calls in one container. The live startup sampler proved recognition batch
+eight. Each repeat processed 4,952 recognition crops in 640 recognition
+batches; 598 batches (93.4%) were full batches of eight. This is genuine B8
+evidence, not a requested-only label.
+
+Warm median throughput was 0.775 pages/s inside the complete render, queue,
+OCR, and assembly method, and 0.709 pages/s at the client boundary. B1 was
+1.243 inner and 0.996 client pages/s. Effective B8 was therefore about 38%
+slower inside the method and 29% slower at the client boundary. It was only
+1.01x the 0.700 pages/s CPU control and fails the 2x gate. Warm median GPU
+utilization was 15%, peak 55%, with 1,630 MiB maximum memory. Per-page OCR
+service time increased from 0.760 s mean at B1 to 1.248 s at B8.
+
+All four offline correctness reports contain zero newly incorrect trusted
+critical values, zero missing trusted values, and zero unresolved trusted
+values. Five source adjudications remain pending and raw OCR differs on all 50
+pages, so the stricter scorer status is pending. Under the owner's amended
+safety rule, no trusted-output defect is demonstrated.
+
+The returned compact server JSON was about 6.46 MB. Warm client time exceeded
+method time by a 5.19 s median. This is a measured combined Modal dispatch,
+serialization, transfer, and decode boundary—not a measured network-only or
+JSON-only cost. The diagnostic response probe exposed that Modal's decoded
+object re-encodes 123 bytes differently from the server's original JSON; that
+byte-representation mismatch occurred after all four OCR results were saved
+and does not invalidate their timings. The probe now treats semantic object
+identity separately from exact raw-byte identity.
+
+The architecture conclusion is narrow but decisive: four CPU render producers
+filled the page queue, and B8 recognition batches were full, but the Python
+owner still executed one monolithic page `predict()` at a time. Larger Small
+recognition batches do not solve utilization. The smallest remaining test is
+two independent B1 inference owners/streams sharing one L4. A split
+detector-to-crop-queue-to-recognizer A3 is justified only if that simpler
+concurrent-owner treatment cannot raise utilization and throughput.
+
 - The §6 M1.5 optimistic end-to-end bound was never computed — the stage
   attribution it requires was not instrumented in these arms.
 - The suggested crop-width padding explanation for Small B4 is unproven;
@@ -655,21 +694,17 @@ zero page results and posted about USD 0.062. The paid launcher now uses
 - The vendor base-image manifest digest was not captured.
 - Comparator mutations for box, confidence, routing, and an independent line
   change were not run.
-- End-to-end Node A2 overlap, sustained 1,000-page operation, failure
-  injection, billed cost, 1-to-4 GPU scale, and the candidate holdout were not
-  run because Small failed the preliminary economic gate and Tiny remains an
-  unqualified witness.
-- No complete 50-page document was run through a GPU service. The 32-page
-  diagnostic measures OCR runtime behavior, not a 50-page completion SLO.
-- B16/B32, width buckets, concurrent producers, and A2 were not run because
-  Small batching was slower and the serial treatment was already about 1.94x
-  the diagnostic CPU resource cost per prepared page.
+- Sustained 1,000-page operation, failure injection, 1-to-4 GPU scale, and the
+  candidate holdout remain unmeasured. Complete 50-page B1 and B8 A2 documents
+  are now measured; neither crosses the 2x continuation gate.
+- B16/B32 exceed the pinned Small TensorRT batch profile and remain unrun.
+  Width buckets and concurrent inference owners remain unrun. Four render
+  producers did run, but one Python owner serialized page-level `predict()`.
 - The unadopted engine was not baked or published. Only the source revision
   and lifetime patch are integrity-pinned.
 - Non-English transfer is intentionally unqualified.
 
-Reopen Small only if a concrete engine, allocation, or pricing change can
-plausibly beat the CPU cost per terminal page while retaining the merged-output
-safety gate. Alternatively, fund Tiny's complete new-witness ceremony. A
-reopened spike starts from the retained safety replay and a same-workload cost
-screen; it does not start with A2 or a fleet.
+Continue Small only with the bounded concurrent-owner attribution earned by
+the A2 traces; do not repeat B4/B8. A split A3 must still justify its extra
+interfaces with measured throughput. Alternatively, fund Tiny's complete
+new-witness ceremony.

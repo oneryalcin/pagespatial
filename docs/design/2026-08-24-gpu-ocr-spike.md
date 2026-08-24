@@ -172,6 +172,23 @@ true B8 retry is allowed only after the image carries the batch value, the
 remote arm equals the requested arm, and the live recognition sampler reports
 effective batch eight before inference.
 
+**Measured A2 result, 2026-08-24:** Small FP32 B1 remains the fastest complete
+50-page A2 cell: 0.996 warm client pages/s. Effective B8 reached batch eight
+before inference and 598 of 640 recognition batches were full in every repeat,
+yet warm client throughput fell to 0.709 pages/s and median GPU utilization
+was only 15%. B8 is rejected. It produced zero newly incorrect, missing, or
+unresolved trusted critical values under the owner-amended safety rule; five
+source adjudications remain pending, so the stricter scorer status remains
+pending. The A2 2x speed gate fails and E2/E3 remain locked.
+
+This result satisfies the A3 trigger: four render producers kept the bounded
+queue full, recognition batches were full, and the monolithic Python owner
+still executed one page-level `predict()` at a time with long GPU idle gaps.
+The next smallest performance treatment is two independent B1 inference
+owners/streams on one L4, followed by the split detector/crop/recognizer A3
+only if concurrent monolithic owners cannot materially raise utilization.
+Neither treatment is a production deployment change.
+
 ## 1. Decision
 
 Run a bounded GPU spike because the existing T4 result did **not** test the

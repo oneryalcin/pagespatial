@@ -335,6 +335,7 @@ class GpuA2Container:
                 f"requested {ARM['recognitionBatchSize']}, "
                 f"effective {effective_recognition_batch!r}"
             )
+        self.startup_backend_attrs = dict(self.backend_attrs)
         # Capture the unwrapped live configuration before installing probes.
         # The probe delegates to the real sampler but is intentionally not a
         # PaddleX type, so the generic attribute walker will not descend into it.
@@ -447,7 +448,10 @@ class GpuA2Container:
                             *self.backend_logs,
                             *_backend_lines(inference_text),
                         ]
-                        self.backend_attrs = _walk_interesting_attrs(self.ocr)
+                        self.backend_attrs = {
+                            **self.startup_backend_attrs,
+                            **_walk_interesting_attrs(self.ocr),
+                        }
                         self.backend_attestation = _attest_backend(
                             ARM, self.device_truth, self.backend_attrs, self.backend_logs
                         )
@@ -637,6 +641,7 @@ def main(
     outcomes = []
     container_ids = []
     last_remote_result_json = b""
+    last_remote_result: dict[str, Any] = {}
     for repeat in range(1, repeats + 1):
         call_started = time.monotonic()
         result = owner.parse_document.remote(
@@ -656,6 +661,7 @@ def main(
         last_remote_result_json = json.dumps(
             result, separators=(",", ":")
         ).encode("utf-8")
+        last_remote_result = dict(result)
         result["client"] = {
             "repeat": repeat,
             "spawnToResultS": time.monotonic() - call_started,
@@ -676,35 +682,51 @@ def main(
         )
     last_remote_result_sha256 = hashlib.sha256(last_remote_result_json).hexdigest()
     response_probe = []
+    server_identity: dict[str, Any] | None = None
     for probe_repeat in range(1, 3):
         for mode in ("tiny", "json-bytes", "object"):
             probe_started = time.monotonic()
             value = owner.probe_last_response.remote(mode)
             elapsed_s = time.monotonic() - probe_started
             if mode == "tiny":
+                server_identity = value
                 returned_bytes = len(
                     json.dumps(value, separators=(",", ":")).encode("utf-8")
                 )
-                if (
-                    value.get("sha256") != last_remote_result_sha256
-                    or value.get("bytes") != len(last_remote_result_json)
-                ):
-                    raise RuntimeError("tiny response probe identity mismatch")
+                semantic_match = None
+                byte_reencode_match = (
+                    value.get("sha256") == last_remote_result_sha256
+                    and value.get("bytes") == len(last_remote_result_json)
+                )
             elif mode == "json-bytes":
                 returned_bytes = len(value)
-                if hashlib.sha256(value).hexdigest() != last_remote_result_sha256:
+                if server_identity is None or (
+                    hashlib.sha256(value).hexdigest() != server_identity.get("sha256")
+                    or len(value) != server_identity.get("bytes")
+                ):
                     raise RuntimeError("JSON-byte response probe identity mismatch")
+                semantic_match = None
+                byte_reencode_match = True
             else:
                 encoded = json.dumps(value, separators=(",", ":")).encode("utf-8")
                 returned_bytes = len(encoded)
-                if hashlib.sha256(encoded).hexdigest() != last_remote_result_sha256:
-                    raise RuntimeError("object response probe identity mismatch")
+                semantic_match = value == last_remote_result
+                byte_reencode_match = (
+                    server_identity is not None
+                    and hashlib.sha256(encoded).hexdigest()
+                    == server_identity.get("sha256")
+                    and len(encoded) == server_identity.get("bytes")
+                )
+                if not semantic_match:
+                    raise RuntimeError("object response probe semantic mismatch")
             response_probe.append(
                 {
                     "repeat": probe_repeat,
                     "mode": mode,
                     "roundTripS": elapsed_s,
                     "returnedBytes": returned_bytes,
+                    "semanticMatch": semantic_match,
+                    "byteReencodeMatch": byte_reencode_match,
                 }
             )
     cold_pattern = [item["method"]["containerCold"] for item in outcomes]

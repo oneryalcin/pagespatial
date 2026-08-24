@@ -41,6 +41,9 @@ test('A2 records effective batches and isolates response-boundary cost', () => {
   assert.match(source, /def probe_last_response/u);
   assert.match(source, /"tiny", "json-bytes", "object"/u);
   assert.match(source, /"responseProbe"/u);
+  assert.match(source, /byteReencodeMatch/u);
+  assert.match(source, /object response probe semantic mismatch/u);
+  assert.doesNotMatch(source, /tiny response probe identity mismatch/u);
 });
 
 test('A2 runner enforces spend and repeat bounds before remote work', () => {
