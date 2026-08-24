@@ -54,6 +54,22 @@ the 1.672 full-result client rate projects to about 30. Those are arithmetic
 capacity estimates, not fleet measurements. A real per-container gain reduces
 both counts; another configuration sweep without a mechanism does not.
 
+The primary metric for this workstream is **inner complete-document
+throughput**: terminal pages per second measured when the in-container result
+is fully assembled. This is the boundary the CPU, CUDA, and NVTX evidence can
+explain. **Full-result client throughput** remains a secondary end-to-end
+metric. Its gap from the inner rate is divided honestly:
+
+- in-container result construction and JSON assembly are measured under
+  `result.assemble`; and
+- Modal serialization, transport, and client receipt remain outside the traced
+  child process and use the existing response-probe measurement.
+
+The eventual production metric is **persisted terminal pages per second**:
+results are durable and the caller receives a pointer rather than a multi-MB
+payload. That path has not been built or measured and is not authorized by this
+instrumentation work.
+
 ## 2. What is already known
 
 These facts come from committed evidence, not from GPU utilization alone:
@@ -223,15 +239,29 @@ Run one capability probe before building the full harness. It must record:
 - whether the report and SQLite export can be copied to retained storage; and
 - the exact error when any capability is denied.
 
+The capability check is one bounded probe sequence, not one shell invocation.
+A missing package, invalid flag, bad path, or other demonstrated harness error
+may be fixed and retried once. A documented platform denial consumes the Modal
+attempt and triggers the host fallback in section 11. A second ambiguous or
+harness failure stops the probe; it does not authorize open-ended environment
+debugging.
+
 For the real run, launch the shared trace worker with CUDA, NVTX, and OS runtime
 tracing. Use an NVTX capture range so model loading, TensorRT engine hydration,
-and the first warm-up document are outside the measured window. Set capture
-range end to `stop`, not the default session shutdown, so the same child can
-complete `control-after`. Capture one fixed middle window of the profiled third
-document. Twenty consecutive submitted pages is the default: long enough to
-show steady alternation across two owners and small enough to keep the trace
-reviewable. Record every page that actually overlaps the capture; do not
-discard companion work at the range boundary.
+and the first warm-up document are outside the measured window. Capture two
+fixed 10-page windows in the profiled third document, submitted pages 11--20
+and 31--40. Use `--capture-range-end=repeat:2:defer`, or the equivalent syntax
+reported by the pinned M0 tool version, so the second NVTX range is honored and
+result generation waits until both ranges finish or the child exits. Plain
+`stop` is forbidden because Nsight Systems ignores later capture ranges after
+the first stop. The child must remain alive for `control-after` and then exit
+cleanly. Record every page and companion operation that actually overlaps each
+capture; do not discard boundary work.
+
+Analyze both windows independently before aggregating them. The dominant cause
+must select the same section 9 decision-table row in both windows before it can
+be named. If the rows disagree, that disagreement is the finding and no
+optimization is authorized.
 
 Retain the forward-compatible `.nsys-rep`. Export SQLite only as an analysis
 derivative. Generate at least the CUDA API, CUDA GPU trace, kernel summary,
@@ -428,6 +458,9 @@ Every remote attempt, including a failed capability probe, records:
 - exported SQLite and report hashes;
 - CPU profile and symbol-map hashes, when present;
 - control and trace results with their hashes;
+- inner complete-document and full-result client rates, plus the measured
+  `result.assemble` interval and the external response gap derived from the
+  existing response probe;
 - reconciliation counts; and
 - a visible limitations array.
 
@@ -444,11 +477,17 @@ record a new dated owner budget and a fixed worst-case reservation. The expired
 2026-08-24 ledger must not be reopened or edited to manufacture headroom.
 
 Use Modal first because it is the deployment host under investigation. The
-capability probe gets one attempt. If CUPTI, process launch, trace export, or
-native CPU sampling is blocked by the platform, do not spend a day bypassing
-the container boundary. Run the exact image and L4 shape on a dedicated Linux
-x86 host or VM, and label it a different host control. Re-run one unprofiled
-Modal control beside it before transferring a conclusion.
+bounded retry rule in section 6.3 applies. If CUPTI, process launch, trace
+export, or native CPU sampling is blocked by the platform, do not spend a day
+bypassing the container boundary. Run the exact image and L4 shape on a
+dedicated Linux x86 host or VM, and label it a different host control. Re-run
+one unprofiled Modal control beside it before transferring a conclusion.
+
+No additional global economic overturn threshold applies. The owner has
+decided that a real saving is material at the expected million-page scale.
+The evidence gates still prevent drift: a removable cause must reach 20% of
+warm wall, and each optimization must improve inner complete-document
+throughput by at least 10% without violating the output gate.
 
 ## 12. Milestones and pull requests
 
@@ -468,12 +507,14 @@ Modal control beside it before transferring a conclusion.
 - prove exact output/provenance parity and less than 10% unprofiled drift; and
 - add analyzer mutation tests for missing events and bad reconciliation.
 
-### M2 — one Systems and one CPU capture
+### M2 — two Systems windows and one CPU capture
 
 - run the fixed four-call lifetime;
+- capture and analyze both fixed 10-page Systems windows;
 - persist the raw and derived artifacts;
 - produce the wall-union, service-time, CUDA, CPU, and unattributed tables; and
-- name the largest removable cause or stop.
+- require both windows to select the same decision-table row, then name the
+  largest removable cause or stop.
 
 ### M3 — conditional native visibility
 
@@ -508,7 +549,8 @@ The measurement closes only when:
    blocker;
 8. correctness remains visibly separate from performance;
 9. raw artifacts are retained and integrity-pinned; and
-10. the report chooses one decision-table row or stops.
+10. both Systems windows choose the same decision-table row, or their
+    disagreement is reported and the workstream stops.
 
 ## 14. References
 
