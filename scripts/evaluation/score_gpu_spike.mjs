@@ -236,7 +236,27 @@ for (const [leftName, rightName] of [
   ['g-pd-tiny-b1c1', 'g-pd-tiny-b8c8'],
   ['g-pd-small-b1c1', 'g-pd-small-b8c1'],
   ['g-pd-small-b1c1', 'g-pd-small-b1c8'],
-  ['g-pd-small-b1c1', 'g-pd-small-b8c8']
+  ['g-pd-small-b1c1', 'g-pd-small-b8c8'],
+  ['g-trt-tiny-fp32', 'g-trt-tiny-fp32-b4'],
+  ['g-trt-tiny-fp32', 'g-trt-tiny-fp32-b8'],
+  ['g-trt-small-fp32', 'g-trt-small-fp32-b4'],
+  ['g-trt-small-fp32', 'g-trt-small-fp32-b8'],
+  ['g-trt-tiny-fp16', 'g-trt-tiny-fp16-b4'],
+  ['g-trt-tiny-fp16', 'g-trt-tiny-fp16-b8'],
+  ['g-trt-small-fp16', 'g-trt-small-fp16-b4'],
+  ['g-trt-small-fp16', 'g-trt-small-fp16-b8'],
+  ['g-trt-tiny-fp32', 'g-trt-tiny-fp16'],
+  ['g-trt-tiny-fp32-b8', 'g-trt-tiny-fp16-b8'],
+  ['g-trt-small-fp32', 'g-trt-small-fp16'],
+  ['g-trt-small-fp32-b4', 'g-trt-small-fp16-b4'],
+  ['c-hpi-tiny', 'g-trt-tiny-fp16'],
+  ['c-hpi-tiny', 'g-trt-tiny-fp16-b8'],
+  ['g-pd-tiny', 'g-trt-tiny-fp16'],
+  ['g-pd-tiny', 'g-trt-tiny-fp16-b8'],
+  ['c-hpi-small', 'g-trt-small-fp32'],
+  ['c-hpi-small', 'g-trt-small-fp16'],
+  ['g-pd-small', 'g-trt-small-fp32'],
+  ['g-pd-small', 'g-trt-small-fp16']
 ]) {
   if (arms.has(leftName) && arms.has(rightName)) comparisons.push(compareArms(arms.get(leftName), arms.get(rightName)));
 }
