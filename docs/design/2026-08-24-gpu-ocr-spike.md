@@ -181,13 +181,17 @@ unresolved trusted critical values under the owner-amended safety rule; five
 source adjudications remain pending, so the stricter scorer status remains
 pending. The A2 2x speed gate fails and E2/E3 remain locked.
 
-This result satisfies the A3 trigger: four render producers kept the bounded
-queue full, recognition batches were full, and the monolithic Python owner
-still executed one page-level `predict()` at a time with long GPU idle gaps.
-The next smallest performance treatment is two independent B1 inference
-owners/streams on one L4, followed by the split detector/crop/recognizer A3
-only if concurrent monolithic owners cannot materially raise utilization.
-Neither treatment is a production deployment change.
+This result triggered one smaller check before A3: two independent B1
+inference owners on one L4. That treatment truly overlapped—the sum of page
+OCR service time was about 1.89 times wall time and each owner handled roughly
+half the crops—but warm client throughput was only 1.017 pages/s versus 0.996
+for one owner. Median GPU utilization remained about 21%. The exact pinned
+UltraInfer TensorRT backend creates a distinct CUDA stream per backend, so this
+also tests the obvious multi-stream treatment. Straightforward Small batching
+and concurrency are exhausted. Do not build split A3 without a new profiler or
+custom-runtime hypothesis that explains why it can escape the measured
+contention. The next bounded performance lane is Tiny B1/B8 under the same
+English trusted-output rule. None of these treatments changes production.
 
 ## 1. Decision
 

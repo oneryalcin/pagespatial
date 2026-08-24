@@ -4,10 +4,10 @@
 
 **Design:** [`docs/design/2026-08-24-gpu-ocr-spike.md`](../design/2026-08-24-gpu-ocr-spike.md)
 
-**Status:** merged-output safety complete; A2 B1 measured; effective B8 retry pending
+**Status:** merged-output safety complete; Small A2 closed; bounded Tiny A2 pending
 
-**Current decision:** **A2 MISSES THE 2X GATE: B1 IS FASTEST; CPU REMAINS THE
-PRODUCTION DEFAULT; CONCURRENT-OWNER ATTRIBUTION IS NEXT.**
+**Current decision:** **SMALL GPU MISSES THE 2X GATE; CPU REMAINS THE
+PRODUCTION DEFAULT; BOUNDED TINY A2 PERFORMANCE IS NEXT.**
 The rejection below is the completed pre-A2 result. The owner later supplied a
 50 terminal pages/s target and an initial USD 50 experiment ceiling, raised to
 USD 75 after an infrastructure-only aborted startup. This authorizes
@@ -687,6 +687,42 @@ two independent B1 inference owners/streams sharing one L4. A split
 detector-to-crop-queue-to-recognizer A3 is justified only if that simpler
 concurrent-owner treatment cannot raise utilization and throughput.
 
+### Dual-owner B1 attribution — 2026-08-24
+
+App `ap-XLNant6Q8hgwgyJ5rVmnW9` ran two independent Small FP32 B1 inference
+owners in one L4 container. Both owners passed provider/device attestation,
+handled about half the recognition crops, and overlapped: summed page OCR time
+was 1.89-1.90 times document wall time. The treatment was real.
+
+It did not help. Warm inner throughput was 1.159 pages/s versus 1.243 for the
+one-owner B1 control (7% lower). Warm client throughput was 1.017 pages/s
+versus 0.996 (2% higher, not a material win). Median GPU utilization remained
+19-21% versus 22% for B1; peak was 33%, and memory rose from 1,416 MiB to
+2,368 MiB. Mean per-page OCR service time rose from 0.760 s to 1.56-1.73 s.
+The owners overlapped but contended almost one-for-one, leaving aggregate work
+flat. The exact pinned UltraInfer source creates a separate CUDA stream when
+no external stream is supplied and synchronizes that stream after each
+prediction; therefore the obvious independent-stream treatment was exercised.
+
+Correctness again showed zero newly incorrect and zero missing trusted values.
+One unresolved value and eight source adjudications remain visible; no silent
+trusted-output error is demonstrated under the owner-amended rule. The app
+posted about USD 0.201 and stopped with zero tasks.
+
+The response probe finally isolates the return path. Tiny metadata took a
+0.19 s median round trip. Exact 7.04 MB JSON bytes took 2.18 s median; the full
+decoded object took 2.53 s. The larger 4-5 s method-to-client gap also includes
+request dispatch and upload of the PDF/native-evidence inputs. Thus the result
+return is material but is not the OCR throughput bottleneck, and the earlier
+9 s observation was never proof of JSON-only cost.
+
+Small's simple treatments are now exhausted: B1 wins over B4/B8, page-list
+input did not help, two real CUDA-stream owners did not help, and render supply
+was already full. A split A3 is not justified without a new low-level profiler
+or custom-runtime mechanism. The smallest remaining performance experiment is
+Tiny B1/B8 through this same 50-page English terminal boundary; Tiny remains a
+new witness and cannot be adopted from throughput evidence alone.
+
 - The §6 M1.5 optimistic end-to-end bound was never computed — the stage
   attribution it requires was not instrumented in these arms.
 - The suggested crop-width padding explanation for Small B4 is unproven;
@@ -704,7 +740,6 @@ concurrent-owner treatment cannot raise utilization and throughput.
   and lifetime patch are integrity-pinned.
 - Non-English transfer is intentionally unqualified.
 
-Continue Small only with the bounded concurrent-owner attribution earned by
-the A2 traces; do not repeat B4/B8. A split A3 must still justify its extra
-interfaces with measured throughput. Alternatively, fund Tiny's complete
-new-witness ceremony.
+Do not continue Small without a new profiler-backed custom-runtime mechanism.
+Run bounded Tiny A2 only for performance and trusted-output screening; any
+adoption still requires Tiny's complete new-witness ceremony.
