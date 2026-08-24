@@ -15,6 +15,8 @@ test('A2 budget exposure retains unreconciled reservations', () => {
   assert.match(source, /posted \+ reserved_exposure\(ledger\) \+ worst_case_usd/u);
   assert.match(source, /partial positive billing row/u);
   assert.match(source, /operator-attested closed billing interval/u);
+  assert.match(source, /complete_without_app/u);
+  assert.match(source, /This only removes the live serialization lock; it never releases money/u);
 });
 
 test('A2 reservations are fixed by stage and atomically claimed', () => {

@@ -220,6 +220,33 @@ def complete(path: Path, reservation_id: str, app_id: str) -> dict[str, Any]:
         return match
 
 
+def complete_without_app(path: Path, reservation_id: str, reason: str) -> dict[str, Any]:
+    """Close a claimed launch that failed before Modal created an app.
+
+    The full worst-case reservation remains `completed-unposted` exposure.
+    This only removes the live serialization lock; it never releases money.
+    """
+    if active_experiment_apps():
+        raise RuntimeError("cannot close a no-app reservation while an A2 app is active")
+    with ledger_lock(path):
+        ledger = load_ledger(path)
+        match = next((item for item in ledger["reservations"] if item["id"] == reservation_id), None)
+        if match is None:
+            raise RuntimeError(f"unknown reservation: {reservation_id}")
+        if match.get("status") not in {"reserved", "active"}:
+            raise RuntimeError(f"reservation is not completable: {match.get('status')}")
+        match.update(
+            {
+                "status": "completed-unposted",
+                "appId": None,
+                "noAppReason": reason[:500],
+                "completedAt": int(time.time()),
+            }
+        )
+        save_ledger(path, ledger)
+        return match
+
+
 def validate_reservation(path: Path, reservation_id: str, stage: str) -> dict[str, Any]:
     if current_profile() != REQUIRED_PROFILE:
         raise RuntimeError(f"Modal profile must be {REQUIRED_PROFILE!r}")
@@ -296,6 +323,9 @@ def main() -> None:
     done = sub.add_parser("complete")
     done.add_argument("--reservation", required=True)
     done.add_argument("--app-id", required=True)
+    no_app = sub.add_parser("complete-no-app")
+    no_app.add_argument("--reservation", required=True)
+    no_app.add_argument("--reason", required=True)
     final = sub.add_parser("reconcile-final")
     final.add_argument("--reservation", required=True)
     final.add_argument("--final-app-total-usd", required=True, type=float)
@@ -305,6 +335,8 @@ def main() -> None:
         result = reserve(args.ledger, args.stage)
     elif args.command == "complete":
         result = complete(args.ledger, args.reservation, args.app_id)
+    elif args.command == "complete-no-app":
+        result = complete_without_app(args.ledger, args.reservation, args.reason)
     elif args.command == "reconcile-final":
         result = reconcile_final(
             args.ledger, args.reservation, args.final_app_total_usd

@@ -51,3 +51,24 @@ print(json.dumps({"errors":errors,"status":m.load_ledger(p)["reservations"][0]["
   assert.match(result.errors[1], /live budget reservation/u);
   assert.equal(result.status, 'active');
 });
+
+test('a no-app launch closes the live lock but retains full exposure', () => {
+  const ledger = join(mkdtempSync(join(tmpdir(), 'gpu-a2-no-app-')), 'ledger.json');
+  const code = String.raw`
+import importlib.util,json,sys
+from pathlib import Path
+spec=importlib.util.spec_from_file_location("budget",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.current_profile=lambda:"desia"; m.active_experiment_apps=lambda:[]; m.billing_rows=lambda:[]
+p=Path(sys.argv[2]); r=m.reserve(p,"E1-GPU"); m.validate_reservation(p,r["id"],"E1-GPU")
+closed=m.complete_without_app(p,r["id"],"CLI rejected arguments before app creation")
+next_reservation=m.reserve(p,"E1-CPU")
+state=m.load_ledger(p)
+print(json.dumps({"closed":closed,"next":next_reservation,"exposure":m.reserved_exposure(state)}))
+`;
+  const result = runPython(code, ledger);
+  assert.equal(result.closed.status, 'completed-unposted');
+  assert.equal(result.closed.appId, null);
+  assert.match(result.closed.noAppReason, /before app creation/u);
+  assert.equal(result.next.status, 'reserved');
+  assert.equal(result.exposure, 10);
+});

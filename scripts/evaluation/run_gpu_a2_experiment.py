@@ -21,7 +21,7 @@ import time
 import uuid
 from pathlib import Path
 
-from gpu_a2_budget import DEFAULT_LEDGER, complete, reserve
+from gpu_a2_budget import DEFAULT_LEDGER, complete, complete_without_app, reserve
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -160,7 +160,7 @@ def run_gpu(ledger: Path, out_dir: Path) -> tuple[str, str, Path]:
         }
         run(
             [
-                "modal", "run", "scripts/evaluation/gpu_a2_modal.py", "--",
+                "modal", "run", "scripts/evaluation/gpu_a2_modal.py",
                 "--pdf-path", str(WORKLOAD),
                 "--out-dir", str(out_dir / "gpu"),
                 "--repeats", "4",
@@ -178,6 +178,40 @@ def run_gpu(ledger: Path, out_dir: Path) -> tuple[str, str, Path]:
             app_id = stop_exact_app(app_name)
         if app_id:
             complete(ledger, reservation["id"], app_id)
+        else:
+            complete_without_app(
+                ledger,
+                reservation["id"],
+                "Modal launcher failed before a discoverable app was created",
+            )
+
+
+def validate_cpu_evidence(path: Path, revision: str) -> Path:
+    run_path = path / "run.json"
+    if not run_path.is_file():
+        raise RuntimeError(f"reused CPU evidence has no run.json: {path}")
+    metadata = json.loads(run_path.read_text())
+    if metadata.get("repeats") != 4 or not metadata.get("completedAt"):
+        raise RuntimeError("reused CPU evidence is not a completed four-call run")
+    warm = metadata.get("summary", {}).get("warmReuse", {})
+    if warm.get("coldPattern") != [True, False, False, False]:
+        raise RuntimeError("reused CPU evidence has no exact cold/warm proof")
+    if len(set(warm.get("containerIds", []))) != 1:
+        raise RuntimeError("reused CPU evidence did not use one warm container")
+    for repeat in range(1, 5):
+        result_path = path / f"cpu-repeat-{repeat}.json"
+        result = json.loads(result_path.read_text())
+        if (
+            result.get("status") != "completed"
+            or result.get("page_count") != EXPECTED_PAGES
+            or result.get("pages_failed") != 0
+            or len(result.get("pages", [])) != EXPECTED_PAGES
+            or result.get("adapter_revision") != revision
+            or result.get("image_pin_revision") != image_pin_revision()
+            or result.get("client", {}).get("repeat") != repeat
+        ):
+            raise RuntimeError(f"reused CPU evidence failed validation: {result_path}")
+    return path
 
 
 def score_e1(cpu_dir: Path, gpu_dir: Path, out_dir: Path, adjudications: Path | None) -> dict:
@@ -243,12 +277,20 @@ def main() -> None:
         default=Path(".evaluation/gpu-spike/2026-08-24/a2-e1"),
     )
     parser.add_argument("--adjudications", type=Path)
+    parser.add_argument(
+        "--cpu-evidence", type=Path,
+        help="reuse one completed, current-revision four-call CPU control",
+    )
     args = parser.parse_args()
     revision = source_revision()
     if not WORKLOAD.exists():
         raise SystemExit(f"frozen workload missing: {WORKLOAD}")
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    cpu = run_cpu(args.ledger, args.out_dir, revision)
+    if args.cpu_evidence is not None:
+        cpu_dir = validate_cpu_evidence(args.cpu_evidence, revision)
+        cpu = ("reused", json.loads((cpu_dir / "run.json").read_text())["expectedAppId"], cpu_dir)
+    else:
+        cpu = run_cpu(args.ledger, args.out_dir, revision)
     gpu = run_gpu(args.ledger, args.out_dir)
     decision = score_e1(cpu[2], gpu[2], args.out_dir, args.adjudications)
     print(json.dumps({

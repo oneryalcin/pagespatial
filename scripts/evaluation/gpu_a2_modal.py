@@ -8,7 +8,7 @@ then runs the real PageSpatial assembly stage.
 
 Typical bounded run:
 
-  modal run scripts/evaluation/gpu_a2_modal.py -- \
+  modal run scripts/evaluation/gpu_a2_modal.py \
     --pdf-path .evaluation/gpu-spike/a2-50page-v1.pdf \
     --out-dir .evaluation/gpu-spike/2026-08-24/a2 \
     --repeats 4

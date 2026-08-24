@@ -17,6 +17,16 @@ test('paid A2 launcher requires clean source and exact app cleanup', () => {
   assert.match(source, /modal", "app", "stop", "--yes", app_id/u);
   assert.match(source, /remaining\.get\("state"\) != "stopped"/u);
   assert.match(source, /finally:/u);
+  assert.match(source, /complete_without_app/u);
+  assert.doesNotMatch(source, /gpu_a2_modal\.py", "--"/u);
+});
+
+test('paid A2 launcher can reuse only a complete current CPU control', () => {
+  assert.match(source, /--cpu-evidence/u);
+  assert.match(source, /validate_cpu_evidence/u);
+  assert.match(source, /\[True, False, False, False\]/u);
+  assert.match(source, /result\.get\("adapter_revision"\) != revision/u);
+  assert.match(source, /result\.get\("image_pin_revision"\) != image_pin_revision\(\)/u);
 });
 
 test('E2 is locked behind all four correctness reports and a 2x warm speed gate', () => {
