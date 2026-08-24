@@ -50,9 +50,20 @@ Paddle GPU on a T4, not GPU HPI, FP16, batching, overlap, or an L4.
 
 The fixed diagnostic input is
 [`evaluation/gpu-spike/english-diagnostic-v1.json`](../../evaluation/gpu-spike/english-diagnostic-v1.json):
-32 English development pages with exact rendered-PNG SHA-256 values. It uses
-no candidate-holdout document. Page language is an explicit selection decision;
-the corpus's `multilingual` label is not used as language truth.
+32 English development pages with exact rendered-PNG SHA-256 values —
+per the manifest's own note, 26 pages are the much-observed historical
+HPI diagnostic with its six non-English pages replaced by five
+page-matched MonotaRO English siblings and one English image-only page.
+It uses no candidate-holdout document. Page language is an explicit
+selection decision; the corpus's `multilingual` label is not used as
+language truth.
+
+Design M0 item 5's *complete* English-only development correctness
+manifest (with document/page/labelled-page counts) was **never frozen or
+committed** — only this 32-page diagnostic exists. That gap is moot for
+these measurements because the spike stopped before M4, where that
+manifest would first have been consumed; a resumed spike must freeze it
+before M4.
 
 Model revisions and file hashes are frozen in
 [`evaluation/gpu-spike/model-pins-v1.json`](../../evaluation/gpu-spike/model-pins-v1.json).
@@ -115,6 +126,24 @@ not prove that true page concurrency or CPU/GPU overlap has no value. That
 architecture remains unmeasured and unauthorized because no correct engine
 advanced.
 
+**Discretionary Tiny stop (dated deviation, 2026-08-24, cold review
+PR #95):** the frozen `acceptance-v1.json` tinyScreen would have allowed
+serial Tiny to advance to development scoring — its G-PD B1/C1 arm was
+stable, attested, and 1.71x (above the 1.3x serial bar), and recognition
+batching gained 1.72x (above the 1.2x bar). The engine-equivalence screen
+that the verdict table cites is, by its own name, a Small gate. Tiny was
+stopped anyway, as a discretionary call, because: (a) Tiny adoption
+requires the full §4.2 new-witness ceremony and English gold labeling
+regardless of speed, none of which exists yet; and (b) Tiny's only
+demonstrated gain axis — recognition batching — is companion-dependent
+and failed same-treatment reproducibility, so the speed that would
+motivate the ceremony does not survive its own stability gate.
+Additionally, the §6-required M1.5 optimistic end-to-end bound was never
+computed: the stage attribution it needs was not instrumented in these
+arms. That bound is unmeasured, alongside TensorRT. A future engineer
+who funds Tiny's ceremony may treat serial Tiny G-PD as a live M1.5
+pass; this trial's stop is a judgment, not a mechanical gate outcome.
+
 The first B8/C8 call exposed that Paddle's detection predictor stacks page
 arrays and rejects heterogeneous shapes. The retry preserved exact decoded
 pixels by batching only same-shaped pages; it did not pad or resize. Effective
@@ -130,6 +159,16 @@ B1/C1 control by 20 critical-token entries and 146 unmatched exact-text lines.
 Tiny differs by 34-40 critical-token entries and also varies between B8/C8
 repeats (same-treatment null 10 critical-token entries). Neither B8/C8 arm can
 advance as a qualified execution engine.
+
+Metric note (cold review PR #95): the tables report "unmatched exact-text
+lines" — the geometry-matching metric — for readability, but the PASS/FAIL
+gate compares **positional differing lines against the same-treatment
+null** (e.g., Tiny B1/C8: 13 unmatched lines but 1,053–1,403 positional
+differing lines versus a null of 351). Both metrics reproduce from the
+archived score rows and both fail where FAIL is stated; the positional
+comparison is the gating one. Per-group wall times for every arm live in
+the archived run rows; p95/latency percentile tables are omitted here as
+presentation, not lost data.
 
 The bounded decomposition then separated recognition batching (`B8/C1`) from
 same-shape page-list input batching (`B1/C8`) in one warm L4 container:
@@ -191,6 +230,11 @@ For all three repeats in both tiers, the stable projection of page identity,
 detected-crop count, line text, confidence, and geometry has the same SHA-256
 between G-HPI and G-PD. G-HPI therefore adds a much larger provider image and
 dependency surface without changing the observed output or improving speed.
+The pairwise projection-SHA comparison backing this claim is archived at
+`.evaluation/gpu-spike/2026-08-24/provider-comparison-gpd-hpi-v1/score.json`
+(added at cold review, PR #95 — the claim was previously re-derivable but
+not archived; the reviewer independently reproduced it before the artifact
+existed).
 
 Official PaddleX documentation says its CUDA 12.6 HPI package does not support
 TensorRT; the documented TensorRT route is CUDA 11.8, cuDNN 8.9, and TensorRT
@@ -246,7 +290,7 @@ the ledger rather than being discarded.
 | same-treatment stability | PASS for serial controls; FAIL for Tiny B8/C8 and Tiny B1/C8 |
 | batch-companion/output equivalence | FAIL for every faster batched arm |
 | prepared-image serial speed | Tiny 1.71x; Small 1.13x; not end to end, and neither reaches the 2x optional-fast-lane gate |
-| A2 authorization | NO: no correct engine advances from M1.5 |
+| A2 authorization | NO — Small mechanically (fails equivalence + serial bar); Tiny by the dated discretionary stop above (ceremony unfunded, batching gain fails its own stability gate) |
 | candidate holdout | correctly unopened |
 | production change | NO |
 
@@ -269,9 +313,16 @@ visible failed provider calls, the attributable resource-time estimate is
 about **$0.81**. It is not an isolated invoice. The two TensorRT imports made
 zero compute calls; any image-build charge is unknown and excluded.
 
+Cleanup (operator-attested): every GPU-spike Modal app was stopped at
+write-up time and `modal app list` showed zero running or deployed
+gpu-spike apps; no automated post-drain probe was run for these
+benchmark-only apps.
+
 ## Unmeasured and next trigger
 
 - TensorRT/FP16 throughput and numerics are unmeasured.
+- The §6 M1.5 optimistic end-to-end bound was never computed — the stage
+  attribution it requires was not instrumented in these arms.
 - End-to-end Node A2 overlap, sustained 1,000-page operation, failure
   injection, billed cost, 1-to-4 GPU scale, and the candidate holdout were not
   run because no M1.5 treatment advanced.

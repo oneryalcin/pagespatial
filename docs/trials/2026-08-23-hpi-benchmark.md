@@ -26,6 +26,17 @@
 > compatible TensorRT/ORT, effective recognition batching, CPU/GPU overlap,
 > and L4 were untested. The dated follow-up contract is
 > [`docs/design/2026-08-24-gpu-ocr-spike.md`](../design/2026-08-24-gpu-ocr-spike.md).
+>
+> **Edited-in-place disclosure (2026-08-24, cold review PR #95):** besides
+> this block, two passages below were rewritten in place rather than
+> annotated, against the pure-addition rule. The original wording, for the
+> record: (1) Modal-cost paragraph — *"The GPU-vs-HPI comparison, by
+> contrast, is same-container and clean — the GPU-dead conclusion does not
+> depend on any cross-machine inference."* (2) Gate verdict — *"…and the
+> GPU arm is dead on this workload: a Tesla T4 (952 ms) buys nothing over
+> OpenVINO on 4 vCPUs."* Both statements are retracted per this
+> correction; the replacement text at those locations states the narrowed
+> claims.
 
 ## Question
 
