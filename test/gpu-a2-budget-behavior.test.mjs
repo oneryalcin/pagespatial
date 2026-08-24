@@ -18,6 +18,7 @@ import importlib.util,json,multiprocessing,sys
 from pathlib import Path
 spec=importlib.util.spec_from_file_location("budget",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 m.current_profile=lambda:"desia"; m.active_experiment_apps=lambda:[]; m.billing_rows=lambda:[]
+m.now_utc=lambda:m.datetime(2026,8,24,12,0,tzinfo=m.timezone.utc)
 def worker(q):
   try: q.put(["ok",m.reserve(Path(sys.argv[2]),"E1-CPU")["id"]])
   except Exception as e: q.put(["error",str(e)])
@@ -38,6 +39,7 @@ import importlib.util,json,sys
 from pathlib import Path
 spec=importlib.util.spec_from_file_location("budget",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 m.current_profile=lambda:"desia"; m.active_experiment_apps=lambda:[]; m.billing_rows=lambda:[]
+m.now_utc=lambda:m.datetime(2026,8,24,12,0,tzinfo=m.timezone.utc)
 p=Path(sys.argv[2]); r=m.reserve(p,"E1-GPU"); errors=[]
 try: m.validate_reservation(p,r["id"],"E1-CPU")
 except Exception as e: errors.append(str(e))
@@ -59,6 +61,7 @@ import importlib.util,json,sys
 from pathlib import Path
 spec=importlib.util.spec_from_file_location("budget",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 m.current_profile=lambda:"desia"; m.active_experiment_apps=lambda:[]; m.billing_rows=lambda:[]
+m.now_utc=lambda:m.datetime(2026,8,24,12,0,tzinfo=m.timezone.utc)
 p=Path(sys.argv[2]); r=m.reserve(p,"E1-GPU"); m.validate_reservation(p,r["id"],"E1-GPU")
 closed=m.complete_without_app(p,r["id"],"CLI rejected arguments before app creation")
 next_reservation=m.reserve(p,"E1-CPU")
@@ -71,4 +74,19 @@ print(json.dumps({"closed":closed,"next":next_reservation,"exposure":m.reserved_
   assert.match(result.closed.noAppReason, /before app creation/u);
   assert.equal(result.next.status, 'reserved');
   assert.equal(result.exposure, 6);
+});
+
+test('expired authorization refuses a new reservation', () => {
+  const ledger = join(mkdtempSync(join(tmpdir(), 'gpu-a2-expired-')), 'ledger.json');
+  const code = String.raw`
+import importlib.util,json,sys
+from pathlib import Path
+spec=importlib.util.spec_from_file_location("budget",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.current_profile=lambda:"desia"; m.active_experiment_apps=lambda:[]; m.billing_rows=lambda:[]
+m.now_utc=lambda:m.datetime(2026,8,25,0,0,tzinfo=m.timezone.utc)
+try: m.reserve(Path(sys.argv[2]),"E1-GPU")
+except Exception as e: print(json.dumps({"error":str(e)}))
+`;
+  const result = runPython(code, ledger);
+  assert.match(result.error, /authorization has expired/u);
 });

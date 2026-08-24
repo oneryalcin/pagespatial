@@ -1,7 +1,7 @@
 # Design: PP-OCRv6 GPU throughput spike
 
-**Status:** merged-output safety is complete; bounded A2 E1 is authorized and
-not yet measured; no production GPU path is adopted
+**Status:** merged-output safety, bounded A2 E1, A3 stage profiling, and the
+single paired split treatment are complete; no production GPU path is adopted
 
 **Date:** 2026-08-24
 
@@ -115,8 +115,9 @@ adopted path.
 The M1.5 harness's historical `C` field grouped same-shaped pages into one
 list-input `predict()` call. It did not implement the design's concurrent
 producer window. Those results are page-list batching evidence, not page
-concurrency evidence. True producer/owner overlap remains an A2 question and
-was not built because no correct engine advanced.
+concurrency evidence. At that pre-A2 point, true producer/owner overlap was
+unmeasured. The owner continuation below later built and measured it without
+creating a production path.
 
 The governing rules are [measure, then trust](../principles.md#8-measured-then-trusted)
 and [use ruthless simplicity with explicit composition](../principles.md#9-ruthless-simplicity-explicit-composition).

@@ -912,6 +912,11 @@ could still fuse work or issue asynchronous CUDA operations, but this result
 removes the claim that a small host-side prepare/backend/decode conveyor is the
 missing optimization. No further paid GPU work is authorized by this trial.
 
+Closure: commit `4a4e042` removes both executable switches and the split
+adapter from the branch tip. The Python-visible stage profiler, this result,
+the compact evidence record, and the historical runnable commits remain for
+audit. There is no supported switch that can reactivate the rejected path.
+
 At close, Modal reported USD 4.81243887 posted for PageSpatial in the UTC
 billing day. The conservative ledger retained USD 70.25 of completed-unposted
 reservation exposure, including the USD 2.75 bound for this arm; the actual

@@ -106,6 +106,11 @@ def posted_spend(rows: list[dict[str, Any]]) -> float:
     return sum(float(row["cost"]) for row in rows)
 
 
+def now_utc() -> datetime:
+    """Clock seam for deterministic tests; production uses the real UTC clock."""
+    return datetime.now(timezone.utc)
+
+
 def load_ledger(path: Path) -> dict[str, Any]:
     if path.exists():
         ledger = json.loads(path.read_text())
@@ -169,7 +174,7 @@ def reserve(path: Path, stage: str) -> dict[str, Any]:
     worst_case_usd = float(bound["worstCaseUsd"])
     if current_profile() != REQUIRED_PROFILE:
         raise RuntimeError(f"Modal profile must be {REQUIRED_PROFILE!r}")
-    if datetime.now(timezone.utc) >= AUTHORIZATION_END_UTC:
+    if now_utc() >= AUTHORIZATION_END_UTC:
         raise RuntimeError("2026-08-24 Europe/London experiment authorization has expired")
     active = active_experiment_apps()
     if active:
@@ -250,7 +255,7 @@ def complete_without_app(path: Path, reservation_id: str, reason: str) -> dict[s
 def validate_reservation(path: Path, reservation_id: str, stage: str) -> dict[str, Any]:
     if current_profile() != REQUIRED_PROFILE:
         raise RuntimeError(f"Modal profile must be {REQUIRED_PROFILE!r}")
-    if datetime.now(timezone.utc) >= AUTHORIZATION_END_UTC:
+    if now_utc() >= AUTHORIZATION_END_UTC:
         raise RuntimeError("2026-08-24 Europe/London experiment authorization has expired")
     with ledger_lock(path):
         ledger = load_ledger(path)
