@@ -1,0 +1,82 @@
+diff --git a/deploy/ultra-infer/ultra_infer/runtime/backends/tensorrt/trt_backend.cc b/deploy/ultra-infer/ultra_infer/runtime/backends/tensorrt/trt_backend.cc
+index f441eea7..ecbdf9d5 100644
+--- a/deploy/ultra-infer/ultra_infer/runtime/backends/tensorrt/trt_backend.cc
++++ b/deploy/ultra-infer/ultra_infer/runtime/backends/tensorrt/trt_backend.cc
+@@ -68,15 +68,15 @@ bool TrtBackend::LoadTrtCache(const std::string &trt_engine_file) {
+     return false;
+   }
+ 
+-  FDUniquePtr<nvinfer1::IRuntime> runtime{
++  runtime_ = FDUniquePtr<nvinfer1::IRuntime>{
+       nvinfer1::createInferRuntime(*FDTrtLogger::Get())};
+-  if (!runtime) {
++  if (!runtime_) {
+     FDERROR << "Failed to call createInferRuntime()." << std::endl;
+     return false;
+   }
+   engine_ = std::shared_ptr<nvinfer1::ICudaEngine>(
+-      runtime->deserializeCudaEngine(engine_buffer.data(),
+-                                     engine_buffer.size()),
++      runtime_->deserializeCudaEngine(engine_buffer.data(),
++                                      engine_buffer.size()),
+       FDInferDeleter());
+   if (!engine_) {
+     FDERROR << "Failed to call deserializeCudaEngine()." << std::endl;
+@@ -571,10 +571,9 @@ bool TrtBackend::BuildTrtEngine() {
+ 
+   FDINFO << "Start to building TensorRT Engine..." << std::endl;
+ 
+-  if (context_) {
+-    context_.reset();
+-    engine_.reset();
+-  }
++  context_.reset();
++  engine_.reset();
++  runtime_.reset();
+   if (option_.max_batch_size >= 1) {
+     builder_->setMaxBatchSize(option_.max_batch_size);
+   }
+@@ -637,15 +636,15 @@ bool TrtBackend::BuildTrtEngine() {
+     return false;
+   }
+ 
+-  FDUniquePtr<nvinfer1::IRuntime> runtime{
++  runtime_ = FDUniquePtr<nvinfer1::IRuntime>{
+       nvinfer1::createInferRuntime(*FDTrtLogger::Get())};
+-  if (!runtime) {
++  if (!runtime_) {
+     FDERROR << "Failed to call createInferRuntime()." << std::endl;
+     return false;
+   }
+ 
+   engine_ = std::shared_ptr<nvinfer1::ICudaEngine>(
+-      runtime->deserializeCudaEngine(plan->data(), plan->size()),
++      runtime_->deserializeCudaEngine(plan->data(), plan->size()),
+       FDInferDeleter());
+   if (!engine_) {
+     FDERROR << "Failed to call deserializeCudaEngine()." << std::endl;
+diff --git a/deploy/ultra-infer/ultra_infer/runtime/backends/tensorrt/trt_backend.h b/deploy/ultra-infer/ultra_infer/runtime/backends/tensorrt/trt_backend.h
+index 544305f3..189eae54 100644
+--- a/deploy/ultra-infer/ultra_infer/runtime/backends/tensorrt/trt_backend.h
++++ b/deploy/ultra-infer/ultra_infer/runtime/backends/tensorrt/trt_backend.h
+@@ -69,7 +69,8 @@ FDDataType GetFDDataType(const nvinfer1::DataType &dtype);
+ 
+ class TrtBackend : public BaseBackend {
+ public:
+-  TrtBackend() : engine_(nullptr), context_(nullptr) {}
++  TrtBackend()
++      : runtime_(nullptr), engine_(nullptr), context_(nullptr) {}
+ 
+   bool Init(const RuntimeOption &runtime_option);
+   bool Infer(std::vector<FDTensor> &inputs, std::vector<FDTensor> *outputs,
+@@ -101,6 +102,10 @@ private:
+   bool InitFromOnnx(const std::string &model_buffer,
+                     const TrtBackendOption &option = TrtBackendOption());
+ 
++  // TensorRT requires IRuntime to outlive every ICudaEngine deserialized by
++  // that runtime. Declare it before engine_ and context_ so reverse member
++  // destruction releases the context, then engine, then runtime.
++  FDUniquePtr<nvinfer1::IRuntime> runtime_;
+   TrtBackendOption option_;
+   std::shared_ptr<nvinfer1::ICudaEngine> engine_;
+   std::shared_ptr<nvinfer1::IExecutionContext> context_;
