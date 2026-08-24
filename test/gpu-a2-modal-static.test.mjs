@@ -49,3 +49,10 @@ test('A2 image pins Node archive hash and uses uv-based TensorRT image', () => {
   assert.match(source, /sha256sum -c/u);
   assert.match(source, /trt_image/u);
 });
+
+test('A2 image installs and loads the Linux native producer bindings before runtime', () => {
+  assert.match(source, /@firecrawl\/pdf-inspector-linux-x64-gnu@1\.14\.2/u);
+  assert.match(source, /@napi-rs\/canvas-linux-x64-gnu@0\.1\.100/u);
+  assert.match(source, /require\('@firecrawl\/pdf-inspector'\)/u);
+  assert.match(source, /require\('@napi-rs\/canvas'\)/u);
+});

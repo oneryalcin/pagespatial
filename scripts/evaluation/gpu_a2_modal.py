@@ -166,6 +166,23 @@ if modal.is_local():
         .add_local_file(str(REPO_ROOT / "package.json"), "/app/package.json", copy=True)
         .add_local_file(str(REPO_ROOT / "package-lock.json"), "/app/package-lock.json", copy=True)
         .run_commands("cd /app && PATH=/opt/node/bin:$PATH /opt/node/bin/npm ci")
+        # npm can omit platform packages that arrive through optionalDependencies
+        # (npm/cli#4828). The A2 producer needs both native bindings on Linux;
+        # install the lockfile-pinned artifacts explicitly and prove they load
+        # while building the image, before an L4 is allocated for a run.
+        .run_commands(
+            (
+                "cd /app && PATH=/opt/node/bin:$PATH /opt/node/bin/npm install "
+                "--no-save --package-lock=false "
+                "@firecrawl/pdf-inspector-linux-x64-gnu@1.14.2 "
+                "@napi-rs/canvas-linux-x64-gnu@0.1.100"
+            ),
+            (
+                "cd /app && /opt/node/bin/node -e \""
+                "require('@firecrawl/pdf-inspector'); "
+                "require('@napi-rs/canvas')\""
+            ),
+        )
         .add_local_file(str(REPO_ROOT / "tsconfig.json"), "/app/tsconfig.json", copy=True)
         .add_local_dir(str(REPO_ROOT / "src"), "/app/src", copy=True)
         .add_local_dir(str(REPO_ROOT / "schemas"), "/app/schemas", copy=True)
