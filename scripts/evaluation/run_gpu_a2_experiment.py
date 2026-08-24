@@ -160,10 +160,14 @@ def run_gpu(
     out_dir: Path,
     native_evidence: Path,
     recognition_batch_size: int,
+    inference_owners: int,
 ) -> tuple[str, str, Path]:
     reservation = reserve(ledger, "E1-GPU")
     suffix = f"{time.strftime('%Y%m%d%H%M%S', time.gmtime())}-{uuid.uuid4().hex[:6]}"
-    app_name = f"pagespatial-gpu-a2-e1-gpu-b{recognition_batch_size}-{suffix}"
+    app_name = (
+        f"pagespatial-gpu-a2-e1-gpu-b{recognition_batch_size}"
+        f"o{inference_owners}-{suffix}"
+    )
     app_id = ""
     evidence_root = out_dir / "gpu"
     before = {path for path in evidence_root.glob("*") if path.is_dir()}
@@ -174,6 +178,7 @@ def run_gpu(
             "PAGESPATIAL_A2_LEDGER": str(ledger),
             "PAGESPATIAL_A2_APP_NAME": app_name,
             "PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE": str(recognition_batch_size),
+            "PAGESPATIAL_A2_INFERENCE_OWNERS": str(inference_owners),
         }
         run(
             [
@@ -346,6 +351,13 @@ def main() -> None:
         default=1,
         help="TensorRT recognition crop batch; all other A2 inputs remain fixed",
     )
+    parser.add_argument(
+        "--inference-owners",
+        type=int,
+        choices=(1, 2),
+        default=1,
+        help="independent monolithic TensorRT owners sharing one L4",
+    )
     args = parser.parse_args()
     revision = source_revision()
     if not WORKLOAD.exists():
@@ -362,6 +374,7 @@ def main() -> None:
         args.out_dir,
         native_evidence,
         args.recognition_batch_size,
+        args.inference_owners,
     )
     decision = score_e1(cpu[2], gpu[2], args.out_dir, args.adjudications)
     print(json.dumps({

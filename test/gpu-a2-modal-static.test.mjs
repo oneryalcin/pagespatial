@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../scripts/evaluation/gpu_a2_modal.py', import.meta.url), 'utf8');
 const runnerSource = readFileSync(new URL('../scripts/evaluation/run_gpu_a2_experiment.py', import.meta.url), 'utf8');
 
-test('A2 Modal arm is one bounded L4 owner with no retries', () => {
+test('A2 Modal arm is one bounded L4 container with no retries', () => {
   assert.match(source, /gpu=GPU_TYPE/u);
   assert.match(source, /max_containers=1/u);
   assert.match(source, /min_containers=0/u);
@@ -24,6 +24,9 @@ test('A2 Modal arm is only Small FP32 with a bounded recognition batch', () => {
   assert.match(source, /PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE/u);
   assert.match(source, /not in \{1, 4, 8\}/u);
   assert.match(source, /"recognitionBatchSize": RECOGNITION_BATCH_SIZE/u);
+  assert.match(source, /PAGESPATIAL_A2_INFERENCE_OWNERS/u);
+  assert.match(source, /INFERENCE_OWNERS not in \{1, 2\}/u);
+  assert.match(source, /"inferenceOwners": INFERENCE_OWNERS/u);
   assert.match(source, /\.env\([\s\S]*PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE/u);
   assert.match(source, /recognition batch mismatch before inference/u);
   assert.match(source, /remote arm mismatch/u);
@@ -33,8 +36,8 @@ test('A2 Modal arm is only Small FP32 with a bounded recognition batch', () => {
 });
 
 test('A2 records effective batches and isolates response-boundary cost', () => {
-  const liveConfigCheck = source.indexOf('self.backend_attrs = _walk_interesting_attrs(self.ocr)');
-  const probeInstall = source.indexOf('self.batch_observations = _instrument_batch_samplers(');
+  const liveConfigCheck = source.indexOf('attrs = _walk_interesting_attrs(ocr)');
+  const probeInstall = source.indexOf('_instrument_batch_samplers(ocr, ARM["pageBatchSize"])');
   assert.ok(liveConfigCheck >= 0 && probeInstall > liveConfigCheck);
   assert.match(source, /_instrument_batch_samplers/u);
   assert.match(source, /"batchObservations"/u);
@@ -44,6 +47,14 @@ test('A2 records effective batches and isolates response-boundary cost', () => {
   assert.match(source, /byteReencodeMatch/u);
   assert.match(source, /object response probe semantic mismatch/u);
   assert.doesNotMatch(source, /tiny response probe identity mismatch/u);
+});
+
+test('A2 concurrent-owner arm attests each owner before bounded overlap', () => {
+  assert.match(source, /self\.backend_attestations = \[None\] \* INFERENCE_OWNERS/u);
+  assert.match(source, /ThreadPoolExecutor\(max_workers=INFERENCE_OWNERS\)/u);
+  assert.match(source, /available_owners: queue\.Queue\[int\]/u);
+  assert.match(source, /if value is None/u);
+  assert.match(source, /"backendAttestations": self\.backend_attestations/u);
 });
 
 test('A2 runner enforces spend and repeat bounds before remote work', () => {
@@ -57,6 +68,8 @@ test('A2 runner enforces spend and repeat bounds before remote work', () => {
   assert.match(source, /MAX_RESULT_BYTES = 64 \* 1024 \* 1024/u);
   assert.match(source, /ResultTooLarge/u);
   assert.match(runnerSource, /"modal", "run", "--detach"/u);
+  assert.match(runnerSource, /--inference-owners/u);
+  assert.match(runnerSource, /PAGESPATIAL_A2_INFERENCE_OWNERS/u);
 });
 
 test('A2 controller owns and drains the complete process group', () => {

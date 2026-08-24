@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Bounded end-to-end A2 benchmark: one Small FP32 TensorRT owner.
+"""Bounded end-to-end A2 benchmark: one or two Small FP32 TensorRT owners.
 
 This is an evaluation adapter, not the production Modal deployment. Four Node
 producer processes execute the real render/native stages and feed this class's
-single persistent GPU object through a bounded JSONL queue. The Node controller
+bounded persistent GPU objects through a bounded JSONL queue. The Node controller
 then runs the real PageSpatial assembly stage.
 
 Typical bounded run:
@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import queue
 import signal
 import shutil
 import statistics
@@ -26,7 +27,9 @@ import subprocess
 import sys
 import tempfile
 import time
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -106,6 +109,9 @@ RECOGNITION_BATCH_SIZE = int(
 )
 if RECOGNITION_BATCH_SIZE not in {1, 4, 8}:
     raise ValueError("PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE must be 1, 4, or 8")
+INFERENCE_OWNERS = int(os.environ.get("PAGESPATIAL_A2_INFERENCE_OWNERS", "1"))
+if INFERENCE_OWNERS not in {1, 2}:
+    raise ValueError("PAGESPATIAL_A2_INFERENCE_OWNERS must be 1 or 2")
 
 if modal.is_local():
     REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -197,6 +203,7 @@ if modal.is_local():
                 "PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE": str(
                     RECOGNITION_BATCH_SIZE
                 ),
+                "PAGESPATIAL_A2_INFERENCE_OWNERS": str(INFERENCE_OWNERS),
             }
         )
     )
@@ -205,7 +212,10 @@ else:
 
 
 ARM = {
-    "name": f"g-trt-small-fp32-a2-b{RECOGNITION_BATCH_SIZE}c4",
+    "name": (
+        f"g-trt-small-fp32-a2-b{RECOGNITION_BATCH_SIZE}"
+        f"c4o{INFERENCE_OWNERS}"
+    ),
     "tier": "small",
     "device": "gpu:0",
     "runtime": "hpi-ort-trt",
@@ -214,6 +224,7 @@ ARM = {
     "recognitionBatchSize": RECOGNITION_BATCH_SIZE,
     "pageBatchSize": 1,
     "producerCount": 4,
+    "inferenceOwners": INFERENCE_OWNERS,
     "requiredBackendTokens": ["onnxruntime", "tensorrt"],
     "providerLayout": {
         "textDetection": "onnxruntime",
@@ -318,42 +329,129 @@ class GpuA2Container:
             shutil.copytree(source_tier, private_tier)
         harness.MODEL_ROOT = self.private_model_root
 
-        started = time.monotonic()
-        with _capture_native_output() as log_path:
-            self.ocr = _construct_ocr(ARM)
-        native_text = log_path.read_text(errors="replace")
-        log_path.unlink(missing_ok=True)
-        self.owner_init_s = time.monotonic() - started
         self.device_truth = _device_truth()
-        self.backend_attrs = _walk_interesting_attrs(self.ocr)
-        effective_recognition_batch = self.backend_attrs.get(
-            "ocr.paddlex_pipeline._pipeline.text_rec_model.batch_sampler.batch_size"
-        )
-        if effective_recognition_batch != ARM["recognitionBatchSize"]:
-            raise RuntimeError(
-                "recognition batch mismatch before inference: "
-                f"requested {ARM['recognitionBatchSize']}, "
-                f"effective {effective_recognition_batch!r}"
+        all_started = time.monotonic()
+        self.ocrs = []
+        self.owner_init_per_owner_s = []
+        self.startup_backend_attrs_by_owner = []
+        self.backend_attrs_by_owner = []
+        self.backend_logs_by_owner = []
+        self.batch_observations_by_owner = []
+        for owner_index in range(INFERENCE_OWNERS):
+            owner_started = time.monotonic()
+            with _capture_native_output() as log_path:
+                ocr = _construct_ocr(ARM)
+            native_text = log_path.read_text(errors="replace")
+            log_path.unlink(missing_ok=True)
+            attrs = _walk_interesting_attrs(ocr)
+            effective_recognition_batch = attrs.get(
+                "ocr.paddlex_pipeline._pipeline.text_rec_model.batch_sampler.batch_size"
             )
-        self.startup_backend_attrs = dict(self.backend_attrs)
-        # Capture the unwrapped live configuration before installing probes.
-        # The probe delegates to the real sampler but is intentionally not a
-        # PaddleX type, so the generic attribute walker will not descend into it.
-        self.batch_observations = _instrument_batch_samplers(
-            self.ocr, ARM["pageBatchSize"]
-        )
-        self.backend_logs = _backend_lines(native_text)
+            if effective_recognition_batch != ARM["recognitionBatchSize"]:
+                raise RuntimeError(
+                    f"recognition batch mismatch before inference for owner {owner_index}: "
+                    f"requested {ARM['recognitionBatchSize']}, "
+                    f"effective {effective_recognition_batch!r}"
+                )
+            self.ocrs.append(ocr)
+            self.owner_init_per_owner_s.append(time.monotonic() - owner_started)
+            self.startup_backend_attrs_by_owner.append(dict(attrs))
+            self.backend_attrs_by_owner.append(attrs)
+            self.backend_logs_by_owner.append(_backend_lines(native_text))
+            # Capture the unwrapped live configuration before installing probes.
+            self.batch_observations_by_owner.append(
+                _instrument_batch_samplers(ocr, ARM["pageBatchSize"])
+            )
+        self.owner_init_s = time.monotonic() - all_started
         # Provider construction is lazy. Final attestation must include the
-        # first REAL workload inference; construction-only attributes are not
+        # first real workload inference for every owner; construction-only attributes are not
         # accepted as proof that TensorRT actually served a page.
-        self.backend_attestation = None
-        self.backend_mutation = None
+        self.backend_attestations = [None] * INFERENCE_OWNERS
+        self.backend_mutations = [None] * INFERENCE_OWNERS
         self.versions = _installed_versions()
         self.model_verification = json.loads(
             (REMOTE_ROOT / "model-verification.json").read_text()
         )["small"]
         self.container_cold = True
-        self.first_inference_ms: float | None = None
+        self.first_inference_ms_by_owner: list[float | None] = [None] * INFERENCE_OWNERS
+
+    def _predict_page(
+        self, owner_index: int, message: dict[str, Any], *, attest: bool
+    ) -> tuple[dict[str, Any], float]:
+        queue_wait_ms = max(
+            0.0,
+            (time.monotonic_ns() - int(message["producedAtNs"])) / 1_000_000,
+        )
+        import cv2
+
+        image = cv2.imread(message["pngPath"], cv2.IMREAD_COLOR)
+        if image is None:
+            raise RuntimeError(
+                f"unreadable controller PNG for page {message['pageNumber']}"
+            )
+        inference_started = time.monotonic()
+        if attest:
+            with _capture_native_output() as inference_log_path:
+                results = list(self.ocrs[owner_index].predict(image))
+            inference_text = inference_log_path.read_text(errors="replace")
+            inference_log_path.unlink(missing_ok=True)
+            self.backend_logs_by_owner[owner_index] = [
+                *self.backend_logs_by_owner[owner_index],
+                *_backend_lines(inference_text),
+            ]
+            self.backend_attrs_by_owner[owner_index] = {
+                **self.startup_backend_attrs_by_owner[owner_index],
+                **_walk_interesting_attrs(self.ocrs[owner_index]),
+            }
+            attestation = _attest_backend(
+                ARM,
+                self.device_truth,
+                self.backend_attrs_by_owner[owner_index],
+                self.backend_logs_by_owner[owner_index],
+            )
+            if not attestation["pass"]:
+                raise RuntimeError(
+                    f"backend attestation failed for owner {owner_index}: "
+                    + "; ".join(attestation["reasons"])
+                )
+            missing_provider = _attest_backend(ARM, self.device_truth, {}, [])
+            wrong_device = _attest_backend(
+                ARM,
+                {
+                    **self.device_truth,
+                    "paddleDevice": "cpu",
+                    "cudaCompiled": False,
+                    "nvidiaSmiIdentity": [],
+                },
+                self.backend_attrs_by_owner[owner_index],
+                self.backend_logs_by_owner[owner_index],
+            )
+            if missing_provider["pass"] or wrong_device["pass"]:
+                raise RuntimeError("backend-attestation mutation unexpectedly passed")
+            self.backend_attestations[owner_index] = attestation
+            self.backend_mutations[owner_index] = {
+                "missingProviderEvidence": {
+                    "pass": True,
+                    "reasons": missing_provider["reasons"],
+                },
+                "wrongDevice": {"pass": True, "reasons": wrong_device["reasons"]},
+            }
+        else:
+            results = list(self.ocrs[owner_index].predict(image))
+        inference_ms = (time.monotonic() - inference_started) * 1000
+        if self.first_inference_ms_by_owner[owner_index] is None:
+            self.first_inference_ms_by_owner[owner_index] = inference_ms
+        return (
+            {
+                "kind": "ocr-result",
+                "id": message["id"],
+                "lines": _paddle_lines(results),
+                "inferenceMs": inference_ms,
+                "queueWaitMs": queue_wait_ms,
+                "ownerIndex": owner_index,
+            },
+            inference_ms,
+        )
 
     @modal.method()
     def parse_document(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -394,7 +492,9 @@ class GpuA2Container:
         native_evidence_path.write_bytes(native_evidence_bytes)
         sampler = _GpuSampler()
         sampler.start()
-        batch_observation_start = len(self.batch_observations)
+        batch_observation_starts = [
+            len(items) for items in self.batch_observations_by_owner
+        ]
         controller = None
         ocr_calls = 0
         try:
@@ -420,89 +520,85 @@ class GpuA2Container:
                 )
                 assert controller.stdin is not None and controller.stdout is not None
                 done = False
-                for raw in controller.stdout:
-                    message = json.loads(raw)
-                    if message.get("kind") == "fatal":
-                        raise RuntimeError(f"A2 controller failed: {message.get('error')}")
-                    if message.get("kind") == "done":
-                        done = True
-                        break
-                    if message.get("kind") != "ocr":
-                        raise RuntimeError(f"unknown controller message: {message.get('kind')}")
-                    received_ns = time.monotonic_ns()
-                    queue_wait_ms = max(
-                        0.0, (received_ns - int(message["producedAtNs"])) / 1_000_000
-                    )
-                    import cv2
+                available_owners: queue.Queue[int] = queue.Queue()
+                for owner_index in range(INFERENCE_OWNERS):
+                    available_owners.put(owner_index)
+                write_lock = threading.Lock()
+                state_lock = threading.Lock()
+                async_errors: list[BaseException] = []
 
-                    image = cv2.imread(message["pngPath"], cv2.IMREAD_COLOR)
-                    if image is None:
-                        raise RuntimeError(f"unreadable controller PNG for page {message['pageNumber']}")
-                    inference_started = time.monotonic()
-                    if self.backend_attestation is None:
-                        with _capture_native_output() as inference_log_path:
-                            results = list(self.ocr.predict(image))
-                        inference_text = inference_log_path.read_text(errors="replace")
-                        inference_log_path.unlink(missing_ok=True)
-                        self.backend_logs = [
-                            *self.backend_logs,
-                            *_backend_lines(inference_text),
-                        ]
-                        self.backend_attrs = {
-                            **self.startup_backend_attrs,
-                            **_walk_interesting_attrs(self.ocr),
-                        }
-                        self.backend_attestation = _attest_backend(
-                            ARM, self.device_truth, self.backend_attrs, self.backend_logs
-                        )
-                        if not self.backend_attestation["pass"]:
+                def record_and_write(response: dict[str, Any], inference_ms: float) -> None:
+                    nonlocal ocr_calls, method_first_inference_ms
+                    with state_lock:
+                        ocr_calls += 1
+                        if method_first_inference_ms is None:
+                            method_first_inference_ms = inference_ms
+                    with write_lock:
+                        controller.stdin.write(json.dumps(response) + "\n")
+                        controller.stdin.flush()
+
+                def run_available(message: dict[str, Any]) -> tuple[dict[str, Any], float]:
+                    owner_index = available_owners.get()
+                    try:
+                        return self._predict_page(owner_index, message, attest=False)
+                    finally:
+                        available_owners.put(owner_index)
+
+                def finish_async(future: Any) -> None:
+                    try:
+                        response, inference_ms = future.result()
+                        record_and_write(response, inference_ms)
+                    except BaseException as error:
+                        with state_lock:
+                            async_errors.append(error)
+                        try:
+                            with write_lock:
+                                controller.stdin.write(
+                                    json.dumps(
+                                        {"kind": "fatal", "error": f"GPU owner failed: {error}"}
+                                    )
+                                    + "\n"
+                                )
+                                controller.stdin.flush()
+                        except Exception:
+                            pass
+
+                with ThreadPoolExecutor(max_workers=INFERENCE_OWNERS) as executor:
+                    for raw in controller.stdout:
+                        message = json.loads(raw)
+                        if message.get("kind") == "fatal":
+                            detail = message.get("error")
+                            if async_errors:
+                                detail = f"{detail}; owner error: {async_errors[0]}"
+                            raise RuntimeError(f"A2 controller failed: {detail}")
+                        if message.get("kind") == "done":
+                            done = True
+                            break
+                        if message.get("kind") != "ocr":
                             raise RuntimeError(
-                                "backend attestation failed after first inference: "
-                                + "; ".join(self.backend_attestation["reasons"])
+                                f"unknown controller message: {message.get('kind')}"
                             )
-                        missing_provider = _attest_backend(ARM, self.device_truth, {}, [])
-                        wrong_device = _attest_backend(
-                            ARM,
-                            {
-                                **self.device_truth,
-                                "paddleDevice": "cpu",
-                                "cudaCompiled": False,
-                                "nvidiaSmiIdentity": [],
-                            },
-                            self.backend_attrs,
-                            self.backend_logs,
+                        unattested = next(
+                            (
+                                index
+                                for index, value in enumerate(self.backend_attestations)
+                                if value is None
+                            ),
+                            None,
                         )
-                        if missing_provider["pass"] or wrong_device["pass"]:
-                            raise RuntimeError("backend-attestation mutation unexpectedly passed")
-                        self.backend_mutation = {
-                            "missingProviderEvidence": {
-                                "pass": True,
-                                "reasons": missing_provider["reasons"],
-                            },
-                            "wrongDevice": {
-                                "pass": True,
-                                "reasons": wrong_device["reasons"],
-                            },
-                        }
-                    else:
-                        results = list(self.ocr.predict(image))
-                    inference_ms = (time.monotonic() - inference_started) * 1000
-                    ocr_calls += 1
-                    if method_first_inference_ms is None:
-                        method_first_inference_ms = inference_ms
-                    if self.first_inference_ms is None:
-                        self.first_inference_ms = inference_ms
-                    response = {
-                        "kind": "ocr-result",
-                        "id": message["id"],
-                        "lines": _paddle_lines(results),
-                        "inferenceMs": inference_ms,
-                        "queueWaitMs": queue_wait_ms,
-                    }
-                    controller.stdin.write(json.dumps(response) + "\n")
-                    controller.stdin.flush()
+                        if unattested is not None:
+                            response, inference_ms = self._predict_page(
+                                unattested, message, attest=True
+                            )
+                            record_and_write(response, inference_ms)
+                        else:
+                            executor.submit(run_available, message).add_done_callback(
+                                finish_async
+                            )
                 if not done:
                     raise RuntimeError("A2 controller exited without a terminal result")
+                if async_errors:
+                    raise RuntimeError(f"GPU owner failed: {async_errors[0]}")
                 controller.stdin.close()
                 exit_code = controller.wait(timeout=60)
                 if exit_code != 0:
@@ -518,12 +614,17 @@ class GpuA2Container:
                         "physicalCpuCores": CPU_CORES,
                         "memoryMiB": MEMORY_MIB,
                         "gpu": GPU_TYPE,
+                        "inferenceOwners": INFERENCE_OWNERS,
                     },
                     "method": {
                         "ownerPid": os.getpid(),
                         "containerCold": was_cold,
                         "ownerInitS": self.owner_init_s if was_cold else 0,
-                        "ownerFirstInferenceMs": self.first_inference_ms,
+                        "ownerInitPerOwnerS": (
+                            self.owner_init_per_owner_s if was_cold else []
+                        ),
+                        "ownerFirstInferenceMs": self.first_inference_ms_by_owner[0],
+                        "ownerFirstInferenceMsByOwner": self.first_inference_ms_by_owner,
                         "methodFirstInferenceMs": method_first_inference_ms,
                         "totalMethodMs": (time.monotonic() - method_started) * 1000,
                         "ocrCalls": ocr_calls,
@@ -532,17 +633,27 @@ class GpuA2Container:
                     "versions": self.versions,
                     "modelVerification": self.model_verification,
                     "deviceTruth": self.device_truth,
-                    "backendAttrs": self.backend_attrs,
-                    "backendLogLines": self.backend_logs,
-                    "backendAttestation": self.backend_attestation,
-                    "backendMutationTests": self.backend_mutation,
+                    "backendAttrs": self.backend_attrs_by_owner[0],
+                    "backendAttrsByOwner": self.backend_attrs_by_owner,
+                    "backendLogLines": self.backend_logs_by_owner[0],
+                    "backendLogLinesByOwner": self.backend_logs_by_owner,
+                    "backendAttestation": self.backend_attestations[0],
+                    "backendAttestations": self.backend_attestations,
+                    "backendMutationTests": self.backend_mutations[0],
+                    "backendMutationTestsByOwner": self.backend_mutations,
                     "ultraInferPatch": {
                         "sourceRevision": ULTRA_INFER_SOURCE_REV,
                         "patchSha256": ULTRA_INFER_PATCH_SHA256,
                     },
                     "gpuTelemetry": _numeric_gpu_summary(sampler.samples),
-                    "batchObservations": self.batch_observations[
-                        batch_observation_start:
+                    "batchObservations": [
+                        {**observation, "ownerIndex": owner_index}
+                        for owner_index, observations in enumerate(
+                            self.batch_observations_by_owner
+                        )
+                        for observation in observations[
+                            batch_observation_starts[owner_index]:
+                        ]
                     ],
                 }
             )
