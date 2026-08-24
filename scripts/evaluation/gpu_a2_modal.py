@@ -16,6 +16,7 @@ Typical bounded run:
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -115,6 +116,13 @@ if INFERENCE_OWNERS not in {1, 2, 4}:
 MODEL_TIER = os.environ.get("PAGESPATIAL_A2_MODEL_TIER", "small")
 if MODEL_TIER not in {"tiny", "small"}:
     raise ValueError("PAGESPATIAL_A2_MODEL_TIER must be tiny or small")
+STAGE_PROFILE = os.environ.get("PAGESPATIAL_A2_STAGE_PROFILE", "0") == "1"
+if STAGE_PROFILE and (
+    MODEL_TIER != "tiny"
+    or RECOGNITION_BATCH_SIZE != 1
+    or INFERENCE_OWNERS != 2
+):
+    raise ValueError("stage profiling is bounded to Tiny B1 with two owners")
 
 if modal.is_local():
     REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -122,6 +130,7 @@ else:
     REPO_ROOT = Path("/app")
 
 CONTROLLER = REPO_ROOT / "scripts/evaluation/gpu_a2_controller.mjs"
+STAGE_PROFILER = REPO_ROOT / "scripts/evaluation/gpu_a3_stage_profile.py"
 WORKLOAD_MANIFEST = REPO_ROOT / "evaluation/gpu-spike/a2-50page-v1.json"
 
 app = modal.App(APP_NAME)
@@ -192,6 +201,7 @@ if modal.is_local():
         .run_commands("cd /app && PATH=/opt/node/bin:$PATH /opt/node/bin/npm run build")
         .add_local_dir(str(REPO_ROOT / "service"), "/app/service", copy=True)
         .add_local_file(str(CONTROLLER), "/app/scripts/evaluation/gpu_a2_controller.mjs", copy=True)
+        .add_local_file(str(STAGE_PROFILER), "/root/gpu_a3_stage_profile.py", copy=True)
         .add_local_file(
             str(WORKLOAD_MANIFEST),
             "/app/evaluation/gpu-spike/a2-50page-v1.json",
@@ -208,6 +218,7 @@ if modal.is_local():
                 ),
                 "PAGESPATIAL_A2_INFERENCE_OWNERS": str(INFERENCE_OWNERS),
                 "PAGESPATIAL_A2_MODEL_TIER": MODEL_TIER,
+                "PAGESPATIAL_A2_STAGE_PROFILE": "1" if STAGE_PROFILE else "0",
             }
         )
     )
@@ -219,6 +230,7 @@ ARM = {
     "name": (
         f"g-trt-{MODEL_TIER}-fp32-a2-b{RECOGNITION_BATCH_SIZE}"
         f"c4o{INFERENCE_OWNERS}"
+        + ("-profile" if STAGE_PROFILE else "")
     ),
     "tier": MODEL_TIER,
     "device": "gpu:0",
@@ -235,6 +247,7 @@ ARM = {
         "textRecognition": "tensorrt",
     },
     "deploymentProfile": "en-gpu",
+    "stageProfile": STAGE_PROFILE,
 }
 
 
@@ -341,6 +354,8 @@ class GpuA2Container:
         self.backend_attrs_by_owner = []
         self.backend_logs_by_owner = []
         self.batch_observations_by_owner = []
+        self.stage_profilers = []
+        self.stage_profile_identities = []
         for owner_index in range(INFERENCE_OWNERS):
             owner_started = time.monotonic()
             with _capture_native_output() as log_path:
@@ -366,6 +381,14 @@ class GpuA2Container:
             self.batch_observations_by_owner.append(
                 _instrument_batch_samplers(ocr, ARM["pageBatchSize"])
             )
+            if STAGE_PROFILE:
+                from gpu_a3_stage_profile import install_ocr_stage_profiler
+
+                profiler, identity = install_ocr_stage_profiler(ocr, owner_index)
+                self.stage_profilers.append(profiler)
+                self.stage_profile_identities.append(identity)
+            else:
+                self.stage_profilers.append(None)
         self.owner_init_s = time.monotonic() - all_started
         # Provider construction is lazy. Final attestation must include the
         # first real workload inference for every owner; construction-only attributes are not
@@ -388,74 +411,104 @@ class GpuA2Container:
         )
         import cv2
 
-        image = cv2.imread(message["pngPath"], cv2.IMREAD_COLOR)
-        if image is None:
-            raise RuntimeError(
-                f"unreadable controller PNG for page {message['pageNumber']}"
-            )
-        inference_started = time.monotonic()
-        if attest:
-            with _capture_native_output() as inference_log_path:
-                results = list(self.ocrs[owner_index].predict(image))
-            inference_text = inference_log_path.read_text(errors="replace")
-            inference_log_path.unlink(missing_ok=True)
-            self.backend_logs_by_owner[owner_index] = [
-                *self.backend_logs_by_owner[owner_index],
-                *_backend_lines(inference_text),
-            ]
-            self.backend_attrs_by_owner[owner_index] = {
-                **self.startup_backend_attrs_by_owner[owner_index],
-                **_walk_interesting_attrs(self.ocrs[owner_index]),
-            }
-            attestation = _attest_backend(
-                ARM,
-                self.device_truth,
-                self.backend_attrs_by_owner[owner_index],
-                self.backend_logs_by_owner[owner_index],
-            )
-            if not attestation["pass"]:
+        profiler = self.stage_profilers[owner_index]
+        if profiler is not None:
+            profiler.begin_page(int(message["pageNumber"]), str(message["id"]))
+        try:
+            with (
+                profiler.span("png.decode")
+                if profiler is not None
+                else contextlib.nullcontext()
+            ):
+                image = cv2.imread(message["pngPath"], cv2.IMREAD_COLOR)
+            if image is None:
                 raise RuntimeError(
-                    f"backend attestation failed for owner {owner_index}: "
-                    + "; ".join(attestation["reasons"])
+                    f"unreadable controller PNG for page {message['pageNumber']}"
                 )
-            missing_provider = _attest_backend(ARM, self.device_truth, {}, [])
-            wrong_device = _attest_backend(
-                ARM,
-                {
-                    **self.device_truth,
-                    "paddleDevice": "cpu",
-                    "cudaCompiled": False,
-                    "nvidiaSmiIdentity": [],
-                },
-                self.backend_attrs_by_owner[owner_index],
-                self.backend_logs_by_owner[owner_index],
-            )
-            if missing_provider["pass"] or wrong_device["pass"]:
-                raise RuntimeError("backend-attestation mutation unexpectedly passed")
-            self.backend_attestations[owner_index] = attestation
-            self.backend_mutations[owner_index] = {
-                "missingProviderEvidence": {
-                    "pass": True,
-                    "reasons": missing_provider["reasons"],
-                },
-                "wrongDevice": {"pass": True, "reasons": wrong_device["reasons"]},
-            }
-        else:
-            results = list(self.ocrs[owner_index].predict(image))
-        inference_ms = (time.monotonic() - inference_started) * 1000
+            inference_started = time.monotonic()
+            with (
+                profiler.span("predict.total")
+                if profiler is not None
+                else contextlib.nullcontext()
+            ):
+                if attest:
+                    with _capture_native_output() as inference_log_path:
+                        results = list(self.ocrs[owner_index].predict(image))
+                    inference_text = inference_log_path.read_text(errors="replace")
+                    inference_log_path.unlink(missing_ok=True)
+                    self.backend_logs_by_owner[owner_index] = [
+                        *self.backend_logs_by_owner[owner_index],
+                        *_backend_lines(inference_text),
+                    ]
+                    self.backend_attrs_by_owner[owner_index] = {
+                        **self.startup_backend_attrs_by_owner[owner_index],
+                        **_walk_interesting_attrs(self.ocrs[owner_index]),
+                    }
+                    attestation = _attest_backend(
+                        ARM,
+                        self.device_truth,
+                        self.backend_attrs_by_owner[owner_index],
+                        self.backend_logs_by_owner[owner_index],
+                    )
+                    if not attestation["pass"]:
+                        raise RuntimeError(
+                            f"backend attestation failed for owner {owner_index}: "
+                            + "; ".join(attestation["reasons"])
+                        )
+                    missing_provider = _attest_backend(ARM, self.device_truth, {}, [])
+                    wrong_device = _attest_backend(
+                        ARM,
+                        {
+                            **self.device_truth,
+                            "paddleDevice": "cpu",
+                            "cudaCompiled": False,
+                            "nvidiaSmiIdentity": [],
+                        },
+                        self.backend_attrs_by_owner[owner_index],
+                        self.backend_logs_by_owner[owner_index],
+                    )
+                    if missing_provider["pass"] or wrong_device["pass"]:
+                        raise RuntimeError(
+                            "backend-attestation mutation unexpectedly passed"
+                        )
+                    self.backend_attestations[owner_index] = attestation
+                    self.backend_mutations[owner_index] = {
+                        "missingProviderEvidence": {
+                            "pass": True,
+                            "reasons": missing_provider["reasons"],
+                        },
+                        "wrongDevice": {
+                            "pass": True,
+                            "reasons": wrong_device["reasons"],
+                        },
+                    }
+                else:
+                    results = list(self.ocrs[owner_index].predict(image))
+            inference_ms = (time.monotonic() - inference_started) * 1000
+            with (
+                profiler.span("result.decode")
+                if profiler is not None
+                else contextlib.nullcontext()
+            ):
+                lines = _paddle_lines(results)
+            stage_profile = profiler.finish_page() if profiler is not None else None
+        except BaseException:
+            if profiler is not None:
+                profiler.abort_page()
+            raise
         if self.first_inference_ms_by_owner[owner_index] is None:
             self.first_inference_ms_by_owner[owner_index] = inference_ms
-        return (
-            {
-                "kind": "ocr-result",
-                "id": message["id"],
-                "lines": _paddle_lines(results),
-                "inferenceMs": inference_ms,
-                "queueWaitMs": queue_wait_ms,
-                "ownerIndex": owner_index,
-            },
-            inference_ms,
-        )
+        response = {
+            "kind": "ocr-result",
+            "id": message["id"],
+            "lines": lines,
+            "inferenceMs": inference_ms,
+            "queueWaitMs": queue_wait_ms,
+            "ownerIndex": owner_index,
+        }
+        if stage_profile is not None:
+            response["stageProfile"] = stage_profile
+        return response, inference_ms
 
     @modal.method()
     def parse_document(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -482,6 +535,10 @@ class GpuA2Container:
             raise ValueError("native evidence SHA-256 mismatch")
 
         method_started = time.monotonic()
+        profile_started_ns = time.monotonic_ns()
+        for stage_profiler in self.stage_profilers:
+            if stage_profiler is not None:
+                stage_profiler.begin_method(profile_started_ns)
         method_first_inference_ms: float | None = None
         was_cold = self.container_cold
         self.container_cold = False
@@ -501,6 +558,7 @@ class GpuA2Container:
         ]
         controller = None
         ocr_calls = 0
+        stage_profile_pages: list[dict[str, Any]] = []
         try:
             with stderr_path.open("wb") as stderr:
                 controller = subprocess.Popen(
@@ -534,10 +592,13 @@ class GpuA2Container:
 
                 def record_and_write(response: dict[str, Any], inference_ms: float) -> None:
                     nonlocal ocr_calls, method_first_inference_ms
+                    stage_profile = response.pop("stageProfile", None)
                     with state_lock:
                         ocr_calls += 1
                         if method_first_inference_ms is None:
                             method_first_inference_ms = inference_ms
+                        if stage_profile is not None:
+                            stage_profile_pages.append(stage_profile)
                     with write_lock:
                         controller.stdin.write(json.dumps(response) + "\n")
                         controller.stdin.flush()
@@ -612,6 +673,7 @@ class GpuA2Container:
             result = json.loads(result_path.read_text())
             if result.get("status") != "completed" or len(result.get("pages", [])) != EXPECTED_PAGES:
                 raise RuntimeError("A2 terminal result did not reconcile 50 successful pages")
+            method_total_ms = (time.monotonic() - method_started) * 1000
             result.update(
                 {
                     "arm": ARM,
@@ -631,7 +693,7 @@ class GpuA2Container:
                         "ownerFirstInferenceMs": self.first_inference_ms_by_owner[0],
                         "ownerFirstInferenceMsByOwner": self.first_inference_ms_by_owner,
                         "methodFirstInferenceMs": method_first_inference_ms,
-                        "totalMethodMs": (time.monotonic() - method_started) * 1000,
+                        "totalMethodMs": method_total_ms,
                         "ocrCalls": ocr_calls,
                         "processGroupClean": True,
                     },
@@ -662,6 +724,19 @@ class GpuA2Container:
                     ],
                 }
             )
+            if STAGE_PROFILE:
+                from gpu_a3_stage_profile import summarize_method_profile
+
+                if len(stage_profile_pages) != EXPECTED_PAGES:
+                    raise RuntimeError(
+                        "stage profile did not reconcile exactly 50 pages: "
+                        f"{len(stage_profile_pages)}"
+                    )
+                result["stageProfile"] = summarize_method_profile(
+                    sorted(stage_profile_pages, key=lambda item: item["pageNumber"]),
+                    self.stage_profile_identities,
+                    method_total_ms,
+                )
             _enforce_result_size(result)
             self.last_result = result
             self.last_result_json = json.dumps(

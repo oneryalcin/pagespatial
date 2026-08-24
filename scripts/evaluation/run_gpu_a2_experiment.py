@@ -162,12 +162,14 @@ def run_gpu(
     recognition_batch_size: int,
     inference_owners: int,
     model_tier: str,
+    stage_profile: bool,
 ) -> tuple[str, str, Path]:
     reservation = reserve(ledger, "E1-GPU")
     suffix = f"{time.strftime('%Y%m%d%H%M%S', time.gmtime())}-{uuid.uuid4().hex[:6]}"
     app_name = (
         f"pagespatial-gpu-a2-e1-gpu-{model_tier}-b{recognition_batch_size}"
         f"o{inference_owners}-{suffix}"
+        + ("-profile" if stage_profile else "")
     )
     app_id = ""
     evidence_root = out_dir / "gpu"
@@ -181,6 +183,7 @@ def run_gpu(
             "PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE": str(recognition_batch_size),
             "PAGESPATIAL_A2_INFERENCE_OWNERS": str(inference_owners),
             "PAGESPATIAL_A2_MODEL_TIER": model_tier,
+            "PAGESPATIAL_A2_STAGE_PROFILE": "1" if stage_profile else "0",
         }
         run(
             [
@@ -366,7 +369,18 @@ def main() -> None:
         default=1,
         help="independent monolithic TensorRT owners sharing one L4; at most one per physical CPU core",
     )
+    parser.add_argument(
+        "--stage-profile",
+        action="store_true",
+        help="record Python-visible stage intervals; bounded to Tiny B1 with two owners",
+    )
     args = parser.parse_args()
+    if args.stage_profile and (
+        args.model_tier != "tiny"
+        or args.recognition_batch_size != 1
+        or args.inference_owners != 2
+    ):
+        parser.error("--stage-profile requires --model-tier tiny --recognition-batch-size 1 --inference-owners 2")
     revision = source_revision()
     if not WORKLOAD.exists():
         raise SystemExit(f"frozen workload missing: {WORKLOAD}")
@@ -384,6 +398,7 @@ def main() -> None:
         args.recognition_batch_size,
         args.inference_owners,
         args.model_tier,
+        args.stage_profile,
     )
     decision = score_e1(cpu[2], gpu[2], args.out_dir, args.adjudications)
     print(json.dumps({
