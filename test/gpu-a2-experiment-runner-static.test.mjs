@@ -25,7 +25,9 @@ test('paid A2 launcher can reuse only a complete current CPU control', () => {
   assert.match(source, /--cpu-evidence/u);
   assert.match(source, /validate_cpu_evidence/u);
   assert.match(source, /\[True, False, False, False\]/u);
-  assert.match(source, /result\.get\("adapter_revision"\) != revision/u);
+  assert.match(source, /CPU_CONTROL_PATHS/u);
+  assert.match(source, /"git", "diff", "--quiet"/u);
+  assert.match(source, /CPU production paths changed after the reused evidence revision/u);
   assert.match(source, /result\.get\("image_pin_revision"\) != image_pin_revision\(\)/u);
 });
 

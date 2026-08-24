@@ -186,7 +186,13 @@ def run_gpu(ledger: Path, out_dir: Path) -> tuple[str, str, Path]:
             )
 
 
-def validate_cpu_evidence(path: Path, revision: str) -> Path:
+CPU_CONTROL_PATHS = (
+    "Dockerfile", "package.json", "package-lock.json", "schemas", "src", "service",
+    "deploy/modal/modal_app.py",
+)
+
+
+def validate_cpu_evidence(path: Path) -> Path:
     run_path = path / "run.json"
     if not run_path.is_file():
         raise RuntimeError(f"reused CPU evidence has no run.json: {path}")
@@ -198,6 +204,7 @@ def validate_cpu_evidence(path: Path, revision: str) -> Path:
         raise RuntimeError("reused CPU evidence has no exact cold/warm proof")
     if len(set(warm.get("containerIds", []))) != 1:
         raise RuntimeError("reused CPU evidence did not use one warm container")
+    evidence_revisions = set()
     for repeat in range(1, 5):
         result_path = path / f"cpu-repeat-{repeat}.json"
         result = json.loads(result_path.read_text())
@@ -206,11 +213,23 @@ def validate_cpu_evidence(path: Path, revision: str) -> Path:
             or result.get("page_count") != EXPECTED_PAGES
             or result.get("pages_failed") != 0
             or len(result.get("pages", [])) != EXPECTED_PAGES
-            or result.get("adapter_revision") != revision
             or result.get("image_pin_revision") != image_pin_revision()
             or result.get("client", {}).get("repeat") != repeat
         ):
             raise RuntimeError(f"reused CPU evidence failed validation: {result_path}")
+        evidence_revisions.add(result.get("adapter_revision"))
+    if len(evidence_revisions) != 1 or None in evidence_revisions:
+        raise RuntimeError("reused CPU evidence has inconsistent source revisions")
+    evidence_revision = evidence_revisions.pop()
+    unchanged = subprocess.run(
+        ["git", "diff", "--quiet", f"{evidence_revision}..HEAD", "--", *CPU_CONTROL_PATHS],
+        cwd=REPO_ROOT,
+        check=False,
+    )
+    if unchanged.returncode != 0:
+        raise RuntimeError(
+            "CPU production paths changed after the reused evidence revision; rerun the control"
+        )
     return path
 
 
@@ -287,7 +306,7 @@ def main() -> None:
         raise SystemExit(f"frozen workload missing: {WORKLOAD}")
     args.out_dir.mkdir(parents=True, exist_ok=True)
     if args.cpu_evidence is not None:
-        cpu_dir = validate_cpu_evidence(args.cpu_evidence, revision)
+        cpu_dir = validate_cpu_evidence(args.cpu_evidence)
         cpu = ("reused", json.loads((cpu_dir / "run.json").read_text())["expectedAppId"], cpu_dir)
     else:
         cpu = run_cpu(args.ledger, args.out_dir, revision)
