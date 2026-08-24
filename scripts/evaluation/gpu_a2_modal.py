@@ -55,6 +55,7 @@ from gpu_spike_modal import (
     _construct_ocr,
     _device_truth,
     _installed_versions,
+    _instrument_batch_samplers,
     _source_state,
     _walk_interesting_attrs,
 )
@@ -100,6 +101,11 @@ NODE_VERSION = "26.0.0"
 NODE_LINUX_X64_SHA256 = (
     "345d558514c62622b5c7d1f7b5f2a19c31ab1405d217df49f010c5ea8decc0f4"
 )
+RECOGNITION_BATCH_SIZE = int(
+    os.environ.get("PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE", "1")
+)
+if RECOGNITION_BATCH_SIZE not in {1, 4, 8}:
+    raise ValueError("PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE must be 1, 4, or 8")
 
 if modal.is_local():
     REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -187,19 +193,15 @@ if modal.is_local():
                 "PATH": (
                     "/opt/node/bin:/usr/local/sbin:/usr/local/bin:"
                     "/usr/sbin:/usr/bin:/sbin:/bin"
-                )
+                ),
+                "PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE": str(
+                    RECOGNITION_BATCH_SIZE
+                ),
             }
         )
     )
 else:
     a2_image = modal.Image.debian_slim(python_version="3.10")
-
-
-RECOGNITION_BATCH_SIZE = int(
-    os.environ.get("PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE", "1")
-)
-if RECOGNITION_BATCH_SIZE not in {1, 4, 8}:
-    raise ValueError("PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE must be 1, 4, or 8")
 
 
 ARM = {
@@ -324,6 +326,21 @@ class GpuA2Container:
         self.owner_init_s = time.monotonic() - started
         self.device_truth = _device_truth()
         self.backend_attrs = _walk_interesting_attrs(self.ocr)
+        effective_recognition_batch = self.backend_attrs.get(
+            "ocr.paddlex_pipeline._pipeline.text_rec_model.batch_sampler.batch_size"
+        )
+        if effective_recognition_batch != ARM["recognitionBatchSize"]:
+            raise RuntimeError(
+                "recognition batch mismatch before inference: "
+                f"requested {ARM['recognitionBatchSize']}, "
+                f"effective {effective_recognition_batch!r}"
+            )
+        # Capture the unwrapped live configuration before installing probes.
+        # The probe delegates to the real sampler but is intentionally not a
+        # PaddleX type, so the generic attribute walker will not descend into it.
+        self.batch_observations = _instrument_batch_samplers(
+            self.ocr, ARM["pageBatchSize"]
+        )
         self.backend_logs = _backend_lines(native_text)
         # Provider construction is lazy. Final attestation must include the
         # first REAL workload inference; construction-only attributes are not
@@ -376,6 +393,7 @@ class GpuA2Container:
         native_evidence_path.write_bytes(native_evidence_bytes)
         sampler = _GpuSampler()
         sampler.start()
+        batch_observation_start = len(self.batch_observations)
         controller = None
         ocr_calls = 0
         try:
@@ -519,9 +537,19 @@ class GpuA2Container:
                         "patchSha256": ULTRA_INFER_PATCH_SHA256,
                     },
                     "gpuTelemetry": _numeric_gpu_summary(sampler.samples),
+                    "batchObservations": self.batch_observations[
+                        batch_observation_start:
+                    ],
                 }
             )
             _enforce_result_size(result)
+            self.last_result = result
+            self.last_result_json = json.dumps(
+                result, separators=(",", ":")
+            ).encode("utf-8")
+            self.last_result_sha256 = hashlib.sha256(
+                self.last_result_json
+            ).hexdigest()
             return result
         except Exception:
             if controller is not None and controller.poll() is None:
@@ -542,6 +570,21 @@ class GpuA2Container:
         finally:
             sampler.stop()
             shutil.rmtree(scratch, ignore_errors=True)
+
+    @modal.method()
+    def probe_last_response(self, mode: str) -> Any:
+        if not hasattr(self, "last_result"):
+            raise RuntimeError("response probe requires one completed parse")
+        if mode == "tiny":
+            return {
+                "sha256": self.last_result_sha256,
+                "bytes": len(self.last_result_json),
+            }
+        if mode == "json-bytes":
+            return self.last_result_json
+        if mode == "object":
+            return self.last_result
+        raise ValueError("response probe mode must be tiny, json-bytes, or object")
 
 
 @app.local_entrypoint()
@@ -593,6 +636,7 @@ def main(
     owner = GpuA2Container()
     outcomes = []
     container_ids = []
+    last_remote_result_json = b""
     for repeat in range(1, repeats + 1):
         call_started = time.monotonic()
         result = owner.parse_document.remote(
@@ -605,6 +649,13 @@ def main(
                 "expected_pages": EXPECTED_PAGES,
             }
         )
+        if result.get("arm") != ARM:
+            raise RuntimeError(
+                f"remote arm mismatch: requested {ARM!r}, returned {result.get('arm')!r}"
+            )
+        last_remote_result_json = json.dumps(
+            result, separators=(",", ":")
+        ).encode("utf-8")
         result["client"] = {
             "repeat": repeat,
             "spawnToResultS": time.monotonic() - call_started,
@@ -623,6 +674,39 @@ def main(
             f"client={result['client']['spawnToResultS']:.1f}s -> {path}",
             flush=True,
         )
+    last_remote_result_sha256 = hashlib.sha256(last_remote_result_json).hexdigest()
+    response_probe = []
+    for probe_repeat in range(1, 3):
+        for mode in ("tiny", "json-bytes", "object"):
+            probe_started = time.monotonic()
+            value = owner.probe_last_response.remote(mode)
+            elapsed_s = time.monotonic() - probe_started
+            if mode == "tiny":
+                returned_bytes = len(
+                    json.dumps(value, separators=(",", ":")).encode("utf-8")
+                )
+                if (
+                    value.get("sha256") != last_remote_result_sha256
+                    or value.get("bytes") != len(last_remote_result_json)
+                ):
+                    raise RuntimeError("tiny response probe identity mismatch")
+            elif mode == "json-bytes":
+                returned_bytes = len(value)
+                if hashlib.sha256(value).hexdigest() != last_remote_result_sha256:
+                    raise RuntimeError("JSON-byte response probe identity mismatch")
+            else:
+                encoded = json.dumps(value, separators=(",", ":")).encode("utf-8")
+                returned_bytes = len(encoded)
+                if hashlib.sha256(encoded).hexdigest() != last_remote_result_sha256:
+                    raise RuntimeError("object response probe identity mismatch")
+            response_probe.append(
+                {
+                    "repeat": probe_repeat,
+                    "mode": mode,
+                    "roundTripS": elapsed_s,
+                    "returnedBytes": returned_bytes,
+                }
+            )
     cold_pattern = [item["method"]["containerCold"] for item in outcomes]
     owner_pids = {item["method"]["ownerPid"] for item in outcomes}
     if (
@@ -635,6 +719,7 @@ def main(
             f"cold={cold_pattern}, ownerPids={sorted(owner_pids)}, containers={container_ids}"
         )
     metadata["completedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    metadata["responseProbe"] = response_probe
     metadata["summary"] = {
         "medianControllerPagesPerS": statistics.median(
             item["timing"]["pagesPerS"] for item in outcomes

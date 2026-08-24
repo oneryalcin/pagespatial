@@ -147,10 +147,11 @@ PaddleX's explicit `Inference backend: openvino` line. A later generic
 thread-config line is not engine proof. This changes no engine, routing,
 scheduling, or OCR output.
 
-Paid stages are serialized. Launches stop at USD 40 of posted plus reserved
-PageSpatial exposure, leaving USD 10 for delayed billing and cleanup. E1 is one
-cold and exactly three warm 50-page comparisons per arm. Fixed reservations are
-USD 3 for E1 CPU and USD 7 for E1 GPU; callers cannot lower them. The only paid
+Paid stages are serialized. Launches stop at the owner-authorized USD 50 of
+posted plus reserved PageSpatial exposure. E1 is one cold and exactly three
+warm 50-page comparisons per arm. Fixed reservations are USD 3 for E1 CPU and,
+prospectively after the measured amendment below, USD 3 for E1 GPU; callers
+cannot lower them. The only paid
 launcher is `scripts/evaluation/run_gpu_a2_experiment.py`; it reserves before
 CPU deployment or TensorRT image construction and stops the exact app in every
 terminal path. E2 (two independent 1,000-page
@@ -158,6 +159,16 @@ single-container lifetimes) and E3 (the smallest measured fleet for 50,000
 pages) are authorized only if every previous correctness, at-least-2x speed,
 billing, and spend-exposure gate passes. CPU remains the production default;
 any adoption still requires a separate decision.
+
+**Measured reservation amendment, 2026-08-24:** two complete four-call L4
+windows posted incremental costs of about USD 0.199 and USD 0.203. The second
+window was invalid as B8 evidence because its local B8 arm identity hydrated as
+B1 remotely; it nevertheless measured the same resource envelope. Future E1
+GPU reservations are therefore fixed at USD 3.00, still more than 14 times the
+largest complete observed window. Existing reservations remain unchanged. One
+true B8 retry is allowed only after the image carries the batch value, the
+remote arm equals the requested arm, and the live recognition sampler reports
+effective batch eight before inference.
 
 ## 1. Decision
 

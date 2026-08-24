@@ -23,6 +23,7 @@ test('A2 reservations are fixed by stage and atomically claimed', () => {
   assert.match(source, /STAGE_BOUNDS/u);
   assert.match(source, /"E1-CPU"/u);
   assert.match(source, /"E1-GPU"/u);
+  assert.match(source, /"E1-GPU": \{[\s\S]*?"worstCaseUsd": 3\.0/u);
   assert.doesNotMatch(source, /--worst-case-usd/u);
   assert.match(source, /fcntl\.flock/u);
   assert.match(source, /match\.get\("status"\) != "reserved"/u);

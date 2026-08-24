@@ -588,8 +588,8 @@ run for these benchmark-only apps.
 The owner supplied the missing demand trigger: 50 terminal pages/s across the
 fleet, plus a USD 50 total PageSpatial experiment ceiling in the `desia` Modal
 workspace for 2026-08-24. Posted PageSpatial spend at authorization was
-USD 2.62063099. A serialized launch guard stops at USD 40 of posted plus
-reserved exposure so delayed billing and cleanup cannot cross the owner cap.
+USD 2.62063099. A serialized launch guard stops at USD 50 of posted plus
+reserved exposure, matching the owner cap.
 The authorization ends at 2026-08-24 23:00 UTC (midnight Europe/London).
 Spend is read from Modal's UTC billing interval
 `[2026-08-24T00:00:00Z, 2026-08-25T00:00:00Z)`.
@@ -603,7 +603,8 @@ correct, at least 2x faster end to end, billed, and within the exposure gate.
 No production deployment change is authorized.
 
 E1 uses one cold plus exactly three warm calls in each arm. Fixed worst-case
-reservations are USD 3 for CPU and USD 7 for GPU; they remain charged until the
+reservations are USD 3 for CPU and, after the measured amendment below, USD 3
+for GPU; they remain charged until the
 exact app is stopped and a final closed-interval total is operator-attested.
 `scripts/evaluation/run_gpu_a2_experiment.py` is the only paid entry point. It
 reserves before deploy or image construction, gives each arm a unique app ID,
@@ -613,6 +614,30 @@ The continuation also corrects one provenance-only defect before E1: CPU
 only to PaddleX's explicit `Inference backend: openvino` statement, and never
 treats a generic backend-config line as engine proof. This covers the observed
 stderr-read race without changing engine selection or OCR behavior.
+
+### A2 B1 result and invalid B8 attempt — 2026-08-24
+
+The first valid A2 window ran effective Small FP32 TensorRT B1. Its three warm
+complete-document calls had median 0.996 pages/s at the client boundary versus
+0.700 pages/s for the CPU control (1.42x). Inner pipeline throughput reached
+1.15-1.25 pages/s. Median GPU utilization was about 22%, maximum 32%, with
+about 1.4 GiB used. The bounded page queue filled to eight, so rendering fed
+the serial OCR owner; the L4 was not saturated.
+
+A requested B8 follow-up is **invalid as B8 evidence**. The local run manifest
+said B8, but the remote result identified B1 and its live recognition sampler
+reported batch one. Modal remote hydration did not inherit the launcher's
+shell-only batch value. The 0.996 pages/s result is therefore a repeated B1
+control, not a B8 result. The harness now bakes the batch value into the image
+environment and fails before inference on either local/remote arm mismatch or
+requested/effective sampler mismatch.
+
+The two complete four-call L4 windows posted incremental costs of about USD
+0.199 and USD 0.203. The prospective E1-GPU reservation is reduced from USD
+3.50 to USD 3.00, still over 14x the larger observed complete window; prior
+ledger entries are unchanged. One true B8 retry may run within the owner's USD
+50 ceiling. It also records effective crop batches and compares tiny metadata,
+raw JSON bytes, and the full result object without repeating OCR.
 
 - The §6 M1.5 optimistic end-to-end bound was never computed — the stage
   attribution it requires was not instrumented in these arms.

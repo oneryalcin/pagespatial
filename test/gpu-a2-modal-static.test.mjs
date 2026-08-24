@@ -23,9 +23,23 @@ test('A2 Modal arm is only Small FP32 with a bounded recognition batch', () => {
   assert.match(source, /PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE/u);
   assert.match(source, /not in \{1, 4, 8\}/u);
   assert.match(source, /"recognitionBatchSize": RECOGNITION_BATCH_SIZE/u);
+  assert.match(source, /\.env\([\s\S]*PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE/u);
+  assert.match(source, /recognition batch mismatch before inference/u);
+  assert.match(source, /remote arm mismatch/u);
   assert.match(source, /"deploymentProfile": "en-gpu"/u);
   assert.doesNotMatch(source, /"tier": "tiny"/u);
   assert.doesNotMatch(source, /"precision": "fp16"/u);
+});
+
+test('A2 records effective batches and isolates response-boundary cost', () => {
+  const liveConfigCheck = source.indexOf('self.backend_attrs = _walk_interesting_attrs(self.ocr)');
+  const probeInstall = source.indexOf('self.batch_observations = _instrument_batch_samplers(');
+  assert.ok(liveConfigCheck >= 0 && probeInstall > liveConfigCheck);
+  assert.match(source, /_instrument_batch_samplers/u);
+  assert.match(source, /"batchObservations"/u);
+  assert.match(source, /def probe_last_response/u);
+  assert.match(source, /"tiny", "json-bytes", "object"/u);
+  assert.match(source, /"responseProbe"/u);
 });
 
 test('A2 runner enforces spend and repeat bounds before remote work', () => {
