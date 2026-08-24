@@ -52,7 +52,10 @@ if (process.env.MOCK_SLOW_META === '1' && !fs.existsSync(process.env.MOCK_STATE_
   setInterval(() => {}, 1000); // never send meta; stay alive until killed
 } else {
   console.log(JSON.stringify({ kind: 'meta', pid: process.pid, versions: { paddleocr: 'mock-1' }, platform: 'MockOS', osCpuCount: 1, threads: 1, threadKwargApplied: true, hpiRequested: false, useHpip: false, modelPins: {}, initS: 0 }));
-  console.error('mock: Backend::MOCKENGINE in Device::CPU');
+  if (process.env.MOCK_NO_CPP_BACKEND !== '1') {
+    console.error('mock: Backend::MOCKENGINE in Device::CPU');
+  }
+  console.error('mock: Inference backend: openvino');
   console.error('mock: Inference backend config: cpu_num_threads=1');
   const held = [];
   readline.createInterface({ input: process.stdin }).on('line', (line) => {
@@ -297,6 +300,22 @@ test('provenance is truthful: ep derives from child meta, pins ride along', asyn
   } finally {
     // dispose in finally: a failed assertion must not leak a live child
     // (that leak is exactly what hangs a test runner).
+    await adapter.dispose();
+    rmSync(fixture.dir, { recursive: true, force: true });
+  }
+});
+
+test('engine evidence retains explicit OpenVINO fallback when C++ line races', async () => {
+  const fixture = fixturePins();
+  process.env.MOCK_NO_CPP_BACKEND = '1';
+  const adapter = mockAdapter(fixture);
+  try {
+    await adapter.warmup();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.match(adapter.backend.engineEvidence.line, /Inference backend:\s*openvino/iu);
+    assert.doesNotMatch(adapter.backend.engineEvidence.line, /backend config/iu);
+  } finally {
+    delete process.env.MOCK_NO_CPP_BACKEND;
     await adapter.dispose();
     rmSync(fixture.dir, { recursive: true, force: true });
   }

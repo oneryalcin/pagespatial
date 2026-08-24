@@ -25,6 +25,7 @@ test('A2 CPU control requires reservation, no retries, and four-call warm proof'
   assert.match(source, /\[True, False, False, False\]/u);
   assert.match(source, /container_snapshot/u);
   assert.match(source, /Backend::OPENVINO/u);
+  assert.match(source, /inference backend: openvino/u);
   assert.match(source, /engine_evidence\.get\("source"\) != "log-derived \(child stderr\)"/u);
   assert.match(source, /result\["modelVerification"\]/u);
   assert.match(source, /cpu-repeat-\{repeat\}\.received\.json/u);

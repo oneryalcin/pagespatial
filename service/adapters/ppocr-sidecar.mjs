@@ -215,9 +215,12 @@ export function createPpOcrSidecarAdapter(config = {}) {
         engineEvidence: {
           source: 'log-derived (child stderr)',
           // Prefer the latest concrete C++ engine selection. A later generic
-          // "backend config" line may carry thread settings but cannot prove
-          // OpenVINO rather than Paddle served the request.
+          // PaddleX "Inference backend: openvino" line is also direct engine
+          // testimony and covers the observed stderr-read race where the C++
+          // line has not reached Node yet. A generic "backend config" line
+          // carries only thread settings and cannot prove the serving engine.
           line: stderrRing.filter((line) => /Backend::/u.test(line)).at(-1)
+            ?? stderrRing.filter((line) => /Inference backend:\s*openvino/iu.test(line)).at(-1)
             ?? stderrRing.filter((line) => /backend config/u.test(line)).at(-1)
             ?? null
         }

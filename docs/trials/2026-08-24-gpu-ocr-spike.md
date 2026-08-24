@@ -609,9 +609,10 @@ exact app is stopped and a final closed-interval total is operator-attested.
 reserves before deploy or image construction, gives each arm a unique app ID,
 uses no application retries, and stops and verifies the exact app in `finally`.
 The continuation also corrects one provenance-only defect before E1: CPU
-`engineEvidence` now prefers the concrete `Backend::OPENVINO` line over a
-later generic backend-config line. Engine selection and OCR behavior do not
-change.
+`engineEvidence` now prefers the concrete `Backend::OPENVINO` line, falls back
+only to PaddleX's explicit `Inference backend: openvino` statement, and never
+treats a generic backend-config line as engine proof. This covers the observed
+stderr-read race without changing engine selection or OCR behavior.
 
 - The §6 M1.5 optimistic end-to-end bound was never computed — the stage
   attribution it requires was not instrumented in these arms.

@@ -118,8 +118,13 @@ def attest_result(
             "useHpip": True,
             "modelPins": model_pins,
             "engineEvidence.source": "log-derived (child stderr)",
-            "engineEvidence.lineContains": "Backend::OPENVINO",
+            "engineEvidence.line": "Backend::OPENVINO or Inference backend: openvino",
         }
+        engine_line = str(engine_evidence.get("line", ""))
+        openvino_proven = (
+            "Backend::OPENVINO" in engine_line
+            or "inference backend: openvino" in engine_line.lower()
+        )
         if (
             observed["provenance.backend"] != "hpi"
             or observed["executionProvider"] != "hpi"
@@ -127,7 +132,7 @@ def attest_result(
             or observed["useHpip"] is not True
             or observed["modelPins"] != model_pins
             or engine_evidence.get("source") != "log-derived (child stderr)"
-            or "Backend::OPENVINO" not in str(engine_evidence.get("line", ""))
+            or not openvino_proven
         ):
             raise RuntimeError(
                 "CPU HPI/OpenVINO/model-pin attestation failed on page "
