@@ -1,7 +1,7 @@
 # Design: PP-OCRv6 GPU throughput spike
 
-**Status:** executed through the merged-output safety continuation; no
-production GPU path is adopted
+**Status:** merged-output safety is complete; bounded A2 E1 is authorized and
+not yet measured; no production GPU path is adopted
 
 **Date:** 2026-08-24
 
@@ -51,10 +51,10 @@ critical-token multiset differences remain on one adjudicated page, including
 equivalence gate with the merged-output safety gate below; the retained Small
 FP32 lane passes the amended safety rule after one narrow merge repair.
 
-The adopted CPU deployment nevertheless remains unchanged. A2, sustained
-qualification, and the locked holdout remain closed because the demonstrated
-Small treatment has an unfavorable diagnostic cost screen and no end-to-end
-billed-cost qualification. The evidence does reject the earlier broad claim
+The adopted CPU deployment nevertheless remains unchanged. The locked holdout
+and production qualification remain closed. The owner continuation amendment
+below reopens only bounded A2 E1 because a concrete 50 pages/s demand target
+and experiment budget now exist. The evidence does reject the earlier broad claim
 that a well-engineered TensorRT path could not be materially faster: it can be
 faster, but speed alone does not justify the more expensive lane. See the
 [trial record](../trials/2026-08-24-gpu-ocr-spike.md) for the complete ledger
@@ -108,8 +108,9 @@ eligible for enrichment rise from 84 to 85. Enrichment is off in this spike;
 any future enriched deployment must price that delta. The merge-safety gate
 therefore passes, but the existing economic screen does not: Small TensorRT
 remains about $221/M prepared pages versus $114/M for the diagnostic CPU
-control. No paid A2 or 50-page run is justified merely to confirm an already
-unfavorable cost screen. CPU remains the adopted path.
+control. The earlier cost screen did not justify A2 by itself. The later owner
+target does justify one bounded end-to-end measurement; CPU remains the
+adopted path.
 
 The M1.5 harness's historical `C` field grouped same-shaped pages into one
 list-input `predict()` call. It did not implement the design's concurrent
@@ -119,6 +120,37 @@ was not built because no correct engine advanced.
 
 The governing rules are [measure, then trust](../principles.md#8-measured-then-trusted)
 and [use ruthless simplicity with explicit composition](../principles.md#9-ruthless-simplicity-explicit-composition).
+
+### Owner continuation amendment — 2026-08-24
+
+The owner has now stated a concrete target: sustain 50 complete, successful,
+unique PageSpatial pages per second across the fleet, equivalent by arithmetic
+to one million pages in 20,000 seconds (5 h 33 m 20 s). The owner also
+authorized up to USD 50 of total PageSpatial experimentation in the `desia`
+Modal workspace on 2026-08-24 Europe/London time. The authorization ends at
+2026-08-24 23:00 UTC. Modal billing is reconciled over the UTC interval
+`[2026-08-24T00:00:00Z, 2026-08-25T00:00:00Z)`.
+
+This decision supersedes only the earlier refusal to fund A2. It authorizes a
+benchmark-only Small FP32 continuation with four CPU producers, one persistent
+L4 TensorRT owner, recognition/page batch B1, bounded queues, one exact
+50-page English PDF, and the adopted four-physical-core/24-GiB CPU control.
+The seam lives under `scripts/evaluation/` and may reuse
+`service/lib/stages.mjs`; it must not modify or become selectable from the
+production Modal adapter, service scheduler, worker adapter table, or adopted
+CPU adapter.
+
+Paid stages are serialized. Launches stop at USD 40 of posted plus reserved
+PageSpatial exposure, leaving USD 10 for delayed billing and cleanup. E1 is one
+cold and exactly three warm 50-page comparisons per arm. Fixed reservations are
+USD 3 for E1 CPU and USD 7 for E1 GPU; callers cannot lower them. The only paid
+launcher is `scripts/evaluation/run_gpu_a2_experiment.py`; it reserves before
+CPU deployment or TensorRT image construction and stops the exact app in every
+terminal path. E2 (two independent 1,000-page
+single-container lifetimes) and E3 (the smallest measured fleet for 50,000
+pages) are authorized only if every previous correctness, at-least-2x speed,
+billing, and spend-exposure gate passes. CPU remains the production default;
+any adoption still requires a separate decision.
 
 ## 1. Decision
 

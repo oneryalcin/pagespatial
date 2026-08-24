@@ -4,9 +4,15 @@
 
 **Design:** [`docs/design/2026-08-24-gpu-ocr-spike.md`](../design/2026-08-24-gpu-ocr-spike.md)
 
-**Status:** bounded spike complete through the merged-output safety continuation
+**Status:** merged-output safety complete; bounded A2 E1 authorized, not yet run
 
-**Decision:** **REJECT: CPU REMAINS THE SIMPLEST WINNER.**
+**Current decision:** **DEFER: A2 E1 MEASUREMENT PENDING; CPU REMAINS THE
+PRODUCTION DEFAULT.**
+The rejection below is the completed pre-A2 result. The owner later supplied a
+50 terminal pages/s target and a USD 50 experiment ceiling, which authorizes
+only the bounded E1 comparison described at the end of this trial.
+
+**Pre-A2 decision:** **REJECT: CPU REMAINS THE SIMPLEST WINNER.**
 The adopted CPU Modal deployment remains unchanged. A supported and attested
 TensorRT lane is materially faster for prepared-image OCR, but no treatment
 passes the original raw output-equivalence gate. The owner replaced that gate
@@ -576,6 +582,32 @@ record in `stopped` state with zero tasks. No automated post-drain probe was
 run for these benchmark-only apps.
 
 ## Unmeasured and next trigger
+
+### Bounded A2 continuation authorized — 2026-08-24
+
+The owner supplied the missing demand trigger: 50 terminal pages/s across the
+fleet, plus a USD 50 total PageSpatial experiment ceiling in the `desia` Modal
+workspace for 2026-08-24. Posted PageSpatial spend at authorization was
+USD 2.62063099. A serialized launch guard stops at USD 40 of posted plus
+reserved exposure so delayed billing and cleanup cannot cross the owner cap.
+The authorization ends at 2026-08-24 23:00 UTC (midnight Europe/London).
+Spend is read from Modal's UTC billing interval
+`[2026-08-24T00:00:00Z, 2026-08-25T00:00:00Z)`.
+
+This reopens only benchmark A2 for Small FP32 TensorRT B1: four CPU producers,
+one persistent L4 owner, one frozen 50-page English PDF, and the adopted
+four-physical-core/24-GiB CPU control at the complete terminal PageSpatial
+boundary. The prior economic stop remains the null hypothesis, not the final
+answer. Sustained and fleet stages run only after the 50-page candidate is
+correct, at least 2x faster end to end, billed, and within the exposure gate.
+No production deployment change is authorized.
+
+E1 uses one cold plus exactly three warm calls in each arm. Fixed worst-case
+reservations are USD 3 for CPU and USD 7 for GPU; they remain charged until the
+exact app is stopped and a final closed-interval total is operator-attested.
+`scripts/evaluation/run_gpu_a2_experiment.py` is the only paid entry point. It
+reserves before deploy or image construction, gives each arm a unique app ID,
+uses no application retries, and stops and verifies the exact app in `finally`.
 
 - The §6 M1.5 optimistic end-to-end bound was never computed — the stage
   attribution it requires was not instrumented in these arms.

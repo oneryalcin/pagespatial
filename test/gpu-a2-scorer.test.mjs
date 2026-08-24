@@ -1,0 +1,172 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+
+import { evaluateGpuA2 } from '../scripts/evaluation/score_gpu_a2.mjs';
+
+const SHA = 'a'.repeat(64);
+
+function page(pageNumber, text = `Page ${pageNumber}`, blocking = []) {
+  return {
+    documentId: 'a2-document',
+    revisionId: `sha256:${SHA}`,
+    documentSha256: SHA,
+    pageNumber,
+    geometry: { width: 612, height: 792 },
+    nativeObservations: [{ id: `n-${pageNumber}`, pageNumber, text: `Native ${pageNumber}`, box: [0, 0, 100, 20] }],
+    ocrObservations: [{ id: `o-${pageNumber}`, pageNumber, text, box: [0, 30, 200, 50], confidence: 0.99 }],
+    diagnostics: {
+      requiresEscalation: blocking.length > 0,
+      escalationReasons: blocking.map((type) => ({ type, severity: 'blocking', message: type }))
+    },
+    provenance: {
+      parserName: 'pagespatial', parserVersion: '0.6.0', runId: 'run', createdAt: '2026-08-24T00:00:00Z',
+      nativeAdapter: 'pdfjs', renderer: 'pdftoppm', ocrAdapter: 'engine', configuration: { engine: 'arm' }
+    }
+  };
+}
+
+function run(kind, mutate = () => {}) {
+  const pages = Array.from({ length: 50 }, (_, index) => ({
+    pageNumber: index + 1,
+    ok: true,
+    pageSpatial: page(index + 1)
+  }));
+  mutate(pages);
+  const identity = { documentId: 'a2-document', revisionId: `sha256:${SHA}`, sha256: SHA, pageCount: 50 };
+  return kind === 'cpu'
+    ? { status: 'completed', document_sha256: SHA, page_count: 50, pages_ok: 50, pages_failed: 0, pages }
+    : { status: 'completed', document: identity, pageCount: 50, pages };
+}
+
+function adjudications(values) {
+  return {
+    schemaVersion: 'pagespatial-gpu-a2-adjudications-v1',
+    documentSha256: SHA,
+    values: values.map((value) => ({
+      occurrence: 0,
+      source: {
+        documentSha256: SHA,
+        pageNumber: value.pageNumber,
+        observationBox: [0, 30, 200, 50],
+        observation: 'Reviewed against source PDF.'
+      },
+      ...value
+    }))
+  };
+}
+
+test('allows raw OCR differences when trusted critical output is unchanged', () => {
+  const cpu = run('cpu', (pages) => { pages[0].pageSpatial.ocrObservations[0].text = 'Alpha page'; });
+  const gpu = run('gpu', (pages) => { pages[0].pageSpatial.ocrObservations[0].text = 'First page'; });
+  const result = evaluateGpuA2({ cpu, gpu });
+  assert.equal(result.summary.pass, true);
+  assert.equal(result.summary.rawEvidenceDifferingPages, 1);
+  assert.equal(result.summary.candidateOnlyCriticalValues, 0);
+});
+
+test('reports missing source adjudications as visible pending failure', () => {
+  const cpu = run('cpu', (pages) => { pages[0].pageSpatial.ocrObservations[0].text = 'Invoice date 2023-04-04'; });
+  const gpu = run('gpu', (pages) => { pages[0].pageSpatial.ocrObservations[0].text = 'Invoice date 2022-04-04'; });
+  const result = evaluateGpuA2({ cpu, gpu });
+  assert.equal(result.summary.pass, false);
+  assert.equal(result.summary.pendingSourceAdjudications, 2);
+  assert.equal(result.summary.unresolvedTrustedValues, 2);
+});
+
+test('CLI writes a visible pending report and exits nonzero', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'pagespatial-a2-score-'));
+  try {
+    const cpu = run('cpu', (pages) => { pages[0].pageSpatial.ocrObservations[0].text = 'Invoice 100'; });
+    const gpu = run('gpu', (pages) => { pages[0].pageSpatial.ocrObservations[0].text = 'Invoice 900'; });
+    const cpuPath = join(directory, 'cpu.json');
+    const gpuPath = join(directory, 'gpu.json');
+    const outputPath = join(directory, 'score.json');
+    writeFileSync(cpuPath, JSON.stringify(cpu));
+    writeFileSync(gpuPath, JSON.stringify(gpu));
+    const result = spawnSync(process.execPath, [
+      new URL('../scripts/evaluation/score_gpu_a2.mjs', import.meta.url).pathname,
+      '--cpu', cpuPath, '--gpu', gpuPath, '--output', outputPath
+    ], { encoding: 'utf8' });
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /^PENDING:/u);
+    assert.equal(JSON.parse(readFileSync(outputPath, 'utf8')).summary.pendingSourceAdjudications, 2);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('passes source-adjudicated correct replacement and fails incorrect trusted value', () => {
+  const cpu = run('cpu', (pages) => { pages[0].pageSpatial.ocrObservations[0].text = 'Invoice date 2023-04-04'; });
+  const gpu = run('gpu', (pages) => { pages[0].pageSpatial.ocrObservations[0].text = 'Invoice date 2022-04-04'; });
+  const accepted = evaluateGpuA2({
+    cpu,
+    gpu,
+    adjudications: adjudications([
+      { pageNumber: 1, side: 'candidate', token: '2022-04-04', verdict: 'correct' },
+      { pageNumber: 1, side: 'control', token: '2023-04-04', verdict: 'removed-incorrect' }
+    ])
+  });
+  assert.equal(accepted.summary.pass, true);
+
+  const rejected = evaluateGpuA2({
+    cpu,
+    gpu,
+    adjudications: adjudications([
+      { pageNumber: 1, side: 'candidate', token: '2022-04-04', verdict: 'incorrect' },
+      { pageNumber: 1, side: 'control', token: '2023-04-04', verdict: 'missing' }
+    ])
+  });
+  assert.equal(rejected.summary.pass, false);
+  assert.equal(rejected.summary.newlyIncorrectTrustedValues, 1);
+  assert.equal(rejected.summary.missingTrustedValues, 1);
+});
+
+test('allows unreviewed critical differences only while candidate remains escalated', () => {
+  const cpu = run('cpu', (pages) => { pages[0].pageSpatial.ocrObservations[0].text = 'Invoice 100'; });
+  const gpu = run('gpu', (pages) => {
+    pages[0].pageSpatial.ocrObservations[0].text = 'Invoice 900';
+    pages[0].pageSpatial.diagnostics = page(1, '', ['critical-conflict']).diagnostics;
+  });
+  const result = evaluateGpuA2({ cpu, gpu });
+  assert.equal(result.summary.pass, true);
+  assert.equal(result.pages[0].candidateOnly[0].status, 'unreviewed-escalated');
+});
+
+test('fails when GPU clears a CPU blocking route', () => {
+  const cpu = run('cpu', (pages) => {
+    pages[0].pageSpatial.diagnostics = page(1, '', ['critical-conflict', 'uncorroborated-ocr']).diagnostics;
+  });
+  const gpu = run('gpu', (pages) => {
+    pages[0].pageSpatial.diagnostics = page(1, '', ['uncorroborated-ocr']).diagnostics;
+  });
+  const result = evaluateGpuA2({ cpu, gpu });
+  assert.equal(result.summary.pass, false);
+  assert.deepEqual(result.summary.clearedControlBlockingRoutes, [
+    { pageNumber: 1, types: ['critical-conflict'] }
+  ]);
+});
+
+test('refuses non-identical documents and non-ordered terminal pages', () => {
+  const wrongDocument = run('gpu');
+  wrongDocument.document.sha256 = 'b'.repeat(64);
+  assert.throws(() => evaluateGpuA2({ cpu: run('cpu'), gpu: wrongDocument }), /top-level document identity/u);
+
+  const wrongOrder = run('gpu');
+  [wrongOrder.pages[0], wrongOrder.pages[1]] = [wrongOrder.pages[1], wrongOrder.pages[0]];
+  assert.throws(() => evaluateGpuA2({ cpu: run('cpu'), gpu: wrongOrder }), /out of order/u);
+});
+
+test('fails non-OCR deterministic evidence drift but ignores engine provenance', () => {
+  const gpu = run('gpu', (pages) => {
+    pages[0].pageSpatial.provenance.ocrAdapter = 'tensorrt';
+    pages[0].pageSpatial.provenance.configuration = { deploymentProfile: 'en-gpu' };
+    pages[1].pageSpatial.geometry.width = 700;
+  });
+  const result = evaluateGpuA2({ cpu: run('cpu'), gpu });
+  assert.equal(result.summary.pass, false);
+  assert.deepEqual(result.summary.deterministicDifferingPages, [2]);
+});
