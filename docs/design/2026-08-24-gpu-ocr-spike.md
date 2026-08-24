@@ -126,8 +126,10 @@ and [use ruthless simplicity with explicit composition](../principles.md#9-ruthl
 The owner has now stated a concrete target: sustain 50 complete, successful,
 unique PageSpatial pages per second across the fleet, equivalent by arithmetic
 to one million pages in 20,000 seconds (5 h 33 m 20 s). The owner also
-authorized up to USD 50 of total PageSpatial experimentation in the `desia`
-Modal workspace on 2026-08-24 Europe/London time. The authorization ends at
+authorized up to USD 75 of total PageSpatial experimentation in the `desia`
+Modal workspace on 2026-08-24 Europe/London time, raising the initial USD 50
+ceiling after the first effective-B8 startup was lost to a client heartbeat.
+The authorization ends at
 2026-08-24 23:00 UTC. Modal billing is reconciled over the UTC interval
 `[2026-08-24T00:00:00Z, 2026-08-25T00:00:00Z)`.
 
@@ -147,7 +149,7 @@ PaddleX's explicit `Inference backend: openvino` line. A later generic
 thread-config line is not engine proof. This changes no engine, routing,
 scheduling, or OCR output.
 
-Paid stages are serialized. Launches stop at the owner-authorized USD 50 of
+Paid stages are serialized. Launches stop at the owner-authorized USD 75 of
 posted plus reserved PageSpatial exposure. E1 is one cold and exactly three
 warm 50-page comparisons per arm. Fixed reservations are USD 3 for E1 CPU and,
 prospectively after the measured amendment below, USD 3 for E1 GPU; callers

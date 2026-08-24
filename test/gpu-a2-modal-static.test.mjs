@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../scripts/evaluation/gpu_a2_modal.py', import.meta.url), 'utf8');
+const runnerSource = readFileSync(new URL('../scripts/evaluation/run_gpu_a2_experiment.py', import.meta.url), 'utf8');
 
 test('A2 Modal arm is one bounded L4 owner with no retries', () => {
   assert.match(source, /gpu=GPU_TYPE/u);
@@ -52,6 +53,7 @@ test('A2 runner enforces spend and repeat bounds before remote work', () => {
   assert.match(source, /len\(set\(container_ids\)\) != 1/u);
   assert.match(source, /MAX_RESULT_BYTES = 64 \* 1024 \* 1024/u);
   assert.match(source, /ResultTooLarge/u);
+  assert.match(runnerSource, /"modal", "run", "--detach"/u);
 });
 
 test('A2 controller owns and drains the complete process group', () => {

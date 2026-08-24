@@ -177,7 +177,7 @@ def run_gpu(
         }
         run(
             [
-                "modal", "run", "scripts/evaluation/gpu_a2_modal.py",
+                "modal", "run", "--detach", "scripts/evaluation/gpu_a2_modal.py",
                 "--pdf-path", str(WORKLOAD),
                 "--native-evidence-path", str(native_evidence),
                 "--out-dir", str(out_dir / "gpu"),

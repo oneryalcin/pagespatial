@@ -4,12 +4,13 @@
 
 **Design:** [`docs/design/2026-08-24-gpu-ocr-spike.md`](../design/2026-08-24-gpu-ocr-spike.md)
 
-**Status:** merged-output safety complete; bounded A2 E1 authorized, not yet run
+**Status:** merged-output safety complete; A2 B1 measured; effective B8 retry pending
 
 **Current decision:** **DEFER: A2 E1 MEASUREMENT PENDING; CPU REMAINS THE
 PRODUCTION DEFAULT.**
 The rejection below is the completed pre-A2 result. The owner later supplied a
-50 terminal pages/s target and a USD 50 experiment ceiling, which authorizes
+50 terminal pages/s target and an initial USD 50 experiment ceiling, raised to
+USD 75 after an infrastructure-only aborted startup. This authorizes
 only the bounded E1 comparison described at the end of this trial.
 
 **Pre-A2 decision:** **REJECT: CPU REMAINS THE SIMPLEST WINNER.**
@@ -586,10 +587,12 @@ run for these benchmark-only apps.
 ### Bounded A2 continuation authorized — 2026-08-24
 
 The owner supplied the missing demand trigger: 50 terminal pages/s across the
-fleet, plus a USD 50 total PageSpatial experiment ceiling in the `desia` Modal
-workspace for 2026-08-24. Posted PageSpatial spend at authorization was
-USD 2.62063099. A serialized launch guard stops at USD 50 of posted plus
-reserved exposure, matching the owner cap.
+fleet, plus an initial USD 50 total PageSpatial experiment ceiling in the
+`desia` Modal workspace for 2026-08-24. The owner later raised the ceiling to
+USD 75 after an effective-B8 container was stopped during cold startup by a
+local-client heartbeat loss. Posted PageSpatial spend at initial authorization
+was USD 2.62063099. A serialized launch guard now stops at USD 75 of posted
+plus reserved exposure, matching the current owner cap.
 The authorization ends at 2026-08-24 23:00 UTC (midnight Europe/London).
 Spend is read from Modal's UTC billing interval
 `[2026-08-24T00:00:00Z, 2026-08-25T00:00:00Z)`.
@@ -636,8 +639,14 @@ The two complete four-call L4 windows posted incremental costs of about USD
 0.199 and USD 0.203. The prospective E1-GPU reservation is reduced from USD
 3.50 to USD 3.00, still over 14x the larger observed complete window; prior
 ledger entries are unchanged. One true B8 retry may run within the owner's USD
-50 ceiling. It also records effective crop batches and compares tiny metadata,
+75 ceiling. It also records effective crop batches and compares tiny metadata,
 raw JSON bytes, and the full result object without repeating OCR.
+
+The first effective-B8 retry never reached user code. Its image log proves
+`PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE=8`, but Modal stopped the app during
+TensorRT cold startup after the local client heartbeat timed out. It produced
+zero page results and posted about USD 0.062. The paid launcher now uses
+`modal run --detach`; it still resolves and stops the exact app in `finally`.
 
 - The §6 M1.5 optimistic end-to-end bound was never computed — the stage
   attribution it requires was not instrumented in these arms.
