@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "pagespatial-gpu-instrumentation-authorization-v1",
+  "localDate": "2026-08-25",
+  "timezone": "Europe/London",
+  "authorizedAtUtc": "2026-08-24T23:34:24Z",
+  "authorizationEndsAtUtc": "2026-08-25T23:00:00Z",
+  "modalProfile": "desia",
+  "ownerCeilingUsd": 100,
+  "operationalStopUsd": 100,
+  "scope": [
+    "M0 capability probe",
+    "M1 shared-core and parity measurement",
+    "M2 Nsight Systems and CPU capture"
+  ],
+  "notAuthorized": [
+    "production deployment",
+    "model or GPU sweep",
+    "optimization implementation",
+    "access to the locked correctness holdout"
+  ],
+  "source": "owner instructions in the 2026-08-25 conversation: go ahead and start the instrumentation implementation as per docs and measure; today's experimentation ceiling is USD 100 and any increase requires a new request"
+}
