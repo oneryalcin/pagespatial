@@ -4,12 +4,12 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../scripts/evaluation/run_gpu_a2_experiment.py', import.meta.url), 'utf8');
 
-test('paid A2 launcher exposes E1 only and reserves before deploy/run', () => {
+test('paid launcher exposes bounded E1 and paired A3 reservations before remote work', () => {
   assert.match(source, /reserve\(ledger, "E1-CPU"\)/u);
-  assert.match(source, /reserve\(ledger, "E1-GPU"\)/u);
+  assert.match(source, /"A3-PAIRED-GPU" if paired_split_comparison else "E1-GPU"/u);
   assert.doesNotMatch(source, /reserve\(ledger, "E2-GPU"\)/u);
   assert.ok(source.indexOf('reserve(ledger, "E1-CPU")') < source.indexOf('["modal", "deploy"'));
-  assert.ok(source.indexOf('reserve(ledger, "E1-GPU")') < source.indexOf('"modal", "run"'));
+  assert.ok(source.indexOf('reservation = reserve(') < source.indexOf('"modal", "run"'));
 });
 
 test('paid A2 launcher requires clean source and exact app cleanup', () => {
@@ -58,4 +58,6 @@ test('paid A2 launcher varies only the predeclared tier and recognition batch gr
   assert.match(source, /choices=\(1, 4, 8\)/u);
   assert.match(source, /PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE/u);
   assert.match(source, /gpu-\{model_tier\}-b\{recognition_batch_size\}/u);
+  assert.match(source, /--paired-split-comparison/u);
+  assert.match(source, /requires unprofiled Tiny B1 O2/u);
 });

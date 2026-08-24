@@ -46,7 +46,14 @@ if modal.is_local():
     _ledger_path = Path(os.environ.get("PAGESPATIAL_A2_LEDGER", str(DEFAULT_LEDGER)))
     if not _reservation_id:
         raise RuntimeError("PAGESPATIAL_A2_RESERVATION is required before image construction")
-    validate_reservation(_ledger_path, _reservation_id, "E1-GPU")
+    _paired_comparison = (
+        os.environ.get("PAGESPATIAL_A3_PAIRED_SPLIT_COMPARISON", "0") == "1"
+    )
+    validate_reservation(
+        _ledger_path,
+        _reservation_id,
+        "A3-PAIRED-GPU" if _paired_comparison else "E1-GPU",
+    )
 
 from gpu_spike_modal import (
     GPU_TYPE,
@@ -118,6 +125,9 @@ if MODEL_TIER not in {"tiny", "small"}:
     raise ValueError("PAGESPATIAL_A2_MODEL_TIER must be tiny or small")
 STAGE_PROFILE = os.environ.get("PAGESPATIAL_A2_STAGE_PROFILE", "0") == "1"
 SPLIT_RECOGNITION = os.environ.get("PAGESPATIAL_A2_SPLIT_RECOGNITION", "0") == "1"
+PAIRED_SPLIT_COMPARISON = (
+    os.environ.get("PAGESPATIAL_A3_PAIRED_SPLIT_COMPARISON", "0") == "1"
+)
 if STAGE_PROFILE and (
     MODEL_TIER != "tiny"
     or RECOGNITION_BATCH_SIZE != 1
@@ -132,6 +142,14 @@ if SPLIT_RECOGNITION and (
     raise ValueError("split recognition is bounded to Tiny B1 with two owners")
 if STAGE_PROFILE and SPLIT_RECOGNITION:
     raise ValueError("stage profiling and split recognition are separate A3 arms")
+if PAIRED_SPLIT_COMPARISON and (
+    MODEL_TIER != "tiny"
+    or RECOGNITION_BATCH_SIZE != 1
+    or INFERENCE_OWNERS != 2
+    or STAGE_PROFILE
+    or SPLIT_RECOGNITION
+):
+    raise ValueError("paired split comparison is bounded to unprofiled Tiny B1 O2")
 
 if modal.is_local():
     REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -239,6 +257,9 @@ if modal.is_local():
                 "PAGESPATIAL_A2_SPLIT_RECOGNITION": (
                     "1" if SPLIT_RECOGNITION else "0"
                 ),
+                "PAGESPATIAL_A3_PAIRED_SPLIT_COMPARISON": (
+                    "1" if PAIRED_SPLIT_COMPARISON else "0"
+                ),
             }
         )
     )
@@ -270,6 +291,7 @@ ARM = {
     "deploymentProfile": "en-gpu",
     "stageProfile": STAGE_PROFILE,
     "splitRecognition": SPLIT_RECOGNITION,
+    "pairedSplitComparison": PAIRED_SPLIT_COMPARISON,
 }
 
 
@@ -430,6 +452,15 @@ class GpuA2Container:
         self.container_cold = True
         self.first_inference_ms_by_owner: list[float | None] = [None] * INFERENCE_OWNERS
 
+    def _enable_split_recognition(self) -> None:
+        if self.split_recognition_models:
+            return
+        from gpu_a3_split_recognition import install_split_recognition
+
+        self.split_recognition_models = [
+            install_split_recognition(ocr, queue_depth=2) for ocr in self.ocrs
+        ]
+
     def _predict_page(
         self, owner_index: int, message: dict[str, Any], *, attest: bool
     ) -> tuple[dict[str, Any], float]:
@@ -561,6 +592,16 @@ class GpuA2Container:
         expected_native_sha = payload.get("native_evidence_sha256")
         if hashlib.sha256(native_evidence_bytes).hexdigest() != expected_native_sha:
             raise ValueError("native evidence SHA-256 mismatch")
+
+        requested_split = payload.get("split_recognition", SPLIT_RECOGNITION)
+        if not isinstance(requested_split, bool):
+            raise ValueError("split_recognition must be boolean")
+        if requested_split and not (SPLIT_RECOGNITION or PAIRED_SPLIT_COMPARISON):
+            raise ValueError("split recognition was not enabled for this arm")
+        if requested_split:
+            self._enable_split_recognition()
+        elif self.split_recognition_models:
+            raise ValueError("paired split comparison cannot return to control mode")
 
         method_started = time.monotonic()
         profile_started_ns = time.monotonic_ns()
@@ -706,7 +747,11 @@ class GpuA2Container:
             method_total_ms = (time.monotonic() - method_started) * 1000
             result.update(
                 {
-                    "arm": ARM,
+                    "arm": {
+                        **ARM,
+                        "name": ARM["name"] + ("-split-active" if requested_split else "-control"),
+                        "splitRecognition": requested_split,
+                    },
                     "resources": {
                         "physicalCpuCores": CPU_CORES,
                         "memoryMiB": MEMORY_MIB,
@@ -754,7 +799,7 @@ class GpuA2Container:
                     ],
                 }
             )
-            if SPLIT_RECOGNITION:
+            if requested_split:
                 result["splitRecognition"] = {
                     "schemaVersion": "pagespatial-gpu-a3-split-recognition-run-v1",
                     "owners": [
@@ -830,8 +875,11 @@ def main(
     repeats: int = 4,
     allow_dirty: bool = False,
 ) -> None:
-    if repeats != 4:
-        raise ValueError("E1 requires exactly four calls: one cold plus three warm")
+    expected_repeats = 5 if PAIRED_SPLIT_COMPARISON else 4
+    if repeats != expected_repeats:
+        raise ValueError(
+            f"arm requires exactly {expected_repeats} calls"
+        )
     source = _source_state(allow_dirty)
     pdf = Path(pdf_path).read_bytes()
     pdf_sha = hashlib.sha256(pdf).hexdigest()
@@ -874,6 +922,7 @@ def main(
     last_remote_result_json = b""
     last_remote_result: dict[str, Any] = {}
     for repeat in range(1, repeats + 1):
+        split_active = PAIRED_SPLIT_COMPARISON and repeat >= 4
         call_started = time.monotonic()
         result = owner.parse_document.remote(
             {
@@ -883,11 +932,19 @@ def main(
                 "native_evidence_sha256": native_evidence_sha,
                 "expected_sha256": pdf_sha,
                 "expected_pages": EXPECTED_PAGES,
+                "split_recognition": split_active or SPLIT_RECOGNITION,
             }
         )
-        if result.get("arm") != ARM:
+        expected_arm = {
+            **ARM,
+            "name": ARM["name"] + (
+                "-split-active" if split_active or SPLIT_RECOGNITION else "-control"
+            ),
+            "splitRecognition": split_active or SPLIT_RECOGNITION,
+        }
+        if result.get("arm") != expected_arm:
             raise RuntimeError(
-                f"remote arm mismatch: requested {ARM!r}, returned {result.get('arm')!r}"
+                f"remote arm mismatch: requested {expected_arm!r}, returned {result.get('arm')!r}"
             )
         last_remote_result_json = json.dumps(
             result, separators=(",", ":")
@@ -895,6 +952,7 @@ def main(
         last_remote_result = dict(result)
         result["client"] = {
             "repeat": repeat,
+            "mode": "split" if split_active or SPLIT_RECOGNITION else "control",
             "spawnToResultS": time.monotonic() - call_started,
         }
         snapshot = _container_snapshot()
@@ -962,8 +1020,9 @@ def main(
             )
     cold_pattern = [item["method"]["containerCold"] for item in outcomes]
     owner_pids = {item["method"]["ownerPid"] for item in outcomes}
+    expected_cold_pattern = [True] + [False] * (repeats - 1)
     if (
-        cold_pattern != [True, False, False, False]
+        cold_pattern != expected_cold_pattern
         or len(owner_pids) != 1
         or len(set(container_ids)) != 1
     ):
@@ -986,5 +1045,24 @@ def main(
             "containerIds": container_ids,
         },
     }
+    if PAIRED_SPLIT_COMPARISON:
+        control = [item for item in outcomes if item["client"]["mode"] == "control" and not item["method"]["containerCold"]]
+        treatment = [item for item in outcomes if item["client"]["mode"] == "split"]
+        if len(control) != 2 or len(treatment) != 2:
+            raise RuntimeError("paired comparison did not produce two warm calls per mode")
+        control_inner = statistics.median(item["timing"]["pagesPerS"] for item in control)
+        treatment_inner = statistics.median(item["timing"]["pagesPerS"] for item in treatment)
+        control_client = statistics.median(EXPECTED_PAGES / item["client"]["spawnToResultS"] for item in control)
+        treatment_client = statistics.median(EXPECTED_PAGES / item["client"]["spawnToResultS"] for item in treatment)
+        metadata["summary"]["pairedComparison"] = {
+            "controlRepeats": [item["client"]["repeat"] for item in control],
+            "splitRepeats": [item["client"]["repeat"] for item in treatment],
+            "controlInnerPagesPerS": control_inner,
+            "splitInnerPagesPerS": treatment_inner,
+            "innerSpeedup": treatment_inner / control_inner,
+            "controlClientPagesPerS": control_client,
+            "splitClientPagesPerS": treatment_client,
+            "clientSpeedup": treatment_client / control_client,
+        }
     (run_dir / "run.json").write_text(json.dumps(metadata, indent=1) + "\n")
     print(f"evidence={run_dir}")
