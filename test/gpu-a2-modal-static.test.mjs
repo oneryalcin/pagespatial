@@ -17,10 +17,12 @@ test('A2 remote hydration never imports the paid image-construction harness', ()
   assert.match(source, /else:[\s\S]*trt_image = modal\.Image\.debian_slim/u);
 });
 
-test('A2 Modal arm is only qualified Small FP32 with batch one', () => {
+test('A2 Modal arm is only Small FP32 with a bounded recognition batch', () => {
   assert.match(source, /"tier": "small"/u);
   assert.match(source, /"precision": "fp32"/u);
-  assert.match(source, /"recognitionBatchSize": 1/u);
+  assert.match(source, /PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE/u);
+  assert.match(source, /not in \{1, 4, 8\}/u);
+  assert.match(source, /"recognitionBatchSize": RECOGNITION_BATCH_SIZE/u);
   assert.match(source, /"deploymentProfile": "en-gpu"/u);
   assert.doesNotMatch(source, /"tier": "tiny"/u);
   assert.doesNotMatch(source, /"precision": "fp16"/u);

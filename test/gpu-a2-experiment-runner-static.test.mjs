@@ -45,6 +45,13 @@ test('E2 is locked behind all four correctness reports and a 2x warm speed gate'
 test('paid GPU work starts only after native evidence is precomputed on CPU', () => {
   assert.match(source, /precompute_gpu_a2_native\.mjs/u);
   assert.match(source, /native-evidence-v1\.json/u);
-  assert.ok(source.indexOf('precompute_native_evidence(args.out_dir)') < source.indexOf('run_gpu(args.ledger'));
+  assert.ok(source.indexOf('precompute_native_evidence(args.out_dir)') < source.indexOf('gpu = run_gpu('));
   assert.match(source, /--native-evidence-path/u);
+});
+
+test('paid A2 launcher varies only the predeclared recognition batch grid', () => {
+  assert.match(source, /--recognition-batch-size/u);
+  assert.match(source, /choices=\(1, 4, 8\)/u);
+  assert.match(source, /PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE/u);
+  assert.match(source, /gpu-b\{recognition_batch_size\}/u);
 });

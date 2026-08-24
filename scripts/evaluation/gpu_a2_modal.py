@@ -195,14 +195,21 @@ else:
     a2_image = modal.Image.debian_slim(python_version="3.10")
 
 
+RECOGNITION_BATCH_SIZE = int(
+    os.environ.get("PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE", "1")
+)
+if RECOGNITION_BATCH_SIZE not in {1, 4, 8}:
+    raise ValueError("PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE must be 1, 4, or 8")
+
+
 ARM = {
-    "name": "g-trt-small-fp32-a2-b1c4",
+    "name": f"g-trt-small-fp32-a2-b{RECOGNITION_BATCH_SIZE}c4",
     "tier": "small",
     "device": "gpu:0",
     "runtime": "hpi-ort-trt",
     "enableHpi": True,
     "precision": "fp32",
-    "recognitionBatchSize": 1,
+    "recognitionBatchSize": RECOGNITION_BATCH_SIZE,
     "pageBatchSize": 1,
     "producerCount": 4,
     "requiredBackendTokens": ["onnxruntime", "tensorrt"],

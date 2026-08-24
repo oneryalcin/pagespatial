@@ -155,10 +155,15 @@ def run_cpu(ledger: Path, out_dir: Path, revision: str) -> tuple[str, str, Path]
             complete(ledger, reservation["id"], app_id)
 
 
-def run_gpu(ledger: Path, out_dir: Path, native_evidence: Path) -> tuple[str, str, Path]:
+def run_gpu(
+    ledger: Path,
+    out_dir: Path,
+    native_evidence: Path,
+    recognition_batch_size: int,
+) -> tuple[str, str, Path]:
     reservation = reserve(ledger, "E1-GPU")
     suffix = f"{time.strftime('%Y%m%d%H%M%S', time.gmtime())}-{uuid.uuid4().hex[:6]}"
-    app_name = f"pagespatial-gpu-a2-e1-gpu-{suffix}"
+    app_name = f"pagespatial-gpu-a2-e1-gpu-b{recognition_batch_size}-{suffix}"
     app_id = ""
     evidence_root = out_dir / "gpu"
     before = {path for path in evidence_root.glob("*") if path.is_dir()}
@@ -168,6 +173,7 @@ def run_gpu(ledger: Path, out_dir: Path, native_evidence: Path) -> tuple[str, st
             "PAGESPATIAL_A2_RESERVATION": reservation["id"],
             "PAGESPATIAL_A2_LEDGER": str(ledger),
             "PAGESPATIAL_A2_APP_NAME": app_name,
+            "PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE": str(recognition_batch_size),
         }
         run(
             [
@@ -333,6 +339,13 @@ def main() -> None:
         "--cpu-evidence", type=Path,
         help="reuse one completed, current-revision four-call CPU control",
     )
+    parser.add_argument(
+        "--recognition-batch-size",
+        type=int,
+        choices=(1, 4, 8),
+        default=1,
+        help="TensorRT recognition crop batch; all other A2 inputs remain fixed",
+    )
     args = parser.parse_args()
     revision = source_revision()
     if not WORKLOAD.exists():
@@ -344,7 +357,12 @@ def main() -> None:
     else:
         cpu = run_cpu(args.ledger, args.out_dir, revision)
     native_evidence = precompute_native_evidence(args.out_dir)
-    gpu = run_gpu(args.ledger, args.out_dir, native_evidence)
+    gpu = run_gpu(
+        args.ledger,
+        args.out_dir,
+        native_evidence,
+        args.recognition_batch_size,
+    )
     decision = score_e1(cpu[2], gpu[2], args.out_dir, args.adjudications)
     print(json.dumps({
         "cpu": [cpu[0], cpu[1], str(cpu[2])],
