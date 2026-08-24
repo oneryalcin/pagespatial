@@ -214,9 +214,12 @@ export function createPpOcrSidecarAdapter(config = {}) {
         // best available evidence and is labeled for what it is.
         engineEvidence: {
           source: 'log-derived (child stderr)',
-          // LATEST match: engine selection can be re-logged (e.g. per model
-          // component); the most recent line reflects the serving engine.
-          line: stderrRing.filter((line) => /Backend::|backend config/u.test(line)).at(-1) ?? null
+          // Prefer the latest concrete C++ engine selection. A later generic
+          // "backend config" line may carry thread settings but cannot prove
+          // OpenVINO rather than Paddle served the request.
+          line: stderrRing.filter((line) => /Backend::/u.test(line)).at(-1)
+            ?? stderrRing.filter((line) => /backend config/u.test(line)).at(-1)
+            ?? null
         }
       };
     },

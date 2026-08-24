@@ -223,6 +223,26 @@ def _enforce_result_size(result: dict[str, Any]) -> None:
         raise RuntimeError(f"ResultTooLarge: {size} bytes exceeds {MAX_RESULT_BYTES}")
 
 
+def _container_snapshot() -> dict[str, Any]:
+    deadline = time.monotonic() + 10
+    mine: list[dict[str, Any]] = []
+    while time.monotonic() < deadline:
+        rows = json.loads(
+            subprocess.run(
+                ["modal", "container", "list", "--json"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            ).stdout
+        )
+        mine = [row for row in rows if row.get("app_name") == APP_NAME]
+        if len(mine) == 1 and mine[0].get("container_id") and mine[0].get("app_id"):
+            return mine[0]
+        time.sleep(0.5)
+    raise RuntimeError(f"expected one attributable GPU container, found {mine}")
+
+
 @app.cls(
     image=a2_image,
     gpu=GPU_TYPE,
@@ -509,6 +529,7 @@ def main(
     (run_dir / "run.json").write_text(json.dumps(metadata, indent=1) + "\n")
     owner = GpuA2Container()
     outcomes = []
+    container_ids = []
     for repeat in range(1, repeats + 1):
         call_started = time.monotonic()
         result = owner.parse_document.remote(
@@ -523,6 +544,11 @@ def main(
             "repeat": repeat,
             "spawnToResultS": time.monotonic() - call_started,
         }
+        snapshot = _container_snapshot()
+        result["client"].update(
+            {"containerId": snapshot["container_id"], "appId": snapshot["app_id"]}
+        )
+        container_ids.append(snapshot["container_id"])
         path = run_dir / f"gpu-repeat-{repeat}.json"
         path.write_text(json.dumps(result, indent=1) + "\n")
         outcomes.append(result)
@@ -534,9 +560,14 @@ def main(
         )
     cold_pattern = [item["method"]["containerCold"] for item in outcomes]
     owner_pids = {item["method"]["ownerPid"] for item in outcomes}
-    if cold_pattern != [True, False, False, False] or len(owner_pids) != 1:
+    if (
+        cold_pattern != [True, False, False, False]
+        or len(owner_pids) != 1
+        or len(set(container_ids)) != 1
+    ):
         raise RuntimeError(
-            f"warm-lifetime proof failed: cold={cold_pattern}, ownerPids={sorted(owner_pids)}"
+            "warm-lifetime proof failed: "
+            f"cold={cold_pattern}, ownerPids={sorted(owner_pids)}, containers={container_ids}"
         )
     metadata["completedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     metadata["summary"] = {
@@ -546,6 +577,11 @@ def main(
         "medianClientPagesPerS": statistics.median(
             EXPECTED_PAGES / item["client"]["spawnToResultS"] for item in outcomes
         ),
+        "warmReuse": {
+            "coldPattern": cold_pattern,
+            "ownerPids": sorted(owner_pids),
+            "containerIds": container_ids,
+        },
     }
     (run_dir / "run.json").write_text(json.dumps(metadata, indent=1) + "\n")
     print(f"evidence={run_dir}")

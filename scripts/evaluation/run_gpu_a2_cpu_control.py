@@ -58,16 +58,22 @@ def stop_and_verify(app_name: str) -> None:
 
 
 def container_snapshot(app_name: str, expected_app_id: str) -> list[dict]:
-    rows = json.loads(
-        subprocess.run(
-            ["modal", "container", "list", "--json"],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        ).stdout
-    )
-    mine = [row for row in rows if row.get("app_name") == app_name]
+    deadline = time.monotonic() + 10
+    mine = []
+    while time.monotonic() < deadline:
+        rows = json.loads(
+            subprocess.run(
+                ["modal", "container", "list", "--json"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            ).stdout
+        )
+        mine = [row for row in rows if row.get("app_name") == app_name]
+        if len(mine) == 1:
+            break
+        time.sleep(0.5)
     if len(mine) != 1:
         raise RuntimeError(f"expected one live CPU control container, found {mine}")
     if mine[0].get("app_id") not in {None, expected_app_id}:
@@ -91,12 +97,15 @@ def attest_result(
         provenance = entry.get("pageSpatial", {}).get("provenance", {})
         backend = provenance.get("configuration", {}).get("ocrBackend", {})
         pins = backend.get("modelPins")
+        engine_evidence = backend.get("engineEvidence", {})
         if (
             provenance.get("backend") != "hpi"
             or backend.get("executionProvider") != "hpi"
             or backend.get("hpiRequested") is not True
             or backend.get("useHpip") is not True
             or pins != model_pins
+            or engine_evidence.get("source") != "log-derived (child stderr)"
+            or "Backend::OPENVINO" not in str(engine_evidence.get("line", ""))
         ):
             raise RuntimeError(f"CPU HPI/OpenVINO/model-pin attestation failed on page {entry.get('pageNumber')}")
 
@@ -184,6 +193,27 @@ def main() -> None:
                 "repeat": repeat,
                 "spawnToResultS": client_wall_s,
                 "inclusivePagesPerS": EXPECTED_PAGES / client_wall_s,
+            }
+            result["modelVerification"] = {
+                "detector": {
+                    "repo": "PaddlePaddle/PP-OCRv6_small_det",
+                    "revision": pin_manifest["repos"]["PaddlePaddle/PP-OCRv6_small_det"]["revision"],
+                    "files": {
+                        name: digest for name, digest in
+                        pin_manifest["repos"]["PaddlePaddle/PP-OCRv6_small_det"]["files"].items()
+                        if name.startswith("inference.")
+                    },
+                },
+                "recognizer": {
+                    "repo": "PaddlePaddle/PP-OCRv6_small_rec",
+                    "revision": pin_manifest["repos"]["PaddlePaddle/PP-OCRv6_small_rec"]["revision"],
+                    "files": {
+                        name: digest for name, digest in
+                        pin_manifest["repos"]["PaddlePaddle/PP-OCRv6_small_rec"]["files"].items()
+                        if name.startswith("inference.")
+                    },
+                },
+                "evidence": "adopted image pin manifest; sidecar boot verified model pins",
             }
             path = run_dir / f"cpu-repeat-{repeat}.json"
             path.write_text(json.dumps(result, indent=1) + "\n")

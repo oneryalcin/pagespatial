@@ -608,6 +608,10 @@ exact app is stopped and a final closed-interval total is operator-attested.
 `scripts/evaluation/run_gpu_a2_experiment.py` is the only paid entry point. It
 reserves before deploy or image construction, gives each arm a unique app ID,
 uses no application retries, and stops and verifies the exact app in `finally`.
+The continuation also corrects one provenance-only defect before E1: CPU
+`engineEvidence` now prefers the concrete `Backend::OPENVINO` line over a
+later generic backend-config line. Engine selection and OCR behavior do not
+change.
 
 - The §6 M1.5 optimistic end-to-end bound was never computed — the stage
   attribution it requires was not instrumented in these arms.

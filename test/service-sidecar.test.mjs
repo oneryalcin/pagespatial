@@ -53,6 +53,7 @@ if (process.env.MOCK_SLOW_META === '1' && !fs.existsSync(process.env.MOCK_STATE_
 } else {
   console.log(JSON.stringify({ kind: 'meta', pid: process.pid, versions: { paddleocr: 'mock-1' }, platform: 'MockOS', osCpuCount: 1, threads: 1, threadKwargApplied: true, hpiRequested: false, useHpip: false, modelPins: {}, initS: 0 }));
   console.error('mock: Backend::MOCKENGINE in Device::CPU');
+  console.error('mock: Inference backend config: cpu_num_threads=1');
   const held = [];
   readline.createInterface({ input: process.stdin }).on('line', (line) => {
     const request = JSON.parse(line);
@@ -291,6 +292,7 @@ test('provenance is truthful: ep derives from child meta, pins ride along', asyn
     // Engine evidence is log-derived and labeled as such.
     assert.equal(adapter.backend.engineEvidence.source, 'log-derived (child stderr)');
     assert.match(adapter.backend.engineEvidence.line, /Backend::MOCKENGINE/u);
+    assert.doesNotMatch(adapter.backend.engineEvidence.line, /backend config/u);
     assert.equal(adapter.canonical, true);
   } finally {
     // dispose in finally: a failed assertion must not leak a live child

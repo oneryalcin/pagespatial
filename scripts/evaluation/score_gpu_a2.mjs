@@ -53,6 +53,54 @@ function ocrLines(page) {
   }));
 }
 
+function modelIdentity(run, label) {
+  const verification = run?.modelVerification;
+  const normalized = {};
+  for (const component of ['detector', 'recognizer']) {
+    const value = verification?.[component];
+    if (!value || typeof value.repo !== 'string' || typeof value.revision !== 'string' ||
+        !value.files || typeof value.files !== 'object') {
+      throw new Error(`${label} lacks complete ${component} model verification.`);
+    }
+    normalized[component] = { repo: value.repo, revision: value.revision, files: value.files };
+  }
+  if (normalized.detector.repo !== 'PaddlePaddle/PP-OCRv6_small_det' ||
+      normalized.recognizer.repo !== 'PaddlePaddle/PP-OCRv6_small_rec') {
+    throw new Error(`${label} is not PP-OCRv6 Small.`);
+  }
+  return normalized;
+}
+
+function boxOverlap(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right)) return 0;
+  const intersection = Math.max(0, Math.min(left[2], right[2]) - Math.max(left[0], right[0]))
+    * Math.max(0, Math.min(left[3], right[3]) - Math.max(left[1], right[1]));
+  const leftArea = Math.max(0, left[2] - left[0]) * Math.max(0, left[3] - left[1]);
+  const rightArea = Math.max(0, right[2] - right[0]) * Math.max(0, right[3] - right[1]);
+  return intersection / Math.max(1, Math.min(leftArea, rightArea));
+}
+
+function tiedNativeConflict(page, side, difference) {
+  const observations = page.ocrObservations ?? [];
+  const criticalReasons = (page.diagnostics?.escalationReasons ?? []).filter((reason) =>
+    reason.severity === 'blocking' && /^critical-token-/u.test(reason.type));
+  const candidates = side === 'candidate'
+    ? [observations[difference.lineIndex]].filter(Boolean)
+    : observations.filter((observation) => boxOverlap(observation.box, difference.box) >= 0.5);
+  for (const observation of candidates) {
+    const conflict = (page.conflicts ?? []).find((entry) =>
+      entry.ocrId === observation.id && (
+        side === 'candidate'
+          ? entry.ocrCriticalTokens?.includes(difference.token)
+          : entry.nativeCriticalTokens?.includes(difference.token)
+      ));
+    if (conflict && criticalReasons.some((reason) => reason.sourceIds?.includes(observation.id))) {
+      return conflict;
+    }
+  }
+  return null;
+}
+
 function crossEngineDeterministicProjection(page) {
   const projection = stableDeterministicProjection(page);
   if (projection.provenance) {
@@ -150,21 +198,38 @@ function adjudicationIndex(adjudications, identity) {
   return entries;
 }
 
-function scoreDifference({ difference, side, pageNumber, trusted, adjudications, identity, used }) {
+function scoreDifference({
+  difference, side, page, pageNumber, trusted, adjudications, identity, used
+}) {
   const base = {
     token: difference.token,
     occurrence: difference.occurrence,
     observationBox: difference.box
   };
-  if (!trusted) return { ...base, status: 'unreviewed-escalated', verdict: 'unreviewed' };
+  const conflict = tiedNativeConflict(page, side, difference);
   const key = adjudicationKey(pageNumber, side, difference);
   const adjudication = adjudications.get(key);
-  if (!adjudication) return { ...base, status: 'pending-source-adjudication', verdict: 'pending' };
+  if (!adjudication) {
+    if (!trusted && conflict) {
+      return {
+        ...base, status: 'unreviewed-native-conflict', verdict: 'unreviewed',
+        caughtByNativeConflict: true
+      };
+    }
+    return {
+      ...base, status: 'pending-source-adjudication', verdict: 'pending',
+      caughtByNativeConflict: false
+    };
+  }
   const allowed = side === 'candidate'
     ? ['correct', 'incorrect', 'unsure']
     : ['removed-incorrect', 'missing', 'unsure'];
   if (!allowed.includes(adjudication.verdict)) {
     throw new Error(`Unsupported ${side} adjudication verdict ${adjudication.verdict}.`);
+  }
+  if (['incorrect', 'removed-incorrect'].includes(adjudication.verdict) &&
+      typeof adjudication.correctToken !== 'string') {
+    throw new Error(`${side} ${adjudication.verdict} adjudication requires correctToken.`);
   }
   const source = adjudication.source;
   if (source?.documentSha256 !== identity.sha256 || source?.pageNumber !== pageNumber ||
@@ -175,10 +240,14 @@ function scoreDifference({ difference, side, pageNumber, trusted, adjudications,
     throw new Error(`Adjudication ${key} is not bound to a source observation.`);
   }
   used.add(key);
+  const caughtByNativeConflict = side === 'candidate' && adjudication.verdict === 'incorrect'
+    && conflict !== null && conflict.nativeCriticalTokens?.includes(adjudication.correctToken);
   return {
     ...base,
     status: 'source-adjudicated',
     verdict: adjudication.verdict,
+    correctToken: adjudication.correctToken ?? null,
+    caughtByNativeConflict,
     source: source.observation
   };
 }
@@ -188,6 +257,11 @@ export function evaluateGpuA2({ cpu, gpu, adjudications }) {
   const candidate = normalizeRun(gpu, 'GPU candidate');
   if (!isDeepStrictEqual(control.identity, candidate.identity)) {
     throw new Error('CPU and GPU document identities differ.');
+  }
+  const controlModels = modelIdentity(cpu, 'CPU control');
+  const candidateModels = modelIdentity(gpu, 'GPU candidate');
+  if (!isDeepStrictEqual(controlModels, candidateModels)) {
+    throw new Error('CPU and GPU Small model revisions or file hashes differ.');
   }
   const reviews = adjudicationIndex(adjudications, control.identity);
   const usedReviews = new Set();
@@ -206,11 +280,11 @@ export function evaluateGpuA2({ cpu, gpu, adjudications }) {
     const candidateTrusted = candidatePage.diagnostics.requiresEscalation === false;
     const candidateOnly = differences.candidateOnly.map((difference) => scoreDifference({
       difference, side: 'candidate', pageNumber, trusted: candidateTrusted,
-      adjudications: reviews, identity: control.identity, used: usedReviews
+      page: candidatePage, adjudications: reviews, identity: control.identity, used: usedReviews
     }));
     const controlOnly = differences.controlOnly.map((difference) => scoreDifference({
       difference, side: 'control', pageNumber, trusted: candidateTrusted,
-      adjudications: reviews, identity: control.identity, used: usedReviews
+      page: candidatePage, adjudications: reviews, identity: control.identity, used: usedReviews
     }));
     const deterministicExact = canonicalJson(crossEngineDeterministicProjection(controlPage))
       === canonicalJson(crossEngineDeterministicProjection(candidatePage));
@@ -242,17 +316,21 @@ export function evaluateGpuA2({ cpu, gpu, adjudications }) {
   const unresolved = [...allCandidate, ...allControl].filter(({ page, difference }) =>
     page.candidateTrusted && ['pending', 'unsure'].includes(difference.verdict));
   const pending = [...allCandidate, ...allControl].filter(({ difference }) => difference.verdict === 'pending');
+  const uncaughtIncorrect = allCandidate.filter(({ difference }) =>
+    difference.verdict === 'incorrect' && difference.caughtByNativeConflict !== true);
   const deterministicDifferingPages = pages.filter((page) => !page.deterministicExact).map((page) => page.pageNumber);
   const clearedControlBlockingRoutes = pages
     .filter((page) => page.clearedControlBlockingTypes.length > 0)
     .map((page) => ({ pageNumber: page.pageNumber, types: page.clearedControlBlockingTypes }));
   const pass = newlyIncorrect.length === 0 && missing.length === 0 && unresolved.length === 0
+    && pending.length === 0 && uncaughtIncorrect.length === 0
     && deterministicDifferingPages.length === 0 && clearedControlBlockingRoutes.length === 0;
 
   return {
     schemaVersion: SCHEMA_VERSION,
     acceptanceRule: 'zero newly incorrect, missing, or unresolved critical values in trusted non-escalated output; raw OCR evidence differences are allowed',
     document: control.identity,
+    models: controlModels,
     terminalPages: EXPECTED_PAGES,
     summary: {
       pass,
@@ -260,6 +338,7 @@ export function evaluateGpuA2({ cpu, gpu, adjudications }) {
       newlyIncorrectTrustedValues: newlyIncorrect.length,
       missingTrustedValues: missing.length,
       unresolvedTrustedValues: unresolved.length,
+      incorrectValuesNotCaughtByNativeConflict: uncaughtIncorrect.length,
       candidateOnlyCriticalValues: allCandidate.length,
       controlOnlyCriticalValues: allControl.length,
       rawEvidenceDifferingPages: pages.filter((page) => !page.rawEvidenceExact).length,

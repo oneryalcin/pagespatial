@@ -140,6 +140,11 @@ The seam lives under `scripts/evaluation/` and may reuse
 production Modal adapter, service scheduler, worker adapter table, or adopted
 CPU adapter.
 
+One deployment-neutral provenance correction is an explicit prerequisite:
+the CPU sidecar must retain the concrete `Backend::OPENVINO` stderr line in
+`engineEvidence` instead of allowing a later generic thread-config line to
+replace it. This changes no engine, routing, scheduling, or OCR output.
+
 Paid stages are serialized. Launches stop at USD 40 of posted plus reserved
 PageSpatial exposure, leaving USD 10 for delayed billing and cleanup. E1 is one
 cold and exactly three warm 50-page comparisons per arm. Fixed reservations are

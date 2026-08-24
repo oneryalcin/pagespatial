@@ -27,6 +27,8 @@ test('A2 runner enforces spend and repeat bounds before remote work', () => {
   assert.ok(reservationCheck >= 0 && reservationCheck < paidImageImport);
   assert.match(source, /if repeats != 4/u);
   assert.match(source, /\[True, False, False, False\]/u);
+  assert.match(source, /"containerId": snapshot\["container_id"\]/u);
+  assert.match(source, /len\(set\(container_ids\)\) != 1/u);
   assert.match(source, /MAX_RESULT_BYTES = 64 \* 1024 \* 1024/u);
   assert.match(source, /ResultTooLarge/u);
 });
