@@ -59,11 +59,11 @@ test('A2 concurrent-owner arm attests each owner before bounded overlap', () => 
 });
 
 test('A2 runner enforces spend and repeat bounds before remote work', () => {
-  const reservationCheck = source.indexOf('validate_reservation(');
+  const reservationCheck = source.indexOf('validate_reservation(_ledger_path, _reservation_id, "E1-GPU")');
   const paidImageImport = source.indexOf('from gpu_spike_trt_modal import');
   assert.ok(reservationCheck >= 0 && reservationCheck < paidImageImport);
-  assert.match(source, /expected_repeats = 5 if PAIRED_SPLIT_COMPARISON else 4/u);
-  assert.match(source, /expected_cold_pattern = \[True\] \+ \[False\] \* \(repeats - 1\)/u);
+  assert.match(source, /if repeats != 4/u);
+  assert.match(source, /\[True, False, False, False\]/u);
   assert.match(source, /"containerId": snapshot\["container_id"\]/u);
   assert.match(source, /len\(set\(container_ids\)\) != 1/u);
   assert.match(source, /MAX_RESULT_BYTES = 64 \* 1024 \* 1024/u);
@@ -73,8 +73,6 @@ test('A2 runner enforces spend and repeat bounds before remote work', () => {
   assert.match(runnerSource, /PAGESPATIAL_A2_INFERENCE_OWNERS/u);
   assert.match(runnerSource, /--model-tier/u);
   assert.match(runnerSource, /PAGESPATIAL_A2_MODEL_TIER/u);
-  assert.match(source, /paired split comparison cannot return to control mode/u);
-  assert.match(source, /len\(control\) != 2 or len\(treatment\) != 2/u);
 });
 
 test('A2 controller owns and drains the complete process group', () => {

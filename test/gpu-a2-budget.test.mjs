@@ -25,9 +25,6 @@ test('A2 reservations are fixed by stage and atomically claimed', () => {
   assert.match(source, /"E1-CPU"/u);
   assert.match(source, /"E1-GPU"/u);
   assert.match(source, /"E1-GPU": \{[\s\S]*?"worstCaseUsd": 3\.0/u);
-  assert.match(source, /"A3-PAIRED-GPU": \{[\s\S]*?"worstCaseUsd": 2\.75/u);
-  assert.match(source, /"calls": 5/u);
-  assert.match(source, /"buildAndIdleAllowanceUsd": 0\.78392/u);
   assert.doesNotMatch(source, /--worst-case-usd/u);
   assert.match(source, /fcntl\.flock/u);
   assert.match(source, /match\.get\("status"\) != "reserved"/u);

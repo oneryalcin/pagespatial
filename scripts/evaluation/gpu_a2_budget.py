@@ -47,15 +47,6 @@ STAGE_BOUNDS: dict[str, dict[str, Any]] = {
         "gpu": "L4", "physicalCpuCores": 4.0,
         "timeoutSecondsPerCall": 1200, "buildAndIdleAllowanceUsd": 1.0,
     },
-    # Five calls in one container: cold control, two warm controls, then two
-    # warm split treatments. Dated rates put the full timeout exposure at
-    # $1.96608; the remaining $0.78392 is build/idle allowance.
-    "A3-PAIRED-GPU": {
-        "worstCaseUsd": 2.75, "calls": 5, "containers": 1,
-        "gpu": "L4", "physicalCpuCores": 4.0,
-        "memoryGiB": 24.0, "timeoutSecondsPerCall": 1200,
-        "buildAndIdleAllowanceUsd": 0.78392,
-    },
     "E2-GPU": {
         "worstCaseUsd": 12.0, "calls": 8, "containers": 1,
         "gpu": "L4", "physicalCpuCores": 4.0,

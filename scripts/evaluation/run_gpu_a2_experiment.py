@@ -163,19 +163,13 @@ def run_gpu(
     inference_owners: int,
     model_tier: str,
     stage_profile: bool,
-    split_recognition: bool,
-    paired_split_comparison: bool,
 ) -> tuple[str, str, Path]:
-    reservation = reserve(
-        ledger, "A3-PAIRED-GPU" if paired_split_comparison else "E1-GPU"
-    )
+    reservation = reserve(ledger, "E1-GPU")
     suffix = f"{time.strftime('%Y%m%d%H%M%S', time.gmtime())}-{uuid.uuid4().hex[:6]}"
     app_name = (
         f"pagespatial-gpu-a2-e1-gpu-{model_tier}-b{recognition_batch_size}"
         f"o{inference_owners}-{suffix}"
         + ("-profile" if stage_profile else "")
-        + ("-split-rec" if split_recognition else "")
-        + ("-paired-split" if paired_split_comparison else "")
     )
     app_id = ""
     evidence_root = out_dir / "gpu"
@@ -190,10 +184,6 @@ def run_gpu(
             "PAGESPATIAL_A2_INFERENCE_OWNERS": str(inference_owners),
             "PAGESPATIAL_A2_MODEL_TIER": model_tier,
             "PAGESPATIAL_A2_STAGE_PROFILE": "1" if stage_profile else "0",
-            "PAGESPATIAL_A2_SPLIT_RECOGNITION": "1" if split_recognition else "0",
-            "PAGESPATIAL_A3_PAIRED_SPLIT_COMPARISON": (
-                "1" if paired_split_comparison else "0"
-            ),
         }
         run(
             [
@@ -201,7 +191,7 @@ def run_gpu(
                 "--pdf-path", str(WORKLOAD),
                 "--native-evidence-path", str(native_evidence),
                 "--out-dir", str(out_dir / "gpu"),
-                "--repeats", "5" if paired_split_comparison else "4",
+                "--repeats", "4",
             ],
             env=env,
         )
@@ -323,63 +313,6 @@ def score_e1(cpu_dir: Path, gpu_dir: Path, out_dir: Path, adjudications: Path | 
     return decision
 
 
-def score_paired(
-    cpu_dir: Path, gpu_dir: Path, out_dir: Path, adjudications: Path | None
-) -> dict:
-    reports = []
-    summaries = []
-    for repeat in range(1, 6):
-        report_path = out_dir / f"correctness-repeat-{repeat}.json"
-        cpu_repeat = min(repeat, 4)
-        command = [
-            "node", "scripts/evaluation/score_gpu_a2.mjs",
-            "--cpu", str(cpu_dir / f"cpu-repeat-{cpu_repeat}.json"),
-            "--gpu", str(gpu_dir / f"gpu-repeat-{repeat}.json"),
-            "--output", str(report_path),
-        ]
-        if adjudications is not None:
-            command.extend(["--adjudications", str(adjudications)])
-        subprocess.run(command, cwd=REPO_ROOT, check=False)
-        report = json.loads(report_path.read_text())
-        reports.append(str(report_path))
-        summaries.append(report["summary"])
-
-    run_metadata = json.loads((gpu_dir / "run.json").read_text())
-    comparison = run_metadata.get("summary", {}).get("pairedComparison")
-    if not comparison:
-        raise RuntimeError("paired GPU evidence lacks its comparison summary")
-    treatment_summaries = summaries[3:]
-    decision = {
-        "schemaVersion": "pagespatial-gpu-a3-paired-decision-v1",
-        "cpuEvidence": str(cpu_dir),
-        "gpuEvidence": str(gpu_dir),
-        "correctnessReports": reports,
-        "pairedComparison": comparison,
-        "treatmentTrustedOutput": {
-            "newlyIncorrectTrustedValues": [
-                item["newlyIncorrectTrustedValues"] for item in treatment_summaries
-            ],
-            "missingTrustedValues": [
-                item["missingTrustedValues"] for item in treatment_summaries
-            ],
-            "unresolvedTrustedValues": [
-                item["unresolvedTrustedValues"] for item in treatment_summaries
-            ],
-            "incorrectValuesNotCaughtByNativeConflict": [
-                item["incorrectValuesNotCaughtByNativeConflict"]
-                for item in treatment_summaries
-            ],
-        },
-        "keepTreatment": comparison["innerSpeedup"] >= 1.10,
-        "keepThreshold": "at least 10% complete-document inner throughput gain",
-        "billingGate": "pending-closed-interval-reconciliation",
-    }
-    (out_dir / "a3-paired-decision.json").write_text(
-        json.dumps(decision, indent=1) + "\n"
-    )
-    return decision
-
-
 EXPECTED_PAGES = 50
 
 
@@ -441,16 +374,6 @@ def main() -> None:
         action="store_true",
         help="record Python-visible stage intervals; bounded to Tiny B1 with two owners",
     )
-    parser.add_argument(
-        "--split-recognition",
-        action="store_true",
-        help="overlap bounded recognition preparation, TensorRT, and decoding; Tiny B1 O2 only",
-    )
-    parser.add_argument(
-        "--paired-split-comparison",
-        action="store_true",
-        help="one-container cold control, two warm controls, then two warm split calls",
-    )
     args = parser.parse_args()
     if args.stage_profile and (
         args.model_tier != "tiny"
@@ -458,22 +381,6 @@ def main() -> None:
         or args.inference_owners != 2
     ):
         parser.error("--stage-profile requires --model-tier tiny --recognition-batch-size 1 --inference-owners 2")
-    if args.split_recognition and (
-        args.model_tier != "tiny"
-        or args.recognition_batch_size != 1
-        or args.inference_owners != 2
-    ):
-        parser.error("--split-recognition requires --model-tier tiny --recognition-batch-size 1 --inference-owners 2")
-    if args.stage_profile and args.split_recognition:
-        parser.error("--stage-profile and --split-recognition are separate A3 arms")
-    if args.paired_split_comparison and (
-        args.model_tier != "tiny"
-        or args.recognition_batch_size != 1
-        or args.inference_owners != 2
-        or args.stage_profile
-        or args.split_recognition
-    ):
-        parser.error("--paired-split-comparison requires unprofiled Tiny B1 O2")
     revision = source_revision()
     if not WORKLOAD.exists():
         raise SystemExit(f"frozen workload missing: {WORKLOAD}")
@@ -492,24 +399,17 @@ def main() -> None:
         args.inference_owners,
         args.model_tier,
         args.stage_profile,
-        args.split_recognition,
-        args.paired_split_comparison,
     )
-    decision = (
-        score_paired(cpu[2], gpu[2], args.out_dir, args.adjudications)
-        if args.paired_split_comparison
-        else score_e1(cpu[2], gpu[2], args.out_dir, args.adjudications)
-    )
+    decision = score_e1(cpu[2], gpu[2], args.out_dir, args.adjudications)
     print(json.dumps({
         "cpu": [cpu[0], cpu[1], str(cpu[2])],
         "gpu": [gpu[0], gpu[1], str(gpu[2])],
         "outDir": str(args.out_dir),
         "decision": decision,
     }, indent=1))
-    if not args.paired_split_comparison:
-        raise SystemExit(
-            "E2 remains locked pending correctness, 2x speed, and closed-interval billing gates"
-        )
+    raise SystemExit(
+        "E2 remains locked pending correctness, 2x speed, and closed-interval billing gates"
+    )
 
 
 if __name__ == "__main__":
