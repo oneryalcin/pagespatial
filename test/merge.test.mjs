@@ -31,6 +31,49 @@ test('critical numeric disagreement creates an escalation', () => {
   pageSpatialSchema.parse(page);
 });
 
+test('colocated standalone critical values disagree even with zero text-token overlap', () => {
+  const page = buildPageSpatial({
+    document,
+    pageNumber: 1,
+    geometry: { width: 200, height: 200 },
+    nativeObservations: [{ pageNumber: 1, text: '2023-04-04', box: [100, 20, 150, 40] }],
+    ocrObservations: [{ pageNumber: 1, text: '2022-04-04', box: [101, 19, 151, 41], confidence: 0.99 }],
+    provenance
+  });
+  assert.equal(page.conflicts.length, 1);
+  assert.equal(page.conflicts[0].reason, 'critical-token-disagreement');
+  assert.equal(page.diagnostics.requiresEscalation, true);
+});
+
+test('numeric-only conflict path refuses weak geometric overlap', () => {
+  const page = buildPageSpatial({
+    document,
+    pageNumber: 1,
+    geometry: { width: 200, height: 200 },
+    nativeObservations: [{ pageNumber: 1, text: '2023-04-04', box: [100, 20, 150, 40] }],
+    ocrObservations: [{ pageNumber: 1, text: '2022-04-04', box: [111, 20, 161, 40], confidence: 0.99 }],
+    provenance
+  });
+  assert.equal(page.conflicts.length, 0);
+});
+
+test('exact native text wins over a competing numeric-only fallback', () => {
+  const page = buildPageSpatial({
+    document,
+    pageNumber: 1,
+    geometry: { width: 200, height: 200 },
+    nativeObservations: [
+      { pageNumber: 1, text: '2022-04-04', box: [10, 20, 100, 40] },
+      { pageNumber: 1, text: '2023-04-04', box: [15, 20, 105, 40] }
+    ],
+    ocrObservations: [{ pageNumber: 1, text: '2023-04-04', box: [10, 20, 100, 40], confidence: 0.99 }],
+    provenance
+  });
+  assert.equal(page.conflicts.length, 0);
+  assert.equal(page.sourceMatches.length, 1);
+  assert.equal(page.diagnostics.requiresEscalation, false);
+});
+
 // The false-confidence hole found by the gold pilot: a page of confident OCR
 // with (almost) nothing in the native layer to corroborate or contradict it
 // previously sailed through without escalating.

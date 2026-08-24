@@ -122,6 +122,12 @@ export const ASSOCIATION_MIN_GEOMETRY_OVERLAP = 0.12;
  */
 export const CONFLICT_MIN_TEXT_SIMILARITY = 0.5;
 export const CONFLICT_MIN_GEOMETRY_OVERLAP = 0.45;
+/** Standalone numeric/date/currency readings have zero word-token similarity
+ * when one digit changes. Permit conflict comparison only when both readings
+ * contain the same number of critical tokens, contain no letters, and are
+ * nearly coincident. This closes the numeric-only blind spot without making
+ * prose association fuzzier. */
+export const CONFLICT_NUMERIC_ONLY_MIN_GEOMETRY_OVERLAP = 0.8;
 
 /** Floor for same-line vertical tolerance in reading order (was 8px @1.6). */
 export const LINE_TOLERANCE_MIN_PT = 5;
