@@ -362,9 +362,9 @@ def main() -> None:
     parser.add_argument(
         "--inference-owners",
         type=int,
-        choices=(1, 2),
+        choices=(1, 2, 4),
         default=1,
-        help="independent monolithic TensorRT owners sharing one L4",
+        help="independent monolithic TensorRT owners sharing one L4; at most one per physical CPU core",
     )
     args = parser.parse_args()
     revision = source_revision()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bounded end-to-end A2 benchmark: one or two Tiny/Small FP32 TensorRT owners.
+"""Bounded end-to-end A2 benchmark: up to four Tiny/Small FP32 TensorRT owners.
 
 This is an evaluation adapter, not the production Modal deployment. Four Node
 producer processes execute the real render/native stages and feed this class's
@@ -110,8 +110,8 @@ RECOGNITION_BATCH_SIZE = int(
 if RECOGNITION_BATCH_SIZE not in {1, 4, 8}:
     raise ValueError("PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE must be 1, 4, or 8")
 INFERENCE_OWNERS = int(os.environ.get("PAGESPATIAL_A2_INFERENCE_OWNERS", "1"))
-if INFERENCE_OWNERS not in {1, 2}:
-    raise ValueError("PAGESPATIAL_A2_INFERENCE_OWNERS must be 1 or 2")
+if INFERENCE_OWNERS not in {1, 2, 4}:
+    raise ValueError("PAGESPATIAL_A2_INFERENCE_OWNERS must be 1, 2, or 4")
 MODEL_TIER = os.environ.get("PAGESPATIAL_A2_MODEL_TIER", "small")
 if MODEL_TIER not in {"tiny", "small"}:
     raise ValueError("PAGESPATIAL_A2_MODEL_TIER must be tiny or small")

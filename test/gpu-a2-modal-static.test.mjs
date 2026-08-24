@@ -27,7 +27,7 @@ test('A2 Modal arm is tier-aware FP32 with a bounded recognition batch', () => {
   assert.match(source, /not in \{1, 4, 8\}/u);
   assert.match(source, /"recognitionBatchSize": RECOGNITION_BATCH_SIZE/u);
   assert.match(source, /PAGESPATIAL_A2_INFERENCE_OWNERS/u);
-  assert.match(source, /INFERENCE_OWNERS not in \{1, 2\}/u);
+  assert.match(source, /INFERENCE_OWNERS not in \{1, 2, 4\}/u);
   assert.match(source, /"inferenceOwners": INFERENCE_OWNERS/u);
   assert.match(source, /\.env\([\s\S]*PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE/u);
   assert.match(source, /recognition batch mismatch before inference/u);
