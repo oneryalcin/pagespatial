@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "pagespatial-gpu-merged-output-adjudications-v1",
+  "scope": "Candidate-only and control-only critical values from Small FP32 TensorRT versus default Paddle GPU on the frozen 32-page English diagnostic",
+  "method": "One source-image read, cross-checked against the native PDF text layer. This is development adjudication, not held-out gold.",
+  "values": [
+    {
+      "page": "world-bank:P170734:document:34222345#7",
+      "side": "candidate",
+      "token": "2022-04-04",
+      "occurrence": 0,
+      "observationBox": [573, 390, 604, 400],
+      "verdict": "incorrect",
+      "correctToken": "2023-04-04",
+      "inputSha256": "57c8de99e2e16113f7aadcbc940830ae408f106bf945a820e21ea20ec0f4eb90",
+      "adjudicationImage": ".evaluation/gold/batch3-v1/images/world-bank_P170734_document_34222345-p7.png",
+      "adjudicationImageSha256": "a514fd8dd157febf7731d9593decd9b5e6fab4cdfb8ef05ce5fb1c2df43c1c8c",
+      "documentSha256": "63e9dad0bf52ded5d0e09b7f5bdb917ef1fdec76ebfea607c6d2be80744a1c4b"
+    },
+    {
+      "page": "world-bank:P170734:document:34222345#7",
+      "side": "candidate",
+      "token": "2023-00-2",
+      "occurrence": 0,
+      "observationBox": [574, 432, 605, 442],
+      "verdict": "incorrect",
+      "correctToken": "2023-08-28",
+      "inputSha256": "57c8de99e2e16113f7aadcbc940830ae408f106bf945a820e21ea20ec0f4eb90",
+      "adjudicationImage": ".evaluation/gold/batch3-v1/images/world-bank_P170734_document_34222345-p7.png",
+      "adjudicationImageSha256": "a514fd8dd157febf7731d9593decd9b5e6fab4cdfb8ef05ce5fb1c2df43c1c8c",
+      "documentSha256": "63e9dad0bf52ded5d0e09b7f5bdb917ef1fdec76ebfea607c6d2be80744a1c4b"
+    },
+    {
+      "page": "world-bank:P170734:document:34222345#7",
+      "side": "control",
+      "token": "2023-04-04",
+      "occurrence": 0,
+      "observationBox": [574, 390, 604, 400],
+      "verdict": "missing",
+      "correctToken": "2023-04-04",
+      "inputSha256": "57c8de99e2e16113f7aadcbc940830ae408f106bf945a820e21ea20ec0f4eb90",
+      "adjudicationImage": ".evaluation/gold/batch3-v1/images/world-bank_P170734_document_34222345-p7.png",
+      "adjudicationImageSha256": "a514fd8dd157febf7731d9593decd9b5e6fab4cdfb8ef05ce5fb1c2df43c1c8c",
+      "documentSha256": "63e9dad0bf52ded5d0e09b7f5bdb917ef1fdec76ebfea607c6d2be80744a1c4b"
+    },
+    {
+      "page": "world-bank:P170734:document:34222345#7",
+      "side": "control",
+      "token": "2023-00-28",
+      "occurrence": 0,
+      "observationBox": [574, 432, 605, 442],
+      "verdict": "removed-incorrect",
+      "correctToken": "2023-08-28",
+      "inputSha256": "57c8de99e2e16113f7aadcbc940830ae408f106bf945a820e21ea20ec0f4eb90",
+      "adjudicationImage": ".evaluation/gold/batch3-v1/images/world-bank_P170734_document_34222345-p7.png",
+      "adjudicationImageSha256": "a514fd8dd157febf7731d9593decd9b5e6fab4cdfb8ef05ce5fb1c2df43c1c8c",
+      "documentSha256": "63e9dad0bf52ded5d0e09b7f5bdb917ef1fdec76ebfea607c6d2be80744a1c4b"
+    }
+  ]
+}
