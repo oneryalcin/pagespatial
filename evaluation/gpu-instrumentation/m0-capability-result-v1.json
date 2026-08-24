@@ -76,7 +76,7 @@
   },
   "verdict": {
     "modalSupportsRequiredM2Trace": false,
-    "classification": "platform-unsupported-for-required-cuda-cupti-trace",
+    "classification": "tested-modal-container-shape-unsupported-for-required-trace",
     "next": "use the exact image and L4 shape on a dedicated Linux x86 host or VM; do not start M1 or M2 on Modal"
   },
   "cost": {
@@ -92,6 +92,7 @@
   "limitations": [
     "the raw trace artifacts remain in the ignored private evaluation tree",
     "return code 139 is observed; whether the target process or profiler component emitted it is unclassified",
+    "the evidence does not establish that every Modal image or Nsight version fails; it applies to the fixed tested container, tool, and target identities",
     "the first two generated report files were not retained",
     "the committed capability summary corrects an analyzer defect that counted ENUM_SAMPLING and ENUM_SCHEDULING definition rows as event evidence"
   ]

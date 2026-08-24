@@ -1,7 +1,7 @@
 # Trial: GPU bottleneck instrumentation
 
-**Status:** M0 complete; Modal unsupported for the required CUDA/CUPTI trace;
-M1 and M2 not started
+**Status:** M0 complete; the tested Modal container shape is unsupported for
+the required trace; M1 and M2 not started
 
 **Date:** 2026-08-25
 
@@ -9,13 +9,17 @@ M1 and M2 not started
 
 ## Result
 
-Do not run the planned Nsight Systems measurement on Modal.
+Do not run the planned Nsight Systems measurement on the tested Modal container
+shape.
 
 The retained third capability attempt generated an `.nsys-rep` and exported a
 valid SQLite database with 948 events. It contained 891 OS-runtime events but
 zero NVTX, CUDA API, CUDA kernel, or CUDA memory events. Nsight diagnostics
 said that no NVTX or CUDA events were collected. The profiled command returned
-139 before its target wrote application output.
+139 before its target wrote application output. Whether the target process or a
+profiler component emitted 139 is unclassified. This result applies to the
+fixed Modal L4/gVisor container, Nsight Systems 2025.5, and Paddle CUDA 11.8
+target. It does not establish that every Modal image or Nsight version fails.
 
 Modal also cannot provide the separate native CPU profile. `nsys status -e`
 reported that gVisor rejects `perf_event_open`, both sampling triggers fail,
