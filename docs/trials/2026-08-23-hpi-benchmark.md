@@ -37,6 +37,19 @@
 > OpenVINO on 4 vCPUs."* Both statements are retracted per this
 > correction; the replacement text at those locations states the narrowed
 > claims.
+>
+> **TensorRT follow-up (2026-08-24):** the later GPU spike made the
+> vendor-documented CUDA 11.8/cuDNN 8.9/TensorRT 8.6.1 stack runnable on one
+> L4. On its fixed 32-page English diagnostic, Small TensorRT reached
+> 1.269 pages/s FP32 and 1.324 FP16 at recognition batch one; batch four was
+> slower. Tiny reached 2.312 FP16 B1 and 2.424 B8. This disproves any broad
+> “TensorRT cannot help” reading. It does not authorize deployment: output
+> comparisons failed the zero-noise gate, Small's separate-window diagnostic
+> warm resource estimate was about 1.94x its 8-GiB harness CPU control, engine
+> construction took 351-931 seconds, and end-to-end billed cost and speed were
+> not run. The FP32/FP16 medians also came from separate windows, so they do
+> not prove a precision effect. See the follow-up design and
+> [`trial`](2026-08-24-gpu-ocr-spike.md).
 
 ## Question
 
