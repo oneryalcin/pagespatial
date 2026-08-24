@@ -41,3 +41,10 @@ test('E2 is locked behind all four correctness reports and a 2x warm speed gate'
   assert.match(source, /"advanceToE2": False/u);
   assert.match(source, /E2 remains locked/u);
 });
+
+test('paid GPU work starts only after native evidence is precomputed on CPU', () => {
+  assert.match(source, /precompute_gpu_a2_native\.mjs/u);
+  assert.match(source, /native-evidence-v1\.json/u);
+  assert.ok(source.indexOf('precompute_native_evidence(args.out_dir)') < source.indexOf('run_gpu(args.ledger'));
+  assert.match(source, /--native-evidence-path/u);
+});

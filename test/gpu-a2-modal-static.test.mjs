@@ -50,9 +50,9 @@ test('A2 image pins Node archive hash and uses uv-based TensorRT image', () => {
   assert.match(source, /trt_image/u);
 });
 
-test('A2 image installs and loads the Linux native producer bindings before runtime', () => {
-  assert.match(source, /@firecrawl\/pdf-inspector-linux-x64-gnu@1\.14\.2/u);
-  assert.match(source, /@napi-rs\/canvas-linux-x64-gnu@0\.1\.100/u);
-  assert.match(source, /require\('@firecrawl\/pdf-inspector'\)/u);
-  assert.match(source, /require\('@napi-rs\/canvas'\)/u);
+test('A2 receives content-addressed CPU-native evidence outside the timed GPU path', () => {
+  assert.match(source, /native_evidence_bytes/u);
+  assert.match(source, /native_evidence_sha256/u);
+  assert.match(source, /--native-evidence/u);
+  assert.doesNotMatch(source, /@firecrawl\/pdf-inspector-linux-x64-gnu/u);
 });

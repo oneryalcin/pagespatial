@@ -166,23 +166,6 @@ if modal.is_local():
         .add_local_file(str(REPO_ROOT / "package.json"), "/app/package.json", copy=True)
         .add_local_file(str(REPO_ROOT / "package-lock.json"), "/app/package-lock.json", copy=True)
         .run_commands("cd /app && PATH=/opt/node/bin:$PATH /opt/node/bin/npm ci")
-        # npm can omit platform packages that arrive through optionalDependencies
-        # (npm/cli#4828). The A2 producer needs both native bindings on Linux;
-        # install the lockfile-pinned artifacts explicitly and prove they load
-        # while building the image, before an L4 is allocated for a run.
-        .run_commands(
-            (
-                "cd /app && PATH=/opt/node/bin:$PATH /opt/node/bin/npm install "
-                "--no-save --package-lock=false "
-                "@firecrawl/pdf-inspector-linux-x64-gnu@1.14.2 "
-                "@napi-rs/canvas-linux-x64-gnu@0.1.100"
-            ),
-            (
-                "cd /app && /opt/node/bin/node -e \""
-                "require('@firecrawl/pdf-inspector'); "
-                "require('@napi-rs/canvas')\""
-            ),
-        )
         .add_local_file(str(REPO_ROOT / "tsconfig.json"), "/app/tsconfig.json", copy=True)
         .add_local_dir(str(REPO_ROOT / "src"), "/app/src", copy=True)
         .add_local_dir(str(REPO_ROOT / "schemas"), "/app/schemas", copy=True)
@@ -362,6 +345,14 @@ class GpuA2Container:
             raise ValueError("PDF SHA-256 mismatch")
         if payload.get("expected_pages") != EXPECTED_PAGES:
             raise ValueError(f"expected_pages must be {EXPECTED_PAGES}")
+        native_evidence_bytes = payload.get("native_evidence_bytes")
+        if not isinstance(native_evidence_bytes, bytes) or not native_evidence_bytes:
+            raise ValueError("native_evidence_bytes must be non-empty bytes")
+        if len(native_evidence_bytes) > MAX_RESULT_BYTES:
+            raise ValueError("native_evidence_bytes exceeds the bounded result size")
+        expected_native_sha = payload.get("native_evidence_sha256")
+        if hashlib.sha256(native_evidence_bytes).hexdigest() != expected_native_sha:
+            raise ValueError("native evidence SHA-256 mismatch")
 
         method_started = time.monotonic()
         method_first_inference_ms: float | None = None
@@ -370,10 +361,12 @@ class GpuA2Container:
         run_id = payload.get("run_id") or f"gpu-a2-{uuid.uuid4().hex[:12]}"
         scratch = Path(tempfile.mkdtemp(prefix="pagespatial-a2-", dir="/tmp"))
         pdf_path = scratch / "input.pdf"
+        native_evidence_path = scratch / "native-evidence.json"
         result_path = scratch / "result.json"
         controller_scratch = scratch / "controller"
         stderr_path = scratch / "controller.stderr"
         pdf_path.write_bytes(pdf_bytes)
+        native_evidence_path.write_bytes(native_evidence_bytes)
         sampler = _GpuSampler()
         sampler.start()
         controller = None
@@ -385,6 +378,7 @@ class GpuA2Container:
                         "/opt/node/bin/node",
                         "/app/scripts/evaluation/gpu_a2_controller.mjs",
                         "--pdf", str(pdf_path),
+                        "--native-evidence", str(native_evidence_path),
                         "--result", str(result_path),
                         "--scratch", str(controller_scratch),
                         "--run-id", run_id,
@@ -546,6 +540,7 @@ class GpuA2Container:
 @app.local_entrypoint()
 def main(
     pdf_path: str,
+    native_evidence_path: str,
     out_dir: str,
     repeats: int = 4,
     allow_dirty: bool = False,
@@ -555,6 +550,8 @@ def main(
     source = _source_state(allow_dirty)
     pdf = Path(pdf_path).read_bytes()
     pdf_sha = hashlib.sha256(pdf).hexdigest()
+    native_evidence = Path(native_evidence_path).read_bytes()
+    native_evidence_sha = hashlib.sha256(native_evidence).hexdigest()
     manifest = json.loads(
         (Path(__file__).resolve().parents[2] / "evaluation/gpu-spike/a2-50page-v1.json").read_text()
     )
@@ -572,10 +569,16 @@ def main(
         "source": source,
         "workload": manifest,
         "arm": ARM,
+        "nativeEvidence": {
+            "mode": "precomputed-cpu",
+            "path": str(Path(native_evidence_path)),
+            "sha256": native_evidence_sha,
+            "bytes": len(native_evidence),
+        },
         "repeats": repeats,
         "budget": {
             "ownerCeilingUsd": 50,
-            "operationalExposureStopUsd": 40,
+            "operationalExposureStopUsd": 50,
             "reservationId": _reservation_id,
         },
     }
@@ -589,6 +592,8 @@ def main(
             {
                 "run_id": f"{run_id}-r{repeat}",
                 "pdf_bytes": pdf,
+                "native_evidence_bytes": native_evidence,
+                "native_evidence_sha256": native_evidence_sha,
                 "expected_sha256": pdf_sha,
                 "expected_pages": EXPECTED_PAGES,
             }

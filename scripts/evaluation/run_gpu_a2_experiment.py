@@ -26,6 +26,7 @@ from gpu_a2_budget import DEFAULT_LEDGER, complete, complete_without_app, reserv
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKLOAD = REPO_ROOT / ".evaluation/gpu-spike/a2-50page-v1.pdf"
+NATIVE_PRECOMPUTER = REPO_ROOT / "scripts/evaluation/precompute_gpu_a2_native.mjs"
 
 
 def run(command: list[str], *, env: dict[str, str] | None = None) -> None:
@@ -154,7 +155,7 @@ def run_cpu(ledger: Path, out_dir: Path, revision: str) -> tuple[str, str, Path]
             complete(ledger, reservation["id"], app_id)
 
 
-def run_gpu(ledger: Path, out_dir: Path) -> tuple[str, str, Path]:
+def run_gpu(ledger: Path, out_dir: Path, native_evidence: Path) -> tuple[str, str, Path]:
     reservation = reserve(ledger, "E1-GPU")
     suffix = f"{time.strftime('%Y%m%d%H%M%S', time.gmtime())}-{uuid.uuid4().hex[:6]}"
     app_name = f"pagespatial-gpu-a2-e1-gpu-{suffix}"
@@ -172,6 +173,7 @@ def run_gpu(ledger: Path, out_dir: Path) -> tuple[str, str, Path]:
             [
                 "modal", "run", "scripts/evaluation/gpu_a2_modal.py",
                 "--pdf-path", str(WORKLOAD),
+                "--native-evidence-path", str(native_evidence),
                 "--out-dir", str(out_dir / "gpu"),
                 "--repeats", "4",
             ],
@@ -298,6 +300,27 @@ def score_e1(cpu_dir: Path, gpu_dir: Path, out_dir: Path, adjudications: Path | 
 EXPECTED_PAGES = 50
 
 
+def precompute_native_evidence(out_dir: Path) -> Path:
+    path = out_dir / "native-evidence-v1.json"
+    run(
+        [
+            "node", str(NATIVE_PRECOMPUTER),
+            "--pdf", str(WORKLOAD),
+            "--output", str(path),
+        ]
+    )
+    artifact = json.loads(path.read_text())
+    if (
+        artifact.get("schemaVersion") != "pagespatial-gpu-a2-native-evidence-v1"
+        or artifact.get("pageCount") != EXPECTED_PAGES
+        or artifact.get("document", {}).get("sha256")
+        != hashlib.sha256(WORKLOAD.read_bytes()).hexdigest()
+        or len(artifact.get("pages", [])) != EXPECTED_PAGES
+    ):
+        raise RuntimeError("precomputed native evidence failed validation")
+    return path
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
@@ -320,7 +343,8 @@ def main() -> None:
         cpu = ("reused", json.loads((cpu_dir / "run.json").read_text())["expectedAppId"], cpu_dir)
     else:
         cpu = run_cpu(args.ledger, args.out_dir, revision)
-    gpu = run_gpu(args.ledger, args.out_dir)
+    native_evidence = precompute_native_evidence(args.out_dir)
+    gpu = run_gpu(args.ledger, args.out_dir, native_evidence)
     decision = score_e1(cpu[2], gpu[2], args.out_dir, args.adjudications)
     print(json.dumps({
         "cpu": [cpu[0], cpu[1], str(cpu[2])],

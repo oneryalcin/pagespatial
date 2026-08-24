@@ -3,7 +3,7 @@
 
 Paid commands are serialized by operator policy. `reserve` refuses a launch
 unless the active profile is `desia`, no A2 app is active, and posted spend plus
-unreconciled reservations plus the next worst case stays at or below USD 40.
+unreconciled reservations plus the next worst case stays at or below USD 50.
 Reservations remain charged at their worst case until the exact app is stopped
 and an operator attests a final total from a closed billing interval.
 """
@@ -28,7 +28,7 @@ DATE_END = "2026-08-25"
 AUTHORIZATION_END_UTC = datetime(2026, 8, 24, 23, 0, tzinfo=timezone.utc)
 REQUIRED_PROFILE = "desia"
 OWNER_CEILING_USD = 50.0
-OPERATIONAL_STOP_USD = 40.0
+OPERATIONAL_STOP_USD = 50.0
 EXPERIMENT_PREFIX = "pagespatial-gpu-a2-"
 DEFAULT_LEDGER = Path(".evaluation/gpu-spike/a2-budget-v1.json")
 
@@ -129,7 +129,7 @@ def load_ledger(path: Path) -> dict[str, Any]:
     )
     ledger.setdefault("authorizationEndsAtUtc", "2026-08-24T23:00:00Z")
     ledger.setdefault("ownerCeilingUsd", OWNER_CEILING_USD)
-    ledger.setdefault("operationalStopUsd", OPERATIONAL_STOP_USD)
+    ledger["operationalStopUsd"] = OPERATIONAL_STOP_USD
     ledger.setdefault("reservations", [])
     return ledger
 

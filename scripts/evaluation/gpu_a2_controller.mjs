@@ -21,14 +21,13 @@
 
 import { fork } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import {
   assemblyStage,
-  nativeStage,
   openDocumentContext,
   renderStage,
   RENDER_SCALE
@@ -151,7 +150,6 @@ async function runProducer() {
         throw new Error(`producer source identity mismatch for page ${message.pageNumber}`);
       }
       const rendered = await renderStage(context, message.pageNumber, message.renderScale);
-      const native = await nativeStage(context, message.pageNumber);
       const bytes = Buffer.from(rendered.value.raster.data);
       const pngPath = join(message.scratchDir, `page-${String(message.pageNumber).padStart(4, '0')}-${randomUUID()}.png`);
       writeFileSync(pngPath, bytes);
@@ -160,9 +158,8 @@ async function runProducer() {
         pageNumber: message.pageNumber,
         pngPath,
         pngBytes: bytes.length,
-        nativePage: native.value,
         renderedPage: rendered.value.renderedPage,
-        stageTimingsMs: { render: rendered.ms, native: native.ms },
+        stageTimingsMs: { render: rendered.ms },
         producedAtNs: nowNs()
       });
     } catch (error) {
@@ -174,6 +171,7 @@ async function runProducer() {
 
 export async function runController(options) {
   const pdfPath = resolve(options.pdfPath);
+  const nativeEvidencePath = resolve(options.nativeEvidencePath);
   const resultPath = resolve(options.resultPath);
   const scratchDir = resolve(options.scratchDir);
   const expectedPages = Number(options.expectedPages ?? 50);
@@ -190,6 +188,23 @@ export async function runController(options) {
   if (context.pageCount !== expectedPages) {
     await context.dispose();
     throw new Error(`expected ${expectedPages} pages, source has ${context.pageCount}`);
+  }
+  const nativeEvidence = JSON.parse(readFileSync(nativeEvidencePath, 'utf8'));
+  if (nativeEvidence.schemaVersion !== 'pagespatial-gpu-a2-native-evidence-v1' ||
+      nativeEvidence.document?.sha256 !== context.identity.sha256 ||
+      nativeEvidence.adapter !== `${context.native.name}@${context.native.version}` ||
+      nativeEvidence.pageCount !== expectedPages ||
+      !Array.isArray(nativeEvidence.pages) || nativeEvidence.pages.length !== expectedPages) {
+    await context.dispose();
+    throw new Error('precomputed native evidence does not match the source document');
+  }
+  const nativeByPage = new Map(nativeEvidence.pages.map((entry) => [entry.pageNumber, entry]));
+  for (let pageNumber = 1; pageNumber <= expectedPages; pageNumber += 1) {
+    const entry = nativeByPage.get(pageNumber);
+    if (!entry || entry.nativePage?.pageNumber !== pageNumber || !Number.isFinite(entry.extractionMs)) {
+      await context.dispose();
+      throw new Error(`precomputed native evidence is invalid for page ${pageNumber}`);
+    }
   }
 
   const adapter = {
@@ -278,7 +293,14 @@ export async function runController(options) {
       pages,
       timing: {
         wallMs: (endedNs - startedNs) / 1e6,
-        pagesPerS: expectedPages / ((endedNs - startedNs) / 1e9)
+        pagesPerS: expectedPages / ((endedNs - startedNs) / 1e9),
+        scope: 'render+queue+tensorrt-ocr+assembly',
+        nativePrecompute: {
+          includedInWall: false,
+          totalWallMs: nativeEvidence.timing?.totalWallMs,
+          summedPageMs: nativeEvidence.timing?.summedPageMs,
+          host: nativeEvidence.host
+        }
       },
       queue: {
         maxPages: budget.maxPages,
@@ -290,7 +312,9 @@ export async function runController(options) {
         deploymentProfile: 'en-gpu',
         adapter: adapter.descriptor,
         producerCount,
-        renderScale: RENDER_SCALE
+        renderScale: RENDER_SCALE,
+        nativeEvidenceMode: 'precomputed-cpu',
+        nativeAdapter: nativeEvidence.adapter
       }
     };
     writeFileSync(resultPath, `${JSON.stringify(payload)}\n`);
@@ -322,8 +346,14 @@ export async function runController(options) {
           throw new Error(`duplicate produced page ${message.pageNumber}`);
         }
         budget.reserve(message.pngBytes);
+        const nativeEntry = nativeByPage.get(message.pageNumber);
         const id = `${runId}:${message.pageNumber}:${randomUUID()}`;
-        pending.set(id, { ...message, id });
+        pending.set(id, {
+          ...message,
+          id,
+          nativePage: nativeEntry.nativePage,
+          nativePrecomputeMs: nativeEntry.extractionMs
+        });
         pendingPages.add(message.pageNumber);
         protocolWrite({
           kind: 'ocr',
@@ -385,6 +415,7 @@ export async function runController(options) {
         pageSpatial: assembled.value.pageSpatial,
         stageTimingsMs: {
           ...entry.stageTimingsMs,
+          nativePrecomputeExcluded: entry.nativePrecomputeMs,
           ocr: message.inferenceMs,
           ocrQueueWait: message.queueWaitMs,
           assembly: assembled.ms,
@@ -428,6 +459,7 @@ async function cli() {
   try {
     await runController({
       pdfPath: value('--pdf'),
+      nativeEvidencePath: value('--native-evidence'),
       resultPath: value('--result'),
       scratchDir: value('--scratch'),
       runId: value('--run-id'),

@@ -14,6 +14,7 @@ import {
   orderedTerminalPages,
   validateOcrLines
 } from '../scripts/evaluation/gpu_a2_controller.mjs';
+import { precomputeNativeEvidence } from '../scripts/evaluation/precompute_gpu_a2_native.mjs';
 
 test('A2 queue budget is bounded by pages and bytes', () => {
   const budget = new OutstandingBudget(2, 10);
@@ -89,11 +90,14 @@ test('A2 controller runs the real terminal stages behind a stub owner', { skip: 
     }
     const pdfPath = join(directory, 'input.pdf');
     const resultPath = join(directory, 'result.json');
+    const nativeEvidencePath = join(directory, 'native-evidence.json');
     const scratch = join(directory, 'scratch');
     writeFileSync(pdfPath, await document.save());
+    await precomputeNativeEvidence(pdfPath, nativeEvidencePath);
     const child = spawn(process.execPath, [
       new URL('../scripts/evaluation/gpu_a2_controller.mjs', import.meta.url).pathname,
       '--pdf', pdfPath,
+      '--native-evidence', nativeEvidencePath,
       '--result', resultPath,
       '--scratch', scratch,
       '--run-id', 'test-a2-controller',
@@ -122,6 +126,9 @@ test('A2 controller runs the real terminal stages behind a stub owner', { skip: 
     assert.equal(result.status, 'completed');
     assert.deepEqual(result.pages.map(({ pageNumber }) => pageNumber), [1, 2]);
     assert.equal(result.provenance.deploymentProfile, 'en-gpu');
+    assert.equal(result.provenance.nativeEvidenceMode, 'precomputed-cpu');
+    assert.equal(result.timing.scope, 'render+queue+tensorrt-ocr+assembly');
+    assert.equal(result.timing.nativePrecompute.includedInWall, false);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
