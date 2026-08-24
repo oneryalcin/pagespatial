@@ -1,0 +1,58 @@
+{
+ "schemaVersion": "pagespatial-gpu-spike-model-pins-v1",
+ "capturedAt": "2026-08-24",
+ "packages": {
+  "python": "3.11",
+  "paddleocr": "3.7.0",
+  "paddlex": "3.7.2",
+  "paddlepaddle": "3.2.1",
+  "paddlepaddle-gpu": "3.2.1"
+ },
+ "models": {
+  "tiny": {
+   "detector": {
+    "repo": "PaddlePaddle/PP-OCRv6_tiny_det",
+    "revision": "d3177d4e5551463292a61e27cfca2b53e7c3fe9d",
+    "files": {
+     "inference.json": "935c18972799dd8f2a2ff424b9f8b2c6adee4b89f3a76f0746210ec33ba9b3d8",
+     "inference.pdiparams": "853f7ed317d4f2f80de646842e5bbc32f9d39c601562cbe466cda42e4bafb1b1",
+     "inference.yml": "3ac018be6f97499a08faa3bbdeb33640968d9307f6736d152902747a9f259593"
+    }
+   },
+   "recognizer": {
+    "repo": "PaddlePaddle/PP-OCRv6_tiny_rec",
+    "revision": "0736086f72f666350ebcdc0c3a504eeac89cdfad",
+    "files": {
+     "inference.json": "b5b14770c7dcf092781e92f4278a2ae5f95048f08b4b8a04140e88cb2745f147",
+     "inference.pdiparams": "bb2f8f54d1e25f28c71b6fa4fe23f5940e159cae27fbee96155c99f822156e57",
+     "inference.yml": "66170210bad538e83fff3c4a3867e547d6bf20b50d64b20347c4b913f3034ea1"
+    }
+   }
+  },
+  "small": {
+   "source": "service/sidecar/model-pins.json",
+   "detector": {
+    "repo": "PaddlePaddle/PP-OCRv6_small_det",
+    "revision": "106c97591b235f607453300d9fc8c1cad1b25488",
+    "files": {
+     "inference.json": "89240f689a4a77aad75ef55a8df0a15c8e1d4980a327d17e58f24bbadde5aeab",
+     "inference.pdiparams": "5043d4ccc8d63402ccea8feefcee4db57077431a873e78d2191836a178a492da",
+     "inference.yml": "193f435274bf9f0b5f71a929bbfbcf148282df7e633b34e7c373e8f44741b516"
+    }
+   },
+   "recognizer": {
+    "repo": "PaddlePaddle/PP-OCRv6_small_rec",
+    "revision": "bd619643acac4b9650c040234da8d944476ee3f1",
+    "files": {
+     "inference.json": "f0bf53c853937a917affdd74467472167727f8ab0f0f7bded01c4a16c27e46e6",
+     "inference.pdiparams": "406e1e689c9a7fbb04178007a3fe10cf852afe7bf8bb3bc6dbb9d532b13bd907",
+     "inference.yml": "ab078671bb49f06228eadccd34f1bb501e157f7a047095ffb943ba81512c77d1"
+    }
+   }
+  }
+ },
+ "runtimeCompatibility": {
+  "cuda126": "PaddleOCR HPI supports OpenVINO/ONNX Runtime but not TensorRT",
+  "tensorrt": "PaddleOCR documents TensorRT 8.6.1.6 with CUDA 11.8"
+ }
+}

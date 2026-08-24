@@ -15,6 +15,29 @@
 > 16-core box" projection, which was derived from that generalization,
 > never measured. The flat 1→8 latency measurement itself stands.
 
+> **GPU-scope correction (2026-08-24):** the GPU arm was default Paddle
+> GPU (`hpi: false`) on a T4, with one sequential `predict()` call per page.
+> The CPU control was OpenVINO HPI in a separate Modal function/container.
+> Therefore “same-container,” “GPU is dead,” “L40 would not change this,” and
+> the 1.5M-parameter explanation are retracted. The deployed Small detector +
+> recognizer are about 7.7M parameters combined; 1.5M describes Tiny. What the
+> data prove is narrower: **sequential default Paddle GPU on the tested T4 did
+> not materially beat the tested CPU OpenVINO HPI arm.** GPU HPI, FP16,
+> compatible TensorRT/ORT, effective recognition batching, CPU/GPU overlap,
+> and L4 were untested. The dated follow-up contract is
+> [`docs/design/2026-08-24-gpu-ocr-spike.md`](../design/2026-08-24-gpu-ocr-spike.md).
+>
+> **Edited-in-place disclosure (2026-08-24, cold review PR #95):** besides
+> this block, two passages below were rewritten in place rather than
+> annotated, against the pure-addition rule. The original wording, for the
+> record: (1) Modal-cost paragraph — *"The GPU-vs-HPI comparison, by
+> contrast, is same-container and clean — the GPU-dead conclusion does not
+> depend on any cross-machine inference."* (2) Gate verdict — *"…and the
+> GPU arm is dead on this workload: a Tesla T4 (952 ms) buys nothing over
+> OpenVINO on 4 vCPUs."* Both statements are retracted per this
+> correction; the replacement text at those locations states the narrowed
+> claims.
+
 ## Question
 
 The service's OCR witness costs 6.5 s/page (WASM EP, 4-worker load; 3.7 s
@@ -83,9 +106,9 @@ contended vs single) — so the headline multipliers are approximate by
 construction: **~6.6× vs the loaded-laptop service figure, ~3.7× vs the
 single-adapter laptop figure**, both cross-machine. One order-of-magnitude
 sanity note (not a control): paddle-default-CPU on Modal (3,884 ms) lands
-where single-adapter WASM on the laptop does (3,700 ms). The GPU-vs-HPI
-comparison, by contrast, is same-container and clean — the GPU-dead
-conclusion does not depend on any cross-machine inference.
+where single-adapter WASM on the laptop does (3,700 ms). The GPU and CPU HPI
+arms used separate Modal functions/containers; their raw timings stand, but
+they do not support a same-container or general GPU conclusion.
 
 ## Accuracy (vs dev-v12 browser witness; gold = 560 tokens on 23 pages)
 
@@ -125,11 +148,13 @@ pages — no equivalence claim is being made here):
 
 ## Gate verdict
 
-**The HPI CPU sidecar (OpenVINO, v6-small) is the recommended speed arm:
+**Historical verdict, narrowed by the 2026-08-24 correction above.** The HPI
+CPU sidecar (OpenVINO, v6-small) was the recommended speed arm:
 ~6.6× the loaded WASM cost (989 ms vs 6.5 s) and ~3.7× the single-worker
 cost, at accuracy parity with the default pipeline and gold recall at
-least matching our current witnesses — and the GPU arm is dead on this
-workload: a Tesla T4 (952 ms) buys nothing over OpenVINO on 4 vCPUs.**
+least matching our current witnesses. The T4 result says only that its
+sequential default-GPU arm (952 ms) did not beat the tested OpenVINO arm
+(989 ms); optimized batched GPU inference remained open.**
 The native-ORT port (arm 1) remains the fallback if a Python sidecar is
 operationally unwanted — it plausibly lands near the same ~1 s but
 requires forking paddleocr-js and owning the fork.

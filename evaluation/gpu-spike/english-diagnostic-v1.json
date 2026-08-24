@@ -1,0 +1,240 @@
+{
+ "schemaVersion": "pagespatial-gpu-spike-english-diagnostic-v1",
+ "languageScope": "en",
+ "source": {
+  "manifest": ".evaluation/hpi-ceremony/manifest.json",
+  "directory": ".evaluation/hpi-ceremony",
+  "note": "Private rendered PNGs are gitignored; page IDs and SHA-256 values freeze exact inputs."
+ },
+ "selection": {
+  "rule": "Historical 32-page HPI diagnostic with the six non-English pages replaced by five page-matched MonotaRO English siblings and one English image-only page.",
+  "developmentOnly": true,
+  "holdoutAccessed": false
+ },
+ "pages": [
+  {
+   "page": "legistar:seattle:1794:v0:attachment:3283#1",
+   "sourcePng": "legistar_seattle_1794_v0_attachment_3283_1.png",
+   "sha256": "8f248a18d18ee2f65f5b40cba9fd2e7a775b16e866346461a2cbefeb66811936",
+   "pngWidth": 1960,
+   "pngHeight": 1268
+  },
+  {
+   "page": "legistar:seattle:1794:v0:attachment:3283#14",
+   "sourcePng": "legistar_seattle_1794_v0_attachment_3283_14.png",
+   "sha256": "e5ec7ae88d347cdfd341a71972bfda30a8791476058c3a7ed7290cec27d232f2",
+   "pngWidth": 980,
+   "pngHeight": 1269
+  },
+  {
+   "page": "legistar:seattle:1794:v0:attachment:3283#27",
+   "sourcePng": "legistar_seattle_1794_v0_attachment_3283_27.png",
+   "sha256": "af808836c4c660de9bdae9a6f9a5bf664674f8ed2bce49bd33db89f00180b244",
+   "pngWidth": 980,
+   "pngHeight": 1269
+  },
+  {
+   "page": "legistar:seattle:1859:v0:attachment:3318#1",
+   "sourcePng": "legistar_seattle_1859_v0_attachment_3318_1.png",
+   "sha256": "79201cb72d4d52d346f2ababcd53da88bab920410b90c3bb4e67589ceb70c2d6",
+   "pngWidth": 980,
+   "pngHeight": 1269
+  },
+  {
+   "page": "legistar:seattle:2438:v0:attachment:6113#10",
+   "sourcePng": "legistar_seattle_2438_v0_attachment_6113_10.png",
+   "sha256": "5344f8691873ef9229acc10b51f033442f18695c8e9f11b9970fb135bed74e67",
+   "pngWidth": 980,
+   "pngHeight": 1269
+  },
+  {
+   "page": "osf:file:607883db0c818200885135da:v1#10",
+   "sourcePng": "osf_file_607883db0c818200885135da_v1_10.png",
+   "sha256": "1b016cde98d45fa8c9cd44331a29a9d0ec0d2af28d2f7c5145e5a03bec77f846",
+   "pngWidth": 1152,
+   "pngHeight": 648
+  },
+  {
+   "page": "osf:file:64a59e4ea2a2f4140943711a:v1#1",
+   "sourcePng": "osf_file_64a59e4ea2a2f4140943711a_v1_1.png",
+   "sha256": "6019c82785708c5a916d6ad5595cdc811ff215711a993e0942b74bb9e39b8ac0",
+   "pngWidth": 980,
+   "pngHeight": 1269
+  },
+  {
+   "page": "osf:file:64a59e4ea2a2f4140943711a:v1#143",
+   "sourcePng": "osf_file_64a59e4ea2a2f4140943711a_v1_143.png",
+   "sha256": "0495ba73f3f8a5685b6a52ca3b20a83a7217e71c6462890730d1d7a90125976f",
+   "pngWidth": 980,
+   "pngHeight": 1269
+  },
+  {
+   "page": "osf:file:64a59e4ea2a2f4140943711a:v1#144",
+   "sourcePng": "osf_file_64a59e4ea2a2f4140943711a_v1_144.png",
+   "sha256": "2b2b588b2c93e016bfb3f1378bfd2c921187001fcaff29f05264935e99da4aa0",
+   "pngWidth": 980,
+   "pngHeight": 1269
+  },
+  {
+   "page": "osf:file:64a59e4ea2a2f4140943711a:v1#2",
+   "sourcePng": "osf_file_64a59e4ea2a2f4140943711a_v1_2.png",
+   "sha256": "0ed1ba20ef8cb9a0692b7fe78404a676a072654ff776b537d1b2395462ca7ac5",
+   "pngWidth": 980,
+   "pngHeight": 1269
+  },
+  {
+   "page": "pa-sers:2024-09-24:llr-vii:consultant-memo#1",
+   "sourcePng": "pa_sers_2024_09_24_llr_vii_consultant_memo_1.png",
+   "sha256": "ac82afd383dc84183a3f694632faf30f483a5f567ee290fee9f3e04d29277e34",
+   "pngWidth": 980,
+   "pngHeight": 1269
+  },
+  {
+   "page": "pa-sers:2024-09-24:llr-vii:consultant-memo#2",
+   "sourcePng": "pa_sers_2024_09_24_llr_vii_consultant_memo_2.png",
+   "sha256": "8616b6a3deeac7bafc93f0d5f397e2f1a7e59c31b31ead706acc7d1f26ccbb99",
+   "pngWidth": 980,
+   "pngHeight": 1269
+  },
+  {
+   "page": "pa-sers:2024-09-24:llr-vii:manager-presentation#1",
+   "sourcePng": "pa_sers_2024_09_24_llr_vii_manager_presentation_1.png",
+   "sha256": "9220a94e6d812eb575daf350f6e3cd7639fbf2952e925120a1cbd699c7db4c3f",
+   "pngWidth": 1536,
+   "pngHeight": 864
+  },
+  {
+   "page": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c#1",
+   "sourcePng": "pa_sers_2026_06_09_skyknight_capital_fund_v_l_p_3_5ffb7a77f66c_1.png",
+   "sha256": "353817df14826be7b42fef8dc0c89b396ac30f23136de5e7a61386984ee14948",
+   "pngWidth": 1152,
+   "pngHeight": 864
+  },
+  {
+   "page": "public-comps:ares:2026-q1:002#3",
+   "sourcePng": "public_comps_ares_2026_q1_002_3.png",
+   "sha256": "df55ba5d41ffac1e4e366bfebbb81ec7516e690f7ff5f00142abc096b2195b70",
+   "pngWidth": 980,
+   "pngHeight": 1269
+  },
+  {
+   "page": "public-comps:ares:2026-q1:002#4",
+   "sourcePng": "public_comps_ares_2026_q1_002_4.png",
+   "sha256": "a0b6f7da3fb338d40ec272e082f954c297533c284b0ccf28dc30174ac550def8",
+   "pngWidth": 980,
+   "pngHeight": 1269
+  },
+  {
+   "page": "public-comps:blackstone:2026-q1:002#12",
+   "sourcePng": "public_comps_blackstone_2026_q1_002_12.png",
+   "sha256": "990062b98f651bd1a65d3647334cf6a23e8432c7c41a78dd6a96ccd3c412d5ce",
+   "pngWidth": 1268,
+   "pngHeight": 980
+  },
+  {
+   "page": "public-comps:blackstone:2026-q1:002#14",
+   "sourcePng": "public_comps_blackstone_2026_q1_002_14.png",
+   "sha256": "30437ca29318412b589aae60670219f8695060da42b4859194f26c2164ed7c66",
+   "pngWidth": 1268,
+   "pngHeight": 980
+  },
+  {
+   "page": "public-comps:blackstone:2026-q1:002#15",
+   "sourcePng": "public_comps_blackstone_2026_q1_002_15.png",
+   "sha256": "aa3d1f7aeea12db9b1a0cf6297bac9489b30c5e963bc3e2061e76bea394c918a",
+   "pngWidth": 1268,
+   "pngHeight": 980
+  },
+  {
+   "page": "public-comps:blackstone:2026-q1:002#16",
+   "sourcePng": "public_comps_blackstone_2026_q1_002_16.png",
+   "sha256": "29c85d7a6ac751f2b96f85d0cf71db522e83ab97b9ea0e9a1d445549fd70d9b9",
+   "pngWidth": 1268,
+   "pngHeight": 980
+  },
+  {
+   "page": "public-comps:blackstone:2026-q1:002#17",
+   "sourcePng": "public_comps_blackstone_2026_q1_002_17.png",
+   "sha256": "f983b26023865f41b874015666135295f87c96039efc208fa134230c4257e18e",
+   "pngWidth": 1268,
+   "pngHeight": 980
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:004#10",
+   "sourcePng": "public_comps_monotaro_2025_fy_004_10.png",
+   "sha256": "1bf45c74b019f818b3aa255f4b10ff52f802d08b239aef92fbc928d051f9afed",
+   "pngWidth": 1348,
+   "pngHeight": 954
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:004#11",
+   "sourcePng": "public_comps_monotaro_2025_fy_004_11.png",
+   "sha256": "965d731a58d6c86c2b11d04a23f1ea32ed8994fbaa741b507d2d12d0128773d6",
+   "pngWidth": 1348,
+   "pngHeight": 954
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:004#12",
+   "sourcePng": "public_comps_monotaro_2025_fy_004_12.png",
+   "sha256": "e0e1c4585d3f94e9887ee841416d918471f2a372e28002e9c0fdf437f247cf66",
+   "pngWidth": 1348,
+   "pngHeight": 954
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:004#30",
+   "sourcePng": "public_comps_monotaro_2025_fy_004_30.png",
+   "sha256": "4b22751fed7542e5d458c3599a2e9bd31db0c0a93b465ad86a44717c3afc6506",
+   "pngWidth": 1348,
+   "pngHeight": 954
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:004#61",
+   "sourcePng": "public_comps_monotaro_2025_fy_004_61.png",
+   "sha256": "dec576035c75f7dd9530a2fcc4cc2855bcd5ce32c2f93eaf8f8fb3654ac98173",
+   "pngWidth": 1348,
+   "pngHeight": 954
+  },
+  {
+   "page": "world-bank:P170734:document:34222345#2",
+   "sourcePng": "world_bank_P170734_document_34222345_2.png",
+   "sha256": "57a5cf41c53dc2be4d7ef8a72954e0c5797a61b09556c173c7bd1384a66ec72a",
+   "pngWidth": 980,
+   "pngHeight": 1269
+  },
+  {
+   "page": "world-bank:P170734:document:34222345#6",
+   "sourcePng": "world_bank_P170734_document_34222345_6.png",
+   "sha256": "d2fe0ae936ce8ea9979e06bab6a2ac6610ab6d0c50f4a8896a638262f0233ec2",
+   "pngWidth": 1268,
+   "pngHeight": 980
+  },
+  {
+   "page": "world-bank:P170734:document:34222345#7",
+   "sourcePng": "world_bank_P170734_document_34222345_7.png",
+   "sha256": "57c8de99e2e16113f7aadcbc940830ae408f106bf945a820e21ea20ec0f4eb90",
+   "pngWidth": 1268,
+   "pngHeight": 980
+  },
+  {
+   "page": "world-bank:P178566:document:34223652#1",
+   "sourcePng": "world_bank_P178566_document_34223652_1.png",
+   "sha256": "d9578c67a7e84fa2fb0db99331eb6f272e1d89e856bbdaac78cd2ca1fcabb37e",
+   "pngWidth": 980,
+   "pngHeight": 1269
+  },
+  {
+   "page": "world-bank:P178566:document:34223652#3",
+   "sourcePng": "world_bank_P178566_document_34223652_3.png",
+   "sha256": "f24d1e0097675dee2dd8406a258178a5b4d8f62b05392545febc8f0a63b256ed",
+   "pngWidth": 1268,
+   "pngHeight": 980
+  },
+  {
+   "page": "world-bank:P178566:document:34223652#4",
+   "sourcePng": "world_bank_P178566_document_34223652_4.png",
+   "sha256": "be01bfd2afc433e834a90a85b59f6bc7fc5242f0493fa33fe333789cbca06f5d",
+   "pngWidth": 1268,
+   "pngHeight": 980
+  }
+ ]
+}
