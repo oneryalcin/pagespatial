@@ -89,3 +89,7 @@ test('M0 validates generated artifacts instead of treating exit status as eviden
     /if profile\["returnCode"\] != 0 or not report_path\.is_file\(\):/u,
   );
 });
+
+test('M0 event counts exclude schema enumeration rows', () => {
+  assert.match(modalSource, /not name\.upper\(\)\.startswith\("ENUM_"\)/u);
+});

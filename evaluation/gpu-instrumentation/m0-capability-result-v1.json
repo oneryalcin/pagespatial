@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "pagespatial-gpu-instrumentation-m0-result-v1",
+  "date": "2026-08-25",
+  "host": {
+    "provider": "Modal",
+    "kernel": "Linux 4.19.0-gvisor",
+    "gpu": "NVIDIA L4",
+    "driver": "580.95.05",
+    "cuda": "11.8",
+    "paddle": "3.0.0"
+  },
+  "tools": {
+    "nsightSystems": {
+      "version": "2025.5.1.121-255136380782v0",
+      "debSha256": "506a8a3fdd94cec84c4c216d159ce3a6496170e8cf22b95b603b4bef4e0fb6e2"
+    },
+    "nvtx": {
+      "version": "0.2.16",
+      "cp310X8664WheelSha256": "23f30fcaf68f53d1895282315cb35aed5f605d59aeb33e75e276545ff95c4af6"
+    }
+  },
+  "attempts": [
+    {
+      "gitRevision": "da5f2f2a4b4a555b2a4e813cc8624e9b8e42d4a4",
+      "appId": "ap-YUWekHlpnKTfOSBGebuNbm",
+      "reservationId": "1787615076-31494489",
+      "rawResultSha256": "374e08e52e28f8406ff754823cf01343cc16c54663d3f02586ca8f2777d32a46",
+      "rawResultBytes": 4354,
+      "outcome": "harness-error",
+      "detail": "combined CUDA and denied perf sampling request returned 139 before a report was retained"
+    },
+    {
+      "gitRevision": "d1f8471874721ee5fa1542fec71118a573d58c69",
+      "appId": "ap-kh3ORTuip6RcmCr73sEggn",
+      "reservationId": "1787615297-04223803",
+      "rawResultSha256": "d792e62f3c3d5d3b4319ffb489d290ce937affd875909128718c2db9285cc122",
+      "rawResultBytes": 4059,
+      "outcome": "harness-error",
+      "detail": "nsys generated a report after sampling was disabled, but the harness discarded it because the command returned 139"
+    },
+    {
+      "gitRevision": "b7e7c79c757ab5572effdd5f4cfc5315b146c79c",
+      "appId": "ap-aPx94y7VW1rS8cKGHRh7Ix",
+      "reservationId": "1787615569-5ee572dc",
+      "rawResultSha256": "453526caf13bbf5aa8a20a9237df162fdd08a2eb7abec2a3373eaba0b5460123",
+      "rawResultBytes": 14515,
+      "outcome": "unsupported-events",
+      "profileExitCode": 139,
+      "exportExitCode": 0,
+      "report": {
+        "sha256": "1f9621b9f1028ceb5e69e3d84c1e1dc148f043a4f72ee2c5d277830127af6be4",
+        "bytes": 78089
+      },
+      "sqlite": {
+        "sha256": "9da37f4e3de6be107b485a33a6904ee726c8af282d7370b988c8193241486441",
+        "bytes": 389120,
+        "exportedEvents": 948,
+        "osRuntimeEvents": 891,
+        "nvtxEvents": 0,
+        "cudaApiEvents": 0,
+        "cudaKernelEvents": 0,
+        "cudaMemoryEvents": 0
+      }
+    }
+  ],
+  "capabilities": {
+    "reportGeneration": true,
+    "sqliteExport": true,
+    "osRuntimeTrace": true,
+    "cpuSampling": false,
+    "cpuContextSwitchTrace": false,
+    "nvtxTrace": false,
+    "cudaApiTrace": false,
+    "cudaKernelTrace": false,
+    "cudaMemoryTrace": false
+  },
+  "verdict": {
+    "modalSupportsRequiredM2Trace": false,
+    "classification": "platform-unsupported-for-required-cuda-cupti-trace",
+    "next": "use the exact image and L4 shape on a dedicated Linux x86 host or VM; do not start M1 or M2 on Modal"
+  },
+  "cost": {
+    "postedSpendSnapshotUsd": 0.03867405,
+    "postedSpendFinal": false,
+    "reservedExposureUsd": 15,
+    "ownerCeilingUsd": 100
+  },
+  "cleanup": {
+    "allExactAppsStopped": true,
+    "activeExperimentApps": 0
+  },
+  "limitations": [
+    "the raw trace artifacts remain in the ignored private evaluation tree",
+    "return code 139 is observed; whether the target process or profiler component emitted it is unclassified",
+    "the first two generated report files were not retained",
+    "the committed capability summary corrects an analyzer defect that counted ENUM_SAMPLING and ENUM_SCHEDULING definition rows as event evidence"
+  ]
+}

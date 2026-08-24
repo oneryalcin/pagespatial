@@ -129,7 +129,8 @@ def _sum_matching(counts: dict[str, int], *tokens: str) -> int:
     return sum(
         count
         for name, count in counts.items()
-        if all(token in name.upper() for token in tokens)
+        if not name.upper().startswith("ENUM_")
+        and all(token in name.upper() for token in tokens)
     )
 
 
