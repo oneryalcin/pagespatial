@@ -18,5 +18,13 @@
     "optimization implementation",
     "access to the locked correctness holdout"
   ],
+  "amendments": [
+    {
+      "authorizedAtUtc": "2026-08-24T23:52:04Z",
+      "scope": "one additional bounded M0 attempt",
+      "reason": "attempt two generated an nsys report but the harness discarded it solely because nsys exited 139 after generation",
+      "reservationWorstCaseUsd": 5
+    }
+  ],
   "source": "owner instructions in the 2026-08-25 conversation: go ahead and start the instrumentation implementation as per docs and measure; today's experimentation ceiling is USD 100 and any increase requires a new request"
 }

@@ -78,3 +78,14 @@ test('M0 separates unavailable perf sampling from the CUDA capability trace', ()
   assert.match(modalSource, /native CPU sampling is unsupported/u);
   assert.doesNotMatch(modalSource, /"--cuda-event-trace=true"/u);
 });
+
+test('M0 validates generated artifacts instead of treating exit status as evidence', () => {
+  assert.match(modalSource, /if not report_path\.is_file\(\):/u);
+  assert.match(modalSource, /if profile\["returnCode"\] != 0:/u);
+  assert.match(modalSource, /if not sqlite_path\.is_file\(\):/u);
+  assert.match(modalSource, /requiredEventCountsPass/u);
+  assert.doesNotMatch(
+    modalSource,
+    /if profile\["returnCode"\] != 0 or not report_path\.is_file\(\):/u,
+  );
+});

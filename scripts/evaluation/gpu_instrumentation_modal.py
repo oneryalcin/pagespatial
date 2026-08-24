@@ -234,11 +234,15 @@ def probe_capabilities(run_id: str) -> dict[str, Any]:
         "limitations": [],
     }
 
-    if profile["returnCode"] != 0 or not report_path.is_file():
+    if not report_path.is_file():
         if _platform_denial(combined_output):
             result["classification"] = "platform-denied"
         result["limitations"].append("Nsight Systems profile did not produce a report")
         return result
+    if profile["returnCode"] != 0:
+        result["limitations"].append(
+            f"nsys profile exited {profile['returnCode']} after generating the retained report"
+        )
 
     export = _run(
         [
@@ -252,12 +256,16 @@ def probe_capabilities(run_id: str) -> dict[str, Any]:
         timeout=240,
     )
     result["export"] = export
-    if export["returnCode"] != 0 or not sqlite_path.is_file():
+    if not sqlite_path.is_file():
         if _platform_denial(export["stdout"] + "\n" + export["stderr"]):
             result["classification"] = "platform-denied"
         result["limitations"].append("Nsight Systems SQLite export failed")
         result["artifacts"][report_path.name] = _file_record(report_path)
         return result
+    if export["returnCode"] != 0:
+        result["limitations"].append(
+            f"nsys export exited {export['returnCode']} after generating the retained SQLite file"
+        )
 
     counts = _sqlite_counts(sqlite_path)
     nvtx_count = _sum_matching(counts, "NVTX")
@@ -290,6 +298,13 @@ def probe_capabilities(run_id: str) -> dict[str, Any]:
             "artifacts": {
                 report_path.name: _file_record(report_path),
                 sqlite_path.name: _file_record(sqlite_path),
+            },
+            "artifactValidation": {
+                "profileExitCode": profile["returnCode"],
+                "exportExitCode": export["returnCode"],
+                "reportExists": True,
+                "sqliteExists": True,
+                "requiredEventCountsPass": required,
             },
         }
     )
