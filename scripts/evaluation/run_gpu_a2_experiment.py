@@ -52,15 +52,25 @@ def stop_exact_app(name: str) -> str:
     if row is None:
         raise RuntimeError(f"paid arm created no discoverable app named {name!r}")
     app_id = row["app_id"]
-    subprocess.run(
-        ["modal", "app", "stop", "--yes", app_id], cwd=REPO_ROOT,
-        check=False, capture_output=True, text=True, timeout=180,
-    )
+    if row.get("state") != "stopped" or str(row.get("tasks", "0")) != "0":
+        subprocess.run(
+            ["modal", "app", "stop", "--yes", app_id], cwd=REPO_ROOT,
+            check=False, capture_output=True, text=True, timeout=180,
+        )
+    deadline = time.monotonic() + 120
     remaining = exact_app(name)
-    if remaining is None or (
-        remaining.get("state") != "stopped" or str(remaining.get("tasks", "0")) != "0"
-    ):
-        raise RuntimeError(f"A2 app did not stop cleanly: {remaining}")
+    while remaining is not None and time.monotonic() < deadline:
+        if (
+            remaining.get("state") == "stopped"
+            and str(remaining.get("tasks", "0")) == "0"
+        ):
+            break
+        time.sleep(2)
+        remaining = exact_app(name)
+    if remaining is None or remaining.get("state") != "stopped" or str(
+        remaining.get("tasks", "0")
+    ) != "0":
+        raise RuntimeError(f"A2 app did not stop cleanly after bounded reap: {remaining}")
     return app_id
 
 

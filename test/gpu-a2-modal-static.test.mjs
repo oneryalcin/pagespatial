@@ -12,6 +12,11 @@ test('A2 Modal arm is one bounded L4 owner with no retries', () => {
   assert.match(source, /METHOD_TIMEOUT_S = 1200/u);
 });
 
+test('A2 remote hydration never imports the paid image-construction harness', () => {
+  assert.match(source, /if modal\.is_local\(\):[\s\S]*from gpu_spike_trt_modal import/u);
+  assert.match(source, /else:[\s\S]*trt_image = modal\.Image\.debian_slim/u);
+});
+
 test('A2 Modal arm is only qualified Small FP32 with batch one', () => {
   assert.match(source, /"tier": "small"/u);
   assert.match(source, /"precision": "fp32"/u);

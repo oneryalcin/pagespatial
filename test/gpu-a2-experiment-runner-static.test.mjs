@@ -18,6 +18,8 @@ test('paid A2 launcher requires clean source and exact app cleanup', () => {
   assert.match(source, /remaining\.get\("state"\) != "stopped"/u);
   assert.match(source, /finally:/u);
   assert.match(source, /complete_without_app/u);
+  assert.match(source, /time\.monotonic\(\) \+ 120/u);
+  assert.match(source, /did not stop cleanly after bounded reap/u);
   assert.doesNotMatch(source, /gpu_a2_modal\.py", "--"/u);
 });
 

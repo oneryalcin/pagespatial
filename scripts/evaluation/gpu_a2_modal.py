@@ -45,6 +45,9 @@ if modal.is_local():
     validate_reservation(_ledger_path, _reservation_id, "E1-GPU")
 
 from gpu_spike_modal import (
+    GPU_TYPE,
+    MODEL_MANIFEST,
+    REMOTE_ROOT,
     _GpuSampler,
     _attest_backend,
     _backend_lines,
@@ -55,14 +58,33 @@ from gpu_spike_modal import (
     _source_state,
     _walk_interesting_attrs,
 )
-from gpu_spike_trt_modal import (
-    GPU_TYPE,
-    MODEL_MANIFEST,
-    REMOTE_ROOT,
-    ULTRA_INFER_PATCH_SHA256,
-    ULTRA_INFER_SOURCE_REV,
-    trt_image,
+
+
+# These values are part of the measured A2 arm identity. Keep them available
+# without importing the image-construction harness in a remote container: a
+# class-hydration import failure can otherwise make Modal repeatedly allocate
+# the requested GPU before user code gets a chance to fail or clean up.
+ULTRA_INFER_SOURCE_REV = "ffb64904d23708863ff5b8da312a5cbd52a7f462"
+ULTRA_INFER_PATCH_SHA256 = (
+    "b03632bbfae1372f21a2e31babbf72f8936943a0848ff3db853a2f1cd5216bd6"
 )
+
+if modal.is_local():
+    from gpu_spike_trt_modal import (
+        ULTRA_INFER_PATCH_SHA256 as SPIKE_ULTRA_INFER_PATCH_SHA256,
+        ULTRA_INFER_SOURCE_REV as SPIKE_ULTRA_INFER_SOURCE_REV,
+        trt_image,
+    )
+
+    if (
+        SPIKE_ULTRA_INFER_SOURCE_REV != ULTRA_INFER_SOURCE_REV
+        or SPIKE_ULTRA_INFER_PATCH_SHA256 != ULTRA_INFER_PATCH_SHA256
+    ):
+        raise RuntimeError("A2 TensorRT source identity drifted from the spike harness")
+else:
+    # The deployed function already has its server-side image assignment. This
+    # placeholder only lets Modal import the source module during hydration.
+    trt_image = modal.Image.debian_slim(python_version="3.10")
 
 
 APP_NAME = os.environ.get("PAGESPATIAL_A2_APP_NAME", "pagespatial-gpu-a2-e2e-m1")
@@ -136,27 +158,41 @@ def _node_install_command() -> str:
     )
 
 
-a2_image = (
-    trt_image
-    .apt_install("curl", "xz-utils", "poppler-utils", "tesseract-ocr")
-    .run_commands(_node_install_command())
-    .add_local_file(str(REPO_ROOT / "package.json"), "/app/package.json", copy=True)
-    .add_local_file(str(REPO_ROOT / "package-lock.json"), "/app/package-lock.json", copy=True)
-    .run_commands("cd /app && PATH=/opt/node/bin:$PATH /opt/node/bin/npm ci")
-    .add_local_file(str(REPO_ROOT / "tsconfig.json"), "/app/tsconfig.json", copy=True)
-    .add_local_dir(str(REPO_ROOT / "src"), "/app/src", copy=True)
-    .add_local_dir(str(REPO_ROOT / "schemas"), "/app/schemas", copy=True)
-    .add_local_file(
-        str(REPO_ROOT / "scripts/generate-schema.mjs"),
-        "/app/scripts/generate-schema.mjs",
-        copy=True,
+if modal.is_local():
+    a2_image = (
+        trt_image
+        .apt_install("curl", "xz-utils", "poppler-utils", "tesseract-ocr")
+        .run_commands(_node_install_command())
+        .add_local_file(str(REPO_ROOT / "package.json"), "/app/package.json", copy=True)
+        .add_local_file(str(REPO_ROOT / "package-lock.json"), "/app/package-lock.json", copy=True)
+        .run_commands("cd /app && PATH=/opt/node/bin:$PATH /opt/node/bin/npm ci")
+        .add_local_file(str(REPO_ROOT / "tsconfig.json"), "/app/tsconfig.json", copy=True)
+        .add_local_dir(str(REPO_ROOT / "src"), "/app/src", copy=True)
+        .add_local_dir(str(REPO_ROOT / "schemas"), "/app/schemas", copy=True)
+        .add_local_file(
+            str(REPO_ROOT / "scripts/generate-schema.mjs"),
+            "/app/scripts/generate-schema.mjs",
+            copy=True,
+        )
+        .run_commands("cd /app && PATH=/opt/node/bin:$PATH /opt/node/bin/npm run build")
+        .add_local_dir(str(REPO_ROOT / "service"), "/app/service", copy=True)
+        .add_local_file(str(CONTROLLER), "/app/scripts/evaluation/gpu_a2_controller.mjs", copy=True)
+        .add_local_file(
+            str(WORKLOAD_MANIFEST),
+            "/app/evaluation/gpu-spike/a2-50page-v1.json",
+            copy=True,
+        )
+        .env(
+            {
+                "PATH": (
+                    "/opt/node/bin:/usr/local/sbin:/usr/local/bin:"
+                    "/usr/sbin:/usr/bin:/sbin:/bin"
+                )
+            }
+        )
     )
-    .run_commands("cd /app && PATH=/opt/node/bin:$PATH /opt/node/bin/npm run build")
-    .add_local_dir(str(REPO_ROOT / "service"), "/app/service", copy=True)
-    .add_local_file(str(CONTROLLER), "/app/scripts/evaluation/gpu_a2_controller.mjs", copy=True)
-    .add_local_file(str(WORKLOAD_MANIFEST), "/app/evaluation/gpu-spike/a2-50page-v1.json", copy=True)
-    .env({"PATH": "/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"})
-)
+else:
+    a2_image = modal.Image.debian_slim(python_version="3.10")
 
 
 ARM = {
