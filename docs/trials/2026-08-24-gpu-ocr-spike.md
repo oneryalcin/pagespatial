@@ -123,8 +123,8 @@ passing a same-shaped list of up to eight decoded pages to one `predict()`
 call. It did not create eight concurrent producers or a bounded owner queue.
 Therefore B1/C8 and B8/C8 establish page-list batching behavior only. They do
 not prove that true page concurrency or CPU/GPU overlap has no value. That
-architecture remains unmeasured and unauthorized because no correct engine
-advanced.
+architecture remains unmeasured and unauthorized because no engine
+advanced — Small mechanically, Tiny by the discretionary stop below.
 
 **Discretionary Tiny stop (dated deviation, 2026-08-24, cold review
 PR #95):** the frozen `acceptance-v1.json` tinyScreen would have allowed
@@ -325,7 +325,8 @@ benchmark-only apps.
   attribution it requires was not instrumented in these arms.
 - End-to-end Node A2 overlap, sustained 1,000-page operation, failure
   injection, billed cost, 1-to-4 GPU scale, and the candidate holdout were not
-  run because no M1.5 treatment advanced.
+  run because no treatment advanced from M1.5 (Small mechanically; Tiny
+  by the dated discretionary stop).
 - No complete 50-page document was run through a GPU service. The 32-page
   diagnostic measures OCR runtime behavior, not a 50-page completion SLO.
 - Non-English transfer is intentionally unqualified.
