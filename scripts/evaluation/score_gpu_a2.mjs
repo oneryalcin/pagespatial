@@ -53,7 +53,10 @@ function ocrLines(page) {
   }));
 }
 
-function modelIdentity(run, label) {
+function modelIdentity(run, label, expectedTier) {
+  if (!['tiny', 'small'].includes(expectedTier)) {
+    throw new Error(`${label} has unsupported PP-OCRv6 tier ${expectedTier}.`);
+  }
   const verification = run?.modelVerification;
   const normalized = {};
   for (const component of ['detector', 'recognizer']) {
@@ -64,9 +67,9 @@ function modelIdentity(run, label) {
     }
     normalized[component] = { repo: value.repo, revision: value.revision, files: value.files };
   }
-  if (normalized.detector.repo !== 'PaddlePaddle/PP-OCRv6_small_det' ||
-      normalized.recognizer.repo !== 'PaddlePaddle/PP-OCRv6_small_rec') {
-    throw new Error(`${label} is not PP-OCRv6 Small.`);
+  if (normalized.detector.repo !== `PaddlePaddle/PP-OCRv6_${expectedTier}_det` ||
+      normalized.recognizer.repo !== `PaddlePaddle/PP-OCRv6_${expectedTier}_rec`) {
+    throw new Error(`${label} is not PP-OCRv6 ${expectedTier}.`);
   }
   return normalized;
 }
@@ -258,10 +261,12 @@ export function evaluateGpuA2({ cpu, gpu, adjudications }) {
   if (!isDeepStrictEqual(control.identity, candidate.identity)) {
     throw new Error('CPU and GPU document identities differ.');
   }
-  const controlModels = modelIdentity(cpu, 'CPU control');
-  const candidateModels = modelIdentity(gpu, 'GPU candidate');
-  if (!isDeepStrictEqual(controlModels, candidateModels)) {
-    throw new Error('CPU and GPU Small model revisions or file hashes differ.');
+  const controlTier = 'small';
+  const candidateTier = gpu?.arm?.tier ?? 'small';
+  const controlModels = modelIdentity(cpu, 'CPU control', controlTier);
+  const candidateModels = modelIdentity(gpu, 'GPU candidate', candidateTier);
+  if (controlTier === candidateTier && !isDeepStrictEqual(controlModels, candidateModels)) {
+    throw new Error(`CPU and GPU ${controlTier} model revisions or file hashes differ.`);
   }
   const reviews = adjudicationIndex(adjudications, control.identity);
   const usedReviews = new Set();
@@ -331,6 +336,8 @@ export function evaluateGpuA2({ cpu, gpu, adjudications }) {
     acceptanceRule: 'zero newly incorrect, missing, or unresolved critical values in trusted non-escalated output; raw OCR evidence differences are allowed',
     document: control.identity,
     models: controlModels,
+    candidateModels,
+    modelTiers: { control: controlTier, candidate: candidateTier },
     terminalPages: EXPECTED_PAGES,
     summary: {
       pass,

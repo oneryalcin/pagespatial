@@ -18,8 +18,10 @@ test('A2 remote hydration never imports the paid image-construction harness', ()
   assert.match(source, /else:[\s\S]*trt_image = modal\.Image\.debian_slim/u);
 });
 
-test('A2 Modal arm is only Small FP32 with a bounded recognition batch', () => {
-  assert.match(source, /"tier": "small"/u);
+test('A2 Modal arm is tier-aware FP32 with a bounded recognition batch', () => {
+  assert.match(source, /PAGESPATIAL_A2_MODEL_TIER/u);
+  assert.match(source, /MODEL_TIER not in \{"tiny", "small"\}/u);
+  assert.match(source, /"tier": MODEL_TIER/u);
   assert.match(source, /"precision": "fp32"/u);
   assert.match(source, /PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE/u);
   assert.match(source, /not in \{1, 4, 8\}/u);
@@ -31,7 +33,6 @@ test('A2 Modal arm is only Small FP32 with a bounded recognition batch', () => {
   assert.match(source, /recognition batch mismatch before inference/u);
   assert.match(source, /remote arm mismatch/u);
   assert.match(source, /"deploymentProfile": "en-gpu"/u);
-  assert.doesNotMatch(source, /"tier": "tiny"/u);
   assert.doesNotMatch(source, /"precision": "fp16"/u);
 });
 
@@ -70,6 +71,8 @@ test('A2 runner enforces spend and repeat bounds before remote work', () => {
   assert.match(runnerSource, /"modal", "run", "--detach"/u);
   assert.match(runnerSource, /--inference-owners/u);
   assert.match(runnerSource, /PAGESPATIAL_A2_INFERENCE_OWNERS/u);
+  assert.match(runnerSource, /--model-tier/u);
+  assert.match(runnerSource, /PAGESPATIAL_A2_MODEL_TIER/u);
 });
 
 test('A2 controller owns and drains the complete process group', () => {

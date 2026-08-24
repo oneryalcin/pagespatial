@@ -18,6 +18,16 @@ const MODEL_VERIFICATION = {
     files: { 'inference.pdiparams': 'rec-hash' }
   }
 };
+const TINY_MODEL_VERIFICATION = {
+  detector: {
+    repo: 'PaddlePaddle/PP-OCRv6_tiny_det', revision: 'tiny-det-rev',
+    files: { 'inference.pdiparams': 'tiny-det-hash' }
+  },
+  recognizer: {
+    repo: 'PaddlePaddle/PP-OCRv6_tiny_rec', revision: 'tiny-rec-rev',
+    files: { 'inference.pdiparams': 'tiny-rec-hash' }
+  }
+};
 
 function page(pageNumber, text = `Page ${pageNumber}`, blocking = []) {
   return {
@@ -85,6 +95,25 @@ test('allows raw OCR differences when trusted critical output is unchanged', () 
   assert.equal(result.summary.pass, true);
   assert.equal(result.summary.rawEvidenceDifferingPages, 1);
   assert.equal(result.summary.candidateOnlyCriticalValues, 0);
+});
+
+test('allows an explicitly identified Tiny candidate against the Small control', () => {
+  const cpu = run('cpu', (pages) => { pages[0].pageSpatial.ocrObservations[0].text = 'Alpha page'; });
+  const gpu = run('gpu', (pages) => { pages[0].pageSpatial.ocrObservations[0].text = 'First page'; });
+  gpu.arm = { tier: 'tiny' };
+  gpu.modelVerification = structuredClone(TINY_MODEL_VERIFICATION);
+  const result = evaluateGpuA2({ cpu, gpu });
+  assert.equal(result.modelTiers.control, 'small');
+  assert.equal(result.modelTiers.candidate, 'tiny');
+  assert.equal(result.candidateModels.detector.repo, 'PaddlePaddle/PP-OCRv6_tiny_det');
+  assert.equal(result.summary.pass, true);
+});
+
+test('refuses candidate model verification that disagrees with its declared tier', () => {
+  const cpu = run('cpu');
+  const gpu = run('gpu');
+  gpu.arm = { tier: 'tiny' };
+  assert.throws(() => evaluateGpuA2({ cpu, gpu }), /GPU candidate is not PP-OCRv6 tiny/u);
 });
 
 test('reports missing source adjudications as visible pending failure', () => {

@@ -49,9 +49,12 @@ test('paid GPU work starts only after native evidence is precomputed on CPU', ()
   assert.match(source, /--native-evidence-path/u);
 });
 
-test('paid A2 launcher varies only the predeclared recognition batch grid', () => {
+test('paid A2 launcher varies only the predeclared tier and recognition batch grids', () => {
+  assert.match(source, /--model-tier/u);
+  assert.match(source, /choices=\("tiny", "small"\)/u);
+  assert.match(source, /PAGESPATIAL_A2_MODEL_TIER/u);
   assert.match(source, /--recognition-batch-size/u);
   assert.match(source, /choices=\(1, 4, 8\)/u);
   assert.match(source, /PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE/u);
-  assert.match(source, /gpu-b\{recognition_batch_size\}/u);
+  assert.match(source, /gpu-\{model_tier\}-b\{recognition_batch_size\}/u);
 });

@@ -47,7 +47,8 @@ function errorText(error) {
   return `${error?.name ?? 'Error'}: ${error?.message ?? String(error)}`;
 }
 
-export function validateOcrLines(lines, pageNumber) {
+export function validateOcrLines(lines, pageNumber, modelTier = 'small') {
+  if (!['tiny', 'small'].includes(modelTier)) throw new Error(`unsupported OCR model tier ${modelTier}`);
   if (!Array.isArray(lines)) throw new Error(`page ${pageNumber}: OCR lines must be an array`);
   return lines
     .filter((line) => typeof line?.text === 'string' && line.text.trim())
@@ -70,7 +71,7 @@ export function validateOcrLines(lines, pageNumber) {
         box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
         polygon,
         confidence: line.score,
-        model: 'PP-OCRv6_small'
+        model: `PP-OCRv6_${modelTier}`
       };
     });
 }
@@ -179,8 +180,10 @@ export async function runController(options) {
   const maxOutstandingPages = Number(options.maxOutstandingPages ?? MAX_OUTSTANDING_PAGES);
   const maxOutstandingBytes = Number(options.maxOutstandingBytes ?? MAX_OUTSTANDING_BYTES);
   const runId = options.runId ?? `gpu-a2-${randomUUID()}`;
+  const modelTier = options.modelTier ?? 'small';
   if (!Number.isInteger(expectedPages) || expectedPages < 1) throw new Error('expectedPages must be positive');
   if (!Number.isInteger(producerCount) || producerCount < 1) throw new Error('producerCount must be positive');
+  if (!['tiny', 'small'].includes(modelTier)) throw new Error(`unsupported OCR model tier ${modelTier}`);
   mkdirSync(scratchDir, { recursive: true });
 
   const startedNs = nowNs();
@@ -207,15 +210,16 @@ export async function runController(options) {
     }
   }
 
+  const adapterName = `ppocrv6-${modelTier}-a2`;
   const adapter = {
-    name: 'ppocrv6-small-a2',
+    name: adapterName,
     version: '3.7.0',
     canonical: true,
-    descriptor: 'ppocrv6-small-a2@3.7.0#det=onnxruntime;rec=tensorrt;precision=fp32;owner=shared',
+    descriptor: `${adapterName}@3.7.0#det=onnxruntime;rec=tensorrt;precision=fp32;owner=shared`,
     backend: {
-      adapter: 'ppocrv6-small-a2',
+      adapter: adapterName,
       version: '3.7.0',
-      variant: 'small',
+      variant: modelTier,
       executionProvider: 'onnxruntime+tensorrt',
       precision: 'fp32',
       owner: 'shared',
@@ -314,7 +318,8 @@ export async function runController(options) {
         producerCount,
         renderScale: RENDER_SCALE,
         nativeEvidenceMode: 'precomputed-cpu',
-        nativeAdapter: nativeEvidence.adapter
+        nativeAdapter: nativeEvidence.adapter,
+        modelTier
       }
     };
     writeFileSync(resultPath, `${JSON.stringify(payload)}\n`);
@@ -389,7 +394,7 @@ export async function runController(options) {
     budget.release(entry.pngBytes);
     try { unlinkSync(entry.pngPath); } catch { /* method scratch owns fallback */ }
     const task = (async () => {
-      const observations = validateOcrLines(message.lines, entry.pageNumber);
+      const observations = validateOcrLines(message.lines, entry.pageNumber, modelTier);
       const ocrPage = { pageNumber: entry.pageNumber, observations, backend: 'onnxruntime+tensorrt' };
       const assembled = await assemblyStage(
         context,
@@ -463,7 +468,8 @@ async function cli() {
       resultPath: value('--result'),
       scratchDir: value('--scratch'),
       runId: value('--run-id'),
-      expectedPages: Number(value('--expected-pages'))
+      expectedPages: Number(value('--expected-pages')),
+      modelTier: value('--tier')
     });
   } catch (error) {
     protocolWrite({ kind: 'fatal', error: errorText(error) });

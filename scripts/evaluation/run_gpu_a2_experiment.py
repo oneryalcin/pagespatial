@@ -161,11 +161,12 @@ def run_gpu(
     native_evidence: Path,
     recognition_batch_size: int,
     inference_owners: int,
+    model_tier: str,
 ) -> tuple[str, str, Path]:
     reservation = reserve(ledger, "E1-GPU")
     suffix = f"{time.strftime('%Y%m%d%H%M%S', time.gmtime())}-{uuid.uuid4().hex[:6]}"
     app_name = (
-        f"pagespatial-gpu-a2-e1-gpu-b{recognition_batch_size}"
+        f"pagespatial-gpu-a2-e1-gpu-{model_tier}-b{recognition_batch_size}"
         f"o{inference_owners}-{suffix}"
     )
     app_id = ""
@@ -179,6 +180,7 @@ def run_gpu(
             "PAGESPATIAL_A2_APP_NAME": app_name,
             "PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE": str(recognition_batch_size),
             "PAGESPATIAL_A2_INFERENCE_OWNERS": str(inference_owners),
+            "PAGESPATIAL_A2_MODEL_TIER": model_tier,
         }
         run(
             [
@@ -345,6 +347,12 @@ def main() -> None:
         help="reuse one completed, current-revision four-call CPU control",
     )
     parser.add_argument(
+        "--model-tier",
+        choices=("tiny", "small"),
+        default="small",
+        help="PP-OCRv6 model tier; provenance and scoring remain tier-aware",
+    )
+    parser.add_argument(
         "--recognition-batch-size",
         type=int,
         choices=(1, 4, 8),
@@ -375,6 +383,7 @@ def main() -> None:
         native_evidence,
         args.recognition_batch_size,
         args.inference_owners,
+        args.model_tier,
     )
     decision = score_e1(cpu[2], gpu[2], args.out_dir, args.adjudications)
     print(json.dumps({

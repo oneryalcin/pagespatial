@@ -38,6 +38,11 @@ test('A2 OCR validation refuses bad confidence and polygons', () => {
     polygon: [[0, 0], [2, 0], [2, 1], [0, 1]], confidence: 0.9,
     model: 'PP-OCRv6_small'
   });
+  assert.equal(
+    validateOcrLines([{ text: '42', score: 0.9, poly: [[0, 0], [2, 0], [2, 1], [0, 1]] }], 3, 'tiny')[0].model,
+    'PP-OCRv6_tiny'
+  );
+  assert.throws(() => validateOcrLines([], 1, 'medium'), /unsupported OCR model tier/u);
 });
 
 test('A2 terminal publication is ordered and refuses missing/failed pages', () => {
@@ -101,7 +106,8 @@ test('A2 controller runs the real terminal stages behind a stub owner', { skip: 
       '--result', resultPath,
       '--scratch', scratch,
       '--run-id', 'test-a2-controller',
-      '--expected-pages', '2'
+      '--expected-pages', '2',
+      '--tier', 'tiny'
     ], { stdio: ['pipe', 'pipe', 'pipe'] });
     const lines = createInterface({ input: child.stdout });
     let done = false;
@@ -127,6 +133,8 @@ test('A2 controller runs the real terminal stages behind a stub owner', { skip: 
     assert.deepEqual(result.pages.map(({ pageNumber }) => pageNumber), [1, 2]);
     assert.equal(result.provenance.deploymentProfile, 'en-gpu');
     assert.equal(result.provenance.nativeEvidenceMode, 'precomputed-cpu');
+    assert.equal(result.provenance.modelTier, 'tiny');
+    assert.match(result.provenance.adapter, /^ppocrv6-tiny-a2@/u);
     assert.equal(result.timing.scope, 'render+queue+tensorrt-ocr+assembly');
     assert.equal(result.timing.nativePrecompute.includedInWall, false);
   } finally {

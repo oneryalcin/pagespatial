@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bounded end-to-end A2 benchmark: one or two Small FP32 TensorRT owners.
+"""Bounded end-to-end A2 benchmark: one or two Tiny/Small FP32 TensorRT owners.
 
 This is an evaluation adapter, not the production Modal deployment. Four Node
 producer processes execute the real render/native stages and feed this class's
@@ -112,6 +112,9 @@ if RECOGNITION_BATCH_SIZE not in {1, 4, 8}:
 INFERENCE_OWNERS = int(os.environ.get("PAGESPATIAL_A2_INFERENCE_OWNERS", "1"))
 if INFERENCE_OWNERS not in {1, 2}:
     raise ValueError("PAGESPATIAL_A2_INFERENCE_OWNERS must be 1 or 2")
+MODEL_TIER = os.environ.get("PAGESPATIAL_A2_MODEL_TIER", "small")
+if MODEL_TIER not in {"tiny", "small"}:
+    raise ValueError("PAGESPATIAL_A2_MODEL_TIER must be tiny or small")
 
 if modal.is_local():
     REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -204,6 +207,7 @@ if modal.is_local():
                     RECOGNITION_BATCH_SIZE
                 ),
                 "PAGESPATIAL_A2_INFERENCE_OWNERS": str(INFERENCE_OWNERS),
+                "PAGESPATIAL_A2_MODEL_TIER": MODEL_TIER,
             }
         )
     )
@@ -213,10 +217,10 @@ else:
 
 ARM = {
     "name": (
-        f"g-trt-small-fp32-a2-b{RECOGNITION_BATCH_SIZE}"
+        f"g-trt-{MODEL_TIER}-fp32-a2-b{RECOGNITION_BATCH_SIZE}"
         f"c4o{INFERENCE_OWNERS}"
     ),
-    "tier": "small",
+    "tier": MODEL_TIER,
     "device": "gpu:0",
     "runtime": "hpi-ort-trt",
     "enableHpi": True,
@@ -321,9 +325,9 @@ class GpuA2Container:
             raise RuntimeError(
                 f"patched UltraInfer source mismatch: {code_version.git_version!r} != {ULTRA_INFER_SOURCE_REV!r}"
             )
-        source_tier = REMOTE_ROOT / "models" / "small"
+        source_tier = REMOTE_ROOT / "models" / MODEL_TIER
         self.private_model_root = Path("/tmp/pagespatial-a2-models")
-        private_tier = self.private_model_root / "small"
+        private_tier = self.private_model_root / MODEL_TIER
         if not private_tier.exists():
             private_tier.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(source_tier, private_tier)
@@ -371,7 +375,7 @@ class GpuA2Container:
         self.versions = _installed_versions()
         self.model_verification = json.loads(
             (REMOTE_ROOT / "model-verification.json").read_text()
-        )["small"]
+        )[MODEL_TIER]
         self.container_cold = True
         self.first_inference_ms_by_owner: list[float | None] = [None] * INFERENCE_OWNERS
 
@@ -509,6 +513,7 @@ class GpuA2Container:
                         "--scratch", str(controller_scratch),
                         "--run-id", run_id,
                         "--expected-pages", str(EXPECTED_PAGES),
+                        "--tier", MODEL_TIER,
                     ],
                     cwd="/app",
                     stdin=subprocess.PIPE,
@@ -742,8 +747,8 @@ def main(
         },
         "repeats": repeats,
         "budget": {
-            "ownerCeilingUsd": 50,
-            "operationalExposureStopUsd": 50,
+            "ownerCeilingUsd": 75,
+            "operationalExposureStopUsd": 75,
             "reservationId": _reservation_id,
         },
     }
