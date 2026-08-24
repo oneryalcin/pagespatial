@@ -1,7 +1,7 @@
 # Design: PP-OCRv6 GPU throughput spike
 
-**Status:** executed through the merged-output safety continuation; no
-production GPU path is adopted
+**Status:** merged-output safety, bounded A2 E1, A3 stage profiling, and the
+single paired split treatment are complete; no production GPU path is adopted
 
 **Date:** 2026-08-24
 
@@ -51,10 +51,10 @@ critical-token multiset differences remain on one adjudicated page, including
 equivalence gate with the merged-output safety gate below; the retained Small
 FP32 lane passes the amended safety rule after one narrow merge repair.
 
-The adopted CPU deployment nevertheless remains unchanged. A2, sustained
-qualification, and the locked holdout remain closed because the demonstrated
-Small treatment has an unfavorable diagnostic cost screen and no end-to-end
-billed-cost qualification. The evidence does reject the earlier broad claim
+The adopted CPU deployment nevertheless remains unchanged. The locked holdout
+and production qualification remain closed. The owner continuation amendment
+below reopens only bounded A2 E1 because a concrete 50 pages/s demand target
+and experiment budget now exist. The evidence does reject the earlier broad claim
 that a well-engineered TensorRT path could not be materially faster: it can be
 faster, but speed alone does not justify the more expensive lane. See the
 [trial record](../trials/2026-08-24-gpu-ocr-spike.md) for the complete ledger
@@ -108,17 +108,104 @@ eligible for enrichment rise from 84 to 85. Enrichment is off in this spike;
 any future enriched deployment must price that delta. The merge-safety gate
 therefore passes, but the existing economic screen does not: Small TensorRT
 remains about $221/M prepared pages versus $114/M for the diagnostic CPU
-control. No paid A2 or 50-page run is justified merely to confirm an already
-unfavorable cost screen. CPU remains the adopted path.
+control. The earlier cost screen did not justify A2 by itself. The later owner
+target does justify one bounded end-to-end measurement; CPU remains the
+adopted path.
 
 The M1.5 harness's historical `C` field grouped same-shaped pages into one
 list-input `predict()` call. It did not implement the design's concurrent
 producer window. Those results are page-list batching evidence, not page
-concurrency evidence. True producer/owner overlap remains an A2 question and
-was not built because no correct engine advanced.
+concurrency evidence. At that pre-A2 point, true producer/owner overlap was
+unmeasured. The owner continuation below later built and measured it without
+creating a production path.
 
 The governing rules are [measure, then trust](../principles.md#8-measured-then-trusted)
 and [use ruthless simplicity with explicit composition](../principles.md#9-ruthless-simplicity-explicit-composition).
+
+### Owner continuation amendment — 2026-08-24
+
+The owner has now stated a concrete target: sustain 50 complete, successful,
+unique PageSpatial pages per second across the fleet, equivalent by arithmetic
+to one million pages in 20,000 seconds (5 h 33 m 20 s). The owner also
+authorized up to USD 75 of total PageSpatial experimentation in the `desia`
+Modal workspace on 2026-08-24 Europe/London time, raising the initial USD 50
+ceiling after the first effective-B8 startup was lost to a client heartbeat.
+The authorization ends at
+2026-08-24 23:00 UTC. Modal billing is reconciled over the UTC interval
+`[2026-08-24T00:00:00Z, 2026-08-25T00:00:00Z)`.
+
+This decision supersedes only the earlier refusal to fund A2. It authorizes a
+benchmark-only Small FP32 continuation with four CPU producers, one persistent
+L4 TensorRT owner, recognition/page batch B1, bounded queues, one exact
+50-page English PDF, and the adopted four-physical-core/24-GiB CPU control.
+The seam lives under `scripts/evaluation/` and may reuse
+`service/lib/stages.mjs`; it must not modify or become selectable from the
+production Modal adapter, service scheduler, worker adapter table, or adopted
+CPU adapter.
+
+One deployment-neutral provenance correction is an explicit prerequisite:
+the CPU sidecar must retain direct OpenVINO stderr testimony in
+`engineEvidence`: prefer the C++ `Backend::OPENVINO` line, otherwise retain
+PaddleX's explicit `Inference backend: openvino` line. A later generic
+thread-config line is not engine proof. This changes no engine, routing,
+scheduling, or OCR output.
+
+Paid stages are serialized. Launches stop at the owner-authorized USD 75 of
+posted plus reserved PageSpatial exposure. E1 is one cold and exactly three
+warm 50-page comparisons per arm. Fixed reservations are USD 3 for E1 CPU and,
+prospectively after the measured amendment below, USD 3 for E1 GPU; callers
+cannot lower them. The only paid
+launcher is `scripts/evaluation/run_gpu_a2_experiment.py`; it reserves before
+CPU deployment or TensorRT image construction and stops the exact app in every
+terminal path. E2 (two independent 1,000-page
+single-container lifetimes) and E3 (the smallest measured fleet for 50,000
+pages) are authorized only if every previous correctness, at-least-2x speed,
+billing, and spend-exposure gate passes. CPU remains the production default;
+any adoption still requires a separate decision.
+
+**Measured reservation amendment, 2026-08-24:** two complete four-call L4
+windows posted incremental costs of about USD 0.199 and USD 0.203. The second
+window was invalid as B8 evidence because its local B8 arm identity hydrated as
+B1 remotely; it nevertheless measured the same resource envelope. Future E1
+GPU reservations are therefore fixed at USD 3.00, still more than 14 times the
+largest complete observed window. Existing reservations remain unchanged. One
+true B8 retry is allowed only after the image carries the batch value, the
+remote arm equals the requested arm, and the live recognition sampler reports
+effective batch eight before inference.
+
+**Measured Small A2 result, 2026-08-24:** Small FP32 B1 remains the fastest
+complete Small 50-page A2 cell: 0.996 warm client pages/s. Effective B8 reached batch eight
+before inference and 598 of 640 recognition batches were full in every repeat,
+yet warm client throughput fell to 0.709 pages/s and median GPU utilization
+was only 15%. B8 is rejected. It produced zero newly incorrect, missing, or
+unresolved trusted critical values under the owner-amended safety rule; five
+source adjudications remain pending, so the stricter scorer status remains
+pending. The A2 2x speed gate fails and E2/E3 remain locked.
+
+This result triggered one smaller check before A3: two independent B1
+inference owners on one L4. That treatment truly overlapped—the sum of page
+OCR service time was about 1.89 times wall time and each owner handled roughly
+half the crops—but warm client throughput was only 1.017 pages/s versus 0.996
+for one owner. Median GPU utilization remained about 21%. The exact pinned
+UltraInfer TensorRT backend creates a distinct CUDA stream per backend, so this
+also tests the obvious multi-stream treatment.
+
+The bounded Tiny lane is now measured too. Tiny B1 reached 1.403 warm client
+pages/s and 1.632 inner pages/s. Effective B8 filled 593 of 639 recognition
+batches to eight but improved client throughput only 1.4%. Two B1 owners were
+the measured optimum: 1.672 warm client pages/s and 2.134 inner pages/s, with
+both owners attested and sharing crops evenly. Four owners regressed to 1.109
+warm client pages/s as mean page OCR service time grew from about 0.57 s to
+about 3.0 s. GPU median utilization stayed low and fell under four-owner
+contention. More owners or recognition-batch sweeps are not justified.
+
+Tiny remains a new, non-adopted witness. Its 50-page results have zero known
+newly incorrect or missing trusted values, but two unresolved trusted values,
+101-103 pending source adjudications, and four cleared Small blocking routes.
+The CPU/Small deployment remains the production default. Do not build split A3
+without a profiler-backed custom-runtime hypothesis that isolates detector,
+host preprocessing, recognizer, and synchronization cost. None of these
+treatments changes production.
 
 ## 1. Decision
 

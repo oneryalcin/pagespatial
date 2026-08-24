@@ -1,0 +1,34 @@
+{
+ "schemaVersion": "pagespatial-gpu-a2-workload-v1",
+ "workloadId": "a2-50page-v1",
+ "purpose": "Complete-document CPU versus GPU A2 throughput and billed-cost control",
+ "languageScope": "en",
+ "source": {
+  "path": ".evaluation/corpus/raw/public-comps/ares/2026-q1/002-quarterly-report-10-q.pdf",
+  "sha256": "31f04055ed52950e35cc309b9652d502740c1bdf7072f6973e01e93761dc5707",
+  "bytes": 2005596,
+  "pageCount": 101
+ },
+ "selection": {
+  "method": "contiguous-source-pages",
+  "sourcePages": {
+   "first": 1,
+   "last": 50,
+   "count": 50
+  },
+  "holdoutAccessed": false
+ },
+ "output": {
+  "path": ".evaluation/gpu-spike/a2-50page-v1.pdf",
+  "sha256": "46ba5fc15613a260cf019ff6f9be0bb579279be4f5892694a76e02a536d8fcda",
+  "bytes": 680970,
+  "pageCount": 50
+ },
+ "builder": {
+  "tool": "qpdf",
+  "observedVersion": "12.4.0",
+  "copyMode": "lossless-page-object-copy",
+  "deterministicId": true,
+  "encryptedSourceDecrypted": true
+ }
+}

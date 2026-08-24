@@ -4,9 +4,16 @@
 
 **Design:** [`docs/design/2026-08-24-gpu-ocr-spike.md`](../design/2026-08-24-gpu-ocr-spike.md)
 
-**Status:** bounded spike complete through the merged-output safety continuation
+**Status:** merged-output safety complete; Small and Tiny A2 sweeps closed
 
-**Decision:** **REJECT: CPU REMAINS THE SIMPLEST WINNER.**
+**Current decision:** **TWO-OWNER TINY B1 IS THE FASTEST MEASURED A2 ARM, BUT
+TINY IS NOT CORRECTNESS-QUALIFIED; CPU/SMALL REMAINS THE PRODUCTION DEFAULT.**
+The rejection below is the completed pre-A2 result. The owner later supplied a
+50 terminal pages/s target and an initial USD 50 experiment ceiling, raised to
+USD 75 after an infrastructure-only aborted startup. This authorizes
+only the bounded E1 comparison described at the end of this trial.
+
+**Pre-A2 decision:** **REJECT: CPU REMAINS THE SIMPLEST WINNER.**
 The adopted CPU Modal deployment remains unchanged. A supported and attested
 TensorRT lane is materially faster for prepared-image OCR, but no treatment
 passes the original raw output-equivalence gate. The owner replaced that gate
@@ -577,28 +584,341 @@ run for these benchmark-only apps.
 
 ## Unmeasured and next trigger
 
-- The §6 M1.5 optimistic end-to-end bound was never computed — the stage
-  attribution it requires was not instrumented in these arms.
-- The suggested crop-width padding explanation for Small B4 is unproven;
-  per-batch padded tensor area and recognizer-only time were not recorded.
+### Bounded A2 continuation authorized — 2026-08-24
+
+The owner supplied the missing demand trigger: 50 terminal pages/s across the
+fleet, plus an initial USD 50 total PageSpatial experiment ceiling in the
+`desia` Modal workspace for 2026-08-24. The owner later raised the ceiling to
+USD 75 after an effective-B8 container was stopped during cold startup by a
+local-client heartbeat loss. Posted PageSpatial spend at initial authorization
+was USD 2.62063099. A serialized launch guard now stops at USD 75 of posted
+plus reserved exposure, matching the current owner cap.
+The authorization ends at 2026-08-24 23:00 UTC (midnight Europe/London).
+Spend is read from Modal's UTC billing interval
+`[2026-08-24T00:00:00Z, 2026-08-25T00:00:00Z)`.
+
+This reopens only benchmark A2 for Small FP32 TensorRT B1: four CPU producers,
+one persistent L4 owner, one frozen 50-page English PDF, and the adopted
+four-physical-core/24-GiB CPU control at the complete terminal PageSpatial
+boundary. The prior economic stop remains the null hypothesis, not the final
+answer. Sustained and fleet stages run only after the 50-page candidate is
+correct, at least 2x faster end to end, billed, and within the exposure gate.
+No production deployment change is authorized.
+
+E1 uses one cold plus exactly three warm calls in each arm. Fixed worst-case
+reservations are USD 3 for CPU and, after the measured amendment below, USD 3
+for GPU; they remain charged until the
+exact app is stopped and a final closed-interval total is operator-attested.
+`scripts/evaluation/run_gpu_a2_experiment.py` is the only paid entry point. It
+reserves before deploy or image construction, gives each arm a unique app ID,
+uses no application retries, and stops and verifies the exact app in `finally`.
+The continuation also corrects one provenance-only defect before E1: CPU
+`engineEvidence` now prefers the concrete `Backend::OPENVINO` line, falls back
+only to PaddleX's explicit `Inference backend: openvino` statement, and never
+treats a generic backend-config line as engine proof. This covers the observed
+stderr-read race without changing engine selection or OCR behavior.
+
+### A2 B1 result and invalid B8 attempt — 2026-08-24
+
+The first valid A2 window ran effective Small FP32 TensorRT B1. Its three warm
+complete-document calls had median 0.996 pages/s at the client boundary versus
+0.700 pages/s for the CPU control (1.42x). Inner pipeline throughput reached
+1.15-1.25 pages/s. Median GPU utilization was about 22%, maximum 32%, with
+about 1.4 GiB used. The bounded page queue filled to eight, so rendering fed
+the serial OCR owner; the L4 was not saturated.
+
+A requested B8 follow-up is **invalid as B8 evidence**. The local run manifest
+said B8, but the remote result identified B1 and its live recognition sampler
+reported batch one. Modal remote hydration did not inherit the launcher's
+shell-only batch value. The 0.996 pages/s result is therefore a repeated B1
+control, not a B8 result. The harness now bakes the batch value into the image
+environment and fails before inference on either local/remote arm mismatch or
+requested/effective sampler mismatch.
+
+The two complete four-call L4 windows posted incremental costs of about USD
+0.199 and USD 0.203. The prospective E1-GPU reservation is reduced from USD
+3.50 to USD 3.00, still over 14x the larger observed complete window; prior
+ledger entries are unchanged. One true B8 retry may run within the owner's USD
+75 ceiling. It also records effective crop batches and compares tiny metadata,
+raw JSON bytes, and the full result object without repeating OCR.
+
+The first effective-B8 retry never reached user code. Its image log proves
+`PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE=8`, but Modal stopped the app during
+TensorRT cold startup after the local client heartbeat timed out. It produced
+zero page results and posted about USD 0.062. The paid launcher now uses
+`modal run --detach`; it still resolves and stops the exact app in `finally`.
+
+### Effective B8 complete-document result — 2026-08-24
+
+App `ap-hthLjw1aBbXUlAjQovzO31` completed one cold and three warm 50-page
+calls in one container. The live startup sampler proved recognition batch
+eight. Each repeat processed 4,952 recognition crops in 640 recognition
+batches; 598 batches (93.4%) were full batches of eight. This is genuine B8
+evidence, not a requested-only label.
+
+Warm median throughput was 0.775 pages/s inside the complete render, queue,
+OCR, and assembly method, and 0.709 pages/s at the client boundary. B1 was
+1.243 inner and 0.996 client pages/s. Effective B8 was therefore about 38%
+slower inside the method and 29% slower at the client boundary. It was only
+1.01x the 0.700 pages/s CPU control and fails the 2x gate. Warm median GPU
+utilization was 15%, peak 55%, with 1,630 MiB maximum memory. Per-page OCR
+service time increased from 0.760 s mean at B1 to 1.248 s at B8.
+
+All four offline correctness reports contain zero newly incorrect trusted
+critical values, zero missing trusted values, and zero unresolved trusted
+values. Five source adjudications remain pending and raw OCR differs on all 50
+pages, so the stricter scorer status is pending. Under the owner's amended
+safety rule, no trusted-output defect is demonstrated.
+
+The returned compact server JSON was about 6.46 MB. Warm client time exceeded
+method time by a 5.19 s median. This is a measured combined Modal dispatch,
+serialization, transfer, and decode boundary—not a measured network-only or
+JSON-only cost. The diagnostic response probe exposed that Modal's decoded
+object re-encodes 123 bytes differently from the server's original JSON; that
+byte-representation mismatch occurred after all four OCR results were saved
+and does not invalidate their timings. The probe now treats semantic object
+identity separately from exact raw-byte identity.
+
+The architecture conclusion is narrow but decisive: four CPU render producers
+filled the page queue, and B8 recognition batches were full, but the Python
+owner still executed one monolithic page `predict()` at a time. Larger Small
+recognition batches do not solve utilization. The smallest remaining test is
+two independent B1 inference owners/streams sharing one L4. A split
+detector-to-crop-queue-to-recognizer A3 is justified only if that simpler
+concurrent-owner treatment cannot raise utilization and throughput.
+
+### Dual-owner B1 attribution — 2026-08-24
+
+App `ap-XLNant6Q8hgwgyJ5rVmnW9` ran two independent Small FP32 B1 inference
+owners in one L4 container. Both owners passed provider/device attestation,
+handled about half the recognition crops, and overlapped: summed page OCR time
+was 1.89-1.90 times document wall time. The treatment was real.
+
+It did not help. Warm inner throughput was 1.159 pages/s versus 1.243 for the
+one-owner B1 control (7% lower). Warm client throughput was 1.017 pages/s
+versus 0.996 (2% higher, not a material win). Median GPU utilization remained
+19-21% versus 22% for B1; peak was 33%, and memory rose from 1,416 MiB to
+2,368 MiB. Mean per-page OCR service time rose from 0.760 s to 1.56-1.73 s.
+The owners overlapped but contended almost one-for-one, leaving aggregate work
+flat. The exact pinned UltraInfer source creates a separate CUDA stream when
+no external stream is supplied and synchronizes that stream after each
+prediction; therefore the obvious independent-stream treatment was exercised.
+
+Correctness again showed zero newly incorrect and zero missing trusted values.
+One unresolved value and eight source adjudications remain visible; no silent
+trusted-output error is demonstrated under the owner-amended rule. The app
+posted about USD 0.201 and stopped with zero tasks.
+
+The response probe finally isolates the return path. Tiny metadata took a
+0.19 s median round trip. Exact 7.04 MB JSON bytes took 2.18 s median; the full
+decoded object took 2.53 s. The larger 4-5 s method-to-client gap also includes
+request dispatch and upload of the PDF/native-evidence inputs. Thus the result
+return is material but is not the OCR throughput bottleneck, and the earlier
+9 s observation was never proof of JSON-only cost.
+
+Small's simple treatments are exhausted: B1 wins over B4/B8, page-list input
+did not help, two real CUDA-stream owners did not help, and render supply was
+already full.
+
+### Tiny terminal A2 closure — 2026-08-24
+
+The same frozen 50-page English document, adopted CPU control, four producer
+processes, private scratch, FP32 TensorRT runtime, response probe, and
+trusted-output scorer were reused. Only model tier, recognition batch, and the
+bounded inference-owner count changed.
+
+| arm | app | warm inner pages/s | warm full-result client pages/s | speed vs CPU client | median GPU use | decision |
+|---|---|---:|---:|---:|---:|---|
+| Tiny B1, one owner | `ap-ehU7yjL5C7bBDdcv17Xp1h` | 1.632 | 1.403 | 2.004x | 10% | valid baseline |
+| Tiny B8, one owner | `ap-pA9Bzh54bIVOXICWkcARE4` | 1.697 | 1.423 | 2.032x | 9-10% | reject: only 1.4% client gain |
+| Tiny B1, two owners | `ap-Wer6fmCGIDfEoL2egKn56R` | 2.134 | 1.672 | 2.388x | 14-18% | fastest measured A2 arm |
+| Tiny B1, four owners | `ap-DuNoQaJ3hvGxzrviPRAXxL` | 1.260 | 1.109 | 1.583x | 7-8% | reject: severe contention |
+
+The B8 treatment was real, not a configuration no-op. Each warm document had
+593 full size-eight recognition batches out of 639 total batches. Mean page
+OCR service time fell only from about 0.57 s at B1 to 0.55 s at B8. Full
+pipeline throughput barely moved. Recognition crop batching is therefore not
+the limiting stage in this architecture.
+
+The two-owner treatment was also real. Both owners passed independent
+provider/device attestation, each handled about half of the 4,929 recognition
+crops, and summed page OCR service time was 1.77-1.82 times document wall.
+Inner throughput improved 31% over one owner. The full-result gain was smaller
+because returning the approximately 7.0 MB object took about 2.36 s and sits
+outside the controller's terminal wall clock.
+
+Four owners establish the contention boundary. All four attestations passed
+and every owner handled 1,100-1,385 crops per warm document. Nevertheless,
+mean page OCR service time rose to 2.89-3.20 s, summed OCR work was about 3.74
+times wall, GPU median use fell to 7-8%, and throughput regressed below one
+owner. With four physical CPU cores and four producers, more monolithic owners
+or owner/batch combinations are not justified.
+
+At the measured two-owner rate, a fleet target of 50 terminal pages/s requires
+about 24 continuously warm containers if results are persisted beside the
+worker and each call returns a small pointer (`50 / 2.134`, rounded up). It
+requires about 30 warm containers if every call returns the full 7 MB result
+to the submitting client (`50 / 1.672`, rounded up). These are arithmetic
+capacity estimates, not fleet measurements; autoscaling efficiency and shared
+tenancy beyond one container remain unmeasured. Sixteen such containers would
+project to about 34 inner pages/s or 27 full-result client pages/s, not the
+50 pages/s target.
+
+Correctness is not closed. All four Tiny arms report zero currently
+adjudicated newly incorrect or missing trusted values, but two unresolved
+trusted values, 101-103 pending source adjudications, and four Small blocking
+routes cleared on pages 14, 24, 30, and 40. One inspected example is an
+improvement: on page 40 native PDF text and Tiny both read `27,025`, while
+Small added `$` and raised a conflict. That example does not adjudicate the
+other differences. Tiny remains performance evidence only and cannot replace
+the qualified Small witness.
+
+Cold startup is also visible. Fresh B1/B8/owner-count containers spent roughly
+five minutes in CPU-bound TensorRT engine construction and downloaded
+`simfang.ttf` at runtime before the first document. The font download is
+removable cold work. Engine caching or snapshots are deployment requirements
+if burst latency matters, but neither changes warm throughput.
+
+The paid sweep stops here. At close, Modal reported USD 4.41291519 posted for
+all PageSpatial work in the UTC billing day; the conservative ledger retained
+USD 64.50 of completed-unposted reservation exposure and no active experiment
+apps. The next performance work is not another GPU SKU, batch size, or owner
+count. It is an internal profile or custom runtime that separately measures
+detector, host preprocessing/crop generation, recognizer kernels, copies, and
+synchronization. Split A3 is justified only if that profile names a removable
+serialization point.
+
+Remaining boundaries:
+
 - The vendor base-image manifest digest was not captured.
-- Comparator mutations for box, confidence, routing, and an independent line
-  change were not run.
-- End-to-end Node A2 overlap, sustained 1,000-page operation, failure
-  injection, billed cost, 1-to-4 GPU scale, and the candidate holdout were not
-  run because Small failed the preliminary economic gate and Tiny remains an
-  unqualified witness.
-- No complete 50-page document was run through a GPU service. The 32-page
-  diagnostic measures OCR runtime behavior, not a 50-page completion SLO.
-- B16/B32, width buckets, concurrent producers, and A2 were not run because
-  Small batching was slower and the serial treatment was already about 1.94x
-  the diagnostic CPU resource cost per prepared page.
-- The unadopted engine was not baked or published. Only the source revision
-  and lifetime patch are integrity-pinned.
+- Sustained 1,000-page operation, failure injection, a real multi-container
+  GPU fleet, and the candidate holdout remain unmeasured.
+- B16/B32 exceed the pinned TensorRT batch profile and are not justified by
+  the measured B8 result.
+- The unadopted Tiny engine was not baked or published. Only the source
+  revision, model hashes, and lifetime patch are integrity-pinned.
 - Non-English transfer is intentionally unqualified.
 
-Reopen Small only if a concrete engine, allocation, or pricing change can
-plausibly beat the CPU cost per terminal page while retaining the merged-output
-safety gate. Alternatively, fund Tiny's complete new-witness ceremony. A
-reopened spike starts from the retained safety replay and a same-workload cost
-screen; it does not start with A2 or a fleet.
+Do not continue the monolithic owner/batch sweep. Any Tiny adoption still
+requires its complete new-witness ceremony. Any A3 work requires a
+profiler-backed custom-runtime mechanism, not another configuration flip.
+
+### A3 stage profile and selected treatment — 2026-08-24
+
+Issue [#97](https://github.com/oneryalcin/pagespatial/issues/97) freezes the
+plain-English bottleneck hypothesis and the measure-first acceptance rules.
+Commit `d39a308` added an opt-in profiler around the exact Python-visible
+PaddleX 3.7.2 boundaries. It records wall and current-thread CPU time for page
+decode, detector preparation/backend/postprocess, box sorting and crops,
+recognition preparation/backend/CTC decoding, and final result decoding. The
+record explicitly calls a backend interval **synchronous backend occupancy**:
+it includes host/device copies, native work, returned output, and
+synchronization. It is not a CUDA-kernel timer or a claim of GPU occupancy.
+
+App `ap-qdbRiYlw8mumwFZllz6d5r` processed the frozen 50-page Tiny B1 O2 arm,
+but Modal replaced its container between repeats two and three. The observed
+cold pattern was `[true, false, true, false]` across two container IDs. No
+system event explaining the replacement was returned. Therefore the four
+repeats are **not** one valid warm window, no four-repeat median is reported,
+and profiling overhead remains unresolved. The compact committed evidence is
+`evaluation/gpu-spike/a3-profile-analysis-v1.json`; it pins every ignored raw
+result and correctness report by SHA-256.
+
+The two warm diagnostic repeats differed materially:
+
+| warm repeat | inner pages/s | median GPU use | recognition CPU prepare + decode | recognition synchronous backend | combined backend occupancy |
+|---|---:|---:|---:|---:|---:|
+| repeat 2, first container | 2.482 | 20% | 18.27 summed s | 7.62 summed s | 45.5% |
+| repeat 4, replacement container | 1.349 | 8% | 28.96 summed s | 24.37 summed s | 70.5% |
+
+These are per-container diagnostics, not comparable benchmark arms. The same
+code, model, and document ran much slower on the replacement container; shared
+tenancy or another host cause is plausible but unproven. The result itself is
+useful: on the faster warm repeat, recognition CPU preparation plus CTC/result
+decoding was 2.40 times the synchronous TensorRT interval. Detector host work
+and cropping added another 7.40 summed seconds. Only 7.62 of 36.70 summed
+`predict()` seconds sat inside recognition's synchronous backend call.
+
+The offline scorer found zero newly incorrect trusted values, zero missing
+trusted values, zero incorrect values outside a native conflict, and zero
+deterministic page differences in all four repeats. It still found two
+unresolved trusted values and 102-104 pending source adjudications per repeat.
+The profile is therefore performance evidence only, not adoption evidence.
+
+The profile selects one bounded treatment. The evaluation adapter now has an
+opt-in Tiny B1 O2 recognition conveyor with exactly two batches in flight:
+
+```text
+CPU prepare next batch -> serialized TensorRT call -> CPU decode prior batch
+```
+
+It reuses PaddleX's existing image reader, resize/normalize, TensorRT runner,
+CTC decoder, result class, crop order, and output mapping. One CPU preparation
+thread and one CPU decoding thread overlap around each owner's serialized
+backend call. It does not change detection, add a service queue, increase the
+recognition batch, add another OCR owner, or claim asynchronous CUDA execution.
+Local tests prove the queue bound, preserved result order, actual stage overlap,
+opt-in arm restrictions, and metric recording.
+
+No paid treatment result is reported. At the post-profile check, Modal showed
+USD 4.74740358 posted, USD 67.50 of conservative completed-unposted reservation
+exposure, and no active experiment apps. A new USD 3 reservation would exceed
+the USD 75 operational ceiling. The ledger can release those reservations only
+after a closed billing interval has an operator-attested final total; doing so
+early would make the budget proof false. The next paid action is exactly one
+stable Tiny B1 O2 control-versus-split comparison after legitimate
+reconciliation. Keep the treatment only for a material complete-document gain,
+with the same trusted-output scorer and recorded billed cost.
+
+### A3 paired split result — 2026-08-24
+
+The owner authorized one final paid comparison within the USD 75 experiment
+ceiling. Commit `5ade39c` added a five-call, same-container paired arm. It used
+one L4, the same loaded Tiny B1 O2 model objects, the same frozen 50-page
+document, and this fixed order: cold control, two warm controls, then two warm
+split treatments. The one-way order is necessary because the evaluation-only
+wrapper cannot safely restore Paddle's original recognizer methods. This is a
+paired rejection test, not a randomized trial.
+
+Modal app `ap-EGwJdZpMsDXJM6smpqS9W2` kept all five calls in container
+`ta-01M0TXHMQ8YZTXP0RGBWTZFFFR`, owner PID 2. The observed cold pattern was
+`[true, false, false, false, false]`. The app stopped with zero tasks. The
+compact committed record is
+`evaluation/gpu-spike/a3-paired-split-result-v1.json`; it pins the ignored raw
+run, five page results, decision, and five correctness reports by SHA-256.
+
+| mode | repeats | median inner pages/s | median full-result client pages/s | median GPU use | result |
+|---|---|---:|---:|---:|---|
+| control | 2-3 | 1.702 | 1.469 | 10.5-12% | baseline |
+| bounded split | 4-5 | 1.597 | 1.375 | 10-11% | reject |
+
+The split treatment ran all 4,929 recognition crops in each call and reached
+the configured queue depth of two for preparation and postprocessing on both
+owners. It nevertheless produced only 0.938x the control's inner throughput
+and 0.937x its client throughput: regressions of 6.2% and 6.3%. GPU use did
+not improve. The Python threads, futures, queues, and extra handoffs cost more
+than the overlap they exposed.
+
+The treatment introduced zero currently adjudicated incorrect trusted values,
+zero missing trusted values, and zero incorrect values outside a native
+conflict. It retained the same two unresolved trusted values seen in the warm
+controls and 103 pending source adjudications. Correctness therefore remains
+pending and Tiny remains unadopted. The speed failure alone is sufficient to
+reject the treatment.
+
+Decision: stop this bounded Python split path. Do not rerun it, increase its
+queue, or move it into production code. A genuinely different native runtime
+could still fuse work or issue asynchronous CUDA operations, but this result
+removes the claim that a small host-side prepare/backend/decode conveyor is the
+missing optimization. No further paid GPU work is authorized by this trial.
+
+Closure: commit `4a4e042` removes both executable switches and the split
+adapter from the branch tip. The Python-visible stage profiler, this result,
+the compact evidence record, and the historical runnable commits remain for
+audit. There is no supported switch that can reactivate the rejected path.
+
+At close, Modal reported USD 4.81243887 posted for PageSpatial in the UTC
+billing day. The conservative ledger retained USD 70.25 of completed-unposted
+reservation exposure, including the USD 2.75 bound for this arm; the actual
+closed cost remains pending. This arm consumed the last available reservation
+headroom under the operational exposure rule.
