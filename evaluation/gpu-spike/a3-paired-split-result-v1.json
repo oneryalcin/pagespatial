@@ -1,0 +1,176 @@
+{
+  "schemaVersion": "pagespatial-gpu-a3-paired-split-result-v1",
+  "recordedAt": "2026-08-24",
+  "source": {
+    "issue": 97,
+    "gitRevision": "5ade39cda89a477b15e1b4ae2200c729c610757e",
+    "modalAppId": "ap-EGwJdZpMsDXJM6smpqS9W2",
+    "modalAppStateAtClose": "stopped",
+    "modalTasksAtClose": 0,
+    "runId": "20260824T221635Z-2af881f7",
+    "arm": "g-trt-tiny-fp32-a2-b1c4o2",
+    "inputPages": 50,
+    "rawArchive": ".evaluation/gpu-spike/2026-08-24/a3-paired"
+  },
+  "design": {
+    "comparison": "same-container-one-way-paired-control-then-split",
+    "callOrder": [
+      "cold-control",
+      "warm-control",
+      "warm-control",
+      "warm-split",
+      "warm-split"
+    ],
+    "coldPattern": [true, false, false, false, false],
+    "containerIds": ["ta-01M0TXHMQ8YZTXP0RGBWTZFFFR"],
+    "ownerPids": [2],
+    "controlRepeats": [2, 3],
+    "splitRepeats": [4, 5],
+    "splitQueueDepth": 2,
+    "keepThreshold": "at-least-10-percent-complete-document-inner-throughput-gain"
+  },
+  "repeats": [
+    {
+      "repeat": 1,
+      "mode": "control",
+      "containerCold": true,
+      "innerPagesPerS": 1.5844506040448982,
+      "clientPagesPerS": 0.13949223615948816,
+      "innerWallS": 31.556679566,
+      "methodWallS": 32.834418365999966,
+      "clientWallS": 358.4428881248459,
+      "medianGpuUtilPercent": 10,
+      "maxGpuUtilPercent": 40,
+      "maxGpuMemoryMiB": 1392,
+      "serializedResultBytes": 7006003
+    },
+    {
+      "repeat": 2,
+      "mode": "control",
+      "containerCold": false,
+      "innerPagesPerS": 1.6863364869617092,
+      "clientPagesPerS": 1.4592204874844648,
+      "innerWallS": 29.650073035000002,
+      "methodWallS": 30.470184341999982,
+      "clientWallS": 34.264869790989906,
+      "medianGpuUtilPercent": 12,
+      "maxGpuUtilPercent": 22,
+      "maxGpuMemoryMiB": 1392,
+      "serializedResultBytes": 7004680
+    },
+    {
+      "repeat": 3,
+      "mode": "control",
+      "containerCold": false,
+      "innerPagesPerS": 1.716877998217034,
+      "clientPagesPerS": 1.4780553783277302,
+      "innerWallS": 29.122628429,
+      "methodWallS": 29.902389688000028,
+      "clientWallS": 33.82823183294386,
+      "medianGpuUtilPercent": 10.5,
+      "maxGpuUtilPercent": 24,
+      "maxGpuMemoryMiB": 1392,
+      "serializedResultBytes": 7004608
+    },
+    {
+      "repeat": 4,
+      "mode": "split",
+      "containerCold": false,
+      "innerPagesPerS": 1.5914813805893306,
+      "clientPagesPerS": 1.371432381676536,
+      "innerWallS": 31.417269853,
+      "methodWallS": 32.242931317,
+      "clientWallS": 36.458232041215524,
+      "medianGpuUtilPercent": 10,
+      "maxGpuUtilPercent": 22,
+      "maxGpuMemoryMiB": 1392,
+      "serializedResultBytes": 7006719,
+      "splitRecognition": {
+        "recognitionCalls": 4929,
+        "summedPreparationS": 34.65820716199904,
+        "summedSynchronousBackendS": 19.103059337997873,
+        "summedPostprocessS": 22.00200422099631,
+        "maxPreparedInFlightPerOwner": [2, 2],
+        "maxPostprocessInFlightPerOwner": [2, 2]
+      }
+    },
+    {
+      "repeat": 5,
+      "mode": "split",
+      "containerCold": false,
+      "innerPagesPerS": 1.6016886521453109,
+      "clientPagesPerS": 1.3793479804025979,
+      "innerWallS": 31.217053285000002,
+      "methodWallS": 32.018030296999996,
+      "clientWallS": 36.24901091703214,
+      "medianGpuUtilPercent": 11,
+      "maxGpuUtilPercent": 20,
+      "maxGpuMemoryMiB": 1392,
+      "serializedResultBytes": 7006723,
+      "splitRecognition": {
+        "recognitionCalls": 4929,
+        "summedPreparationS": 35.46236524600106,
+        "summedSynchronousBackendS": 19.02762533799968,
+        "summedPostprocessS": 22.488268205998347,
+        "maxPreparedInFlightPerOwner": [2, 2],
+        "maxPostprocessInFlightPerOwner": [2, 2]
+      }
+    }
+  ],
+  "pairedComparison": {
+    "controlInnerPagesPerS": 1.7016072425893716,
+    "splitInnerPagesPerS": 1.5965850163673208,
+    "innerSpeedup": 0.9382805716892482,
+    "innerRegressionPercent": 6.17194283107518,
+    "controlClientPagesPerS": 1.4686379329060975,
+    "splitClientPagesPerS": 1.3753901810395668,
+    "clientSpeedup": 0.936507324387288,
+    "clientRegressionPercent": 6.3492675612712
+  },
+  "correctness": {
+    "treatmentNewlyIncorrectTrustedValues": [0, 0],
+    "treatmentMissingTrustedValues": [0, 0],
+    "treatmentUnresolvedTrustedValues": [2, 2],
+    "treatmentIncorrectValuesNotCaughtByNativeConflict": [0, 0],
+    "controlUnresolvedTrustedValues": [2, 2],
+    "pendingSourceAdjudications": [104, 103, 103, 103, 103],
+    "status": "pending-not-adoptable"
+  },
+  "verdict": {
+    "keepTreatment": false,
+    "reason": "split-treatment-regressed-inner-and-client-throughput",
+    "gpuUtilizationImproved": false,
+    "nextAction": "stop-bounded-python-split-treatment-no-paid-rerun"
+  },
+  "budget": {
+    "reservationId": "1787609755-6a81336d",
+    "reservationUsd": 2.75,
+    "postedPageSpatialSpendAtCloseUsd": 4.81243887,
+    "billingGate": "pending-closed-interval-reconciliation"
+  },
+  "integrity": {
+    "decisionSha256": "3e6f551e73db64877cb2bd8592d0b99a631c2d2dfd4bb3fea7130192d5abdf81",
+    "runSha256": "27e58bee9a5bc0b40e54dde04c5bb5d1b4ad7ed5dcb040cde8a19937933f8b62",
+    "repeatSha256": [
+      "498372f95d69b9f725815243c327269ad17ca2865f8dfb5814d840170868de00",
+      "99451862e8eb10d7e005f7ad30084e283cf061c2ba2465a36a9d624d5dc3debe",
+      "74f01e73e136a1f8d41bba0e86c313f97b5f77ce70958001bd74d53e45588dde",
+      "c3966111ed2426735678da88febe1ee6006bb1ea1b1b362c2520759cc068ed35",
+      "4a00768c981b3a539053a644ec058f8c93bcdcd78c757a0b1234b92c6dffe1d4"
+    ],
+    "correctnessSha256": [
+      "72df8bcb1600d6ad64dc3a5cceb2d5cf112450897cfb9320c0e9558d37280b67",
+      "495f394891f435a073cdfb4fa81d2e6e7d46b5d782f0df31ea94f330a9c50eac",
+      "ab36814eb9d16fac62546057de6fe0672c004e9aaa22b552823a743c1e7b01e2",
+      "387db0350a4ef2d5fed9485b1ca30483e9ebf4ad4d78311193c102d7a126bf8e",
+      "080599f1b7899478975f588c4e8bc9bc87eaeb2be3af56e6ff4b08dd049c8bc6"
+    ]
+  },
+  "limitations": [
+    "the one-way transition prevents randomized or reversed treatment order",
+    "two warm repeats per mode reject a materially slower treatment but do not estimate a fleet distribution",
+    "nvidia-smi utilization is sampled device-level activity not kernel occupancy",
+    "the posted cost had not yet closed when this record was written",
+    "Tiny correctness remains pending and Tiny is not adopted"
+  ]
+}

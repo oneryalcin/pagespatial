@@ -869,3 +869,51 @@ early would make the budget proof false. The next paid action is exactly one
 stable Tiny B1 O2 control-versus-split comparison after legitimate
 reconciliation. Keep the treatment only for a material complete-document gain,
 with the same trusted-output scorer and recorded billed cost.
+
+### A3 paired split result — 2026-08-24
+
+The owner authorized one final paid comparison within the USD 75 experiment
+ceiling. Commit `5ade39c` added a five-call, same-container paired arm. It used
+one L4, the same loaded Tiny B1 O2 model objects, the same frozen 50-page
+document, and this fixed order: cold control, two warm controls, then two warm
+split treatments. The one-way order is necessary because the evaluation-only
+wrapper cannot safely restore Paddle's original recognizer methods. This is a
+paired rejection test, not a randomized trial.
+
+Modal app `ap-EGwJdZpMsDXJM6smpqS9W2` kept all five calls in container
+`ta-01M0TXHMQ8YZTXP0RGBWTZFFFR`, owner PID 2. The observed cold pattern was
+`[true, false, false, false, false]`. The app stopped with zero tasks. The
+compact committed record is
+`evaluation/gpu-spike/a3-paired-split-result-v1.json`; it pins the ignored raw
+run, five page results, decision, and five correctness reports by SHA-256.
+
+| mode | repeats | median inner pages/s | median full-result client pages/s | median GPU use | result |
+|---|---|---:|---:|---:|---|
+| control | 2-3 | 1.702 | 1.469 | 10.5-12% | baseline |
+| bounded split | 4-5 | 1.597 | 1.375 | 10-11% | reject |
+
+The split treatment ran all 4,929 recognition crops in each call and reached
+the configured queue depth of two for preparation and postprocessing on both
+owners. It nevertheless produced only 0.938x the control's inner throughput
+and 0.937x its client throughput: regressions of 6.2% and 6.3%. GPU use did
+not improve. The Python threads, futures, queues, and extra handoffs cost more
+than the overlap they exposed.
+
+The treatment introduced zero currently adjudicated incorrect trusted values,
+zero missing trusted values, and zero incorrect values outside a native
+conflict. It retained the same two unresolved trusted values seen in the warm
+controls and 103 pending source adjudications. Correctness therefore remains
+pending and Tiny remains unadopted. The speed failure alone is sufficient to
+reject the treatment.
+
+Decision: stop this bounded Python split path. Do not rerun it, increase its
+queue, or move it into production code. A genuinely different native runtime
+could still fuse work or issue asynchronous CUDA operations, but this result
+removes the claim that a small host-side prepare/backend/decode conveyor is the
+missing optimization. No further paid GPU work is authorized by this trial.
+
+At close, Modal reported USD 4.81243887 posted for PageSpatial in the UTC
+billing day. The conservative ledger retained USD 70.25 of completed-unposted
+reservation exposure, including the USD 2.75 bound for this arm; the actual
+closed cost remains pending. This arm consumed the last available reservation
+headroom under the operational exposure rule.
