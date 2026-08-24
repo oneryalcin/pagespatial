@@ -165,13 +165,16 @@ or result schema.
 
 Before any profiler run, prove the extraction with:
 
+- a thin `parse_document()` delegate whose diff introduces no new algorithm,
+  copy, queue, thread, batch, or scheduling decision;
 - exact terminal page count and document identity;
 - exact deterministic projection;
 - the existing trusted-output scorer;
 - exact arm, backend, model, batch, owner, and process-tree attestations; and
-- an uninstrumented same-container throughput comparison within 10% of the
-  current core. A larger difference blocks profiling because the refactor has
-  changed the subject.
+- an uninstrumented same-container, same-L4-window comparison between the
+  ordinary Modal-method invocation and the child-worker invocation. Their
+  inner throughput must be within 10%. A larger difference blocks profiling
+  because the launch boundary has changed the subject.
 
 The trace worker is launched as a child of `nsys profile`, so Nsight observes
 the Python owner and all CUDA work it creates. Node producers remain children
