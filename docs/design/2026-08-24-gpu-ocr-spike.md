@@ -1,7 +1,7 @@
 # Design: PP-OCRv6 GPU throughput spike
 
-**Status:** executed through the pre-A2 stop gate; no production GPU path is
-adopted
+**Status:** executed through the merged-output safety continuation; no
+production GPU path is adopted
 
 **Date:** 2026-08-24
 
@@ -19,19 +19,97 @@ This document is the source of truth for the GPU OCR spike. It supplements the
 [Modal scaling design](2026-08-23-modal-scaling-and-deployment.md). It does not
 authorize a production migration.
 
-**Execution result (2026-08-24):** the bounded M1 provider pre-screen and
-prepared-image batching diagnostics are complete.
-Serial L4 execution improved Tiny by 1.71x and Small by 1.13x over their CPU
-controls. Recognition batching improved Tiny by a further 1.72x inside one L4
-window, but every faster batching treatment changed OCR evidence beyond the
-derived null tolerance. CUDA 12.6 HPI selected Paddle Inference and was slower
-than default Paddle GPU. Its ONNX Runtime GPU fallback was also about 40%
-slower and non-equivalent. The official CUDA 11.8/TensorRT 8.6 image did not
-finish importing in two bounded attempts and produced zero tasks, so TensorRT
-remains unmeasured rather than failed. No engine advanced; A2 and the locked
-holdout stayed closed. See the
+**Execution result (updated 2026-08-24):** the bounded M1 provider pre-screen,
+prepared-image batching diagnostics, one reopened TensorRT provider lane, and
+the smallest runtime/correctness continuation are complete. The supported lane
+uses the vendor-documented CUDA 11.8,
+cuDNN 8.9, TensorRT 8.6.1, Paddle 3.0, and PaddleX HPI stack. Provider logs,
+device truth, and mutations attest ONNX Runtime detection plus TensorRT
+recognition on one L4.
+
+On the fixed 32-page English diagnostic, the current Small tier reached
+1.269 pages/s with FP32 and 1.324 with FP16 at recognition batch one, versus
+0.614 for the earlier CPU control. Recognition batch four was slower at
+1.117/1.129 pages/s. Tiny reached 2.312 pages/s with FP16 batch one and 2.424
+at batch eight, versus 0.677 for its CPU control. All arms had zero
+critical-token, raw-line, and score delta across three repeats. However,
+precision and batch changes exceeded the derived zero-noise output tolerance.
+The Small FP32 arm also differed from
+default Paddle GPU by four critical tokens and 11 raw lines. The separate
+Small FP16 window observed a median 4% above FP32; this is not a causal
+precision comparison. The diagnostic warm resource estimate was about 1.94x
+the 8 GiB CPU harness control per prepared page. Neither figure executes the
+design's end-to-end billed production gate. TensorRT engine construction took
+351 seconds for Small FP32, 931 seconds for Small FP16, and 606 seconds for
+Tiny FP16. A bounded continuation traced the TensorRT runtime-destruction error
+to UltraInfer's runtime/engine ownership order and repaired it in an
+integrity-pinned source build. Both a fresh engine build and a same-container
+cached-engine load then completed without the error. The patched Small FP32
+lane still failed the original zero-noise engine-equivalence gate: four
+critical-token multiset differences remain on one adjudicated page, including
+`2023-04-04` becoming `2022-04-04`. The owner later replaced that internal
+equivalence gate with the merged-output safety gate below; the retained Small
+FP32 lane passes the amended safety rule after one narrow merge repair.
+
+The adopted CPU deployment nevertheless remains unchanged. A2, sustained
+qualification, and the locked holdout remain closed because the demonstrated
+Small treatment has an unfavorable diagnostic cost screen and no end-to-end
+billed-cost qualification. The evidence does reject the earlier broad claim
+that a well-engineered TensorRT path could not be materially faster: it can be
+faster, but speed alone does not justify the more expensive lane. See the
 [trial record](../trials/2026-08-24-gpu-ocr-spike.md) for the complete ledger
 and stop decision.
+
+**Acceptance amendment (owner decision, 2026-08-24):** raw OCR equivalence is
+no longer the Small adoption gate. PageSpatial is a two-witness evidence
+system: it preserves native and OCR readings and blocks material conflicts.
+The product gate is now **zero newly incorrect, missing, or unresolved critical
+values in trusted, non-escalated output**, not zero differences in raw OCR
+evidence. Candidate-only and control-only values are enumerated symmetrically.
+Every difference on a candidate page that remains non-escalated must be
+source-adjudicated. Differences confined to escalated pages stay visible in
+the inventory but need not be labelled because they cannot enter trusted
+output. Raw line, score, geometry, and batch-companion deltas remain required
+diagnostics.
+
+Two retained replays were required. The first isolates TensorRT from default
+Paddle GPU on all 32 frozen English pages. It found two incorrect
+candidate-only dates on one native-backed page. A narrow merge blind spot was
+exposed: standalone dates with one changed digit had zero text-token similarity
+and were not paired despite coincident boxes. The merge now permits this
+comparison only when both readings contain the same number of critical tokens,
+contain no letters, and overlap by at least 0.8. Exact or text-supported native
+matches take precedence over this fallback. Mutation tests cover a moved-away
+wrong value, a deleted value, compatible split tokens with repeated numbers,
+and competing native numeric candidates.
+
+The second replay uses the adopted CPU OpenVINO arm as the production control.
+It finds 42 candidate-only and 40 control-only critical-token occurrences on
+12 pages. Eleven of those pages are escalated in both arms; their 81 residual
+occurrences are enumerated and intentionally unreviewed. The only difference
+on a candidate page that remains non-escalated is `1|mayor`; direct source
+inspection confirms the visible row is `1 Mayor`. Both arms have 14 of 32
+non-escalated pages, with zero route changes. Thus the production-control
+replay passes the amended rule without claiming raw equivalence.
+
+Each replay output records the complete arm metadata and hashes the control,
+candidate, manifest, adjudications, retained evidence images, every consumed
+base page record, the scorer, the built JavaScript merge implementation, and
+`package-lock.json`. The verdict is therefore bound to the evidence and code
+that produced it; the ignored local evidence directory is still development
+storage, not a durable published archive.
+
+In the engine-isolation replay, both wrong dates are tied to their correct
+native readings by explicit blocking conflicts. Replaying the merge change over the complete
+162-page development run creates no escalated/non-escalated route transition.
+It does increase critical conflicts from 355 to 420 across seven already
+escalated pages and makes one advisory-only page newly blocking, so pages
+eligible for enrichment rise from 84 to 85. Enrichment is off in this spike;
+any future enriched deployment must price that delta. The merge-safety gate
+therefore passes, but the existing economic screen does not: Small TensorRT
+remains about $221/M prepared pages versus $114/M for the diagnostic CPU
+control. No paid A2 or 50-page run is justified merely to confirm an already
+unfavorable cost screen. CPU remains the adopted path.
 
 The M1.5 harness's historical `C` field grouped same-shaped pages into one
 list-input `predict()` call. It did not implement the design's concurrent
@@ -961,17 +1039,26 @@ Small GPU advances only if:
 
 1. model hashes match the Small CPU control;
 2. deterministic-exact fields match under the existing stable projection;
-3. critical-token and raw-line deltas pass the predeclared derived-null
-   tolerance;
-4. no wrong-side or critical gold result regresses;
-5. geometry and routing deltas are reviewed and within predeclared bounds;
-6. confidence shifts are measured and do not invalidate existing routing; and
-7. the same page remains within its derived null tolerance when batch size,
-   batch companions, or crop submission order changes; and
-8. every backend and comparator mutation test fails as expected.
+3. candidate-only and control-only critical values are enumerated using the
+   library's compatible-token semantics, with exact spatial matches preferred;
+4. every difference on a candidate page with
+   `diagnostics.requiresEscalation === false` is source-adjudicated;
+5. zero incorrect, missing, or unresolved critical values occur on such a
+   non-escalated page;
+6. adjudicated incorrect candidate values covered by native evidence create an explicit critical
+   conflict, rather than relying on an unrelated page warning;
+7. no candidate treatment clears a control blocking route;
+8. no wrong-side or critical gold result regresses;
+9. raw-line, score, geometry, confidence, routing, batch-companion, and
+   submission-order deltas are measured and reported, but are not required to
+   be zero when the trusted-output gate passes; and
+10. every backend, gate, and comparator mutation test fails as expected.
 
-An FP16 or TensorRT difference is not dismissed as harmless numeric jitter
-until the scorer proves that it is harmless for PageSpatial evidence.
+`Non-escalated` means the page's `requiresEscalation` field is false. This gate
+does not silently prefer native text: both observations remain in the record,
+and a conflict identifies the unresolved disagreement. An FP16 or TensorRT
+difference is not dismissed as harmless numeric jitter until the merged-output
+scorer proves that it cannot enter trusted output.
 
 ### 13.2 Tiny correctness gate
 
@@ -1148,6 +1235,11 @@ corpus, end-to-end boundary, and whether cold time and failures are included.
 - [Current Python PP-OCR sidecar](../../service/sidecar/ppocr_sidecar.py)
 - [Current Modal adapter](../../deploy/modal/modal_app.py)
 - [Historical benchmark harness](../../scripts/evaluation/hpi_bench_modal.py)
+- [TensorRT continuation harness](../../scripts/evaluation/gpu_spike_trt_modal.py)
+- [UltraInfer runtime-lifetime patch](../../scripts/evaluation/ultra-infer-trt-runtime-lifetime.patch)
+- [Merged-output safety scorer](../../scripts/evaluation/score_gpu_merged_output.mjs)
+- [TensorRT-versus-default-GPU adjudications](../../evaluation/gpu-spike/merged-output-adjudications-v1.json)
+- [TensorRT-versus-production-CPU adjudications](../../evaluation/gpu-spike/merged-output-production-adjudications-v1.json)
 
 ### Primary external references
 
@@ -1155,6 +1247,8 @@ corpus, end-to-end boundary, and whether cold time and failures are included.
 - [PaddleOCR general OCR pipeline usage](https://www.paddleocr.ai/main/en/version3.x/pipeline_usage/OCR.html)
 - [PaddleOCR high-performance inference and compatibility](https://www.paddleocr.ai/main/en/version3.x/inference_deployment/local_inference/high_performance_inference.html)
 - [PaddleOCR text recognition module](https://www.paddleocr.ai/main/en/version3.x/module_usage/text_recognition.html)
+- [Pinned UltraInfer TensorRT backend source](https://github.com/PaddlePaddle/PaddleX/blob/ffb64904d23708863ff5b8da312a5cbd52a7f462/deploy/ultra-infer/ultra_infer/runtime/backends/tensorrt/trt_backend.cc)
+- [PaddleX issue 4291: matching TensorRT runtime-lifetime failure](https://github.com/PaddlePaddle/PaddleX/issues/4291)
 - [Official PP-OCRv6 model collection](https://huggingface.co/collections/PaddlePaddle/pp-ocrv6)
 - [PP-OCRv6 Tiny detector](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det)
 - [PP-OCRv6 Tiny recognizer](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec)

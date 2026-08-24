@@ -149,10 +149,41 @@ test, principles §9):**
    made Tiny another 1.72x faster within one window, but every faster batched
    arm failed the predeclared output-equivalence gate. CUDA 12.6 HPI selected
    default Paddle Inference and was slower; ONNX Runtime GPU was about 40%
-   slower and non-equivalent. The official CUDA 11.8/TRT 8.6 image produced
-   zero tasks in two bounded import attempts, so TensorRT is unmeasured, not
-   declared slow. No correct engine advanced to A2; CPU remains
-   the deployment default and the candidate holdout stayed unopened. Design:
+   slower and non-equivalent. **TensorRT follow-up, same date:** the smaller
+   official PaddlePaddle CUDA 11.8/cuDNN 8.9/TRT 8.6 image ran successfully
+   with attested ORT detection and TensorRT recognition. On the fixed 32-page
+   English diagnostic, Small reached 1.269 pages/s FP32 and 1.324 FP16 at B1
+   versus 0.614 CPU; B4 was slower. Tiny reached 2.312 FP16 B1 and 2.424 B8
+   versus 0.677 CPU. Precision and CPU comparisons cross app windows and are
+   screening results, not causal effects. Every arm had zero repeat-to-repeat
+   critical-token, raw-line, and score delta, but precision/batch changes failed the zero-noise
+   equivalence gate. Small's diagnostic warm resource estimate is about
+   $221-230/M prepared pages versus the 8-GiB harness CPU's $114/M; the
+   end-to-end billed production cost gate was not run. Engine builds took
+   351-931 seconds. **Smallest continuation, same date:** the runtime error was
+   traced to UltraInfer destroying `IRuntime` before its deserialized engine.
+   An integrity-pinned lifetime patch passed both fresh-build and cached-load
+   L4 probes, but patched Small FP32 retained four critical-token multiset
+   differences on an image-adjudicated page (`2023-04-04` became
+   `2022-04-04`). **Owner acceptance amendment, same date:** raw OCR
+   equivalence is diagnostic; the product gate is zero newly incorrect,
+   missing, or unresolved critical values in trusted, non-escalated output. Replaying all
+   32 frozen pages through the real native/OCR merge exposed and fixed a
+   narrow standalone-numeric conflict blind spot. After the fix, both wrong
+   dates create exact native-backed blocking conflicts in the default-GPU
+   isolation comparison. The separate production-control replay uses CPU
+   OpenVINO: 42 candidate-only and 40 control-only occurrences across 12
+   pages; 81 are confined to pages escalated in both arms, and the sole
+   trusted-output difference (`1|mayor`) is source-correct. All three repeats
+   pass with 14/32 non-escalated pages in each arm and zero route changes. The
+   complete 162-page
+   baseline has zero escalated/non-escalated route transitions under the
+   merge change; one advisory-only page becomes newly blocking, so future
+   enrichment economics must include it. Small still stops before engine baking, B16/B32, producer
+   concurrency, A2, and the 50-page run because its diagnostic prepared-page
+   cost is about $221/M versus CPU's $114/M and Small batching is slower. No
+   end-to-end 50-page result exists. No engine advanced to A2; CPU
+   remains the deployment default and the candidate holdout stayed unopened. Design:
    `docs/design/2026-08-24-gpu-ocr-spike.md`; trial:
    `docs/trials/2026-08-24-gpu-ocr-spike.md`.
    v6-medium:

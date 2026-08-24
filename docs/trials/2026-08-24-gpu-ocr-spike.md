@@ -4,13 +4,25 @@
 
 **Design:** [`docs/design/2026-08-24-gpu-ocr-spike.md`](../design/2026-08-24-gpu-ocr-spike.md)
 
-**Status:** bounded spike complete through the pre-A2 stop gate
+**Status:** bounded spike complete through the merged-output safety continuation
 
 **Decision:** **REJECT: CPU REMAINS THE SIMPLEST WINNER.**
-The adopted CPU Modal deployment remains unchanged. GPU execution and batching
-were measured, but no faster treatment preserved the predeclared output
-equivalence. A2, sustained qualification, the locked candidate holdout, A100,
-and production integration were therefore not authorized.
+The adopted CPU Modal deployment remains unchanged. A supported and attested
+TensorRT lane is materially faster for prepared-image OCR, but no treatment
+passes the original raw output-equivalence gate. The owner replaced that gate
+with zero newly incorrect, missing, or unresolved critical values in trusted,
+non-escalated output. Small FP32 passes the amended safety gate after a narrow
+standalone-numeric conflict repair, but its diagnostic prepared-image cost is
+about $221/M versus $114/M for CPU. Production end-to-end performance and
+billed cost were not run because the preliminary cost screen already fails.
+The separate Small FP16 window's
+median was 4% above FP32, which is not a causal precision result; recognition
+batching makes Small slower within each precision window. Tiny is faster but
+remains an unqualified witness. The runtime-lifetime defect was repaired and
+the discordant Small FP32 page was image-adjudicated. Merged-output safety
+passes; engine equivalence does not. A2, sustained qualification, the locked
+candidate holdout, A100, and production integration were therefore not
+authorized.
 
 ## Scope
 
@@ -41,6 +53,16 @@ and production integration were therefore not authorized.
 | 2026-08-24 02:56-03:00 UTC, app `ap-Fpy4MQtJppcxQ0h5bf9PJ9` | conditional ONNX Runtime fallback shakedown | G-ORT Small | 2 measured page passes / 1 terminal arm | about $0.033 resource-time estimate | ONNX Runtime GPU backend attested; 0.590 pages/s and 74.3 s initialization, already slower than G-PD Small |
 | 2026-08-24 03:00-03:09 UTC, app `ap-QxfKyRu5YhZZ7Rt4jdEytz` | M1 provider fallback control | G-ORT Tiny and Small | 192 measured page passes / 2 terminal arms | about $0.154 resource-time estimate | both tiers stable and correctly attested, but about 40% slower than G-PD and non-equivalent; dominated, no batching authorized |
 | 2026-08-24 03:13-03:17 UTC, app `ap-8y3rKV9j1KwYp64R3D55d9` | triggered ONNX thread fairness check | G-ORT Small, `cpu_num_threads=4` | 2 measured page passes / 1 terminal arm | about $0.036 resource-time estimate | requested four threads attested; 0.541 pages/s versus the default's 0.590 and 86.1 s init versus 74.3 s; stop without a full run |
+| 2026-08-24 08:16-08:24 UTC, app `ap-scGiogOpxkbnmwjn0dSFd8` | reopened TensorRT stack shakedown | Small FP32 B1, apparent FP16 B1 | 4 measured page passes / 2 terminal arms | about $0.136 resource-time estimate | CUDA 11.8/TRT 8.6.1 and ORT-detection/TRT-recognition attested; FP32 0.211 pages/s after a 365 s engine build; the apparent FP16 result is invalid because UltraInfer loaded the FP32 cache from the same path |
+| 2026-08-24 08:25-08:32 UTC, apps `ap-zEK7tbhKkIInBYjqdOXsfF`, `ap-PbDdaNwvcYbuhHsZw6q0PH` | TensorRT batching smoke and cache repair | Small FP32 B4/B8; Tiny attempts | 8 measured Small page passes / 2 terminal Small arms; 3 visible Tiny harness failures | about $0.222 resource-time estimate for terminal calls | two-page steady repeats made B4 look fastest, but both batches changed output; failed Tiny calls exposed mutable model-root state; caches were then isolated by tier and precision |
+| 2026-08-24 08:40-08:46 UTC, app `ap-rkDwEZwHwCcJIZIK6Pt3mz` | TensorRT Tiny smoke | Tiny FP32 B1/B4/B8 | 12 measured page passes / 3 terminal arms | about $0.104 resource-time estimate | batching improved the two-page steady repeat but failed batch-companion equivalence; B8 had fewer critical-token deltas than B4 |
+| 2026-08-24 08:46-09:04 UTC, app `ap-StfTjk7YWFa3gAuqmMP0MD` | TensorRT FP32 diagnostic | Small B1/B4; Tiny B1/B8 | 384 measured page passes / 4 terminal arms | about $0.286 resource-time estimate | same L4 UUID; Small B4 was 12% slower than B1 on 32 pages, overturning the two-page result; Tiny B8 retained a 1.63x batching gain; every arm has zero repeat text/score delta, both batch comparisons fail equivalence |
+| 2026-08-24 09:04-09:36 UTC, app `ap-LDObH88mZzZs6uHmZBmnT2` | TensorRT FP16 diagnostic | Small B1/B4; Tiny B1/B8 | 384 measured page passes / 4 terminal arms | about $0.582 resource-time estimate | precision-isolated engines; the Small FP16 window median was 4% above the separate FP32 window, not an isolated precision effect; batching remained slower; Tiny FP16 B1 nearly reached its B8 result within the FP16 window; every arm has zero repeat text/score delta, all precision/batch comparisons fail equivalence; engine builds took 931 s Small and 606 s Tiny |
+| 2026-08-24 10:58-11:02 UTC, apps `ap-rRrVq4U16YMMPW3n85x7nU`, `ap-wIH2QAZNEGGxSxGu6vlmZA`, `ap-lscXGyCZp0erMR8YYDJsSl` | UltraInfer lifetime-fix build shakedowns | patched UltraInfer only | 3 failed image builds / 0 GPU calls | build cost not isolated | stopped at three concrete build-contract errors: the upstream wheel requires an explicit build before `bdist_wheel`, Python development headers, and modern-case CMake Python variables; each was corrected without changing inference providers |
+| 2026-08-24 11:03-11:15 UTC, app `ap-aLOVLkjXe06gsroDrR7Viz` | patched TensorRT build-path probe | Small FP32 B1, first 2 manifest pages | 4 measured page passes / 1 terminal arm | about $0.100 GPU-call resource-time estimate; image build excluded | exact PaddleX source and local patch attested; engine build completed without the TensorRT runtime-lifetime error |
+| 2026-08-24 11:17-11:24 UTC, app `ap-pXca4rS3aI7Cqu8nlH4K2Y` | patched TensorRT cache-load and correctness probe | Small FP32 B1, first 29 current-manifest pages | 58 measured page passes plus 1 cached-load page / 1 terminal arm | about $0.108 resource-time estimate | cached engine loaded in 6.67 s without rebuild or lifetime error; the known discordant page remained outside the zero-noise correctness tolerance, so all later work stopped |
+| 2026-08-24, offline retained-evidence replay | amended merged-output safety gate | Small FP32 TensorRT versus default Paddle GPU, three repeats, real PageSpatial native/OCR merge | 96 control + 96 candidate merged pages; complete 162-page baseline merge-impact replay | $0 new GPU spend | PASS: both adjudicated wrong candidate dates create exact native-backed blocking conflicts; zero incorrect values on non-escalated pages; zero control/candidate route changes; cost screen still stops paid A2/E2E work |
+| 2026-08-24, offline retained-evidence replay | production-control merged-output gate | Small FP32 TensorRT versus CPU OpenVINO, three repeats, real PageSpatial native/OCR merge | 96 control + 96 candidate merged pages | $0 new GPU spend | PASS: 42 candidate-only and 40 control-only occurrences across 12 pages; 81 occur only on pages escalated in both arms; the sole trusted-output difference, `1|mayor`, is source-correct; zero route changes |
 
 ## M0 record
 
@@ -238,13 +260,12 @@ existed).
 
 Official PaddleX documentation says its CUDA 12.6 HPI package does not support
 TensorRT; the documented TensorRT route is CUDA 11.8, cuDNN 8.9, and TensorRT
-8.6. The conditional harness therefore used that exact official PaddleX image
-instead of claiming the CUDA 12.6 lane was TensorRT. Both bounded imports
-stalled before image build steps, task creation, uv installation, or GPU
-allocation. This is **unsupported operational evidence**, not a TensorRT speed
-or correctness verdict. The repository retains the conditional harness for a
-future retry if Modal or the vendor image path changes. This spike does not
-authorize a second hand-built provider stack.
+8.6. At the initial close, the conditional harness used that exact official
+PaddleX image instead of claiming the CUDA 12.6 lane was TensorRT. Both bounded
+imports stalled before image build steps, task creation, uv installation, or
+GPU allocation. That was **unsupported operational evidence**, not a
+TensorRT speed or correctness verdict. The later reopened lane below used the
+smaller official PaddlePaddle image for the same vendor-documented stack.
 
 The design's ONNX Runtime GPU fallback used the already-working CUDA 12.6 HPI
 stack, so it did not create another provider stack. Both detector and
@@ -282,24 +303,257 @@ harnesses so the base M1 run cannot build them accidentally.
 Every attempt, including failed image builds and backend fallbacks, remains in
 the ledger rather than being discarded.
 
+## Reopened TensorRT result
+
+The reopened lane uses the official PaddlePaddle
+`3.0.0-gpu-cuda11.8-cudnn8.9-trt8.6` image, its bundled TensorRT 8.6.1 Python
+wheel, PaddleOCR 3.7.0, PaddleX 3.7.2, PaddleX's GPU HPI plugin, and
+Paddle2ONNX 2.0.2rc3. Ordinary Python packages use Modal
+`uv_pip_install`; the exact vendor-local TensorRT wheel and PaddleX's own HPI
+installer use their documented install paths. Runtime evidence records CUDA 11.8, cuDNN 8.9.7, one L4,
+ONNX Runtime detection, and TensorRT recognition. Wrong-device and
+missing-provider-evidence mutations both fail as required.
+
+The vendor base is recorded by its registry tag, not an immutable manifest
+digest. That is sufficient for this development spike but not for a future
+qualification or deployment image.
+
+Raw FP32 evidence is under
+`.evaluation/gpu-spike/2026-08-24/20260824T084656Z-81ec27e9/`; raw FP16 evidence
+is under `20260824T090409Z-3cdc3451/`. The read-only cross-provider projection
+is `trt-controls-comparison-v1/score.json`. These paths are ignored local
+development evidence, not a durable published archive.
+
+The first two-page shakedown found a real cache hazard: UltraInfer serialized
+FP32 and FP16 engines to the same model-relative filename. The apparent FP16
+arm loaded the FP32 engine and is invalid. The harness now copies each model
+tier into a private scratch tree keyed by precision before TensorRT writes its
+cache. All later FP16 evidence uses that isolation.
+
+The paid runs used the explicit development override on git revision
+`84bb16ff54f99019d5fb90693469631dd5105170`. Both full 32-page windows record
+dirty diff SHA-256
+`bf97b89bee78dfbbf410b342f731664f8844cc34c6bbc4842752526b3563176b`
+covering the TensorRT harness and scorer. The raw arm records preserve this
+provenance; the work was not represented as a clean-commit qualification.
+
+The full FP32 and FP16 diagnostics each ran four arms, 32 frozen pages, and
+three randomized repetitions. Every arm within a window used the same L4 UUID;
+every arm had zero repeat-to-repeat critical-token, raw-line, and score delta.
+The comparator does not use that statement to claim every geometry field was
+byte-identical. The first repetition is visibly slower; this is consistent
+with lazy dynamic-width warm-up, but the cause was not instrumented. The
+median of three reflects the two stable repeats without discarding the first:
+
+| tier | precision | recognition batch | pages/s | vs tier CPU | estimated warm resource $/M prepared pages | batch/precision verdict |
+|---|---|---:|---:|---:|---:|---|
+| Small | FP32 | 1 | 1.269 | 2.07x | $230 | simplest TensorRT Small arm |
+| Small | FP32 | 4 | 1.117 | 1.82x | $262 | 12% slower than B1 |
+| Small | FP16 | 1 | 1.324 | 2.15x | $221 | separate-window median 4% above FP32; not causal |
+| Small | FP16 | 4 | 1.129 | 1.84x | $259 | slower than B1 |
+| Tiny | FP32 | 1 | 1.483 | 2.19x | $197 | stable serial control |
+| Tiny | FP32 | 8 | 2.410 | 3.56x | $121 | batching wins but changes output |
+| Tiny | FP16 | 1 | 2.312 | 3.41x | $126 | separate FP16-window result |
+| Tiny | FP16 | 8 | 2.424 | 3.58x | $121 | only 5% above FP16 B1 |
+
+The CPU ratios and FP32/FP16 differences compare separate app windows on the
+same frozen inputs. They are not same-host ratios and remain subject to Modal
+shared-tenancy variance. They are screening evidence, not causal precision
+effects or an end-to-end qualification result.
+
+The warm resource estimates divide the dated $0.00029216/s four-core, 8 GiB,
+and L4 rate by median pages/s. The 4-core/8-GiB diagnostic CPU Small control is
+about $114/M prepared pages at its measured 0.614 pages/s. It is not the
+design's mandatory 4-core/24-GiB adopted-service cost control. These estimates
+exclude engine build and idle time; they are not isolated bills and not
+end-to-end service costs.
+
+The 32-page result rejects the two-page inference that Small batching was the
+missing architecture. Small B4 is slower even though the effective recognition
+batch median and maximum are four. The likely explanation is width-padding and
+batch-management work across heterogeneous crops, but that mechanism was not
+instrumented and is not claimed as proven. Tiny did benefit from batching
+within each precision window. No causal FP32/FP16 conclusion is made.
+
+Correctness remains the stop. Relative to the repeat-stable text/score controls:
+
+- Small FP32 versus default Paddle GPU: 4 critical-token differences,
+  11 raw-line differences, and 18 unmatched lines;
+- Small FP16 versus Small FP32: 3 critical-token differences, 20 raw-line
+  differences, and 36 unmatched lines;
+- Small B4 versus its serial precision: 6-8 critical-token differences and
+  85-87 raw-line differences;
+- Tiny FP16 versus FP32: 8 critical-token differences and 6 raw-line
+  differences; and
+- Tiny B8 versus serial: 26 critical-token differences and 97 raw-line
+  differences.
+
+The scorer's one text mutation is detected as required. Box, confidence,
+routing, and independent line mutations from the full predeclared comparator
+mutation suite were not run; that suite is required before any resumed
+qualification. No difference is relabeled harmless without gold evidence.
+TensorRT engine construction also took 351 seconds for
+Small FP32, 931 seconds for Small FP16, and 606 seconds for Tiny FP16. Runtime
+engine construction is therefore rejected. Provider logs also contain a
+TensorRT API-usage error while destroying a runtime before its deserialized
+engine; TensorRT itself warns that this leads to undefined behavior. It did not
+prevent these bounded calls from completing repeatably. At the close of this
+original lane it remained unresolved and blocked production qualification.
+The continuation below removes that error; a future candidate would still
+have to bake and integrity-pin the selected engine and prove that its
+deployment GPU can load it.
+
+### Smallest continuation: lifetime repair and adjudication
+
+The bounded continuation traced the runtime error to UltraInfer, not to Modal
+or PageSpatial. At PaddleX source revision
+`ffb64904d23708863ff5b8da312a5cbd52a7f462`, both `BuildTrtEngine()` and
+`LoadTrtCache()` create a local TensorRT `IRuntime`, deserialize a long-lived
+member engine from it, and then destroy the runtime as the function returns.
+The same failure is visible in upstream PaddleX issue 4291. The local patch
+keeps that runtime as a backend member declared before the engine and context,
+so reverse member destruction releases context, engine, then runtime. The
+patch is integrity-pinned as
+`b03632bbfae1372f21a2e31babbf72f8936943a0848ff3db853a2f1cd5216bd6`.
+
+Two real L4 probes passed:
+
+- the OCR pipeline initialized in 302.55 s, including a fresh TensorRT engine
+  build, with no lifetime error; and
+- a second OCR pipeline in the same container initialized in 6.67 s while
+  loading the cached engine, did not rebuild it, attested ORT detection plus
+  TensorRT recognition, and emitted no lifetime error.
+
+Raw evidence is under
+`.evaluation/gpu-spike/2026-08-24/20260824T110919Z-8f766bc9/` and
+`20260824T111751Z-a57c1249/`. The latter used a different current manifest hash
+from the frozen 32-page performance window and only its first 29 entries.
+Its 2.260 pages/s median is therefore a lifecycle/correctness observation, not
+a replacement performance result.
+
+The original engine-equivalence gate still fails. On the 23 pages shared with the earlier default
+Paddle GPU control, both patched repeats report four critical-token
+differences at a derived tolerance of zero. All four occur on
+`world-bank:P170734:document:34222345#7`. Direct inspection of the source page
+image at
+`.evaluation/gold/batch3-v1/images/world-bank_P170734_document_34222345-p7.png`
+(image SHA-256
+`a514fd8dd157febf7731d9593decd9b5e6fab4cdfb8ef05ce5fb1c2df43c1c8c`)
+shows two regressions:
+
+- the native source reference contains `FPIU`; default Paddle preserves the
+  `I` in the corresponding crop while TensorRT drops it; and
+- the visible date is `2023-04-04`; default Paddle returns that value while
+  TensorRT returns `2022-04-04`.
+
+The ownership patch intentionally changes no inference math, and the patched
+run confirms that runtime safety does not restore output equivalence. The
+original gate therefore stopped paid work at this point. No engine was baked
+or published, and no width-bucket/concurrency grid, B16/B32 profile, A2
+service work, or 50-page end-to-end comparison was run.
+
+### Merged-output safety continuation
+
+The owner then made the product trade-off explicit: PageSpatial may retain
+different raw OCR evidence, but it must admit **zero newly incorrect, missing,
+or unresolved critical values into trusted, non-escalated output**. This does not
+prefer native silently. Native and OCR remain separate observations; a
+material disagreement must remain blocking.
+
+The retained 32-page Small FP32 default-Paddle and TensorRT arms were first
+replayed through the real PageSpatial merge with the frozen dev-v13 native
+observations. This engine-isolation comparison is not the production-control
+verdict. Its four symmetric critical-token differences were source-adjudicated
+in `evaluation/gpu-spike/merged-output-adjudications-v1.json`. It found a real
+merge blind spot: standalone dates such as `2022-04-04` versus native
+`2023-04-04` have zero word-token similarity, so the older conflict candidate
+filter ignored them despite coincident boxes.
+
+The smallest repair adds one path only for readings that contain the same
+non-zero number of critical tokens, contain no letters, and overlap by at
+least 0.8. It does not loosen prose matching, and an exact/text-supported
+native candidate wins before this numeric fallback. Regression tests prove
+the colocated date becomes a blocking conflict, a competing exact native value
+does not create a false conflict, and moving the wrong date away from native
+evidence makes the merged-output gate fail.
+
+After the repair, all three engine-isolation repeats agree and pass:
+
+- 32 pages: 25 native-backed and 7 native-starved;
+- 14 non-escalated pages in both control and candidate; zero route changes;
+- two incorrect candidate-only critical values, both on the same
+  native-backed already-blocking page;
+- both wrong dates are attached to the correct native dates by explicit
+  critical conflicts; and
+- zero incorrect, missing, or unresolved critical values occur on a non-escalated page.
+
+The production decision was then replayed against the actual adopted CPU
+OpenVINO control, not default Paddle GPU. Critical-token subtraction uses the
+library's compatible-token semantics and spatially matches exact duplicates
+first. This prevents a split `1` + `City Clerk` from being misreported against
+`1 City Clerk`, even when other bare `1` values occur later on the page.
+
+Across each repeat, 12 pages differ: 42 candidate-only and 40 control-only
+occurrences. Eleven pages are escalated in both arms, containing 41 unreviewed
+candidate-only and 40 unreviewed control-only occurrences. They remain in the
+artifact but are outside trusted output, so the gate does not spend human
+labelling on them. The only residual difference on a candidate page that
+remains non-escalated is `1|mayor` from the line `1 Mayor`; the source image
+confirms it is correct. Both CPU and TensorRT have 14 of 32 non-escalated pages
+and zero route changes. A native-starved deletion mutation, moved wrong-value
+mutation, repeated-token/split-tail mutation, missing adjudication, bad image
+hash, and unknown verdict all fail as required.
+
+The replay outputs bind the verdict to complete arm metadata and SHA-256 values
+for both arm artifacts, the manifest, adjudications, source images, all 162
+consumed base records, the scorer, every built `dist/*.js` implementation file,
+and `package-lock.json`.
+
+The complete 162-page dev-v13 baseline was also rebuilt through the narrow
+merge change. Non-escalated pages remain 67 before and after, with zero route
+transitions. Critical conflicts increase from 355 to 420 across seven pages;
+all seven were already escalated, but one advisory-only page becomes newly
+blocking. Blocking/enrichment-eligible pages therefore rise from 84 to 85.
+Enrichment is off here; a future enriched deployment must include this delta
+in its spend measurement. The scorer outputs are
+`.evaluation/gpu-spike/2026-08-24/merged-output-small-fp32-vs-gpd-v1.json`
+and
+`.evaluation/gpu-spike/2026-08-24/merged-output-small-fp32-vs-chpi-v1.json`.
+Their SHA-256 values are respectively
+`f5823e2d447b89d638c739bcb63818024bbdfd0d0caa602b228819b5709fe1d1`
+and
+`ed2aed181885bd5fc728e79f803b4168d78b5e473c5e6889a84a4c528b61999d`.
+These integrity pins do not make the ignored local evidence durable.
+
+This passes the amended safety gate, not the economic gate. Small TensorRT's
+warm prepared-image estimate remains about $221/M pages versus $114/M for the
+8-GiB diagnostic CPU control. A paid A2/50-page implementation would now test
+an already more-expensive treatment. Ruthless simplicity stops before it.
+
 ## Decision against the gates
 
 | gate | result |
 |---|---|
-| backend and device are attested | PASS for CPU OpenVINO, G-PD L4/CUDA, G-HPI L4/Paddle Inference, and G-ORT L4/ONNX Runtime; TensorRT unrun |
-| same-treatment stability | PASS for serial controls; FAIL for Tiny B8/C8 and Tiny B1/C8 |
-| batch-companion/output equivalence | FAIL for every faster batched arm |
-| prepared-image serial speed | Tiny 1.71x; Small 1.13x; not end to end, and neither reaches the 2x optional-fast-lane gate |
-| A2 authorization | NO — Small mechanically (fails equivalence + serial bar); Tiny by the dated discretionary stop above (ceremony unfunded, batching gain fails its own stability gate) |
+| backend and device are attested | PASS for CPU OpenVINO, G-PD L4/CUDA, G-HPI L4/Paddle Inference, G-ORT L4/ONNX Runtime, and G-TRT L4/ORT-detection/TRT-recognition |
+| same-treatment text/score stability | PASS within each reopened TensorRT arm: the earlier frozen 32-page arms were stable across three repeats, and the patched probes were stable across two repeats on their exercised pages; not a claim of byte-identical geometry |
+| runtime health | PASS for the bounded patched build and cached-load probes; this is not a production engine qualification |
+| raw engine/batch equivalence | FAIL for every TensorRT batched arm; Small FP32 serial also differs from G-PD; retained as a diagnostic after the owner amended the product gate |
+| merged-output safety | PASS for Small FP32 B1 against the adopted CPU control after the numeric-only and symmetric-comparator repairs: zero incorrect/missing/unresolved critical values on non-escalated pages, zero route changes, three repeat-consistent replays |
+| prepared-image speed | Small best 2.15x CPU at 1.324 pages/s; Tiny best 3.58x CPU at 2.424; neither is end-to-end evidence |
+| diagnostic cost screen | Small warm prepared-image estimate $221/M versus the 8-GiB diagnostic CPU's $114/M; not billed or end-to-end |
+| production performance/cost gate | NOT RUN — requires terminal end-to-end pages, the 24-GiB adopted control, and billed cost |
+| A2 authorization | NO — Small passes merged-output safety but fails the preliminary cost screen and batching is slower; Tiny still needs the unfunded witness ceremony |
 | candidate holdout | correctly unopened |
 | production change | NO |
 
-The result is narrower than “GPU is bad.” One L4 can accelerate Tiny when
-recognition crops are batched, but the tested engine changes evidence and is
-not eligible for PageSpatial records. Small, the current witness, has no
-qualified material speedup. TensorRT remains unmeasured because the one
-allowed official stack did not become runnable within the bounded setup
-attempts. The smallest correct decision is to retain CPU and stop before A2.
+The result is narrower than either “GPU is bad” or “batching fixes Small.” A
+real TensorRT lane materially accelerates Small prepared-image OCR, but the
+best Small treatment is serial, has an unfavorable diagnostic resource-cost
+screen, changes evidence, and has no end-to-end document result. Repairing the
+runtime lifetime did not repair those output differences. Tiny has a
+near-CPU diagnostic cost screen and higher throughput, but it is a different
+unqualified witness.
+The smallest correct decision is to retain CPU and stop before A2.
 
 ## Spend
 
@@ -310,30 +564,41 @@ Image-build billing, if any, was not isolated and is not reported as zero.
 
 Across the successful controls, failed M1.5 calls, provider shakedowns, and
 visible failed provider calls, the attributable resource-time estimate is
-about **$0.81**. It is not an isolated invoice. The two TensorRT imports made
-zero compute calls; any image-build charge is unknown and excluded.
+about **$0.81** before the reopened TensorRT work. The six reopened TensorRT
+windows add about **$1.33**. The two successful lifetime-fix calls add about
+**$0.21**, for about **$2.35** total attributable
+resource-time. This is not an isolated invoice. Registry/image-build charges,
+if any, were not isolated and are excluded.
 
-Cleanup (operator-attested): every GPU-spike Modal app was stopped at
-write-up time and `modal app list` showed zero running or deployed
-gpu-spike apps; no automated post-drain probe was run for these
-benchmark-only apps.
+Cleanup (operator-attested): every GPU-spike Modal app was stopped at the final
+write-up check; `modal app list --json` showed every retained GPU-spike app
+record in `stopped` state with zero tasks. No automated post-drain probe was
+run for these benchmark-only apps.
 
 ## Unmeasured and next trigger
 
-- TensorRT/FP16 throughput and numerics are unmeasured.
 - The §6 M1.5 optimistic end-to-end bound was never computed — the stage
   attribution it requires was not instrumented in these arms.
+- The suggested crop-width padding explanation for Small B4 is unproven;
+  per-batch padded tensor area and recognizer-only time were not recorded.
+- The vendor base-image manifest digest was not captured.
+- Comparator mutations for box, confidence, routing, and an independent line
+  change were not run.
 - End-to-end Node A2 overlap, sustained 1,000-page operation, failure
   injection, billed cost, 1-to-4 GPU scale, and the candidate holdout were not
-  run because no treatment advanced from M1.5 (Small mechanically; Tiny
-  by the dated discretionary stop).
+  run because Small failed the preliminary economic gate and Tiny remains an
+  unqualified witness.
 - No complete 50-page document was run through a GPU service. The 32-page
   diagnostic measures OCR runtime behavior, not a 50-page completion SLO.
+- B16/B32, width buckets, concurrent producers, and A2 were not run because
+  Small batching was slower and the serial treatment was already about 1.94x
+  the diagnostic CPU resource cost per prepared page.
+- The unadopted engine was not baked or published. Only the source revision
+  and lifetime patch are integrity-pinned.
 - Non-English transfer is intentionally unqualified.
 
-Reopen only when one of these facts changes: a supported TensorRT image starts
-cleanly on Modal, Paddle fixes companion-dependent batching for these pinned
-models, or production volume makes a separate lower-level TensorRT/ONNX
-implementation worth its maintenance cost. A reopened spike starts with the
-same frozen 32-page diagnostic and equivalence scorer. It does not start with
-the production architecture.
+Reopen Small only if a concrete engine, allocation, or pricing change can
+plausibly beat the CPU cost per terminal page while retaining the merged-output
+safety gate. Alternatively, fund Tiny's complete new-witness ceremony. A
+reopened spike starts from the retained safety replay and a same-workload cost
+screen; it does not start with A2 or a fleet.

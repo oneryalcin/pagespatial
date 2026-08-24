@@ -8,6 +8,7 @@ import {
   ASSOCIATION_MIN_TEXT_SIMILARITY,
   ASSOCIATION_TEXT_WEIGHT,
   CONFLICT_MIN_GEOMETRY_OVERLAP,
+  CONFLICT_NUMERIC_ONLY_MIN_GEOMETRY_OVERLAP,
   CONFLICT_MIN_TEXT_SIMILARITY,
   REFERENCE_RENDER_SCALE
 } from './tuning.js';
@@ -119,20 +120,36 @@ export function associateNativeAndOcr(
       for (const candidate of buckets.get(bucket) ?? []) nearby.set(candidate.id, candidate);
     }
 
+    const ocrCriticalTokens = criticalTokens(ocr.text);
+    const ocrIsNumericOnly = ocrCriticalTokens.length > 0 && !/\p{L}/u.test(ocr.text);
     const scored = [...nearby.values()].map((native) => {
       const textual = textSimilarity(native.text, ocr.text);
       const geometric = geometryOverlap(native, ocr.box);
+      const nativeCriticalTokens = ocrIsNumericOnly ? criticalTokens(native.text) : [];
       return {
         native,
         textual,
         geometric,
+        nativeCriticalTokens,
         score: textual * ASSOCIATION_TEXT_WEIGHT + geometric * ASSOCIATION_GEOMETRY_WEIGHT
       };
     });
     const best = scored.sort((left, right) => right.score - left.score)[0];
-    const criticalLocal = scored
+    const numericOnlyLocal = ocrIsNumericOnly
+      ? scored
+        .filter((candidate) => candidate.geometric >= CONFLICT_NUMERIC_ONLY_MIN_GEOMETRY_OVERLAP
+          && candidate.nativeCriticalTokens.length === ocrCriticalTokens.length
+          && candidate.nativeCriticalTokens.length > 0
+          && !/\p{L}/u.test(candidate.native.text))
+        .sort((left, right) => right.geometric - left.geometric)[0]
+      : undefined;
+    const textLocal = scored
       .filter((candidate) => candidate.geometric >= criticalGeometry && candidate.textual >= criticalText)
       .sort((left, right) => right.textual - left.textual || right.geometric - left.geometric)[0];
+    // Exact/text-supported evidence wins when duplicate numeric candidates
+    // overlap. The numeric-only path is a fallback solely for the zero-text-
+    // similarity blind spot (for example, one changed digit in a date).
+    const criticalLocal = textLocal ?? numericOnlyLocal;
 
     // Second-pass recoveries never generate conflicts: tiles can fragment
     // a line the first pass read whole, and a fragment overlapping native
@@ -142,7 +159,7 @@ export function associateNativeAndOcr(
     // They may still source-match (a whole-line re-read that agrees).
     if (criticalLocal && !ocr.recoveryMethod) {
       const nativeCritical = criticalTokens(criticalLocal.native.text);
-      const ocrCritical = criticalTokens(ocr.text);
+      const ocrCritical = ocrCriticalTokens;
       if ((nativeCritical.length || ocrCritical.length) && !criticalTokensAgree(nativeCritical, ocrCritical)) {
         conflicts.push({
           id: `conflict:${ocr.id}`,

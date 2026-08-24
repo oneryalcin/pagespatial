@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "pagespatial-gpu-merged-output-adjudications-v1",
+  "scope": "Trusted-output differences from Small FP32 TensorRT versus the adopted CPU OpenVINO control on the frozen 32-page English diagnostic",
+  "method": "Source-image read of every candidate-only and control-only critical value on candidate pages that remain non-escalated. Differences confined to escalated pages remain enumerated but unreviewed.",
+  "values": [
+    {
+      "page": "legistar:seattle:1859:v0:attachment:3318#1",
+      "side": "candidate",
+      "token": "1|mayor",
+      "occurrence": 0,
+      "observationBox": [114, 966, 182, 982],
+      "verdict": "correct",
+      "correctToken": "1|mayor",
+      "inputSha256": "79201cb72d4d52d346f2ababcd53da88bab920410b90c3bb4e67589ceb70c2d6",
+      "adjudicationImage": ".evaluation/gold/batch3-v1/images/legistar_seattle_1859_v0_attachment_3318-p1.png",
+      "adjudicationImageSha256": "0b8261c3f43d7fc4fdef7033481f232afd51100e94e80ec6f057e5a7ce95d8d0",
+      "documentSha256": "725f4b428d49a365184b8993146e14c2ebd37fdeb3bb774a801c95fc6c7f9fa8"
+    }
+  ]
+}
