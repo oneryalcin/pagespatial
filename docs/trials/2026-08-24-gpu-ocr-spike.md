@@ -4,10 +4,10 @@
 
 **Design:** [`docs/design/2026-08-24-gpu-ocr-spike.md`](../design/2026-08-24-gpu-ocr-spike.md)
 
-**Status:** merged-output safety complete; Small A2 closed; bounded Tiny A2 pending
+**Status:** merged-output safety complete; Small and Tiny A2 sweeps closed
 
-**Current decision:** **SMALL GPU MISSES THE 2X GATE; CPU REMAINS THE
-PRODUCTION DEFAULT; BOUNDED TINY A2 PERFORMANCE IS NEXT.**
+**Current decision:** **TWO-OWNER TINY B1 IS THE FASTEST MEASURED A2 ARM, BUT
+TINY IS NOT CORRECTNESS-QUALIFIED; CPU/SMALL REMAINS THE PRODUCTION DEFAULT.**
 The rejection below is the completed pre-A2 result. The owner later supplied a
 50 terminal pages/s target and an initial USD 50 experiment ceiling, raised to
 USD 75 after an infrastructure-only aborted startup. This authorizes
@@ -716,30 +716,89 @@ request dispatch and upload of the PDF/native-evidence inputs. Thus the result
 return is material but is not the OCR throughput bottleneck, and the earlier
 9 s observation was never proof of JSON-only cost.
 
-Small's simple treatments are now exhausted: B1 wins over B4/B8, page-list
-input did not help, two real CUDA-stream owners did not help, and render supply
-was already full. A split A3 is not justified without a new low-level profiler
-or custom-runtime mechanism. The smallest remaining performance experiment is
-Tiny B1/B8 through this same 50-page English terminal boundary; Tiny remains a
-new witness and cannot be adopted from throughput evidence alone.
+Small's simple treatments are exhausted: B1 wins over B4/B8, page-list input
+did not help, two real CUDA-stream owners did not help, and render supply was
+already full.
 
-- The §6 M1.5 optimistic end-to-end bound was never computed — the stage
-  attribution it requires was not instrumented in these arms.
-- The suggested crop-width padding explanation for Small B4 is unproven;
-  per-batch padded tensor area and recognizer-only time were not recorded.
+### Tiny terminal A2 closure — 2026-08-24
+
+The same frozen 50-page English document, adopted CPU control, four producer
+processes, private scratch, FP32 TensorRT runtime, response probe, and
+trusted-output scorer were reused. Only model tier, recognition batch, and the
+bounded inference-owner count changed.
+
+| arm | app | warm inner pages/s | warm full-result client pages/s | speed vs CPU client | median GPU use | decision |
+|---|---|---:|---:|---:|---:|---|
+| Tiny B1, one owner | `ap-ehU7yjL5C7bBDdcv17Xp1h` | 1.632 | 1.403 | 2.004x | 10% | valid baseline |
+| Tiny B8, one owner | `ap-pA9Bzh54bIVOXICWkcARE4` | 1.697 | 1.423 | 2.032x | 9-10% | reject: only 1.4% client gain |
+| Tiny B1, two owners | `ap-Wer6fmCGIDfEoL2egKn56R` | 2.134 | 1.672 | 2.388x | 14-18% | fastest measured A2 arm |
+| Tiny B1, four owners | `ap-DuNoQaJ3hvGxzrviPRAXxL` | 1.260 | 1.109 | 1.583x | 7-8% | reject: severe contention |
+
+The B8 treatment was real, not a configuration no-op. Each warm document had
+593 full size-eight recognition batches out of 639 total batches. Mean page
+OCR service time fell only from about 0.57 s at B1 to 0.55 s at B8. Full
+pipeline throughput barely moved. Recognition crop batching is therefore not
+the limiting stage in this architecture.
+
+The two-owner treatment was also real. Both owners passed independent
+provider/device attestation, each handled about half of the 4,929 recognition
+crops, and summed page OCR service time was 1.77-1.82 times document wall.
+Inner throughput improved 31% over one owner. The full-result gain was smaller
+because returning the approximately 7.0 MB object took about 2.36 s and sits
+outside the controller's terminal wall clock.
+
+Four owners establish the contention boundary. All four attestations passed
+and every owner handled 1,100-1,385 crops per warm document. Nevertheless,
+mean page OCR service time rose to 2.89-3.20 s, summed OCR work was about 3.74
+times wall, GPU median use fell to 7-8%, and throughput regressed below one
+owner. With four physical CPU cores and four producers, more monolithic owners
+or owner/batch combinations are not justified.
+
+At the measured two-owner rate, a fleet target of 50 terminal pages/s requires
+about 24 continuously warm containers if results are persisted beside the
+worker and each call returns a small pointer (`50 / 2.134`, rounded up). It
+requires about 30 warm containers if every call returns the full 7 MB result
+to the submitting client (`50 / 1.672`, rounded up). These are arithmetic
+capacity estimates, not fleet measurements; autoscaling efficiency and shared
+tenancy beyond one container remain unmeasured. Sixteen such containers would
+project to about 34 inner pages/s or 27 full-result client pages/s, not the
+50 pages/s target.
+
+Correctness is not closed. All four Tiny arms report zero currently
+adjudicated newly incorrect or missing trusted values, but two unresolved
+trusted values, 101-103 pending source adjudications, and four Small blocking
+routes cleared on pages 14, 24, 30, and 40. One inspected example is an
+improvement: on page 40 native PDF text and Tiny both read `27,025`, while
+Small added `$` and raised a conflict. That example does not adjudicate the
+other differences. Tiny remains performance evidence only and cannot replace
+the qualified Small witness.
+
+Cold startup is also visible. Fresh B1/B8/owner-count containers spent roughly
+five minutes in CPU-bound TensorRT engine construction and downloaded
+`simfang.ttf` at runtime before the first document. The font download is
+removable cold work. Engine caching or snapshots are deployment requirements
+if burst latency matters, but neither changes warm throughput.
+
+The paid sweep stops here. At close, Modal reported USD 4.41291519 posted for
+all PageSpatial work in the UTC billing day; the conservative ledger retained
+USD 64.50 of completed-unposted reservation exposure and no active experiment
+apps. The next performance work is not another GPU SKU, batch size, or owner
+count. It is an internal profile or custom runtime that separately measures
+detector, host preprocessing/crop generation, recognizer kernels, copies, and
+synchronization. Split A3 is justified only if that profile names a removable
+serialization point.
+
+Remaining boundaries:
+
 - The vendor base-image manifest digest was not captured.
-- Comparator mutations for box, confidence, routing, and an independent line
-  change were not run.
-- Sustained 1,000-page operation, failure injection, 1-to-4 GPU scale, and the
-  candidate holdout remain unmeasured. Complete 50-page B1 and B8 A2 documents
-  are now measured; neither crosses the 2x continuation gate.
-- B16/B32 exceed the pinned Small TensorRT batch profile and remain unrun.
-  Width buckets and concurrent inference owners remain unrun. Four render
-  producers did run, but one Python owner serialized page-level `predict()`.
-- The unadopted engine was not baked or published. Only the source revision
-  and lifetime patch are integrity-pinned.
+- Sustained 1,000-page operation, failure injection, a real multi-container
+  GPU fleet, and the candidate holdout remain unmeasured.
+- B16/B32 exceed the pinned TensorRT batch profile and are not justified by
+  the measured B8 result.
+- The unadopted Tiny engine was not baked or published. Only the source
+  revision, model hashes, and lifetime patch are integrity-pinned.
 - Non-English transfer is intentionally unqualified.
 
-Do not continue Small without a new profiler-backed custom-runtime mechanism.
-Run bounded Tiny A2 only for performance and trusted-output screening; any
-adoption still requires Tiny's complete new-witness ceremony.
+Do not continue the monolithic owner/batch sweep. Any Tiny adoption still
+requires its complete new-witness ceremony. Any A3 work requires a
+profiler-backed custom-runtime mechanism, not another configuration flip.

@@ -172,8 +172,8 @@ true B8 retry is allowed only after the image carries the batch value, the
 remote arm equals the requested arm, and the live recognition sampler reports
 effective batch eight before inference.
 
-**Measured A2 result, 2026-08-24:** Small FP32 B1 remains the fastest complete
-50-page A2 cell: 0.996 warm client pages/s. Effective B8 reached batch eight
+**Measured Small A2 result, 2026-08-24:** Small FP32 B1 remains the fastest
+complete Small 50-page A2 cell: 0.996 warm client pages/s. Effective B8 reached batch eight
 before inference and 598 of 640 recognition batches were full in every repeat,
 yet warm client throughput fell to 0.709 pages/s and median GPU utilization
 was only 15%. B8 is rejected. It produced zero newly incorrect, missing, or
@@ -187,11 +187,24 @@ OCR service time was about 1.89 times wall time and each owner handled roughly
 half the crops—but warm client throughput was only 1.017 pages/s versus 0.996
 for one owner. Median GPU utilization remained about 21%. The exact pinned
 UltraInfer TensorRT backend creates a distinct CUDA stream per backend, so this
-also tests the obvious multi-stream treatment. Straightforward Small batching
-and concurrency are exhausted. Do not build split A3 without a new profiler or
-custom-runtime hypothesis that explains why it can escape the measured
-contention. The next bounded performance lane is Tiny B1/B8 under the same
-English trusted-output rule. None of these treatments changes production.
+also tests the obvious multi-stream treatment.
+
+The bounded Tiny lane is now measured too. Tiny B1 reached 1.403 warm client
+pages/s and 1.632 inner pages/s. Effective B8 filled 593 of 639 recognition
+batches to eight but improved client throughput only 1.4%. Two B1 owners were
+the measured optimum: 1.672 warm client pages/s and 2.134 inner pages/s, with
+both owners attested and sharing crops evenly. Four owners regressed to 1.109
+warm client pages/s as mean page OCR service time grew from about 0.57 s to
+about 3.0 s. GPU median utilization stayed low and fell under four-owner
+contention. More owners or recognition-batch sweeps are not justified.
+
+Tiny remains a new, non-adopted witness. Its 50-page results have zero known
+newly incorrect or missing trusted values, but two unresolved trusted values,
+101-103 pending source adjudications, and four cleared Small blocking routes.
+The CPU/Small deployment remains the production default. Do not build split A3
+without a profiler-backed custom-runtime hypothesis that isolates detector,
+host preprocessing, recognizer, and synchronization cost. None of these
+treatments changes production.
 
 ## 1. Decision
 
