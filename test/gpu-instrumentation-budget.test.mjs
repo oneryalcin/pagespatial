@@ -8,6 +8,10 @@ import { join } from 'node:path';
 const moduleUrl = new URL('../scripts/evaluation/gpu_instrumentation_budget.py', import.meta.url);
 const modulePath = moduleUrl.pathname;
 const source = readFileSync(moduleUrl, 'utf8');
+const modalSource = readFileSync(
+  new URL('../scripts/evaluation/gpu_instrumentation_modal.py', import.meta.url),
+  'utf8',
+);
 
 function runPython(code, ledger) {
   return JSON.parse(execFileSync('python3', ['-c', code, modulePath, ledger], { encoding: 'utf8' }));
@@ -66,4 +70,11 @@ except Exception as e: print(json.dumps({"error":str(e)}))
 `;
   const result = runPython(code, ledger);
   assert.match(result.error, /authorization has expired/u);
+});
+
+test('M0 separates unavailable perf sampling from the CUDA capability trace', () => {
+  assert.match(modalSource, /"--trace=cuda,nvtx,osrt"[\s\S]*?"--sample=none"/u);
+  assert.match(modalSource, /CPU Profiling Environment \(process-tree\): Fail/u);
+  assert.match(modalSource, /native CPU sampling is unsupported/u);
+  assert.doesNotMatch(modalSource, /"--cuda-event-trace=true"/u);
 });

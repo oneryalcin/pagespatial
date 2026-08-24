@@ -199,9 +199,13 @@ def probe_capabilities(run_id: str) -> dict[str, Any]:
             "nsys",
             "profile",
             "--trace=cuda,nvtx,osrt",
-            "--sample=process-tree",
-            "--cpuctxsw=process-tree",
-            "--cuda-event-trace=true",
+            # `nsys status -e` is the capability truth for host sampling. Do
+            # not request perf sampling after that probe reports that gVisor
+            # rejects perf_event_open; doing so crashed nsys 2025.5 with 139
+            # before CUPTI could produce the independent CUDA trace.
+            "--sample=none",
+            "--cpuctxsw=none",
+            "--cuda-event-trace=false",
             "--force-overwrite=true",
             f"--output={report_base}",
             "python",
@@ -289,10 +293,17 @@ def probe_capabilities(run_id: str) -> dict[str, Any]:
             },
         }
     )
-    if not capabilities["cpuSampling"]:
+    status_text = identity["nsysStatus"]["stdout"] + identity["nsysStatus"]["stderr"]
+    if "CPU Profiling Environment (process-tree): Fail" in status_text:
+        result["limitations"].append(
+            "Modal gVisor denies perf_event_open; native CPU sampling is unsupported"
+        )
+    elif not capabilities["cpuSampling"]:
         result["limitations"].append("CPU samples were not observed in the M0 trace")
     if not capabilities["cpuContextSwitch"]:
-        result["limitations"].append("CPU scheduling events were not observed in the M0 trace")
+        result["limitations"].append(
+            "CPU scheduling events were not requested after the CPU environment probe failed"
+        )
     return result
 
 
