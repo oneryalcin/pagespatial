@@ -43,9 +43,9 @@ STAGE_BOUNDS: dict[str, dict[str, Any]] = {
         "buildAndIdleAllowanceUsd": 1.0,
     },
     "E1-GPU": {
-        "worstCaseUsd": 7.0, "calls": 4, "containers": 1,
+        "worstCaseUsd": 3.5, "calls": 4, "containers": 1,
         "gpu": "L4", "physicalCpuCores": 4.0,
-        "timeoutSecondsPerCall": 1200, "buildAndIdleAllowanceUsd": 3.0,
+        "timeoutSecondsPerCall": 1200, "buildAndIdleAllowanceUsd": 1.5,
     },
     "E2-GPU": {
         "worstCaseUsd": 12.0, "calls": 8, "containers": 1,

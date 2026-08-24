@@ -70,5 +70,5 @@ print(json.dumps({"closed":closed,"next":next_reservation,"exposure":m.reserved_
   assert.equal(result.closed.appId, null);
   assert.match(result.closed.noAppReason, /before app creation/u);
   assert.equal(result.next.status, 'reserved');
-  assert.equal(result.exposure, 10);
+  assert.equal(result.exposure, 6.5);
 });
