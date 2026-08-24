@@ -802,3 +802,70 @@ Remaining boundaries:
 Do not continue the monolithic owner/batch sweep. Any Tiny adoption still
 requires its complete new-witness ceremony. Any A3 work requires a
 profiler-backed custom-runtime mechanism, not another configuration flip.
+
+### A3 stage profile and selected treatment — 2026-08-24
+
+Issue [#97](https://github.com/oneryalcin/pagespatial/issues/97) freezes the
+plain-English bottleneck hypothesis and the measure-first acceptance rules.
+Commit `d39a308` added an opt-in profiler around the exact Python-visible
+PaddleX 3.7.2 boundaries. It records wall and current-thread CPU time for page
+decode, detector preparation/backend/postprocess, box sorting and crops,
+recognition preparation/backend/CTC decoding, and final result decoding. The
+record explicitly calls a backend interval **synchronous backend occupancy**:
+it includes host/device copies, native work, returned output, and
+synchronization. It is not a CUDA-kernel timer or a claim of GPU occupancy.
+
+App `ap-qdbRiYlw8mumwFZllz6d5r` processed the frozen 50-page Tiny B1 O2 arm,
+but Modal replaced its container between repeats two and three. The observed
+cold pattern was `[true, false, true, false]` across two container IDs. No
+system event explaining the replacement was returned. Therefore the four
+repeats are **not** one valid warm window, no four-repeat median is reported,
+and profiling overhead remains unresolved. The compact committed evidence is
+`evaluation/gpu-spike/a3-profile-analysis-v1.json`; it pins every ignored raw
+result and correctness report by SHA-256.
+
+The two warm diagnostic repeats differed materially:
+
+| warm repeat | inner pages/s | median GPU use | recognition CPU prepare + decode | recognition synchronous backend | combined backend occupancy |
+|---|---:|---:|---:|---:|---:|
+| repeat 2, first container | 2.482 | 20% | 18.27 summed s | 7.62 summed s | 45.5% |
+| repeat 4, replacement container | 1.349 | 8% | 28.96 summed s | 24.37 summed s | 70.5% |
+
+These are per-container diagnostics, not comparable benchmark arms. The same
+code, model, and document ran much slower on the replacement container; shared
+tenancy or another host cause is plausible but unproven. The result itself is
+useful: on the faster warm repeat, recognition CPU preparation plus CTC/result
+decoding was 2.40 times the synchronous TensorRT interval. Detector host work
+and cropping added another 7.40 summed seconds. Only 7.62 of 36.70 summed
+`predict()` seconds sat inside recognition's synchronous backend call.
+
+The offline scorer found zero newly incorrect trusted values, zero missing
+trusted values, zero incorrect values outside a native conflict, and zero
+deterministic page differences in all four repeats. It still found two
+unresolved trusted values and 102-104 pending source adjudications per repeat.
+The profile is therefore performance evidence only, not adoption evidence.
+
+The profile selects one bounded treatment. The evaluation adapter now has an
+opt-in Tiny B1 O2 recognition conveyor with exactly two batches in flight:
+
+```text
+CPU prepare next batch -> serialized TensorRT call -> CPU decode prior batch
+```
+
+It reuses PaddleX's existing image reader, resize/normalize, TensorRT runner,
+CTC decoder, result class, crop order, and output mapping. One CPU preparation
+thread and one CPU decoding thread overlap around each owner's serialized
+backend call. It does not change detection, add a service queue, increase the
+recognition batch, add another OCR owner, or claim asynchronous CUDA execution.
+Local tests prove the queue bound, preserved result order, actual stage overlap,
+opt-in arm restrictions, and metric recording.
+
+No paid treatment result is reported. At the post-profile check, Modal showed
+USD 4.74740358 posted, USD 67.50 of conservative completed-unposted reservation
+exposure, and no active experiment apps. A new USD 3 reservation would exceed
+the USD 75 operational ceiling. The ledger can release those reservations only
+after a closed billing interval has an operator-attested final total; doing so
+early would make the budget proof false. The next paid action is exactly one
+stable Tiny B1 O2 control-versus-split comparison after legitimate
+reconciliation. Keep the treatment only for a material complete-document gain,
+with the same trusted-output scorer and recorded billed cost.

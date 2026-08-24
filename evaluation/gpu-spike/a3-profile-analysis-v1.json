@@ -1,0 +1,110 @@
+{
+  "schemaVersion": "pagespatial-gpu-a3-profile-analysis-v1",
+  "recordedAt": "2026-08-24",
+  "source": {
+    "issue": 97,
+    "gitRevision": "d39a308271f11dbe1aa33175e0641e499707bc38",
+    "modalAppId": "ap-qdbRiYlw8mumwFZllz6d5r",
+    "runId": "20260824T190430Z-c6c63f48",
+    "arm": "g-trt-tiny-fp32-a2-b1c4o2-profile",
+    "inputPages": 50,
+    "rawArchive": ".evaluation/gpu-spike/2026-08-24/a3-profile"
+  },
+  "verdict": {
+    "validWarmWindow": false,
+    "benchmarkAggregationAllowed": false,
+    "rejectionReason": "container-replaced-during-four-repeat-window",
+    "replacementCause": "unproven-no-system-event-returned",
+    "profilerOverhead": "unresolved-due-container-replacement"
+  },
+  "lifetimes": [
+    {
+      "containerId": "ta-01M0TJHZDH2J1CPJXQNHH6FYSR",
+      "repeats": [1, 2],
+      "coldPattern": [true, false]
+    },
+    {
+      "containerId": "ta-01M0TJY2TZYMMQVHG4YCFR81XR",
+      "repeats": [3, 4],
+      "coldPattern": [true, false]
+    }
+  ],
+  "repeats": [
+    {
+      "repeat": 1,
+      "containerCold": true,
+      "controllerPagesPerS": 2.437,
+      "gpuMedianPercent": 21.5,
+      "gpuMaxPercent": 34,
+      "recognitionHostMs": 17418.337,
+      "recognitionBackendMs": 7659.564,
+      "combinedSynchronousBackendOccupancyPercent": 48.647,
+      "rawSha256": "738bcdc141041d933a50ac9b6ebae847b295e1c6c7901a84e96f3e114067b6fc",
+      "scoreSha256": "00484fdf733c042ca6bd9c38dfc14426a484423c0a61d89c554ea863679a34c1"
+    },
+    {
+      "repeat": 2,
+      "containerCold": false,
+      "controllerPagesPerS": 2.482,
+      "gpuMedianPercent": 20,
+      "gpuMaxPercent": 35,
+      "recognitionHostMs": 18266.533,
+      "recognitionBackendMs": 7615.315,
+      "combinedSynchronousBackendOccupancyPercent": 45.54,
+      "rawSha256": "db02a31213c99b67c586c77d840f03c9785d302a32460eb54220352fbea9470f",
+      "scoreSha256": "57c0874dd084b6e10e72f74d7ff49b039a681a4188fe3671bd8ed288de839d15"
+    },
+    {
+      "repeat": 3,
+      "containerCold": true,
+      "controllerPagesPerS": 1.251,
+      "gpuMedianPercent": 8,
+      "gpuMaxPercent": 32,
+      "recognitionHostMs": 30724.253,
+      "recognitionBackendMs": 25148.094,
+      "combinedSynchronousBackendOccupancyPercent": 70.401,
+      "rawSha256": "fde9b3ca1c55a590804d8ca818c38bbb57091115d630e2710d263803d947bf5a",
+      "scoreSha256": "fc3679cd1ed373c3ed5dd692bd964986c3ad3ae3e3b6f0b35e3fde127c75d9f2"
+    },
+    {
+      "repeat": 4,
+      "containerCold": false,
+      "controllerPagesPerS": 1.349,
+      "gpuMedianPercent": 8,
+      "gpuMaxPercent": 19,
+      "recognitionHostMs": 28955.359,
+      "recognitionBackendMs": 24372.245,
+      "combinedSynchronousBackendOccupancyPercent": 70.454,
+      "rawSha256": "a1a51eceb5b5f772be89b1204d2bf2a3ea317f3c3c31fb100fff587235547f65",
+      "scoreSha256": "02492354b12c103992d579a54417890860f2257ac1c31d6a407e9c9ba2f2d7ce"
+    }
+  ],
+  "correctness": {
+    "newlyIncorrectTrustedValues": [0, 0, 0, 0],
+    "missingTrustedValues": [0, 0, 0, 0],
+    "unresolvedTrustedValues": [2, 2, 2, 2],
+    "pendingSourceAdjudications": [103, 103, 104, 102],
+    "incorrectValuesNotCaughtByNativeConflict": [0, 0, 0, 0],
+    "deterministicDifferingPages": [[], [], [], []],
+    "status": "pending-not-adoptable"
+  },
+  "treatmentSelection": {
+    "evidenceRepeat": 2,
+    "evidenceRule": "fastest-complete-warm-repeat-diagnostic-only",
+    "recognitionHostToSynchronousBackendRatio": 2.399,
+    "selected": "bounded-recognition-prepare-backend-postprocess-pipeline",
+    "queueDepth": 2,
+    "rejected": [
+      "larger-recognition-batch-alone-already-measured-no-material-gain",
+      "more-whole-pipeline-owners-already-measured-cpu-contention"
+    ],
+    "paidConfirmation": "not-run-budget-reservation-gate-closed"
+  },
+  "limitations": [
+    "summed service times overlap across two owners and are not additive method wall time",
+    "synchronous backend time includes copies native execution and synchronization",
+    "backend occupancy is not GPU kernel occupancy",
+    "the first paid profile cannot establish profiling overhead or a stable warm median",
+    "the treatment requires a stable warm control and treatment comparison before any performance claim"
+  ]
+}

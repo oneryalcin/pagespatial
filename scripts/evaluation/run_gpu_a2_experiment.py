@@ -163,6 +163,7 @@ def run_gpu(
     inference_owners: int,
     model_tier: str,
     stage_profile: bool,
+    split_recognition: bool,
 ) -> tuple[str, str, Path]:
     reservation = reserve(ledger, "E1-GPU")
     suffix = f"{time.strftime('%Y%m%d%H%M%S', time.gmtime())}-{uuid.uuid4().hex[:6]}"
@@ -170,6 +171,7 @@ def run_gpu(
         f"pagespatial-gpu-a2-e1-gpu-{model_tier}-b{recognition_batch_size}"
         f"o{inference_owners}-{suffix}"
         + ("-profile" if stage_profile else "")
+        + ("-split-rec" if split_recognition else "")
     )
     app_id = ""
     evidence_root = out_dir / "gpu"
@@ -184,6 +186,7 @@ def run_gpu(
             "PAGESPATIAL_A2_INFERENCE_OWNERS": str(inference_owners),
             "PAGESPATIAL_A2_MODEL_TIER": model_tier,
             "PAGESPATIAL_A2_STAGE_PROFILE": "1" if stage_profile else "0",
+            "PAGESPATIAL_A2_SPLIT_RECOGNITION": "1" if split_recognition else "0",
         }
         run(
             [
@@ -374,6 +377,11 @@ def main() -> None:
         action="store_true",
         help="record Python-visible stage intervals; bounded to Tiny B1 with two owners",
     )
+    parser.add_argument(
+        "--split-recognition",
+        action="store_true",
+        help="overlap bounded recognition preparation, TensorRT, and decoding; Tiny B1 O2 only",
+    )
     args = parser.parse_args()
     if args.stage_profile and (
         args.model_tier != "tiny"
@@ -381,6 +389,14 @@ def main() -> None:
         or args.inference_owners != 2
     ):
         parser.error("--stage-profile requires --model-tier tiny --recognition-batch-size 1 --inference-owners 2")
+    if args.split_recognition and (
+        args.model_tier != "tiny"
+        or args.recognition_batch_size != 1
+        or args.inference_owners != 2
+    ):
+        parser.error("--split-recognition requires --model-tier tiny --recognition-batch-size 1 --inference-owners 2")
+    if args.stage_profile and args.split_recognition:
+        parser.error("--stage-profile and --split-recognition are separate A3 arms")
     revision = source_revision()
     if not WORKLOAD.exists():
         raise SystemExit(f"frozen workload missing: {WORKLOAD}")
@@ -399,6 +415,7 @@ def main() -> None:
         args.inference_owners,
         args.model_tier,
         args.stage_profile,
+        args.split_recognition,
     )
     decision = score_e1(cpu[2], gpu[2], args.out_dir, args.adjudications)
     print(json.dumps({

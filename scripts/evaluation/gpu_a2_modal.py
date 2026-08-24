@@ -117,12 +117,21 @@ MODEL_TIER = os.environ.get("PAGESPATIAL_A2_MODEL_TIER", "small")
 if MODEL_TIER not in {"tiny", "small"}:
     raise ValueError("PAGESPATIAL_A2_MODEL_TIER must be tiny or small")
 STAGE_PROFILE = os.environ.get("PAGESPATIAL_A2_STAGE_PROFILE", "0") == "1"
+SPLIT_RECOGNITION = os.environ.get("PAGESPATIAL_A2_SPLIT_RECOGNITION", "0") == "1"
 if STAGE_PROFILE and (
     MODEL_TIER != "tiny"
     or RECOGNITION_BATCH_SIZE != 1
     or INFERENCE_OWNERS != 2
 ):
     raise ValueError("stage profiling is bounded to Tiny B1 with two owners")
+if SPLIT_RECOGNITION and (
+    MODEL_TIER != "tiny"
+    or RECOGNITION_BATCH_SIZE != 1
+    or INFERENCE_OWNERS != 2
+):
+    raise ValueError("split recognition is bounded to Tiny B1 with two owners")
+if STAGE_PROFILE and SPLIT_RECOGNITION:
+    raise ValueError("stage profiling and split recognition are separate A3 arms")
 
 if modal.is_local():
     REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -131,6 +140,9 @@ else:
 
 CONTROLLER = REPO_ROOT / "scripts/evaluation/gpu_a2_controller.mjs"
 STAGE_PROFILER = REPO_ROOT / "scripts/evaluation/gpu_a3_stage_profile.py"
+SPLIT_RECOGNITION_ADAPTER = (
+    REPO_ROOT / "scripts/evaluation/gpu_a3_split_recognition.py"
+)
 WORKLOAD_MANIFEST = REPO_ROOT / "evaluation/gpu-spike/a2-50page-v1.json"
 
 app = modal.App(APP_NAME)
@@ -203,6 +215,11 @@ if modal.is_local():
         .add_local_file(str(CONTROLLER), "/app/scripts/evaluation/gpu_a2_controller.mjs", copy=True)
         .add_local_file(str(STAGE_PROFILER), "/root/gpu_a3_stage_profile.py", copy=True)
         .add_local_file(
+            str(SPLIT_RECOGNITION_ADAPTER),
+            "/root/gpu_a3_split_recognition.py",
+            copy=True,
+        )
+        .add_local_file(
             str(WORKLOAD_MANIFEST),
             "/app/evaluation/gpu-spike/a2-50page-v1.json",
             copy=True,
@@ -219,6 +236,9 @@ if modal.is_local():
                 "PAGESPATIAL_A2_INFERENCE_OWNERS": str(INFERENCE_OWNERS),
                 "PAGESPATIAL_A2_MODEL_TIER": MODEL_TIER,
                 "PAGESPATIAL_A2_STAGE_PROFILE": "1" if STAGE_PROFILE else "0",
+                "PAGESPATIAL_A2_SPLIT_RECOGNITION": (
+                    "1" if SPLIT_RECOGNITION else "0"
+                ),
             }
         )
     )
@@ -231,6 +251,7 @@ ARM = {
         f"g-trt-{MODEL_TIER}-fp32-a2-b{RECOGNITION_BATCH_SIZE}"
         f"c4o{INFERENCE_OWNERS}"
         + ("-profile" if STAGE_PROFILE else "")
+        + ("-split-rec" if SPLIT_RECOGNITION else "")
     ),
     "tier": MODEL_TIER,
     "device": "gpu:0",
@@ -248,6 +269,7 @@ ARM = {
     },
     "deploymentProfile": "en-gpu",
     "stageProfile": STAGE_PROFILE,
+    "splitRecognition": SPLIT_RECOGNITION,
 }
 
 
@@ -356,6 +378,7 @@ class GpuA2Container:
         self.batch_observations_by_owner = []
         self.stage_profilers = []
         self.stage_profile_identities = []
+        self.split_recognition_models = []
         for owner_index in range(INFERENCE_OWNERS):
             owner_started = time.monotonic()
             with _capture_native_output() as log_path:
@@ -381,6 +404,11 @@ class GpuA2Container:
             self.batch_observations_by_owner.append(
                 _instrument_batch_samplers(ocr, ARM["pageBatchSize"])
             )
+            if SPLIT_RECOGNITION:
+                from gpu_a3_split_recognition import install_split_recognition
+
+                split_model = install_split_recognition(ocr, queue_depth=2)
+                self.split_recognition_models.append(split_model)
             if STAGE_PROFILE:
                 from gpu_a3_stage_profile import install_ocr_stage_profiler
 
@@ -539,6 +567,8 @@ class GpuA2Container:
         for stage_profiler in self.stage_profilers:
             if stage_profiler is not None:
                 stage_profiler.begin_method(profile_started_ns)
+        for split_model in self.split_recognition_models:
+            split_model.reset_metrics()
         method_first_inference_ms: float | None = None
         was_cold = self.container_cold
         self.container_cold = False
@@ -724,6 +754,16 @@ class GpuA2Container:
                     ],
                 }
             )
+            if SPLIT_RECOGNITION:
+                result["splitRecognition"] = {
+                    "schemaVersion": "pagespatial-gpu-a3-split-recognition-run-v1",
+                    "owners": [
+                        {**model.metrics(), "ownerIndex": owner_index}
+                        for owner_index, model in enumerate(
+                            self.split_recognition_models
+                        )
+                    ],
+                }
             if STAGE_PROFILE:
                 from gpu_a3_stage_profile import summarize_method_profile
 
