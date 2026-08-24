@@ -14,7 +14,8 @@ test('A2 CPU runner pins adopted control resources and terminal count', () => {
 test('A2 CPU runner cannot stop unrelated apps and always verifies drain', () => {
   assert.match(source, /startswith\("pagespatial-gpu-a2-"\)/u);
   assert.match(source, /finally:\n        stop_and_verify\(args\.app\)/u);
-  assert.match(source, /CPU control app did not drain/u);
+  assert.match(source, /CPU control app did not drain within 30s/u);
+  assert.match(source, /while time\.monotonic\(\) < deadline/u);
 });
 
 test('A2 CPU control requires reservation, no retries, and four-call warm proof', () => {
@@ -26,4 +27,9 @@ test('A2 CPU control requires reservation, no retries, and four-call warm proof'
   assert.match(source, /Backend::OPENVINO/u);
   assert.match(source, /engine_evidence\.get\("source"\) != "log-derived \(child stderr\)"/u);
   assert.match(source, /result\["modelVerification"\]/u);
+  assert.match(source, /cpu-repeat-\{repeat\}\.received\.json/u);
+  assert.ok(
+    source.indexOf('received_path.write_text') < source.lastIndexOf('attest_result('),
+    'the exact remote record must be saved before local attestation'
+  );
 });

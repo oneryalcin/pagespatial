@@ -39,22 +39,27 @@ def stop_and_verify(app_name: str) -> None:
         text=True,
         timeout=120,
     )
-    rows = json.loads(
-        subprocess.run(
-            ["modal", "app", "list", "--json"],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        ).stdout
-    )
-    active = [
-        row for row in rows
-        if row.get("description") == app_name
-        and (row.get("state") != "stopped" or str(row.get("tasks", "0")) != "0")
-    ]
-    if active:
-        raise RuntimeError(f"CPU control app did not drain: {active}")
+    deadline = time.monotonic() + 30
+    active = []
+    while time.monotonic() < deadline:
+        rows = json.loads(
+            subprocess.run(
+                ["modal", "app", "list", "--json"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            ).stdout
+        )
+        active = [
+            row for row in rows
+            if row.get("description") == app_name
+            and (row.get("state") != "stopped" or str(row.get("tasks", "0")) != "0")
+        ]
+        if not active:
+            return
+        time.sleep(1)
+    raise RuntimeError(f"CPU control app did not drain within 30s: {active}")
 
 
 def container_snapshot(app_name: str, expected_app_id: str) -> list[dict]:
@@ -98,16 +103,37 @@ def attest_result(
         backend = provenance.get("configuration", {}).get("ocrBackend", {})
         pins = backend.get("modelPins")
         engine_evidence = backend.get("engineEvidence", {})
+        observed = {
+            "provenance.backend": provenance.get("backend"),
+            "executionProvider": backend.get("executionProvider"),
+            "hpiRequested": backend.get("hpiRequested"),
+            "useHpip": backend.get("useHpip"),
+            "modelPins": pins,
+            "engineEvidence": engine_evidence,
+        }
+        expected = {
+            "provenance.backend": "hpi",
+            "executionProvider": "hpi",
+            "hpiRequested": True,
+            "useHpip": True,
+            "modelPins": model_pins,
+            "engineEvidence.source": "log-derived (child stderr)",
+            "engineEvidence.lineContains": "Backend::OPENVINO",
+        }
         if (
-            provenance.get("backend") != "hpi"
-            or backend.get("executionProvider") != "hpi"
-            or backend.get("hpiRequested") is not True
-            or backend.get("useHpip") is not True
-            or pins != model_pins
+            observed["provenance.backend"] != "hpi"
+            or observed["executionProvider"] != "hpi"
+            or observed["hpiRequested"] is not True
+            or observed["useHpip"] is not True
+            or observed["modelPins"] != model_pins
             or engine_evidence.get("source") != "log-derived (child stderr)"
             or "Backend::OPENVINO" not in str(engine_evidence.get("line", ""))
         ):
-            raise RuntimeError(f"CPU HPI/OpenVINO/model-pin attestation failed on page {entry.get('pageNumber')}")
+            raise RuntimeError(
+                "CPU HPI/OpenVINO/model-pin attestation failed on page "
+                f"{entry.get('pageNumber')}: observed={json.dumps(observed, sort_keys=True)}; "
+                f"expected={json.dumps(expected, sort_keys=True)}"
+            )
 
 
 def main() -> None:
@@ -173,6 +199,11 @@ def main() -> None:
                 }
             )
             client_wall_s = time.monotonic() - started
+            # Preserve the exact returned record before any local assertion.
+            # A failed attestation is evidence about the deployment and must
+            # not be reduced to an exception string with the record discarded.
+            received_path = run_dir / f"cpu-repeat-{repeat}.received.json"
+            received_path.write_text(json.dumps(result, indent=1) + "\n")
             if result.get("status") != "completed" or result.get("page_count") != EXPECTED_PAGES:
                 raise RuntimeError(f"CPU control did not complete 50 pages: {result.get('failure')}")
             if len(result.get("pages", [])) != EXPECTED_PAGES or result.get("pages_failed") != 0:
@@ -217,6 +248,7 @@ def main() -> None:
             }
             path = run_dir / f"cpu-repeat-{repeat}.json"
             path.write_text(json.dumps(result, indent=1) + "\n")
+            received_path.unlink()
             results.append(result)
             print(
                 f"repeat {repeat}: {result['client']['inclusivePagesPerS']:.3f} terminal pages/s; "
