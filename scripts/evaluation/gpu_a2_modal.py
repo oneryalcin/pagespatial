@@ -38,6 +38,13 @@ import modal
 
 from gpu_process_tree import reap_marked_process_groups
 
+_SOURCE_PATH = Path(__file__).resolve()
+_COPIED_REMOTE_SOURCE = _SOURCE_PATH in {
+    Path("/root/gpu_a2_modal.py"),
+    Path("/app/scripts/evaluation/gpu_a2_modal.py"),
+}
+_LOCAL_BUILD_CONTEXT = modal.is_local() and not _COPIED_REMOTE_SOURCE
+
 _REQUESTED_APP_NAME = os.environ.get(
     "PAGESPATIAL_A2_APP_NAME", "pagespatial-gpu-a2-e2e-m1"
 )
@@ -48,7 +55,7 @@ INSTRUMENTATION_MODE = _REQUESTED_APP_NAME.startswith(
 # Refuse before importing/constructing the TensorRT image. That imported image
 # contains a paid GPU build step, so validating inside the local entrypoint is
 # too late.
-if modal.is_local():
+if _LOCAL_BUILD_CONTEXT:
     if INSTRUMENTATION_MODE:
         from gpu_instrumentation_budget import (
             DEFAULT_LEDGER,
@@ -107,7 +114,7 @@ ULTRA_INFER_PATCH_SHA256 = (
     "b03632bbfae1372f21a2e31babbf72f8936943a0848ff3db853a2f1cd5216bd6"
 )
 
-if modal.is_local():
+if _LOCAL_BUILD_CONTEXT:
     from gpu_spike_trt_modal import (
         ULTRA_INFER_PATCH_SHA256 as SPIKE_ULTRA_INFER_PATCH_SHA256,
         ULTRA_INFER_SOURCE_REV as SPIKE_ULTRA_INFER_SOURCE_REV,
@@ -126,7 +133,7 @@ else:
 
 
 APP_NAME = _REQUESTED_APP_NAME
-if modal.is_local() and not (
+if _LOCAL_BUILD_CONTEXT and not (
     APP_NAME.startswith("pagespatial-gpu-a2-") or INSTRUMENTATION_MODE
 ):
     raise RuntimeError("A2 app name has an unsupported prefix")
@@ -164,7 +171,7 @@ if STAGE_PROFILE and (
 ):
     raise ValueError("stage profiling is bounded to Tiny B1 with two owners")
 
-if modal.is_local():
+if _LOCAL_BUILD_CONTEXT:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 else:
     REPO_ROOT = Path("/app")
@@ -252,7 +259,7 @@ def _nvtx_install_command() -> str:
     )
 
 
-if modal.is_local():
+if _LOCAL_BUILD_CONTEXT:
     a2_image = (
         trt_image
         .apt_install("curl", "xz-utils", "poppler-utils", "tesseract-ocr")
@@ -315,7 +322,7 @@ if modal.is_local():
 else:
     a2_image = modal.Image.debian_slim(python_version="3.10")
 
-if modal.is_local() and INSTRUMENTATION_MODE:
+if _LOCAL_BUILD_CONTEXT and INSTRUMENTATION_MODE:
     a2_image = a2_image.run_commands(_nvtx_install_command())
 
 

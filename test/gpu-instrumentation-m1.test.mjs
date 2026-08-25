@@ -11,6 +11,7 @@ const workerSource = readFileSync(new URL('../scripts/evaluation/gpu_a2_trace_wo
 const launcherSource = readFileSync(new URL('../scripts/evaluation/run_gpu_instrumentation.py', import.meta.url), 'utf8');
 const controllerSource = readFileSync(new URL('../scripts/evaluation/gpu_a2_controller.mjs', import.meta.url), 'utf8');
 const profilerSource = readFileSync(new URL('../scripts/evaluation/gpu_a3_stage_profile.py', import.meta.url), 'utf8');
+const spikeSource = readFileSync(new URL('../scripts/evaluation/gpu_spike_modal.py', import.meta.url), 'utf8');
 const processTreePath = new URL('../scripts/evaluation/gpu_process_tree.py', import.meta.url).pathname;
 const modelPins = JSON.parse(readFileSync(
   new URL('../evaluation/gpu-spike/model-pins-v1.json', import.meta.url),
@@ -85,6 +86,17 @@ test('M1 uses one execution core instead of copying the page loop', () => {
   assert.match(workerSource, /from gpu_a2_modal import A2ExecutionCore/u);
   assert.match(workerSource, /core\.parse_document\(_payload\(request\)\)/u);
   assert.doesNotMatch(workerSource, /ThreadPoolExecutor|gpu_a2_controller/u);
+});
+
+test('copied remote child imports cannot enter local image-build or budget code', () => {
+  assert.match(modalSource, /Path\("\/app\/scripts\/evaluation\/gpu_a2_modal\.py"\)/u);
+  assert.match(spikeSource, /Path\("\/app\/scripts\/evaluation\/gpu_spike_modal\.py"\)/u);
+  assert.match(modalSource, /_LOCAL_BUILD_CONTEXT = modal\.is_local\(\) and not _COPIED_REMOTE_SOURCE/u);
+  assert.match(spikeSource, /_LOCAL_BUILD_CONTEXT = modal\.is_local\(\) and not _COPIED_REMOTE_SOURCE/u);
+  assert.match(spikeSource, /Remote hydration and plain child imports already run inside the assigned/u);
+  assert.match(spikeSource, /else:\n    # Remote hydration[\s\S]*cpu_image = model_base[\s\S]*gpu_image = model_base/u);
+  assert.equal((modalSource.match(/modal\.is_local\(\)/gu) ?? []).length, 1);
+  assert.equal((spikeSource.match(/modal\.is_local\(\)/gu) ?? []).length, 1);
 });
 
 test('M1 paid launcher fixes the arm and closes the exact experiment app', () => {

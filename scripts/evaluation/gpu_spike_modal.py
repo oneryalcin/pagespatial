@@ -37,6 +37,13 @@ from typing import Any, Iterable
 import modal
 
 
+_SOURCE_PATH = Path(__file__).resolve()
+_COPIED_REMOTE_SOURCE = _SOURCE_PATH in {
+    Path("/root/gpu_spike_modal.py"),
+    Path("/app/scripts/evaluation/gpu_spike_modal.py"),
+}
+_LOCAL_BUILD_CONTEXT = modal.is_local() and not _COPIED_REMOTE_SOURCE
+
 APP_NAME = "pagespatial-gpu-spike-m1"
 CPU_CORES = 4.0
 MEMORY_MIB = 8192
@@ -57,7 +64,7 @@ BACKEND_WORDS = (
     "precision",
 )
 
-if modal.is_local():
+if _LOCAL_BUILD_CONTEXT:
     REPO_ROOT = Path(__file__).resolve().parents[2]
     MODEL_MANIFEST = REPO_ROOT / "evaluation/gpu-spike/model-pins-v1.json"
     MODEL_FETCHER = REPO_ROOT / "scripts/evaluation/fetch_gpu_spike_models.py"
@@ -76,36 +83,51 @@ MODEL_FETCH_COMMAND = (
     "--verification-out /opt/pagespatial/model-verification.json"
 )
 
-model_base = (
-    modal.Image.debian_slim(python_version="3.11")
-    .apt_install(*APT)
-    .uv_pip_install("huggingface-hub==0.34.4")
-    .add_local_file(str(MODEL_MANIFEST), str(REMOTE_ROOT / "model-pins-v1.json"), copy=True)
-    .add_local_file(str(MODEL_FETCHER), str(REMOTE_ROOT / "fetch_gpu_spike_models.py"), copy=True)
-    .run_commands(MODEL_FETCH_COMMAND)
-)
+if _LOCAL_BUILD_CONTEXT:
+    model_base = (
+        modal.Image.debian_slim(python_version="3.11")
+        .apt_install(*APT)
+        .uv_pip_install("huggingface-hub==0.34.4")
+        .add_local_file(
+            str(MODEL_MANIFEST),
+            str(REMOTE_ROOT / "model-pins-v1.json"),
+            copy=True,
+        )
+        .add_local_file(
+            str(MODEL_FETCHER),
+            str(REMOTE_ROOT / "fetch_gpu_spike_models.py"),
+            copy=True,
+        )
+        .run_commands(MODEL_FETCH_COMMAND)
+    )
 
-cpu_image = (
-    model_base
-    .uv_pip_install(
-        "paddlepaddle==3.2.1",
+    cpu_image = (
+        model_base
+        .uv_pip_install(
+            "paddlepaddle==3.2.1",
+            "paddleocr==3.7.0",
+            "paddlex==3.7.2",
+            "psutil==7.0.0",
+            "setuptools",
+        )
+        .run_commands("paddleocr install_hpi_deps cpu")
+    )
+
+    gpu_image = model_base.uv_pip_install(
         "paddleocr==3.7.0",
         "paddlex==3.7.2",
         "psutil==7.0.0",
         "setuptools",
+    ).uv_pip_install(
+        "paddlepaddle-gpu==3.2.1",
+        extra_index_url="https://www.paddlepaddle.org.cn/packages/stable/cu126/",
     )
-    .run_commands("paddleocr install_hpi_deps cpu")
-)
-
-gpu_image = model_base.uv_pip_install(
-    "paddleocr==3.7.0",
-    "paddlex==3.7.2",
-    "psutil==7.0.0",
-    "setuptools",
-).uv_pip_install(
-    "paddlepaddle-gpu==3.2.1",
-    extra_index_url="https://www.paddlepaddle.org.cn/packages/stable/cu126/",
-)
+else:
+    # Remote hydration and plain child imports already run inside the assigned
+    # image. Defining new build graphs here is both unnecessary and unsafe.
+    model_base = modal.Image.debian_slim(python_version="3.11")
+    cpu_image = model_base
+    gpu_image = model_base
 
 ARMS = {
     "c-hpi-tiny": {
