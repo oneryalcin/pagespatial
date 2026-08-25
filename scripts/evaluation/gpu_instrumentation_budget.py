@@ -280,6 +280,74 @@ def reserve_bundle(path: Path, stages: list[str]) -> list[dict[str, Any]]:
         return reservations
 
 
+def reopen_preflight_bundle(path: Path, bundle_id: str) -> list[dict[str, Any]]:
+    """Reuse one already-counted M2 bundle after a proven access-only failure."""
+    _assert_authorized()
+    active = active_experiment_apps()
+    if active:
+        raise RuntimeError(f"paid launch serialization refused: active apps: {active}")
+    rows = billing_rows()
+    with ledger_lock(path):
+        ledger = load_ledger(path)
+        live = [
+            item
+            for item in ledger["reservations"]
+            if item.get("status") in {"reserved", "active"}
+        ]
+        if live:
+            raise RuntimeError(f"paid launch serialization refused: live reservation: {live}")
+        matches = [
+            item for item in ledger["reservations"] if item.get("bundleId") == bundle_id
+        ]
+        if sorted(item.get("stage") for item in matches) != sorted(
+            ["M2-SYSTEMS", "M2-CPU"]
+        ):
+            raise RuntimeError("retry requires one exact M2 stage bundle")
+        if any(item.get("status") != "completed-unposted" for item in matches):
+            raise RuntimeError("retry bundle is not completed-unposted")
+        if any(item.get("retryHistory") for item in matches):
+            raise RuntimeError("M2 preflight bundle may be reopened only once")
+        if any(
+            not str(item.get("appId", "")).startswith("gcp:")
+            or not any(
+                marker in str(item.get("completionNote", ""))
+                for marker in ("IAP tunnel failed", "Connection refused")
+            )
+            for item in matches
+        ):
+            raise RuntimeError("retry requires a retained GCP access-only failure")
+        exposure = posted_spend(rows) + reserved_exposure(ledger)
+        if exposure > OPERATIONAL_STOP_USD:
+            raise RuntimeError(
+                f"spend guard refused reused exposure ${exposure:.4f} > "
+                f"${OPERATIONAL_STOP_USD:.2f}"
+            )
+        reopened_at = int(time.time())
+        for item in matches:
+            item["retryHistory"] = [
+                {
+                    "status": item["status"],
+                    "completedAt": item.get("completedAt"),
+                    "completionNote": item.get("completionNote"),
+                    "appId": item.get("appId"),
+                }
+            ]
+            item["status"] = "reserved"
+            item["reopenedAt"] = reopened_at
+            for key in (
+                "claimedAt",
+                "claimedByPid",
+                "completedAt",
+                "completionNote",
+                "appId",
+            ):
+                item.pop(key, None)
+        ledger["lastBillingRows"] = rows
+        ledger["lastReusedExposureUsd"] = exposure
+        save_ledger(path, ledger)
+        return matches
+
+
 def validate_reservation(path: Path, reservation_id: str, stage: str) -> dict[str, Any]:
     _assert_authorized()
     with ledger_lock(path):

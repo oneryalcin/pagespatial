@@ -83,6 +83,29 @@ print(json.dumps({"stages":[r["stage"] for r in rows],"bundleIds":list({r["bundl
   assert.equal(result.exposure, 30);
 });
 
+test('one proven GCP access-only retry reuses existing M2 exposure', () => {
+  const ledger = join(mkdtempSync(join(tmpdir(), 'gpu-inst-retry-')), 'ledger.json');
+  const code = String.raw`
+import importlib.util,json,sys
+from pathlib import Path
+spec=importlib.util.spec_from_file_location("budget",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.current_profile=lambda:"desia"; m.active_experiment_apps=lambda:[]; m.billing_rows=lambda:[]
+m.now_utc=lambda:m.datetime(2026,8,25,12,0,tzinfo=m.timezone.utc)
+p=Path(sys.argv[2]); rows=m.reserve_bundle(p,["M2-SYSTEMS","M2-CPU"])
+for row in rows:m.validate_reservation(p,row["id"],row["stage"]); m.complete(p,row["id"],"gcp:test","ssh: Connection refused")
+before=m.reserved_exposure(m.load_ledger(p)); reopened=m.reopen_preflight_bundle(p,rows[0]["bundleId"]); after=m.reserved_exposure(m.load_ledger(p)); errors=[]
+try:m.reopen_preflight_bundle(p,rows[0]["bundleId"])
+except Exception as e:errors.append(str(e))
+print(json.dumps({"before":before,"after":after,"statuses":[r["status"] for r in reopened],"history":[len(r["retryHistory"]) for r in reopened],"errors":errors}))
+`;
+  const result = runPython(code, ledger);
+  assert.equal(result.before, 30);
+  assert.equal(result.after, 30);
+  assert.deepEqual(result.statuses, ['reserved', 'reserved']);
+  assert.deepEqual(result.history, [1, 1]);
+  assert.match(result.errors[0], /live reservation/u);
+});
+
 test('instrumentation authorization expires at the stated boundary', () => {
   const ledger = join(mkdtempSync(join(tmpdir(), 'gpu-inst-expired-')), 'ledger.json');
   const code = String.raw`

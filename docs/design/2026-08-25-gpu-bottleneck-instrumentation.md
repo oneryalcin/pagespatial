@@ -511,6 +511,14 @@ The project has an existing world-reachable SSH rule, so this is a deliberate,
 time-bounded public port-22 exposure. Do not run a public service, create or
 refresh keys, or mutate any other GCP resource.
 
+After `RUNNING`, wait up to three minutes for `sshd` with a read-only `true`
+probe. Connection refusal is boot readiness and may retry; a host-key or
+identity error fails immediately. Every failed owner attempt gets a unique
+cleanup directory. If an M2 bundle fails at this access-only boundary before
+upload or build, that already-counted bundle may be reopened exactly once.
+Keep its prior completion in retry history and do not add a new $30
+reservation or reduce recorded exposure.
+
 No additional global economic overturn threshold applies. The owner has
 decided that a real saving is material at the expected million-page scale.
 The evidence gates still prevent drift: a removable cause must reach 20% of

@@ -233,6 +233,24 @@ print(json.dumps({"deleteCalls":sum("delete-access-config" in row for row in del
   assert.match(result.error, /final boundary failed/u);
 });
 
+test('SSH readiness retries refusal but fails identity errors immediately', () => {
+  const code = String.raw`
+import importlib.util,json,pathlib,sys
+sys.path.insert(0,str(pathlib.Path(sys.argv[1]).parent))
+spec=importlib.util.spec_from_file_location("gcp",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+responses=iter([{"returnCode":255,"stderr":"Connection refused"},{"returnCode":0,"stderr":""}]); m._ssh=lambda *args,**kwargs:next(responses); m.time.sleep=lambda _:None
+ready=len(m._wait_for_ssh({},"34.1.2.3",180))
+m._ssh=lambda *args,**kwargs:{"returnCode":255,"stderr":"Host key verification failed"}
+try:m._wait_for_ssh({},"34.1.2.3",180)
+except Exception as e:error=str(e)
+print(json.dumps({"readyAttempts":ready,"identityError":error}))
+`;
+  const result = JSON.parse(execFileSync('python3', ['-c', code, gcpPath], { encoding: 'utf8' }));
+  assert.equal(result.readyAttempts, 2);
+  assert.match(result.identityError, /non-retryable SSH identity failure/u);
+  assert.match(gcpSource, /-cleanup-\{attempt_id\}/u);
+});
+
 test('failed retained analysis fails the owner before its mandatory cleanup', () => {
   assert.match(gcpSource, /_require_analysis_success\(analysis, args\.out_dir \/ "m2-analysis\.json"\)/u);
   assert.match(gcpSource, /finally:\s*\n\s*try:\s*\n\s*cleanup = _cleanup_exact_vm\(\)/u);

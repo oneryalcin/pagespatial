@@ -22,6 +22,7 @@ from typing import Any
 from gpu_instrumentation_budget import (
     DEFAULT_LEDGER,
     complete,
+    reopen_preflight_bundle,
     reserve_bundle,
     validate_reservation,
 )
@@ -445,6 +446,32 @@ def _ssh(
     )
 
 
+def _wait_for_ssh(
+    identity: dict[str, str], host: str, timeout_seconds: int = 180
+) -> list[dict[str, Any]]:
+    """Wait only for sshd readiness; never alter keys or remote state."""
+    deadline = time.monotonic() + timeout_seconds
+    attempts = []
+    while True:
+        attempt = _ssh("true", 45, identity, host, check=False)
+        attempts.append(attempt)
+        if attempt.get("returnCode") == 0:
+            return attempts
+        error = str(attempt.get("stderr", ""))
+        if any(
+            marker in error
+            for marker in (
+                "Permission denied",
+                "REMOTE HOST IDENTIFICATION HAS CHANGED",
+                "Host key verification failed",
+            )
+        ):
+            raise RuntimeError(f"non-retryable SSH identity failure: {attempt}")
+        if time.monotonic() >= deadline:
+            raise RuntimeError(f"SSH did not become ready: {attempts}")
+        time.sleep(5)
+
+
 def _scp(
     sources: list[str],
     destination: str,
@@ -488,6 +515,7 @@ def _scp(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
+    parser.add_argument("--retry-bundle")
     parser.add_argument(
         "--pdf",
         type=Path,
@@ -518,7 +546,11 @@ def main() -> None:
     before = _describe()
     _assert_scope(before, "TERMINATED", "absent")
     ssh_identity = _existing_ssh_identity(before)
-    reservations = reserve_bundle(args.ledger, list(M2_STAGES))
+    reservations = (
+        reopen_preflight_bundle(args.ledger, args.retry_bundle)
+        if args.retry_bundle
+        else reserve_bundle(args.ledger, list(M2_STAGES))
+    )
     for reservation in reservations:
         validate_reservation(args.ledger, reservation["id"], reservation["stage"])
 
@@ -529,6 +561,8 @@ def main() -> None:
     ssh_host: str | None = None
     access_attach: dict[str, Any] | None = None
     cleanup: dict[str, Any] | None = None
+    ssh_readiness: list[dict[str, Any]] = []
+    attempt_id = f"{time.time_ns()}-{revision[:12]}"
     with tempfile.TemporaryDirectory(prefix="pagespatial-m2-transfer-") as temp:
         temp_root = Path(temp)
         archive = temp_root / "source.tar.gz"
@@ -571,6 +605,7 @@ def main() -> None:
             running = _describe()
             _assert_scope(running, "RUNNING", "attached")
             ssh_host = str(running["networkInterfaces"][0]["accessConfigs"][0]["natIP"])
+            ssh_readiness = _wait_for_ssh(ssh_identity, ssh_host)
             _ssh(
                 f"mkdir -p {remote_root}/repo {remote_root}/inputs",
                 120,
@@ -651,6 +686,7 @@ def main() -> None:
             try:
                 cleanup = _cleanup_exact_vm()
                 cleanup["accessAttach"] = access_attach
+                cleanup["sshReadiness"] = ssh_readiness
             except BaseException as stop_error:
                 failure = (
                     f"{failure}; cleanup: {type(stop_error).__name__}: {stop_error}"
@@ -666,7 +702,7 @@ def main() -> None:
             evidence_dir = (
                 args.out_dir
                 if args.out_dir.is_dir()
-                else args.out_dir.parent / f"{args.out_dir.name}-cleanup"
+                else args.out_dir.parent / f"{args.out_dir.name}-cleanup-{attempt_id}"
             )
             evidence_dir.mkdir(parents=True, exist_ok=True)
             (evidence_dir / "gcp-instance-before.json").write_text(
