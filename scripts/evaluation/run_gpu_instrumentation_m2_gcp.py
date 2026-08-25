@@ -627,7 +627,7 @@ def main() -> None:
             )
             remote = (
                 f"tar -xzf {remote_root}/inputs/source.tar.gz -C {remote_root}/repo && "
-                f"python3 {remote_root}/repo/scripts/evaluation/run_gpu_instrumentation_m2_host.py "
+                f"sudo -n python3 {remote_root}/repo/scripts/evaluation/run_gpu_instrumentation_m2_host.py "
                 f"--repo-root {remote_root}/repo --input-dir {remote_root}/inputs "
                 f"--output-dir {remote_root}/output --revision {revision}"
             )

@@ -519,6 +519,11 @@ upload or build, that already-counted bundle may be reopened exactly once.
 Keep its prior completion in retry history and do not add a new $30
 reservation or reduce recorded exposure.
 
+The OS Login user is not a member of the Docker group. Run the fixed host owner
+through non-interactive `sudo -n`; do not mutate users, groups, socket modes, or
+the Docker service. The host owner remains responsible for its bounded sysctl,
+container cleanup, and evidence permissions.
+
 No additional global economic overturn threshold applies. The owner has
 decided that a real saving is material at the expected million-page scale.
 The evidence gates still prevent drift: a removable cause must reach 20% of

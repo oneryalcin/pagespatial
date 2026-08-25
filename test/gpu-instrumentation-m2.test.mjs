@@ -144,6 +144,7 @@ test('GCP owner can mutate only the exact experiment VM and always stops it', ()
   assert.doesNotMatch(gcpSource, /start-iap-tunnel/u);
   assert.match(gcpSource, /HostKeyAlias=/u);
   assert.match(gcpSource, /StrictHostKeyChecking=yes/u);
+  assert.match(gcpSource, /sudo -n python3 \{remote_root\}\/repo\/scripts\/evaluation\/run_gpu_instrumentation_m2_host\.py/u);
 });
 
 test('GCP owner rejects drift in every retained M0 loss boundary', () => {
