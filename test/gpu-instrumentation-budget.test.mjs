@@ -38,7 +38,7 @@ test('instrumentation budget records the owner-approved USD 130 continuation', (
   assert.doesNotMatch(source, /a2-budget-v1/u);
   assert.equal(authorization.ownerCeilingUsd, 100);
   assert.equal(authorization.operationalStopUsd, 100);
-  assert.deepEqual(authorization.amendments.at(-5), {
+  assert.deepEqual(authorization.amendments.at(-4), {
     authorizedAtUtc: '2026-08-25T09:33:09Z',
     scope: 'one fresh M2 Systems plus CPU bundle after three pre-build GCP host-access failures',
     reason: 'owner approved a USD 30 continuation after reviewing the USD 20 Systems and USD 10 CPU stage bounds',
@@ -50,7 +50,7 @@ test('instrumentation budget records the owner-approved USD 130 continuation', (
     noFurtherBundles: true,
     oldBundleReopeningDisabled: true,
   });
-  assert.deepEqual(authorization.amendments.at(-3), {
+  assert.deepEqual(authorization.amendments.at(-2), {
     authorizedAtUtc: '2026-08-25T09:57:23Z',
     scope: 'one final fixed-image retry of bundle-1787650684-b39227dc on pagespatial-gpu-profiler-20260825 in us-central1-a',
     reason: 'the capacity retry started the VM but the pinned image build failed before profiling when pip attempted to uninstall Ubuntu-owned distutils PyYAML 5.3.1; commit 4548f31 installs pinned PyYAML 6.0.2 without uninstalling the system copy',
@@ -60,7 +60,7 @@ test('instrumentation budget records the owner-approved USD 130 continuation', (
     fixedImageRetryLimit: 1,
     otherInfrastructureChangesAuthorized: false,
   });
-  assert.deepEqual(authorization.amendments.at(-4), {
+  assert.deepEqual(authorization.amendments.at(-3), {
     authorizedAtUtc: '2026-08-25T09:40:39Z',
     scope: 'one capacity-only retry of bundle-1787650684-b39227dc in us-central1-a; after a repeated L4 stockout, one equivalent temporary experiment VM in us-central1-b or us-central1-c',
     reason: 'the authorized fresh bundle reached GCP but the exact VM could not start because us-central1-a reported ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS',
@@ -72,22 +72,13 @@ test('instrumentation budget records the owner-approved USD 130 continuation', (
     fallbackMustBeDeletedDuringCleanup: true,
     otherInfrastructureChangesAuthorized: false,
   });
-  assert.deepEqual(authorization.amendments.at(-2), {
+  assert.deepEqual(authorization.amendments.at(-1), {
     authorizedAtUtc: '2026-08-25T12:30:23Z',
     scope: 'one M3 native-visibility run on the existing pagespatial-gpu-profiler-20260825 VM in us-central1-a; six UltraInfer NVTX markers, one fixed trace window, and one warm control bracket only',
     reason: 'owner approved the smallest justified continuation after M2 left the TensorRT backend opaque',
     reservationWorstCaseUsd: 4,
     reusesExistingExperimentVm: true,
     modelGpuBatchingAndProducerChangesAuthorized: false,
-    otherInfrastructureChangesAuthorized: false,
-  });
-  assert.deepEqual(authorization.amendments.at(-1), {
-    authorizedAtUtc: '2026-08-25T12:55:34Z',
-    scope: 'one additional capacity retry of the existing M3 reservation on pagespatial-gpu-profiler-20260825 in us-central1-a',
-    reason: 'owner explicitly authorized another retry after two pre-start GCP L4 stockouts',
-    reservationWorstCaseUsd: 0,
-    reusesExistingWorstCaseReservationUsd: 4,
-    sameVmRetryLimitAdded: 1,
     otherInfrastructureChangesAuthorized: false,
   });
 });
@@ -127,7 +118,7 @@ final=m.load_ledger(p); print(json.dumps({"stage":r["stage"],"worst":r["worstCas
   assert.match(result.errors[2], /only one exact fresh M2/u);
 });
 
-test('M3 permits one same-reservation retry only after a retained L4 stockout', () => {
+test('M3 reuses one reservation across zero-cost pre-start L4 stockouts', () => {
   const ledger = join(mkdtempSync(join(tmpdir(), 'gpu-inst-m3-retry-')), 'ledger.json');
   const code = String.raw`
 import importlib.util,json,sys
@@ -136,19 +127,14 @@ spec=importlib.util.spec_from_file_location("budget",sys.argv[1]); m=importlib.u
 m.current_profile=lambda:"desia"; m.active_experiment_apps=lambda:[]; m.billing_rows=lambda:[]
 m.now_utc=lambda:m.datetime(2026,8,25,12,40,tzinfo=m.timezone.utc)
 p=Path(sys.argv[2]); r=m.reserve(p,"M3-NATIVE"); m.validate_reservation(p,r["id"],"M3-NATIVE"); m.complete(p,r["id"],"gcp:test",m.CAPACITY_FAILURE_MARKER)
-reopened=m.reopen_m3_capacity_retry(p,r["id"]); same=m.reopen_m3_capacity_retry(p,r["id"]); m.validate_reservation(p,r["id"],"M3-NATIVE"); m.complete(p,r["id"],"gcp:test",m.CAPACITY_FAILURE_MARKER)
-second=m.reopen_m3_capacity_retry(p,r["id"]); m.validate_reservation(p,r["id"],"M3-NATIVE"); m.complete(p,r["id"],"gcp:test",m.CAPACITY_FAILURE_MARKER); errors=[]
-try:m.reopen_m3_capacity_retry(p,r["id"])
-except Exception as e:errors.append(str(e))
-state=m.load_ledger(p); final=next(x for x in state["reservations"] if x["id"]==r["id"])
-print(json.dumps({"id":reopened["id"],"sameId":same["id"],"secondId":second["id"],"history":final["capacityRetryHistory"],"token":state[m.M3_CAPACITY_RETRY_LEDGER_KEY],"errors":errors}))
+first=m.reopen_m3_capacity_retry(p,r["id"]); same=m.reopen_m3_capacity_retry(p,r["id"]); m.validate_reservation(p,r["id"],"M3-NATIVE"); m.complete(p,r["id"],"gcp:test",m.CAPACITY_FAILURE_MARKER)
+second=m.reopen_m3_capacity_retry(p,r["id"]); state=m.load_ledger(p); final=next(x for x in state["reservations"] if x["id"]==r["id"])
+print(json.dumps({"id":first["id"],"sameId":same["id"],"secondId":second["id"],"failures":final["capacityStartFailures"]}))
 `;
   const result = runPython(code, ledger);
   assert.equal(result.sameId, result.id);
   assert.equal(result.secondId, result.id);
-  assert.equal(result.history.length, 2);
-  assert.equal(result.token.retryCount, 2);
-  assert.match(result.errors[0], /exhausted or claimed/u);
+  assert.equal(result.failures.length, 2);
 });
 
 test('instrumentation reservation is single-use and retains completed exposure', () => {

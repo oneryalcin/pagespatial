@@ -48,4 +48,7 @@ test('M3 evolves the pinned M2 image and reuses only the exact VM owner', () => 
     gcpSource,
     /if args\.m3_capacity_retry:\s*\n\s*reservations = \[reopen_m3_capacity_retry[\s\S]*?elif args\.m3_native:\s*\n\s*reservations = \[reserve\(args\.ledger, "M3-NATIVE"\)\]/u,
   );
+  assert.match(gcpSource, /0 <= args\.capacity_wait_seconds <= 600/u);
+  assert.match(gcpSource, /CAPACITY_FAILURE_MARKER not in start_attempt\["stderr"\]/u);
+  assert.match(gcpSource, /time\.sleep\(min\(30,/u);
 });

@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from gpu_instrumentation_budget import (
+    CAPACITY_FAILURE_MARKER,
     DEFAULT_LEDGER,
     complete,
     reopen_capacity_retry,
@@ -529,6 +530,7 @@ def main() -> None:
     parser.add_argument("--fixed-image-retry-bundle")
     parser.add_argument("--m3-native", action="store_true")
     parser.add_argument("--m3-capacity-retry")
+    parser.add_argument("--capacity-wait-seconds", type=int, default=0)
     parser.add_argument(
         "--pdf",
         type=Path,
@@ -547,6 +549,8 @@ def main() -> None:
         default=Path(".evaluation/gpu-instrumentation/2026-08-25/m2-gcp"),
     )
     args = parser.parse_args()
+    if not 0 <= args.capacity_wait_seconds <= 600:
+        raise RuntimeError("capacity wait must be between 0 and 600 seconds")
     milestone = "m3" if args.m3_native else "m2"
     fixed_image_failure_sha256: str | None = None
     _assert_gcloud_identity()
@@ -601,6 +605,7 @@ def main() -> None:
     access_attach: dict[str, Any] | None = None
     cleanup: dict[str, Any] | None = None
     ssh_readiness: list[dict[str, Any]] = []
+    start_attempts: list[dict[str, Any]] = []
     attempt_id = f"{time.time_ns()}-{revision[:12]}"
     with tempfile.TemporaryDirectory(prefix=f"pagespatial-{milestone}-transfer-") as temp:
         temp_root = Path(temp)
@@ -632,15 +637,21 @@ def main() -> None:
         )
         try:
             access_attach = _attach_external_access()
-            _gcloud(
-                "compute",
-                "instances",
-                "start",
-                INSTANCE,
-                "--zone",
-                ZONE,
-                timeout=600,
-            )
+            start_deadline = time.monotonic() + args.capacity_wait_seconds
+            while True:
+                start_attempt = _gcloud(
+                    "compute", "instances", "start", INSTANCE, "--zone", ZONE,
+                    timeout=600, check=False,
+                )
+                start_attempts.append(start_attempt)
+                if start_attempt["returnCode"] == 0:
+                    break
+                if (
+                    CAPACITY_FAILURE_MARKER not in start_attempt["stderr"]
+                    or time.monotonic() >= start_deadline
+                ):
+                    raise RuntimeError(f"VM start failed: {start_attempt}")
+                time.sleep(min(30, max(0, start_deadline - time.monotonic())))
             running = _describe()
             _assert_scope(running, "RUNNING", "attached")
             ssh_host = str(running["networkInterfaces"][0]["accessConfigs"][0]["natIP"])
@@ -731,6 +742,7 @@ def main() -> None:
                 cleanup = _cleanup_exact_vm()
                 cleanup["accessAttach"] = access_attach
                 cleanup["sshReadiness"] = ssh_readiness
+                cleanup["startAttempts"] = start_attempts
             except BaseException as stop_error:
                 failure = (
                     f"{failure}; cleanup: {type(stop_error).__name__}: {stop_error}"
