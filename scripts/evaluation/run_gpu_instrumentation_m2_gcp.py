@@ -469,7 +469,7 @@ def _ssh(
             marker in error for marker in ("Operation timed out", "Connection refused")
         )
         if result.get("returnCode") == 0 or not transient or index + 1 == connect_attempts:
-            result["connectAttempts"] = attempts
+            result["connectAttempts"] = [attempt.copy() for attempt in attempts]
             if check and result.get("returnCode") != 0:
                 raise RuntimeError(f"command failed: {result}")
             return result
@@ -548,7 +548,7 @@ def _scp(
             marker in error for marker in ("Operation timed out", "Connection refused")
         )
         if result.get("returnCode") == 0 or not transient or index == 3:
-            result["connectAttempts"] = attempts
+            result["connectAttempts"] = [attempt.copy() for attempt in attempts]
             if check and result.get("returnCode") != 0:
                 raise RuntimeError(f"command failed: {result}")
             return result

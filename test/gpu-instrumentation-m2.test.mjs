@@ -273,11 +273,12 @@ rows=iter([{"returnCode":255,"stderr":"Operation timed out"},{"returnCode":0,"st
 retried=m._ssh("true",1,identity,"34.1.2.3")
 rows=iter([{"returnCode":255,"stderr":"Host key verification failed"},{"returnCode":0,"stderr":""}]); m._run=lambda *args,**kwargs:next(rows)
 terminal=m._ssh("true",1,identity,"34.1.2.3",check=False)
-print(json.dumps({"retried":len(retried["connectAttempts"]),"terminal":len(terminal["connectAttempts"])}))
+print(json.dumps({"retried":len(retried["connectAttempts"]),"terminal":len(terminal["connectAttempts"]),"serializable":bool(json.dumps(retried))}))
 `;
   const result = JSON.parse(execFileSync('python3', ['-c', code, gcpPath], { encoding: 'utf8' }));
   assert.equal(result.retried, 2);
   assert.equal(result.terminal, 1);
+  assert.equal(result.serializable, true);
 });
 
 test('failed retained analysis fails the owner before its mandatory cleanup', () => {
@@ -313,7 +314,7 @@ print(json.dumps({"bothGood":m.output_pair_passes(good,good),"cpuCorrupt":m.outp
 test('host run pins the four-core shape and restores its only host sysctl', () => {
   assert.match(hostSource, /--cpuset-cpus=0-7/u);
   assert.match(hostSource, /--memory=24g/u);
-  assert.match(hostSource, /MIN_FREE_BYTES = 28 \* 1024\*\*3/u);
+  assert.match(hostSource, /MIN_FREE_BYTES = 24 \* 1024\*\*3/u);
   assert.match(hostSource, /--privileged/u);
   assert.match(hostSource, /seccomp=unconfined/u);
   assert.match(hostSource, /kernel\.perf_event_paranoid=\{original_perf\}/u);
