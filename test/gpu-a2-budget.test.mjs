@@ -6,8 +6,8 @@ const source = readFileSync(new URL('../scripts/evaluation/gpu_a2_budget.py', im
 
 test('A2 budget ledger pins workspace and operational buffer', () => {
   assert.match(source, /REQUIRED_PROFILE = "desia"/u);
-  assert.match(source, /OWNER_CEILING_USD = 75\.0/u);
-  assert.match(source, /OPERATIONAL_STOP_USD = 75\.0/u);
+  assert.match(source, /OWNER_CEILING_USD = 100\.0/u);
+  assert.match(source, /OPERATIONAL_STOP_USD = 100\.0/u);
   assert.match(source, /ledger\["ownerCeilingUsd"\] = OWNER_CEILING_USD/u);
 });
 

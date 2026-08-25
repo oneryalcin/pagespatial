@@ -1320,8 +1320,8 @@ def main(
         },
         "repeats": repeats,
         "budget": {
-            "ownerCeilingUsd": 75,
-            "operationalExposureStopUsd": 75,
+            "ownerCeilingUsd": 100,
+            "operationalExposureStopUsd": 100,
             "reservationId": _reservation_id,
         },
     }

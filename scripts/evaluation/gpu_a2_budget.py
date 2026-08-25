@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Executable spend ledger for the 2026-08-24 PageSpatial A2 experiment.
+"""Executable spend ledger for the 2026-08-25 PageSpatial A2 experiment.
 
 Paid commands are serialized by operator policy. `reserve` refuses a launch
 unless the active profile is `desia`, no A2 app is active, and posted spend plus
-unreconciled reservations plus the next worst case stays at or below USD 75.
+unreconciled reservations plus the next worst case stays at or below USD 100.
 Reservations remain charged at their worst case until the exact app is stopped
 and an operator attests a final total from a closed billing interval.
 """
@@ -23,14 +23,14 @@ from pathlib import Path
 from typing import Any
 
 
-DATE_START = "2026-08-24"  # Modal billing-report UTC day
-DATE_END = "2026-08-25"
-AUTHORIZATION_END_UTC = datetime(2026, 8, 24, 23, 0, tzinfo=timezone.utc)
+DATE_START = "2026-08-25"  # Modal billing-report UTC day
+DATE_END = "2026-08-26"
+AUTHORIZATION_END_UTC = datetime(2026, 8, 25, 23, 0, tzinfo=timezone.utc)
 REQUIRED_PROFILE = "desia"
-OWNER_CEILING_USD = 75.0
-OPERATIONAL_STOP_USD = 75.0
+OWNER_CEILING_USD = 100.0
+OPERATIONAL_STOP_USD = 100.0
 EXPERIMENT_PREFIX = "pagespatial-gpu-a2-"
-DEFAULT_LEDGER = Path(".evaluation/gpu-spike/a2-budget-v1.json")
+DEFAULT_LEDGER = Path(".evaluation/gpu-spike/a2-budget-2026-08-25.json")
 
 # Fixed reservations are part of the experiment contract. Callers cannot
 # lower them. Values include the stated call count, the configured resource
@@ -118,8 +118,8 @@ def load_ledger(path: Path) -> dict[str, Any]:
         ledger = {
             "schemaVersion": "pagespatial-gpu-a2-budget-v1",
             "date": DATE_START,
-            "billingWindowUtc": "[2026-08-24T00:00:00Z,2026-08-25T00:00:00Z)",
-            "authorizationEndsAtUtc": "2026-08-24T23:00:00Z",
+            "billingWindowUtc": "[2026-08-25T00:00:00Z,2026-08-26T00:00:00Z)",
+            "authorizationEndsAtUtc": "2026-08-25T23:00:00Z",
             "profile": REQUIRED_PROFILE,
             "ownerCeilingUsd": OWNER_CEILING_USD,
             "operationalStopUsd": OPERATIONAL_STOP_USD,
@@ -130,9 +130,9 @@ def load_ledger(path: Path) -> dict[str, Any]:
     if ledger.get("date") != DATE_START or ledger.get("profile") != REQUIRED_PROFILE:
         raise RuntimeError("A2 budget ledger date/profile mismatch")
     ledger.setdefault(
-        "billingWindowUtc", "[2026-08-24T00:00:00Z,2026-08-25T00:00:00Z)"
+        "billingWindowUtc", "[2026-08-25T00:00:00Z,2026-08-26T00:00:00Z)"
     )
-    ledger.setdefault("authorizationEndsAtUtc", "2026-08-24T23:00:00Z")
+    ledger.setdefault("authorizationEndsAtUtc", "2026-08-25T23:00:00Z")
     ledger["ownerCeilingUsd"] = OWNER_CEILING_USD
     ledger["operationalStopUsd"] = OPERATIONAL_STOP_USD
     ledger.setdefault("reservations", [])
@@ -175,7 +175,7 @@ def reserve(path: Path, stage: str) -> dict[str, Any]:
     if current_profile() != REQUIRED_PROFILE:
         raise RuntimeError(f"Modal profile must be {REQUIRED_PROFILE!r}")
     if now_utc() >= AUTHORIZATION_END_UTC:
-        raise RuntimeError("2026-08-24 Europe/London experiment authorization has expired")
+        raise RuntimeError("2026-08-25 Europe/London experiment authorization has expired")
     active = active_experiment_apps()
     if active:
         raise RuntimeError(f"paid launch serialization refused: active A2 apps: {active}")
@@ -256,7 +256,7 @@ def validate_reservation(path: Path, reservation_id: str, stage: str) -> dict[st
     if current_profile() != REQUIRED_PROFILE:
         raise RuntimeError(f"Modal profile must be {REQUIRED_PROFILE!r}")
     if now_utc() >= AUTHORIZATION_END_UTC:
-        raise RuntimeError("2026-08-24 Europe/London experiment authorization has expired")
+        raise RuntimeError("2026-08-25 Europe/London experiment authorization has expired")
     with ledger_lock(path):
         ledger = load_ledger(path)
         match = next((item for item in ledger["reservations"] if item["id"] == reservation_id), None)
