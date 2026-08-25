@@ -36,6 +36,7 @@ RUN set -eu; \
     rm -rf /var/lib/apt/lists/*
 
 RUN set -eu; \
+    python -m pip install --no-cache-dir --ignore-installed PyYAML==6.0.2; \
     python -m pip install --no-cache-dir \
       huggingface-hub==0.34.4 paddleocr==3.7.0 paddlex==3.7.2 \
       psutil==7.0.0 setuptools modal==1.5.3; \

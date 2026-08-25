@@ -306,6 +306,10 @@ test('M2 image pins the measured runtime, models, profiler, and shared core', ()
   assert.match(dockerfile, /ULTRA_INFER_REV=ffb64904/u);
   assert.match(dockerfile, /PAGESPATIAL_A2_INFERENCE_OWNERS=2/u);
   assert.match(dockerfile, /PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE=1/u);
+  assert.match(
+    dockerfile,
+    /pip install --no-cache-dir --ignore-installed PyYAML==6\.0\.2[\s\S]*pip install --no-cache-dir[\s\S]*paddleocr==3\.7\.0/u,
+  );
   assert.match(dockerfile, /gpu_a2_modal\.py/u);
   assert.match(dockerfile, /gpu_instrumentation_capture\.py/u);
 });
