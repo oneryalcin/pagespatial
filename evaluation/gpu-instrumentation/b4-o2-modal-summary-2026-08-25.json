@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "pagespatial-gpu-b4-o2-modal-summary-v1",
+  "measuredAtUtc": "2026-08-25",
+  "hypothesis": "Recognition batch size 4 improves complete-document Tiny FP32 TensorRT throughput with two inference owners.",
+  "workload": {
+    "pages": 50,
+    "modelTier": "tiny",
+    "precision": "fp32",
+    "inferenceOwners": 2,
+    "producers": 4,
+    "device": "Modal NVIDIA L4",
+    "coldCallExcluded": true,
+    "warmCallsPerLifetime": 3
+  },
+  "lifetimes": [
+    {
+      "name": "b1-before",
+      "appId": "ap-36IAeYCLYEJHve35kn63gn",
+      "recognitionBatchSize": 1,
+      "warmInnerPagesPerSecond": [1.3902138297464546, 1.3553860868537237, 1.4145415763283977],
+      "medianInnerPagesPerSecond": 1.3902138297464546,
+      "warmClientPagesPerSecond": [1.2159992708588394, 1.1836360178113075, 1.2032047768371712],
+      "medianClientPagesPerSecond": 1.2032047768371712,
+      "meanGpuUtilizationPercent": 8.994845360824742,
+      "maxGpuUtilizationPercent": 22,
+      "recognizerCalls": 14785,
+      "recognizerItems": 14785,
+      "batchHistogram": {"1": 14785},
+      "runJsonSha256": "e449ab657d3f415bf17c1f40115a7a9da7fa88ae95f56b16296dd8172081c0b2",
+      "warmResultSha256": [
+        "65854da79be4703e32275d63fde392c2a3d2d58e8bfddc79836b98d7025964a0",
+        "55090bbafdb8fcb9a017aa9988c72921d154d7b8c71bc3b9d4d49e44b61e15b4",
+        "ef4b1974a4b131cec0a7dc2f9353f1440194bd30be9aadf496336691c062e42b"
+      ]
+    },
+    {
+      "name": "b4",
+      "appId": "ap-ZS4BCpKYe8N5mHwvPhy0Qs",
+      "recognitionBatchSize": 4,
+      "warmInnerPagesPerSecond": [1.9154121544002618, 1.9482667981070318, 1.9634732599403928],
+      "medianInnerPagesPerSecond": 1.9482667981070318,
+      "warmClientPagesPerSecond": [1.639591242520439, 1.6533197970954847, 1.6598578743428376],
+      "medianClientPagesPerSecond": 1.6533197970954847,
+      "meanGpuUtilizationPercent": 9.88929889298893,
+      "maxGpuUtilizationPercent": 32,
+      "recognizerCalls": 3750,
+      "recognizerItems": 14785,
+      "fullBatchFraction": 0.9690666666666666,
+      "batchHistogram": {"1": 30, "2": 39, "3": 47, "4": 3634},
+      "runJsonSha256": "e03df250f94b31ef68f85f30b78ae19a49b2e5092637736b6b6a045e40cd39c1",
+      "warmResultSha256": [
+        "d32ed09f0518c5df3064d61cfa40e713cbb3f2ec0758df678754ac48e4ede105",
+        "84b7430bf3512663c1e0cb19cdb502a536e8a7c5182369dfa94fd433aa9516a9",
+        "76959a21cd30724bfcd79b1e16861048d6456abf43f6eea5d780d79b2eaacf84"
+      ]
+    },
+    {
+      "name": "b1-after",
+      "appId": "ap-Uzf7Dvd4hjVyDlpIT0Ipo8",
+      "recognitionBatchSize": 1,
+      "warmInnerPagesPerSecond": [2.366652239007132, 2.527895650685616, 2.4300576746739155],
+      "medianInnerPagesPerSecond": 2.4300576746739155,
+      "warmClientPagesPerSecond": [1.8736661721559675, 2.033908198838255, 1.9815227592647024],
+      "medianClientPagesPerSecond": 1.9815227592647024,
+      "meanGpuUtilizationPercent": 15.636363636363637,
+      "maxGpuUtilizationPercent": 23,
+      "recognizerCalls": 14784,
+      "recognizerItems": 14784,
+      "batchHistogram": {"1": 14784},
+      "runJsonSha256": "7bc40397244322784db349b64f4bf16219195b2edfbf199eddbd3d0399747ca6",
+      "warmResultSha256": [
+        "361ccd4c4f01572f1be6da16e6ff63389edc64317ec005cb9ae13ea6b42abf77",
+        "807db72c5b1576c883ef58190beb2f0d8c8e95689dc93d45f9e7db12a53cd2f7",
+        "fc7a3737b9e25a3264490ac554a43ab32c7d576810bc952aadccc4a55979e0d4"
+      ]
+    }
+  ],
+  "comparison": {
+    "b4VersusOpeningB1Percent": 40.14152042080852,
+    "b4VersusClosingB1Percent": -19.826314477557993,
+    "openingToClosingB1DriftPercent": 74.79740329709612,
+    "pooledB1MedianInnerPagesPerSecond": 1.890596907667765,
+    "b4VersusPooledB1Percent": 3.0503535790930902,
+    "causalEstimateValid": false,
+    "reason": "The two fresh-container B1 control medians differ by 74.8%, much more than the treatment effect."
+  },
+  "output": {
+    "productGatePass": true,
+    "deterministicProjectionExact": true,
+    "trustedDifferencePages": [],
+    "rawEquivalencePass": false,
+    "sameArmNullTolerance": {"criticalTokens": 1, "rawLines": 1},
+    "crossArmDelta": {"criticalTokens": 3, "rawLines": 40},
+    "diagnosticDifferencePages": [24]
+  },
+  "cleanup": {
+    "allAppsStopped": true,
+    "remainingTasks": 0
+  },
+  "decision": "Do not adopt B4. It reduced recognizer calls by 74.6% but did not establish the required 10% complete-document throughput gain. Together with the dedicated-host B8 rejection, configuration-only recognition batching is closed."
+}

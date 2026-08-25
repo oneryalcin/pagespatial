@@ -444,6 +444,48 @@ The compact result is
 It pins the controls, stage totals, native DSO shares, host/runtime identity,
 and hashes for the large raw artifacts retained in the isolated VM directory.
 
+## B4 Modal follow-up: no demonstrated throughput gain
+
+A final Tiny FP32 treatment tested whether B8 had simply been too large. It
+used the same frozen 50-page document, four producers, two inference owners,
+and full A2 path on Modal L4. Three warm documents were measured in each fresh
+container in the order B1, B4, B1.
+
+| lifetime | warm inner pages/s | median | warm client median |
+|---|---|---:|---:|
+| B1 before | 1.390, 1.355, 1.415 | 1.390 | 1.203 |
+| B4 | 1.915, 1.948, 1.963 | 1.948 | 1.653 |
+| B1 after | 2.367, 2.528, 2.430 | 2.430 | 1.982 |
+
+The treatment was active. Across the warm calls, B4 processed 14,785 crops in
+3,750 recognizer calls instead of about 14,785 B1 calls. Of the B4 calls,
+96.9% were full batches of four. Mean sampled GPU utilization was 9.9%, versus
+9.0% for the opening B1 and 15.6% for the closing B1.
+
+The two B1 control medians drifted by 74.8% across fresh Modal containers. B4
+was 40.1% faster than the opening control but 19.8% slower than the closing
+control. Its 1.948 pages/s median was only 3.1% above the pooled B1 median of
+1.891 pages/s. The host drift is larger than the treatment, so this bracket
+does not establish a causal B4 speedup and does not meet the 10% keep bar.
+
+Trusted output passed: the deterministic projection was exact and there were
+zero critical-token differences on trusted, non-escalated pages. Raw evidence
+differed by three critical tokens and 40 lines, above the same-arm null of one
+token and one line; the critical-token differences were confined to escalated
+page 24.
+
+**Decision:** do not adopt B4. The dedicated-host B8 result was 12.7% slower,
+and this B4 test did not demonstrate a material gain. Configuration-only
+recognition batching is closed. The result does show that four-crop batches are
+real and nearly full; the missing speedup is therefore not a failure to apply
+the setting.
+
+The compact result is
+[`b4-o2-modal-summary-2026-08-25.json`](../../evaluation/gpu-instrumentation/b4-o2-modal-summary-2026-08-25.json).
+Raw results remain under the ignored private `.evaluation/` tree and their
+SHA-256 values are pinned in the summary. All three Modal apps are stopped with
+zero tasks.
+
 ## Spend, evidence, and cleanup
 
 At the successful M1 reservation snapshot, posted Modal instrumentation spend
