@@ -9,6 +9,8 @@ const analyzerSource = readFileSync(new URL('../scripts/evaluation/analyze_gpu_i
 const dockerSource = readFileSync(new URL('../scripts/evaluation/Dockerfile.gpu-instrumentation-host-m2', import.meta.url), 'utf8');
 const gcpSource = readFileSync(new URL('../scripts/evaluation/run_gpu_instrumentation_m2_gcp.py', import.meta.url), 'utf8');
 const modalSource = readFileSync(new URL('../scripts/evaluation/gpu_a2_modal.py', import.meta.url), 'utf8');
+const workerSource = readFileSync(new URL('../scripts/evaluation/gpu_a2_trace_worker.py', import.meta.url), 'utf8');
+const captureSource = readFileSync(capturePath, 'utf8');
 
 test('M3 has exactly one fixed 10-page window', () => {
   const code = String.raw`
@@ -56,4 +58,10 @@ test('M3 evolves the pinned M2 image and reuses only the exact VM owner', () => 
   assert.match(gcpSource, /0 <= args\.capacity_wait_seconds <= 600/u);
   assert.match(gcpSource, /CAPACITY_FAILURE_MARKER not in start_attempt\["stderr"\]/u);
   assert.match(gcpSource, /time\.sleep\(min\(30,/u);
+});
+
+test('batch comparison reuses the shared core without profiler capture', () => {
+  assert.match(workerSource, /"batch-compare": \["warmup", "control-before", "trace", "control-after"\]/u);
+  assert.match(workerSource, /args\.mode in \{"m1", "batch-compare"\}/u);
+  assert.match(captureSource, /if mode == "batch-compare":\s*\n\s*return None/u);
 });

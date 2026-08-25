@@ -163,4 +163,6 @@ def plan_for_mode(mode: str) -> dict[str, Any] | None:
         return {"captureName": "m3.native.capture", "windows": M3_NATIVE_WINDOWS}
     if mode == "m1":
         return None
+    if mode == "batch-compare":
+        return None
     raise ValueError(f"unsupported trace-worker mode: {mode}")
