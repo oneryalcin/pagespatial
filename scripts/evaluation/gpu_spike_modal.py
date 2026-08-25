@@ -182,6 +182,7 @@ def _installed_versions() -> dict[str, str]:
         "onnxruntime-gpu",
         "openvino",
         "tensorrt",
+        "nvtx",
     ):
         try:
             versions[package] = importlib.metadata.version(package)

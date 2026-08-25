@@ -29,14 +29,13 @@ NVTX_STAGE_NAMES = {
     "crop.total": "crop.generate",
     "recognizer.backend": "recognizer.backend",
     "recognizer.postprocess": "recognizer.decode",
-    "result.decode": "recognizer.decode",
 }
 
 
 def _nvtx_stage(stage: str) -> str | None:
     if stage.startswith("detector.preprocess.") or stage == "detector.batch_sampler":
         return "detector.prepare"
-    if stage.startswith("recognizer.preprocess.") or stage == "recognizer.batch_sampler":
+    if stage.startswith("recognizer.preprocess."):
         return "recognizer.prepare"
     return NVTX_STAGE_NAMES.get(stage)
 
@@ -86,6 +85,8 @@ class StageProfiler:
             "startedNs": time.monotonic_ns(),
             "events": [],
             "stack": [],
+            "recognitionBatchOrdinal": 0,
+            "recognitionCropCount": None,
         }
 
     def finish_page(self) -> dict[str, Any]:
@@ -121,14 +122,31 @@ class StageProfiler:
             return
         if getattr(self._local, "recognizer_wait_handle", None) is not None:
             raise RuntimeError("recognizer wait range is already active")
+        crop_count = page.get("recognitionCropCount")
+        batch_ordinal = page.get("recognitionBatchOrdinal")
+        if not isinstance(crop_count, int) or crop_count < 1 or batch_ordinal < 1:
+            raise RuntimeError("recognizer wait lacks crop-count/batch identity")
         message = (
             f"recognizer.wait_backend;run={page.get('runId')};"
             f"page={page['pageNumber']};owner={self.owner_index};"
-            f"request={page['messageId']}"
+            f"request={page['messageId']};crops={crop_count};batch={batch_ordinal}"
         )
         self._local.recognizer_wait_handle = self._nvtx.start_range(
             message=message, domain="pagespatial.ocr"
         )
+
+    def observe_recognition_batch(self, batch: Any) -> None:
+        page = getattr(self._local, "page", None)
+        if page is None:
+            return
+        instances = getattr(batch, "instances", None)
+        if instances is None:
+            raise RuntimeError("recognizer batch has no observable instances")
+        crop_count = len(instances)
+        if crop_count < 1:
+            raise RuntimeError("recognizer batch has no crops")
+        page["recognitionBatchOrdinal"] += 1
+        page["recognitionCropCount"] = crop_count
 
     def _start(self, stage: str) -> dict[str, Any] | None:
         page = getattr(self._local, "page", None)
@@ -146,9 +164,23 @@ class StageProfiler:
         }
         nvtx_name = _nvtx_stage(stage)
         if self._nvtx is not None and nvtx_name is not None:
+            recognition_tags = ""
+            if nvtx_name.startswith("recognizer."):
+                crop_count = page.get("recognitionCropCount")
+                batch_ordinal = page.get("recognitionBatchOrdinal")
+                if (
+                    not isinstance(crop_count, int)
+                    or crop_count < 1
+                    or batch_ordinal < 1
+                ):
+                    raise RuntimeError(
+                        f"{nvtx_name} lacks crop-count/batch identity"
+                    )
+                recognition_tags = f";crops={crop_count};batch={batch_ordinal}"
             message = (
                 f"{nvtx_name};run={page.get('runId')};page={page['pageNumber']};"
                 f"owner={self.owner_index};request={page['messageId']}"
+                f"{recognition_tags}"
             )
             token["nvtxHandle"] = self._nvtx.start_range(
                 message=message, domain="pagespatial.ocr"
@@ -254,6 +286,8 @@ class _TimedCallable:
                 self._profiler._finish(token, "error", error)
                 raise
             else:
+                if self._stage == "recognizer.batch_sampler":
+                    self._profiler.observe_recognition_batch(item)
                 self._profiler._finish(token, "success")
                 yield item
 

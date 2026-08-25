@@ -36,6 +36,8 @@ from typing import Any
 
 import modal
 
+from gpu_process_tree import reap_marked_process_groups
+
 _REQUESTED_APP_NAME = os.environ.get(
     "PAGESPATIAL_A2_APP_NAME", "pagespatial-gpu-a2-e2e-m1"
 )
@@ -138,6 +140,10 @@ NODE_VERSION = "26.0.0"
 NODE_LINUX_X64_SHA256 = (
     "345d558514c62622b5c7d1f7b5f2a19c31ab1405d217df49f010c5ea8decc0f4"
 )
+NVTX_VERSION = "0.2.16"
+NVTX_CP310_X86_64_WHEEL_SHA256 = (
+    "23f30fcaf68f53d1895282315cb35aed5f605d59aeb33e75e276545ff95c4af6"
+)
 RECOGNITION_BATCH_SIZE = int(
     os.environ.get("PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE", "1")
 )
@@ -235,6 +241,17 @@ def _node_install_command() -> str:
     )
 
 
+def _nvtx_install_command() -> str:
+    return (
+        "set -eu; mkdir -p /tmp/nvtx-wheel; "
+        f"python -m pip download --only-binary=:all: --no-deps --dest /tmp/nvtx-wheel nvtx=={NVTX_VERSION}; "
+        "wheel=$(find /tmp/nvtx-wheel -type f -name 'nvtx-*.whl'); "
+        f"echo '{NVTX_CP310_X86_64_WHEEL_SHA256}  '$wheel | sha256sum -c -; "
+        "python -m pip install --no-cache-dir --no-deps \"$wheel\"; "
+        "rm -rf /tmp/nvtx-wheel"
+    )
+
+
 if modal.is_local():
     a2_image = (
         trt_image
@@ -259,6 +276,16 @@ if modal.is_local():
         .add_local_file(
             str(REPO_ROOT / "scripts/evaluation/gpu_spike_modal.py"),
             "/app/scripts/evaluation/gpu_spike_modal.py",
+            copy=True,
+        )
+        .add_local_file(
+            str(REPO_ROOT / "scripts/evaluation/gpu_process_tree.py"),
+            "/app/scripts/evaluation/gpu_process_tree.py",
+            copy=True,
+        )
+        .add_local_file(
+            str(REPO_ROOT / "scripts/evaluation/gpu_process_tree.py"),
+            "/root/gpu_process_tree.py",
             copy=True,
         )
         .add_local_file(str(Path(__file__)), "/app/scripts/evaluation/gpu_a2_modal.py", copy=True)
@@ -289,7 +316,7 @@ else:
     a2_image = modal.Image.debian_slim(python_version="3.10")
 
 if modal.is_local() and INSTRUMENTATION_MODE:
-    a2_image = a2_image.uv_pip_install("nvtx==0.2.16")
+    a2_image = a2_image.run_commands(_nvtx_install_command())
 
 
 ARM = {
@@ -603,7 +630,6 @@ class A2ExecutionCore:
         self.container_cold = False
         run_id = payload.get("run_id") or f"gpu-a2-{uuid.uuid4().hex[:12]}"
         document_nvtx = _nvtx_start("document", run=run_id)
-        result_nvtx = None
         scratch = Path(tempfile.mkdtemp(prefix="pagespatial-a2-", dir="/tmp"))
         pdf_path = scratch / "input.pdf"
         native_evidence_path = scratch / "native-evidence.json"
@@ -618,22 +644,27 @@ class A2ExecutionCore:
             len(items) for items in self.batch_observations_by_owner
         ]
         controller = None
+        assembly_nvtx: dict[str, dict[str, Any]] = {}
+        assembly_stage_events: list[dict[str, Any]] = []
         ocr_calls = 0
         stage_profile_pages: list[dict[str, Any]] = []
         try:
             with stderr_path.open("wb") as stderr:
+                controller_command = [
+                    "/opt/node/bin/node",
+                    "/app/scripts/evaluation/gpu_a2_controller.mjs",
+                    "--pdf", str(pdf_path),
+                    "--native-evidence", str(native_evidence_path),
+                    "--result", str(result_path),
+                    "--scratch", str(controller_scratch),
+                    "--run-id", run_id,
+                    "--expected-pages", str(EXPECTED_PAGES),
+                    "--tier", MODEL_TIER,
+                ]
+                if NVTX_ENABLED:
+                    controller_command.append("--instrument-stages")
                 controller = subprocess.Popen(
-                    [
-                        "/opt/node/bin/node",
-                        "/app/scripts/evaluation/gpu_a2_controller.mjs",
-                        "--pdf", str(pdf_path),
-                        "--native-evidence", str(native_evidence_path),
-                        "--result", str(result_path),
-                        "--scratch", str(controller_scratch),
-                        "--run-id", run_id,
-                        "--expected-pages", str(EXPECTED_PAGES),
-                        "--tier", MODEL_TIER,
-                    ],
+                    controller_command,
                     cwd="/app",
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
@@ -693,12 +724,98 @@ class A2ExecutionCore:
                 with ThreadPoolExecutor(max_workers=INFERENCE_OWNERS) as executor:
                     for raw in controller.stdout:
                         message = json.loads(raw)
+                        if message.get("kind") == "stage":
+                            if message.get("stage") != "result.assemble":
+                                raise RuntimeError(
+                                    f"unknown controller stage: {message.get('stage')}"
+                                )
+                            stage_id = str(message.get("id"))
+                            stage_scope = message.get("scope")
+                            if stage_scope not in {"page", "document"}:
+                                raise RuntimeError(
+                                    "result assembly stage lacks a valid scope"
+                                )
+                            source_at_ns = message.get("atNs")
+                            if (
+                                not isinstance(source_at_ns, int)
+                                or source_at_ns <= 0
+                            ):
+                                raise RuntimeError(
+                                    "result assembly stage lacks a source timestamp"
+                                )
+                            if message.get("phase") == "start":
+                                if stage_id in assembly_nvtx:
+                                    raise RuntimeError(
+                                        f"duplicate result assembly start: {stage_id}"
+                                    )
+                                assembly_nvtx[stage_id] = {
+                                    "handle": _nvtx_start(
+                                        "result.assemble",
+                                        run=run_id,
+                                        page=message.get("pageNumber"),
+                                        request=stage_id,
+                                        owner="node",
+                                        scope=stage_scope,
+                                        proxy="protocol",
+                                        sourceStartNs=source_at_ns,
+                                    ),
+                                    "pageNumber": message.get("pageNumber"),
+                                    "scope": stage_scope,
+                                    "sourceStartedNs": source_at_ns,
+                                    "proxyStartedNs": time.monotonic_ns(),
+                                }
+                            elif message.get("phase") == "end":
+                                if stage_id not in assembly_nvtx:
+                                    raise RuntimeError(
+                                        f"result assembly end without start: {stage_id}"
+                                    )
+                                started = assembly_nvtx.pop(stage_id)
+                                if message.get("pageNumber") != started["pageNumber"]:
+                                    raise RuntimeError(
+                                        "result assembly page identity changed"
+                                    )
+                                if source_at_ns <= started["sourceStartedNs"]:
+                                    raise RuntimeError(
+                                        "result assembly timestamps are not increasing"
+                                    )
+                                _nvtx_end(started["handle"])
+                                assembly_stage_events.append(
+                                    {
+                                        "stage": "result.assemble",
+                                        "requestId": stage_id,
+                                        "pageNumber": started["pageNumber"],
+                                        "scope": started["scope"],
+                                        "sourceStartedNs": started[
+                                            "sourceStartedNs"
+                                        ],
+                                        "sourceEndedNs": source_at_ns,
+                                        "sourceWallMs": (
+                                            source_at_ns
+                                            - started["sourceStartedNs"]
+                                        )
+                                        / 1_000_000,
+                                        "proxyStartedNs": started[
+                                            "proxyStartedNs"
+                                        ],
+                                        "proxyEndedNs": time.monotonic_ns(),
+                                        "nvtxRangeKind": "protocol-proxy",
+                                    }
+                                )
+                            else:
+                                raise RuntimeError(
+                                    f"unknown result assembly phase: {message.get('phase')}"
+                                )
+                            continue
                         if message.get("kind") == "fatal":
                             detail = message.get("error")
                             if async_errors:
                                 detail = f"{detail}; owner error: {async_errors[0]}"
                             raise RuntimeError(f"A2 controller failed: {detail}")
                         if message.get("kind") == "done":
+                            if assembly_nvtx:
+                                raise RuntimeError(
+                                    f"unfinished result assembly ranges: {sorted(assembly_nvtx)}"
+                                )
                             done = True
                             break
                         if message.get("kind") != "ocr":
@@ -731,7 +848,6 @@ class A2ExecutionCore:
                 if exit_code != 0:
                     raise RuntimeError(f"A2 controller exited {exit_code}")
                 _stop_process_group(controller, grace_s=10)
-            result_nvtx = _nvtx_start("result.assemble", run=run_id)
             result = json.loads(result_path.read_text())
             if result.get("status") != "completed" or len(result.get("pages", [])) != EXPECTED_PAGES:
                 raise RuntimeError("A2 terminal result did not reconcile 50 successful pages")
@@ -774,6 +890,15 @@ class A2ExecutionCore:
                         "sourceRevision": ULTRA_INFER_SOURCE_REV,
                         "patchSha256": ULTRA_INFER_PATCH_SHA256,
                     },
+                    "instrumentation": {
+                        "nvtx": {
+                            "enabled": NVTX_ENABLED,
+                            "version": self.versions.get("nvtx"),
+                            "wheelSha256": NVTX_CP310_X86_64_WHEEL_SHA256,
+                            "domain": "pagespatial.ocr",
+                        },
+                        "nodeStages": assembly_stage_events,
+                    },
                     "gpuTelemetry": _numeric_gpu_summary(sampler.samples),
                     "batchObservations": [
                         {**observation, "ownerIndex": owner_index}
@@ -800,8 +925,6 @@ class A2ExecutionCore:
                     method_total_ms,
                 )
             _enforce_result_size(result)
-            _nvtx_end(result_nvtx)
-            result_nvtx = None
             self.last_result = result
             self.last_result_json = json.dumps(
                 result, separators=(",", ":")
@@ -829,7 +952,8 @@ class A2ExecutionCore:
         finally:
             sampler.stop()
             shutil.rmtree(scratch, ignore_errors=True)
-            _nvtx_end(result_nvtx)
+            for active in assembly_nvtx.values():
+                _nvtx_end(active["handle"])
             _nvtx_end(document_nvtx)
 
     def probe_last_response(self, mode: str) -> Any:
@@ -905,8 +1029,9 @@ class GpuA2Container:
                 )
             manifest_path.write_text(json.dumps(requests, separators=(",", ":")))
             started = time.monotonic()
+            worker = None
             with stderr_path.open("wb") as stderr:
-                completed = subprocess.run(
+                worker = subprocess.Popen(
                     [
                         sys.executable,
                         "/app/scripts/evaluation/gpu_a2_trace_worker.py",
@@ -918,14 +1043,19 @@ class GpuA2Container:
                     cwd="/app",
                     stdout=subprocess.DEVNULL,
                     stderr=stderr,
-                    check=False,
-                    timeout=METHOD_TIMEOUT_S,
                     start_new_session=True,
                 )
-            if completed.returncode != 0:
+                try:
+                    return_code = worker.wait(timeout=METHOD_TIMEOUT_S)
+                except subprocess.TimeoutExpired as error:
+                    _stop_process_group(worker, grace_s=3)
+                    reap_marked_process_groups(str(scratch), grace_s=3)
+                    raise RuntimeError("A2 child worker deadline exceeded") from error
+            cleanup_interventions = reap_marked_process_groups(str(scratch))
+            if return_code != 0:
                 detail = stderr_path.read_text(errors="replace")[-4000:]
                 raise RuntimeError(
-                    f"A2 child worker exited {completed.returncode}: {detail}"
+                    f"A2 child worker exited {return_code}: {detail}"
                 )
             results = json.loads(result_path.read_text())
             if not isinstance(results, list) or len(results) != repeats:
@@ -933,9 +1063,13 @@ class GpuA2Container:
             child_pids = {item.get("launch", {}).get("workerPid") for item in results}
             if None in child_pids or len(child_pids) != 1:
                 raise RuntimeError("A2 child worker did not preserve one process lifetime")
+            for item in results:
+                item["launch"]["processTreeClean"] = True
+                item["launch"]["cleanupInterventions"] = cleanup_interventions
             results[-1]["launch"]["sequenceWallS"] = time.monotonic() - started
             return results
         finally:
+            reap_marked_process_groups(str(scratch), grace_s=1)
             shutil.rmtree(scratch, ignore_errors=True)
 
     @modal.method()

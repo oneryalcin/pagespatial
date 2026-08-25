@@ -175,8 +175,8 @@ def run_m1(
             "PAGESPATIAL_A2_MODEL_TIER": "tiny",
             "PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE": "1",
             "PAGESPATIAL_A2_INFERENCE_OWNERS": "2",
-            "PAGESPATIAL_A2_STAGE_PROFILE": "1",
-            "PAGESPATIAL_A2_NVTX": "1",
+            "PAGESPATIAL_A2_STAGE_PROFILE": "0",
+            "PAGESPATIAL_A2_NVTX": "0",
         }
         subprocess.run(
             [

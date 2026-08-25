@@ -87,17 +87,18 @@ fake=types.SimpleNamespace(
 sys.modules["nvtx"]=fake; os.environ["PAGESPATIAL_A2_NVTX"]="1"
 spec=importlib.util.spec_from_file_location("profile",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 p=m.StageProfiler(1); p.recognizer_last_prepare_stage="recognizer.preprocess.to_batch"; p.begin_method(); p.begin_page(3,"req-3","run-1")
+p.observe_recognition_batch(types.SimpleNamespace(instances=[1,2,3]))
 with p.span("recognizer.preprocess.to_batch"): pass
 with p.span("recognizer.backend"): pass
 p.finish_page(); print(json.dumps(events))
 `;
   const result = runPython(code);
   assert.equal(result[0][1], 'pagespatial.ocr');
-  assert.match(result[0][2], /^recognizer\.prepare;run=run-1;page=3;owner=1;request=req-3$/u);
+  assert.match(result[0][2], /^recognizer\.prepare;run=run-1;page=3;owner=1;request=req-3;crops=3;batch=1$/u);
   assert.equal(result[1][0], 'end');
-  assert.match(result[2][2], /^recognizer\.wait_backend;/u);
+  assert.match(result[2][2], /^recognizer\.wait_backend;.*;crops=3;batch=1$/u);
   assert.equal(result[3][0], 'end');
-  assert.match(result[4][2], /^recognizer\.backend;/u);
+  assert.match(result[4][2], /^recognizer\.backend;.*;crops=3;batch=1$/u);
 });
 
 test('stage profiler merges overlapping owner backend intervals without calling them GPU kernels', () => {
