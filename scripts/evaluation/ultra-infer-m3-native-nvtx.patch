@@ -1,0 +1,171 @@
+(eval):5: parse error near `end'
+diff --git a/deploy/ultra-infer/CMakeLists.txt b/deploy/ultra-infer/CMakeLists.txt
+index 4df6692d..eeefcf56 100644
+--- a/deploy/ultra-infer/CMakeLists.txt
++++ b/deploy/ultra-infer/CMakeLists.txt
+@@ -397,7 +397,11 @@ if(ENABLE_TRT_BACKEND)
+   find_library(TRT_INFER_LIB nvinfer ${TRT_LIB_DIR} NO_DEFAULT_PATH)
+   find_library(TRT_ONNX_LIB nvonnxparser ${TRT_LIB_DIR} NO_DEFAULT_PATH)
+   find_library(TRT_PLUGIN_LIB nvinfer_plugin ${TRT_LIB_DIR} NO_DEFAULT_PATH)
+-  list(APPEND DEPEND_LIBS ${TRT_INFER_LIB} ${TRT_ONNX_LIB} ${TRT_PLUGIN_LIB})
++  find_library(NVTX_LIB nvToolsExt ${CUDA_DIRECTORY}/lib64 NO_DEFAULT_PATH)
++  if(NOT NVTX_LIB)
++    message(FATAL_ERROR "M3 instrumentation requires libnvToolsExt from CUDA")
++  endif()
++  list(APPEND DEPEND_LIBS ${TRT_INFER_LIB} ${TRT_ONNX_LIB} ${TRT_PLUGIN_LIB} ${NVTX_LIB})
+ 
+   if(NOT BUILD_ON_JETSON AND TRT_DIRECTORY)
+     if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/third_libs/install/tensorrt")
+diff --git a/deploy/ultra-infer/ultra_infer/runtime/backends/tensorrt/trt_backend.cc b/deploy/ultra-infer/ultra_infer/runtime/backends/tensorrt/trt_backend.cc
+index f441eea7..f46eb295 100644
+--- a/deploy/ultra-infer/ultra_infer/runtime/backends/tensorrt/trt_backend.cc
++++ b/deploy/ultra-infer/ultra_infer/runtime/backends/tensorrt/trt_backend.cc
+@@ -18,6 +18,7 @@
+ #include <unordered_map>
+ 
+ #include "NvInferRuntime.h"
++#include "nvToolsExt.h"
+ #include "ultra_infer/function/cuda_cast.h"
+ #include "ultra_infer/utils/utils.h"
+ #ifdef ENABLE_PADDLE2ONNX
+@@ -26,6 +27,32 @@
+ 
+ namespace ultra_infer {
+ 
++namespace {
++
++nvtxDomainHandle_t PageSpatialM3Domain() {
++  static nvtxDomainHandle_t domain = nvtxDomainCreateA("pagespatial.native");
++  return domain;
++}
++
++class PageSpatialM3Range final {
++public:
++  explicit PageSpatialM3Range(const char *message) {
++    nvtxEventAttributes_t attributes = {};
++    attributes.version = NVTX_VERSION;
++    attributes.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
++    attributes.messageType = NVTX_MESSAGE_TYPE_ASCII;
++    attributes.message.ascii = message;
++    nvtxDomainRangePushEx(PageSpatialM3Domain(), &attributes);
++  }
++
++  ~PageSpatialM3Range() { nvtxDomainRangePop(PageSpatialM3Domain()); }
++
++  PageSpatialM3Range(const PageSpatialM3Range &) = delete;
++  PageSpatialM3Range &operator=(const PageSpatialM3Range &) = delete;
++};
++
++} // namespace
++
+ FDTrtLogger *FDTrtLogger::logger = nullptr;
+ 
+ // Check if the model can build tensorrt engine now
+@@ -337,18 +364,29 @@ bool TrtBackend::Infer(std::vector<FDTensor> &inputs,
+   }
+ 
+   RUNTIME_PROFILE_LOOP_H2D_D2H_BEGIN
+-  cudaSetDevice(option_.gpu_id);
+-  SetInputs(inputs);
+-  AllocateOutputsBuffer(outputs, copy_to_fd);
++  {
++    PageSpatialM3Range input_prepare("trt.input_prepare");
++    cudaSetDevice(option_.gpu_id);
++    SetInputs(inputs);
++  }
++  {
++    PageSpatialM3Range output_materialize("trt.output_materialize");
++    AllocateOutputsBuffer(outputs, copy_to_fd);
++  }
+ 
+   RUNTIME_PROFILE_LOOP_BEGIN(1)
+-  if (!context_->enqueueV2(bindings_.data(), stream_, nullptr)) {
+-    FDERROR << "Failed to Infer with TensorRT." << std::endl;
+-    return false;
++  {
++    PageSpatialM3Range enqueue("trt.enqueue");
++    if (!context_->enqueueV2(bindings_.data(), stream_, nullptr)) {
++      FDERROR << "Failed to Infer with TensorRT." << std::endl;
++      return false;
++    }
+   }
+   RUNTIME_PROFILE_LOOP_END
+ 
+-  for (size_t i = 0; i < outputs->size(); ++i) {
++  {
++    PageSpatialM3Range output_materialize("trt.output_materialize");
++    for (size_t i = 0; i < outputs->size(); ++i) {
+     // if the final output tensor's dtype is different from the model output
+     // tensor's dtype, then we need cast the data to the final output's dtype
+     auto model_output_dtype =
+@@ -375,18 +413,25 @@ bool TrtBackend::Infer(std::vector<FDTensor> &inputs,
+           (*outputs)[i].shape, model_output_dtype,
+           outputs_device_buffer_[(*outputs)[i].name].data(), Device::GPU);
+     }
++    }
+   }
+   if (copy_to_fd) {
+-    for (size_t i = 0; i < outputs->size(); ++i) {
+-      FDASSERT(
+-          cudaMemcpyAsync((*outputs)[i].Data(),
+-                          casted_output_tensors_[(*outputs)[i].name].Data(),
+-                          (*outputs)[i].Nbytes(), cudaMemcpyDeviceToHost,
+-                          stream_) == 0,
+-          "[ERROR] Error occurs while copy memory from GPU to CPU.");
++    {
++      PageSpatialM3Range device_to_host("trt.device_to_host");
++      for (size_t i = 0; i < outputs->size(); ++i) {
++        FDASSERT(
++            cudaMemcpyAsync((*outputs)[i].Data(),
++                            casted_output_tensors_[(*outputs)[i].name].Data(),
++                            (*outputs)[i].Nbytes(), cudaMemcpyDeviceToHost,
++                            stream_) == 0,
++            "[ERROR] Error occurs while copy memory from GPU to CPU.");
++      }
++    }
++    {
++      PageSpatialM3Range synchronize("trt.synchronize");
++      FDASSERT(cudaStreamSynchronize(stream_) == cudaSuccess,
++               "[ERROR] Error occurs while sync cuda stream.");
+     }
+-    FDASSERT(cudaStreamSynchronize(stream_) == cudaSuccess,
+-             "[ERROR] Error occurs while sync cuda stream.");
+   }
+   RUNTIME_PROFILE_LOOP_H2D_D2H_END
+   return true;
+@@ -478,10 +523,13 @@ void TrtBackend::SetInputs(const std::vector<FDTensor> &inputs) {
+         // page-locked feature need by cudaMemcpyAsync may not guarantee by
+         // FDTensor now. Reference:
+         // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#creation-and-destruction
+-        FDASSERT(cudaMemcpy(inputs_device_buffer_[item.name].data(),
+-                            static_cast<void *>(casted_data.data()),
+-                            item.Nbytes() / 2, cudaMemcpyHostToDevice) == 0,
+-                 "Error occurs while copy memory from CPU to GPU.");
++        {
++          PageSpatialM3Range host_to_device("trt.host_to_device");
++          FDASSERT(cudaMemcpy(inputs_device_buffer_[item.name].data(),
++                              static_cast<void *>(casted_data.data()),
++                              item.Nbytes() / 2, cudaMemcpyHostToDevice) == 0,
++                   "Error occurs while copy memory from CPU to GPU.");
++        }
+       } else {
+         // FDASSERT(cudaMemcpyAsync(inputs_device_buffer_[item.name].data(),
+         //                          item.Data(), item.Nbytes(),
+@@ -492,10 +540,13 @@ void TrtBackend::SetInputs(const std::vector<FDTensor> &inputs) {
+         // page-locked feature need by cudaMemcpyAsync may not guarantee by
+         // FDTensor now. Reference:
+         // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#creation-and-destruction
+-        FDASSERT(cudaMemcpy(inputs_device_buffer_[item.name].data(),
+-                            item.Data(), item.Nbytes(),
+-                            cudaMemcpyHostToDevice) == 0,
+-                 "Error occurs while copy memory from CPU to GPU.");
++        {
++          PageSpatialM3Range host_to_device("trt.host_to_device");
++          FDASSERT(cudaMemcpy(inputs_device_buffer_[item.name].data(),
++                              item.Data(), item.Nbytes(),
++                              cudaMemcpyHostToDevice) == 0,
++                   "Error occurs while copy memory from CPU to GPU.");
++        }
+       }
+     }
+     // binding input buffer

@@ -93,7 +93,7 @@ test('M1 uses one execution core instead of copying the page loop', () => {
   assert.doesNotMatch(workerSource, /ThreadPoolExecutor|gpu_a2_controller/u);
 });
 
-test('copied remote child imports cannot enter local image-build or budget code', () => {
+test('copied remote child imports cannot enter local image-build code', () => {
   assert.match(modalSource, /Path\("\/app\/scripts\/evaluation\/gpu_a2_modal\.py"\)/u);
   assert.match(spikeSource, /Path\("\/app\/scripts\/evaluation\/gpu_spike_modal\.py"\)/u);
   assert.match(modalSource, /_LOCAL_BUILD_CONTEXT = modal\.is_local\(\) and not _COPIED_REMOTE_SOURCE/u);
@@ -104,10 +104,7 @@ test('copied remote child imports cannot enter local image-build or budget code'
   assert.equal((spikeSource.match(/modal\.is_local\(\)/gu) ?? []).length, 1);
 });
 
-test('M1 paid launcher fixes the arm and closes the exact experiment app', () => {
-  const reservation = launcherSource.indexOf('reserve(ledger, "M1-PARITY")');
-  const paidRun = launcherSource.indexOf('M1_SCRIPT,');
-  assert.ok(reservation >= 0 && paidRun > reservation);
+test('M1 launcher fixes the arm and closes the exact experiment app', () => {
   assert.match(launcherSource, /PAGESPATIAL_A2_MODEL_TIER": "tiny"/u);
   assert.match(launcherSource, /PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE": "1"/u);
   assert.match(launcherSource, /PAGESPATIAL_A2_INFERENCE_OWNERS": "2"/u);

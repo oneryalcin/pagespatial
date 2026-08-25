@@ -18,9 +18,6 @@ from pathlib import Path
 
 import modal
 
-from gpu_a2_budget import DEFAULT_LEDGER, validate_reservation
-
-
 SCHEMA_VERSION = "0.6.0"
 EXPECTED_PAGES = 50
 EXPECTED_CPU_RESOURCES = {
@@ -147,8 +144,6 @@ def main() -> None:
     parser.add_argument("--pdf-path", required=True, type=Path)
     parser.add_argument("--out-dir", required=True, type=Path)
     parser.add_argument("--repeats", type=int, default=4)
-    parser.add_argument("--reservation", required=True)
-    parser.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
     parser.add_argument("--expected-app-id", required=True)
     parser.add_argument("--expected-adapter-revision", required=True)
     parser.add_argument("--expected-image-pin-revision", required=True)
@@ -157,7 +152,6 @@ def main() -> None:
         raise SystemExit("E1 requires exactly four calls: one cold plus three warm")
     if not args.app.startswith("pagespatial-gpu-a2-"):
         raise SystemExit("refusing to operate on a non-A2 app name")
-    validate_reservation(args.ledger, args.reservation, "E1-CPU")
     repo_root = Path(__file__).resolve().parents[2]
     manifest = json.loads(
         (repo_root / "evaluation/gpu-spike/a2-50page-v1.json").read_text()
@@ -181,7 +175,6 @@ def main() -> None:
         "workload": manifest,
         "repeats": args.repeats,
         "startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "reservationId": args.reservation,
         "expectedAppId": args.expected_app_id,
     }
     (run_dir / "run.json").write_text(json.dumps(metadata, indent=1) + "\n")

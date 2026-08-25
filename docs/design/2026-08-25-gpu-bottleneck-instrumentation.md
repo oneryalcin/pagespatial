@@ -258,6 +258,13 @@ the first stop. The child must remain alive for `control-after` and then exit
 cleanly. Record every page and companion operation that actually overlaps each
 capture; do not discard boundary work.
 
+A window opens when the first page in its numeric target set enters the Python
+OCR owner path. It closes only after all ten target pages have completed the
+existing page-scoped `result.assemble` event. Record every non-target page and
+operation that overlaps the open interval. An incomplete window, or the second
+window opening before the first closes, invalidates the run. This rule measures
+ten completed target pages rather than ten queued submissions.
+
 Analyze both windows independently before aggregating them. The dominant cause
 must select the same section 9 decision-table row in both windows before it can
 be named. If the rows disagree, that disagreement is the finding and no
@@ -360,6 +367,9 @@ performance claim. If overhead exceeds 15%, shorten the capture window once.
 If it still exceeds 15%, the timeline remains qualitative and every duration
 claim must be taken from the bracketing controls.
 
+The one allowed retry uses submitted pages 11--15 and 31--35 with the same
+completion rule. No other page range may be selected after seeing the trace.
+
 ## 8. Required attribution
 
 CPU threads, CUDA APIs, copy engines, and GPU kernels can run at the same time.
@@ -444,6 +454,12 @@ complete-document keep bar of at least 10% inner throughput improvement and no
 new incorrect, missing, or unresolved critical value in trusted,
 non-escalated output.
 
+The analyzer may select a row only when one row's stated condition is met and
+the same row is selected independently in both Systems windows. When two rows
+remain plausible, their thresholds tie, or required evidence is missing, the
+machine result is `ambiguous-stop`. A later reviewed decision record may
+interpret the retained evidence, but M2 must not encode a subjective tie-break.
+
 ## 10. Artifacts and provenance
 
 Every remote attempt, including a failed capability probe, records:
@@ -472,9 +488,10 @@ make storage immutable.
 
 ## 11. Cost and host fallback
 
-No paid execution is authorized by this design. Before the capability probe,
-record a new dated owner budget and a fixed worst-case reservation. The expired
-2026-08-24 ledger must not be reopened or edited to manufacture headroom.
+Paid experiments use the provider's billing controls and the operator's stated
+limit. The repository does not implement a second reservation ledger or make
+time-bound spending authorization part of source code or CI. Historical trial
+reports retain the costs and limits that applied when each run occurred.
 
 Use Modal first because it is the deployment host under investigation. The
 bounded retry rule in section 6.3 applies. If CUPTI, process launch, trace
@@ -482,6 +499,33 @@ export, or native CPU sampling is blocked by the platform, do not spend a day
 bypassing the container boundary. Run the exact image and L4 shape on a
 dedicated Linux x86 host or VM, and label it a different host control. Re-run
 one unprofiled Modal control beside it before transferring a conclusion.
+
+For the 2026-08-25 GCP host control, the owner explicitly permits temporary
+external SSH access on only
+`pagespatial-gpu-profiler-20260825`. The project account lacks IAP tunnel
+authorization, and IAM or firewall mutation is out of scope. The owner must
+prove the VM starts and ends `TERMINATED` with no access configuration. Inside
+the protected lifetime it may attach one exact ephemeral `external-nat`
+configuration, use direct SSH/SCP with the existing OS Login key and pinned
+host key, then stop the VM and remove that configuration in mandatory cleanup.
+The project has an existing world-reachable SSH rule, so this is a deliberate,
+time-bounded public port-22 exposure. Do not run a public service, create or
+refresh keys, or mutate any other GCP resource.
+
+After `RUNNING`, wait up to three minutes for `sshd` with a read-only `true`
+probe. Connection refusal is boot readiness and may retry; a host-key or
+identity error fails immediately. Every failed owner attempt gets a unique
+cleanup directory.
+
+The OS Login user is not a member of the Docker group. Run the fixed host owner
+through non-interactive `sudo -n`; do not mutate users, groups, socket modes, or
+the Docker service. The host owner remains responsible for its bounded sysctl,
+container cleanup, and evidence permissions.
+
+The GCP runner may retry L4 capacity failures for up to the configured ten
+minutes. It must still operate only on the named VM and execute mandatory
+cleanup. Tool or image failures are fixed normally and retried by the operator;
+they do not require source-code authorization tokens.
 
 No additional global economic overturn threshold applies. The owner has
 decided that a real saving is material at the expected million-page scale.
@@ -515,6 +559,17 @@ throughput by at least 10% without violating the output gate.
 - produce the wall-union, service-time, CUDA, CPU, and unattributed tables; and
 - require both windows to select the same decision-table row, then name the
   largest removable cause or stop.
+
+**Measured 2026-08-25:** M2 passes on the dedicated GCP L4 host. Both windows
+select `producer-starvation`. The 77.24% Systems profiler overhead makes exact
+timeline shares non-quantitative, but the same structural result repeats:
+named host preparation covers nearly all gaps in PageSpatial device activity.
+CPU sampling cannot yet name one low-level operation because 77.25% of leaf
+samples are unresolved. The strict raw OCR diagnostic fails on two
+control-only low-confidence `5` occurrences on non-trusted pages; deterministic
+native evidence is exact and the owner-approved trusted-output gate passes.
+See the [M2 trial](../trials/2026-08-25-gpu-bottleneck-instrumentation.md) and
+its [compact summary](../../evaluation/gpu-instrumentation/m2-gcp-l4-summary-2026-08-25.json).
 
 ### M3 — conditional native visibility
 

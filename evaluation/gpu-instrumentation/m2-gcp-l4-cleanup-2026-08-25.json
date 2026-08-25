@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "pagespatial-gpu-instrumentation-m2-cleanup-v1",
+  "observedAtUtc": "2026-08-25T12:04:52Z",
+  "project": "red-studio-399209",
+  "primary": {
+    "name": "pagespatial-gpu-profiler-20260825",
+    "zone": "us-central1-a",
+    "status": "TERMINATED",
+    "accessConfigs": []
+  },
+  "fallback": {
+    "name": "pagespatial-gpu-profiler-20260825-b",
+    "instances": []
+  },
+  "method": "read-only gcloud describe of the exact primary VM and read-only filtered instance list for the exact fallback name"
+}

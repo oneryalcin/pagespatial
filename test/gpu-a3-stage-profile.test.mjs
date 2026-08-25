@@ -81,9 +81,11 @@ test('NVTX ranges use the fixed domain and expose recognizer wait without a new 
   const code = String.raw`
 import importlib.util,json,os,sys,types
 events=[]
-fake=types.SimpleNamespace(
- start_range=lambda **kwargs: events.append(["start",kwargs["domain"],kwargs["message"]]) or len(events),
- end_range=lambda handle: events.append(["end",handle]))
+class Domain:
+ def __init__(self,name): self.name=name
+ def start_range(self,**kwargs): events.append(["start",self.name,kwargs["message"]]); return len(events)
+ def end_range(self,handle): events.append(["end",handle])
+fake=types.SimpleNamespace(Domain=Domain)
 sys.modules["nvtx"]=fake; os.environ["PAGESPATIAL_A2_NVTX"]="1"
 spec=importlib.util.spec_from_file_location("profile",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 p=m.StageProfiler(1); p.recognizer_last_prepare_stage="recognizer.preprocess.to_batch"; p.begin_method(); p.begin_page(3,"req-3","run-1")
@@ -127,5 +129,4 @@ test('A3 profiling is evaluation-only, arm-bounded, persisted, and opt-in from t
   assert.match(modalSource, /stage profile did not reconcile exactly 50 pages/u);
   assert.match(runnerSource, /--stage-profile/u);
   assert.match(runnerSource, /--stage-profile requires --model-tier tiny/u);
-  assert.ok(runnerSource.indexOf('reserve(ledger, "E1-GPU")') < runnerSource.indexOf('"modal", "run"'));
 });

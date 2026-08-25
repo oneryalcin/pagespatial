@@ -1,0 +1,119 @@
+FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:3.0.0-gpu-cuda11.8-cudnn8.9-trt8.6@sha256:2bd8830dafd258501e7313b320fa1bcc946c70318b3081647b90bc70182e7360
+
+ARG NSYS_DEB=NsightSystems-linux-cli-public-2025.5.1.121-3638078.deb
+ARG NSYS_SHA256=506a8a3fdd94cec84c4c216d159ce3a6496170e8cf22b95b603b4bef4e0fb6e2
+ARG NVTX_SHA256=23f30fcaf68f53d1895282315cb35aed5f605d59aeb33e75e276545ff95c4af6
+ARG NODE_VERSION=26.0.0
+ARG NODE_SHA256=345d558514c62622b5c7d1f7b5f2a19c31ab1405d217df49f010c5ea8decc0f4
+ARG ULTRA_INFER_REV=ffb64904d23708863ff5b8da312a5cbd52a7f462
+ARG ULTRA_INFER_PATCH_SHA256=b03632bbfae1372f21a2e31babbf72f8936943a0848ff3db853a2f1cd5216bd6
+ARG ULTRA_INFER_M3_PATCH_SHA256=8ae31bf3c66e74904ced789a033487d05fdda5d6dea591db21cb04f5f579a8e1
+
+ENV PATH=/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE=1 \
+    PAGESPATIAL_A2_INFERENCE_OWNERS=2 \
+    PAGESPATIAL_A2_MODEL_TIER=tiny \
+    PAGESPATIAL_A2_STAGE_PROFILE=1 \
+    PAGESPATIAL_A2_NVTX=1 \
+    PAGESPATIAL_A2_APP_NAME=pagespatial-gpu-instrumentation-m3-host \
+    PAGESPATIAL_A2_STANDALONE=1
+
+RUN set -eu; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      curl xz-utils git cmake patchelf python3.10-dev rapidjson-dev \
+      poppler-utils tesseract-ocr libgl1 libglib2.0-0 libgomp1 ccache; \
+    curl -fsSLo "/tmp/${NSYS_DEB}" \
+      "https://developer.download.nvidia.com/devtools/repos/ubuntu2004/amd64/${NSYS_DEB}"; \
+    echo "${NSYS_SHA256}  /tmp/${NSYS_DEB}" | sha256sum -c -; \
+    dpkg -i "/tmp/${NSYS_DEB}"; \
+    rm -f "/tmp/${NSYS_DEB}"; \
+    archive="node-v${NODE_VERSION}-linux-x64.tar.xz"; \
+    curl -fsSLo "/tmp/${archive}" "https://nodejs.org/dist/v${NODE_VERSION}/${archive}"; \
+    echo "${NODE_SHA256}  /tmp/${archive}" | sha256sum -c -; \
+    mkdir -p /opt/node; \
+    tar -xJf "/tmp/${archive}" --strip-components=1 -C /opt/node; \
+    rm -f "/tmp/${archive}"; \
+    rm -rf /var/lib/apt/lists/*
+
+RUN set -eu; \
+    python -m pip install --no-cache-dir --ignore-installed PyYAML==6.0.2; \
+    python -m pip install --no-cache-dir \
+      huggingface-hub==0.34.4 paddleocr==3.7.0 paddlex==3.7.2 \
+      psutil==7.0.0 setuptools modal==1.5.3; \
+    trt_wheel=$(find /usr/local/TensorRT-8.6.1.6/python -type f \
+      -name 'tensorrt-8.6.1-cp310-none-linux_x86_64.whl'); \
+    test -n "${trt_wheel}"; \
+    python -m pip install --no-cache-dir "${trt_wheel}"; \
+    python -m pip install --no-cache-dir \
+      wheel==0.48.0 paddle2onnx==2.0.2rc3 onnx==1.17.0 \
+      onnxoptimizer==0.3.13 polygraphy==0.53.4; \
+    mkdir -p /tmp/nvtx-wheel; \
+    python -m pip download --only-binary=:all: --no-deps \
+      --dest /tmp/nvtx-wheel nvtx==0.2.16; \
+    nvtx_wheel=$(find /tmp/nvtx-wheel -type f -name 'nvtx-*.whl'); \
+    echo "${NVTX_SHA256}  ${nvtx_wheel}" | sha256sum -c -; \
+    python -m pip install --no-cache-dir --no-deps "${nvtx_wheel}"; \
+    rm -rf /tmp/nvtx-wheel
+
+COPY evaluation/gpu-spike/model-pins-v1.json /opt/pagespatial/model-pins-v1.json
+COPY scripts/evaluation/fetch_gpu_spike_models.py /opt/pagespatial/fetch_gpu_spike_models.py
+RUN python /opt/pagespatial/fetch_gpu_spike_models.py \
+      --manifest /opt/pagespatial/model-pins-v1.json \
+      --models-dir /opt/pagespatial/models \
+      --verification-out /opt/pagespatial/model-verification.json
+
+COPY scripts/evaluation/ultra-infer-trt-runtime-lifetime.patch /root/ultra-infer-trt-runtime-lifetime.patch
+COPY scripts/evaluation/ultra-infer-m3-native-nvtx.patch /root/ultra-infer-m3-native-nvtx.patch
+RUN set -eu; \
+    echo "${ULTRA_INFER_PATCH_SHA256}  /root/ultra-infer-trt-runtime-lifetime.patch" | sha256sum -c -; \
+    echo "${ULTRA_INFER_M3_PATCH_SHA256}  /root/ultra-infer-m3-native-nvtx.patch" | sha256sum -c -; \
+    git init /opt/paddlex-source; \
+    git -C /opt/paddlex-source remote add origin https://github.com/PaddlePaddle/PaddleX.git; \
+    git -C /opt/paddlex-source config core.sparseCheckout true; \
+    mkdir -p /opt/paddlex-source/.git/info; \
+    echo deploy/ultra-infer/ > /opt/paddlex-source/.git/info/sparse-checkout; \
+    git -C /opt/paddlex-source fetch --depth=1 origin "${ULTRA_INFER_REV}"; \
+    git -C /opt/paddlex-source checkout --detach FETCH_HEAD; \
+    git -C /opt/paddlex-source apply /root/ultra-infer-trt-runtime-lifetime.patch; \
+    git -C /opt/paddlex-source apply /root/ultra-infer-m3-native-nvtx.patch; \
+    cd /opt/paddlex-source/deploy/ultra-infer/python; \
+    WITH_GPU=ON DEVICE_TYPE=GPU ENABLE_ORT_BACKEND=ON ENABLE_TRT_BACKEND=ON \
+      ENABLE_PADDLE_BACKEND=OFF ENABLE_OPENVINO_BACKEND=OFF ENABLE_VISION=OFF \
+      ENABLE_TEXT=OFF TRT_DIRECTORY=/usr/local/TensorRT-8.6.1.6 \
+      CC=/usr/local/gcc-8.2/bin/gcc CXX=/usr/local/gcc-8.2/bin/g++ \
+      CUDACXX=/usr/local/cuda/bin/nvcc \
+      CMAKE_ARGS='-DPython_EXECUTABLE=/usr/bin/python -DPython_INCLUDE_DIR=/usr/include/python3.10 -DPython_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.10.so' \
+      python setup.py build; \
+    patchelf --set-rpath \
+      '$ORIGIN/libs/third_libs/onnxruntime/lib:$ORIGIN/libs/third_libs/paddle2onnx/lib:$ORIGIN/libs/third_libs/tensorrt/lib' \
+      build/lib.*/ultra_infer/ultra_infer_main*.so; \
+    python setup.py bdist_wheel; \
+    python -m pip install --force-reinstall --no-deps dist/*.whl
+
+WORKDIR /app
+COPY package.json package-lock.json /app/
+RUN npm ci
+COPY tsconfig.json /app/tsconfig.json
+COPY src /app/src
+COPY schemas /app/schemas
+COPY scripts/generate-schema.mjs /app/scripts/generate-schema.mjs
+RUN npm run build
+COPY service /app/service
+COPY evaluation/gpu-spike/a2-50page-v1.json /app/evaluation/gpu-spike/a2-50page-v1.json
+COPY scripts/evaluation/gpu_a2_controller.mjs /app/scripts/evaluation/gpu_a2_controller.mjs
+COPY scripts/evaluation/gpu_a2_modal.py /app/scripts/evaluation/gpu_a2_modal.py
+COPY scripts/evaluation/gpu_a2_trace_worker.py /app/scripts/evaluation/gpu_a2_trace_worker.py
+COPY scripts/evaluation/gpu_a3_stage_profile.py /app/scripts/evaluation/gpu_a3_stage_profile.py
+COPY scripts/evaluation/gpu_instrumentation_capture.py /app/scripts/evaluation/gpu_instrumentation_capture.py
+COPY scripts/evaluation/gpu_process_tree.py /app/scripts/evaluation/gpu_process_tree.py
+COPY scripts/evaluation/gpu_spike_modal.py /app/scripts/evaluation/gpu_spike_modal.py
+COPY scripts/evaluation/gpu_instrumentation_m2_preflight.py /app/scripts/evaluation/gpu_instrumentation_m2_preflight.py
+COPY scripts/evaluation/run_gpu_instrumentation_m2_container.py /app/scripts/evaluation/run_gpu_instrumentation_m2_container.py
+COPY scripts/evaluation/run_gpu_instrumentation_m3_container.py /app/scripts/evaluation/run_gpu_instrumentation_m3_container.py
+COPY scripts/evaluation/analyze_gpu_instrumentation_m2.py /app/scripts/evaluation/analyze_gpu_instrumentation_m2.py
+COPY scripts/evaluation/analyze_gpu_instrumentation_m2_output.mjs /app/scripts/evaluation/analyze_gpu_instrumentation_m2_output.mjs
+
+RUN nsys --version; \
+    python -c 'import json,nvtx,tensorrt,ultra_infer; print(json.dumps({"tensorrt":tensorrt.__version__,"ultraInfer":ultra_infer.__version__}))'; \
+    node --version

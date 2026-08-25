@@ -17,21 +17,6 @@ from typing import Any
 import modal
 
 
-if modal.is_local():
-    from gpu_instrumentation_budget import DEFAULT_LEDGER, validate_reservation
-
-    _reservation_id = os.environ.get("PAGESPATIAL_GPU_INSTRUMENTATION_RESERVATION", "")
-    _ledger_path = Path(
-        os.environ.get(
-            "PAGESPATIAL_GPU_INSTRUMENTATION_LEDGER", str(DEFAULT_LEDGER)
-        )
-    )
-    if not _reservation_id:
-        raise RuntimeError(
-            "PAGESPATIAL_GPU_INSTRUMENTATION_RESERVATION is required before image construction"
-        )
-    validate_reservation(_ledger_path, _reservation_id, "M0-CAPABILITY")
-
 from gpu_spike_trt_modal import trt_image
 
 
@@ -347,7 +332,6 @@ def main(out_dir: str) -> None:
     target.mkdir(parents=True, exist_ok=False)
     result = probe_capabilities.remote(run_id)
     result["source"] = {"gitRevision": revision, "dirty": False}
-    result["reservationId"] = _reservation_id
     artifacts = result.pop("artifacts", {})
     manifest = {}
     for name, record in artifacts.items():
