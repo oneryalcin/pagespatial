@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 import { createValidDocument } from './fixture.mjs';
 import { analyzeM1 } from '../scripts/evaluation/analyze_gpu_instrumentation_m1.mjs';
@@ -15,6 +16,10 @@ const spikeSource = readFileSync(new URL('../scripts/evaluation/gpu_spike_modal.
 const processTreePath = new URL('../scripts/evaluation/gpu_process_tree.py', import.meta.url).pathname;
 const modelPins = JSON.parse(readFileSync(
   new URL('../evaluation/gpu-spike/model-pins-v1.json', import.meta.url),
+  'utf8',
+));
+const committedM1 = JSON.parse(readFileSync(
+  new URL('../evaluation/gpu-instrumentation/m1-parity-result-v1.json', import.meta.url),
   'utf8',
 ));
 const documentSha = '46ba5fc15613a260cf019ff6f9be0bb579279be4f5892694a76e02a536d8fcda';
@@ -212,5 +217,42 @@ test('M1 analyzer rejects invalid timing and every required lifecycle proof', as
     const runs = valid();
     mutate(runs);
     assert.equal(analyzeM1(runs).pass, false);
+  }
+});
+
+test('committed M1 result records a bounded same-core pass and private artifact pins', () => {
+  assert.equal(committedM1.schemaVersion, 'pagespatial-gpu-instrumentation-m1-result-v1');
+  assert.equal(committedM1.status, 'pass');
+  assert.equal(committedM1.parity.executionCore, 'gpu_a2_modal.A2ExecutionCore');
+  assert.ok(committedM1.parity.controlBracketDriftPercent <= 10);
+  assert.ok(committedM1.parity.launchBoundaryDriftPercent <= 10);
+  assert.equal(committedM1.parity.outputGatePass, true);
+  assert.equal(committedM1.parity.processTreeClean, true);
+  assert.equal(committedM1.attempts.length, 2);
+  assert.equal(committedM1.attempts[0].result, 'failed-before-child-parse');
+  assert.equal(committedM1.attempts[1].result, 'pass');
+  assert.equal(committedM1.attempts[1].appStateAfterCleanup, 'stopped');
+  assert.equal(committedM1.attempts[1].tasksAfterCleanup, 0);
+  assert.equal(committedM1.privateArtifacts.length, 8);
+  for (const artifact of committedM1.privateArtifacts) {
+    assert.match(artifact.sha256, /^[0-9a-f]{64}$/u);
+    assert.ok(artifact.bytes > 0);
+  }
+  const declaredPaths = committedM1.attempts.flatMap((attempt) => attempt.artifactPaths).sort();
+  const pinnedPaths = committedM1.privateArtifacts.map((artifact) => artifact.path).sort();
+  assert.deepEqual(declaredPaths, pinnedPaths);
+  assert.ok(committedM1.limitations.some((item) => item.includes('does not identify')));
+});
+
+test('local private M1 artifacts resolve and match every committed pin', {
+  skip: !existsSync(new URL(`../${committedM1.privateArtifactRoot}`, import.meta.url)),
+}, () => {
+  for (const artifact of committedM1.privateArtifacts) {
+    const bytes = readFileSync(new URL(
+      `../${committedM1.privateArtifactRoot}/${artifact.path}`,
+      import.meta.url,
+    ));
+    assert.equal(bytes.length, artifact.bytes, artifact.path);
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), artifact.sha256, artifact.path);
   }
 });

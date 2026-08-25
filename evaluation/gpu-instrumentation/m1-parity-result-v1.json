@@ -1,0 +1,160 @@
+{
+  "schemaVersion": "pagespatial-gpu-instrumentation-m1-result-v1",
+  "status": "pass",
+  "date": "2026-08-25",
+  "source": {
+    "gitRevision": "9962f96427acc2101bc340c7aa84acc29c31353e",
+    "dirty": false
+  },
+  "workload": {
+    "id": "a2-50page-v1",
+    "languageScope": "en",
+    "pageCount": 50,
+    "pdfSha256": "46ba5fc15613a260cf019ff6f9be0bb579279be4f5892694a76e02a536d8fcda",
+    "pdfBytes": 680970,
+    "nativeEvidenceSha256": "8e1f5bf2bc2b8a45b5c1cf6699fa275a6a4199acb0f9e308d7183d12ce7f10ef",
+    "nativeEvidenceBytes": 1689433
+  },
+  "arm": {
+    "name": "g-trt-tiny-fp32-a2-b1c4o2",
+    "tier": "tiny",
+    "device": "gpu:0",
+    "runtime": "hpi-ort-trt",
+    "precision": "fp32",
+    "recognitionBatchSize": 1,
+    "producerCount": 4,
+    "inferenceOwners": 2,
+    "providerLayout": {
+      "textDetection": "onnxruntime",
+      "textRecognition": "tensorrt"
+    }
+  },
+  "resources": {
+    "host": "Modal",
+    "physicalCpuCores": 4,
+    "memoryMiB": 24576,
+    "gpu": "NVIDIA L4",
+    "gpuUuid": "GPU-01606b74-9cc3-fb6a-8df6-e149399cffab",
+    "driverVersion": "580.95.05",
+    "cudaVersion": "11.8",
+    "cudnnVersion": "8.9.7"
+  },
+  "runtime": {
+    "ultraInferSourceRevision": "ffb64904d23708863ff5b8da312a5cbd52a7f462",
+    "ultraInferPatchSha256": "b03632bbfae1372f21a2e31babbf72f8936943a0848ff3db853a2f1cd5216bd6",
+    "nvtxVersion": "0.2.16",
+    "nvtxWheelSha256": "23f30fcaf68f53d1895282315cb35aed5f605d59aeb33e75e276545ff95c4af6"
+  },
+  "attempts": [
+    {
+      "appId": "ap-oyXNUPBwRhZBYr3qTwf7tq",
+      "appName": "pagespatial-gpu-instrumentation-m1-20260825014722-f3ba8b",
+      "gitRevision": "66be9c129a2ebe0f77c470dadf7bf317731fb1d1",
+      "reservationId": "1787622442-aaff9042",
+      "result": "failed-before-child-parse",
+      "failure": "operator-observed console output reported that the plain child import entered the local Modal budget path and raised ModuleNotFoundError for gpu_instrumentation_budget; the console log was not retained",
+      "appStateAfterCleanup": "stopped",
+      "tasksAfterCleanup": 0,
+      "artifactPaths": [
+        "20260825T020222Z-adaacaf4/run.json"
+      ]
+    },
+    {
+      "appId": "ap-nov49mC4hCDTdeO9vBcRK8",
+      "appName": "pagespatial-gpu-instrumentation-m1-20260825022520-8778b2",
+      "containerId": "ta-01M0VCHGSZGDZGBD7W2S7E4ZJR",
+      "createdAtUtc": "2026-08-25T02:25:21Z",
+      "stoppedAtUtc": "2026-08-25T02:46:33Z",
+      "gitRevision": "9962f96427acc2101bc340c7aa84acc29c31353e",
+      "reservationId": "1787624720-43b90aff",
+      "result": "pass",
+      "appStateAfterCleanup": "stopped",
+      "tasksAfterCleanup": 0,
+      "artifactPaths": [
+        "20260825T023839Z-fe5ec1ba/child-cold.json",
+        "20260825T023839Z-fe5ec1ba/child-warm.json",
+        "20260825T023839Z-fe5ec1ba/m1-parity.json",
+        "20260825T023839Z-fe5ec1ba/ordinary-after.json",
+        "20260825T023839Z-fe5ec1ba/ordinary-before.json",
+        "20260825T023839Z-fe5ec1ba/ordinary-cold.json",
+        "20260825T023839Z-fe5ec1ba/run.json"
+      ]
+    }
+  ],
+  "parity": {
+    "executionCore": "gpu_a2_modal.A2ExecutionCore",
+    "ordinaryOwnerPid": 2,
+    "childWorkerPid": 1196,
+    "ordinaryBeforePagesPerS": 2.3653397246345427,
+    "ordinaryAfterPagesPerS": 2.3897978294466307,
+    "ordinaryBracketMeanPagesPerS": 2.3775687770405867,
+    "childWarmPagesPerS": 2.3472422981686463,
+    "controlBracketDriftPercent": 1.0340208029046185,
+    "launchBoundaryDriftPercent": 1.275524778285844,
+    "maximumAllowedDriftPercent": 10,
+    "deterministicProjectionExact": true,
+    "criticalTokenDelta": 1,
+    "rawLineDelta": 1,
+    "derivedNullTolerance": {
+      "criticalTokens": 1,
+      "rawLines": 1
+    },
+    "outputGatePass": true,
+    "processTreeClean": true
+  },
+  "privateArtifactRoot": ".evaluation/gpu-instrumentation/2026-08-25/m1",
+  "privateArtifacts": [
+    {
+      "path": "20260825T020222Z-adaacaf4/run.json",
+      "bytes": 1937,
+      "sha256": "515397e31af09ea277be50c1c5950954165dfca8c1f021f3abfcbb7f1f114df1"
+    },
+    {
+      "path": "20260825T023839Z-fe5ec1ba/child-cold.json",
+      "bytes": 10533898,
+      "sha256": "fc10d44943f5540eb2810a59b4db1e1ace0d88fd031d333d877e058214b52d72"
+    },
+    {
+      "path": "20260825T023839Z-fe5ec1ba/child-warm.json",
+      "bytes": 10532534,
+      "sha256": "cd26dff009d28afc4e1d64bdf8bc146acddea433b99699784cbe2af4c4c66863"
+    },
+    {
+      "path": "20260825T023839Z-fe5ec1ba/m1-parity.json",
+      "bytes": 4754,
+      "sha256": "d2ebea45c7dd19e46b6276fb776c1168879990849be08a21ee6fd74513d308ec"
+    },
+    {
+      "path": "20260825T023839Z-fe5ec1ba/ordinary-after.json",
+      "bytes": 10530538,
+      "sha256": "70a59975a267c00a684adf6c18f4e9ea8c87566b27ba900c26a596e468003c28"
+    },
+    {
+      "path": "20260825T023839Z-fe5ec1ba/ordinary-before.json",
+      "bytes": 10530762,
+      "sha256": "ca250c341a134b0544e1c82f8b65ed4382eac6e85be0b395ab41dbb5e8f4a5fd"
+    },
+    {
+      "path": "20260825T023839Z-fe5ec1ba/ordinary-cold.json",
+      "bytes": 10532471,
+      "sha256": "f229384a208518612491a7dd5c4fd2e5f9f9909d1219dfe3c07fa9fadd5b79b7"
+    },
+    {
+      "path": "20260825T023839Z-fe5ec1ba/run.json",
+      "bytes": 1937,
+      "sha256": "947cb5ada78cb8b74483faa527805c48ef7ccce766f2299f9c0f4325597350f7"
+    }
+  ],
+  "observations": [
+    "Operator-observed console output showed that the first paid attempt hit a plain-child import boundary bug; the console log was not retained and the attempt produced no parity result.",
+    "Operator-observed console output showed the successful cold container downloading simfang.ttf before the measured bracket; the console log was not retained, and this must not be described as measured OCR work.",
+    "The successful shared-child path stayed within 1.28 percent of the ordinary control bracket and passed the derived output tolerance.",
+    "The successful exact app stopped with zero tasks."
+  ],
+  "limitations": [
+    "M1 proves shared-core parity only; it does not identify a CPU, CUDA, copy, synchronization, or kernel bottleneck.",
+    "M1 ran on Modal because it is the deployment-host transfer control; the exact core still must be reproduced on the dedicated GCP L4 host before M2 tracing.",
+    "The Tiny output comparison uses the predeclared derived null tolerance and is not a production adoption qualification.",
+    "Actual billed cost for the attempts was not posted when this result was sealed."
+  ]
+}
