@@ -12,13 +12,42 @@ Onboarding order: [principles](principles.md) →
 
 ## State snapshot (update the date when you touch this)
 
-*As of 2026-08-21, night.*
+*As of 2026-08-26.*
 
-- **main**: through PRs #43/#44/#45 (retrieval harness; extractor-blind
-  clean sampler + no-miss verdicts; batch-6 re-read instruments). Era:
-  schema 0.6.0, enrichment-0.2.0 (with `transport` provenance). Each
-  landed through cold-review → fix → closure-verification cycles; every
-  finding and correction is in the trial docs.
+- **main**: through PR #104 (`b96e891`). CI is green. Current record
+  versions remain schema 0.6.0 and enrichment-0.2.0.
+- **Internal Modal parse is ADOPTED**: the CPU/OpenVINO warm-`Cls` adapter
+  passed its 12/12 qualification for controlled internal, parse-only jobs.
+  Qualified bounds are 90 MiB input, 200 pages, 64 MiB serialized result,
+  100 jobs per warm lifetime, and `max_containers` in `{1, 4, 16}`.
+  Enrichment and public ingress remain off. The current Modal adapter has
+  `min_containers=0`, `buffer_containers=0`, and no memory snapshot support;
+  measured cold readiness remains 70–88 seconds. Trial:
+  `docs/trials/2026-08-23-modal-qualification.md`.
+- **GPU optimization workstream CLOSED without adoption (PR #104)**:
+  M2 selected producer starvation; M3 showed thousands of small recognizer
+  calls dominated by TensorRT enqueue and device-to-host transfer, while the
+  independent CPU profile named repeated recognizer execution—not PDF
+  rendering, crop generation, decoding, or Python scheduling—as the useful
+  boundary. The direct treatment rejected B8 (12.7% slower than B1); B4 did
+  not demonstrate a causal gain under 74.8% host drift. CPU/OpenVINO remains
+  the deployment default. No H100 sweep, split-serving rewrite, M4 kernel
+  analysis, or automatic M5 is justified. Trial:
+  `docs/trials/2026-08-25-gpu-bottleneck-instrumentation.md`; follow-up issue
+  #97 stays as a record, not an active commitment.
+- **Standard/Flex service architecture recorded in #105**: private
+  PostgreSQL is initially the authoritative job database and queue; object
+  storage holds PDFs/results; provider workers use an authenticated
+  worker-control API and never receive database credentials. Modal CPU is
+  first. AWS Spot is only a measured cost candidate. Flex provisions no
+  workers without queued demand. No SQS, Kubernetes, custom multi-cloud
+  scheduler, or GPU tier is justified for v1.
+- **Not public-service ready**: #76 owns auth, tenancy, quotas, storage and
+  retention; #87 owns streaming upload, admission, idempotency and
+  incremental polling; #105 owns the durable queue and demand-driven worker
+  control; #83 owns runtime dependency slimming. The existing HTTP service
+  is for a trusted caller and local disk is not a horizontally shared job
+  store.
 - **Retrieval thesis measured (issue #36 CLOSED)**: pre-registered
   outcome "flat everywhere" — trust metadata does NOT pay in ranking,
   not even the corroboration links (five-way ablation, n=101 queries,
@@ -82,8 +111,8 @@ the design flagged is reconciled: 11.4× at $0.000817 is correct (this
 file was already right); the batch trial doc now carries the dated
 correction.**
 
-**Next actions (owner-confirmed 2026-08-22; ranked by the rabbit-hole
-test, principles §9):**
+**Decision history and next actions (updated 2026-08-26; ranked by the
+rabbit-hole test, principles §9):**
 
 1. ~~First extractor-blind clean batch~~ **DONE (batch7-clean-v1,
    2026-08-22), CORRECTED same day (PRs #58/#60)**: the "1/15
@@ -300,14 +329,19 @@ current scorer; decides instrument-fix vs detector-project).
 |---|---|---|---|---|---|
 | Gold extension (human batches) | #1 | **in progress — batches 3–5 shipped (PRs #27/#30/#35)**: ~75 pages labelled incl. 27 clean; rows 1/4/7/8 measured. Known gaps: single annotator (**batch 6 amendment: double-label ~20 stratified pages for an inter-annotator noise floor** — see issue comment); row 1b uncollectable by the digit-only pre-labeler | — | evaluation/gold, review.html flow | nothing |
 | Escalation recall (clean-page silent misses) | #29 | **instances confirmed, rate withdrawn (PR #35 review)**: sound sampling needs (a) selection from ALL non-escalated pages independent of extractor output, (b) a page-level "no miss found here" verdict in the review UI so verified negatives can enter a denominator | — | sampler tiering, review UI, diagnostics | nothing |
-| Retrieval harness (does trust metadata move retrieval?) | #36 | open — **pre-registered design in the issue**; deterministic paired scoring, stratified queries; 1–2 days; co-evolves the #21 chunk contract and $/trusted-chunk metric | — | scripts/evaluation, trial doc | nothing (gold bounds query pool; grows with #1) |
+| Retrieval harness (does trust metadata move retrieval?) | #36 | **closed — measured flat**: trust metadata did not improve ranking; trust-free duplicate-drop is the ingestion baseline. Future hypothesis moved to answer verification/citation. | — | — | — |
 | Malformed-PDF fuzz pass (fail-closed degradation) | #37 | open — bounded; synthetic hostile PDFs; one bad page must not kill a document | — | test/, scripts | nothing |
 | Adjudication spot-check (audit the 272/272) | #31 | **shipped** (PR #33): 25/29 agree; "272/272" retracted, "zero wrong-side" survives. Optional follow-up: second batch on the digits-differ class (11/15) | — | — | — |
 | Server-GPU OCR adapter (privacy-constrained deployments) | #2 | open — **gated: re-measure JA/chart recovery recall on current main first** (CMap fix + zoom-retry shipped since the motivating number; see issue comment) | — | new node/server module | the re-measure |
 | Index ingestion spec (consumption contract) | #21 | open — design doc only | — | docs/ | nothing |
 | Recovery tile budget (cost bound) | #13 | open — small, well-specified; good first task | — | src/browser/region-recovery.ts, tuning | nothing |
 | Batch API + residue-crop rungs | #20 | **shipped** (PR #23) | session | — | — |
-| Production-scale offline ingestion service | #22 | open — design + throughput prototype | — | new service layer; coordinates with #21 | nothing |
+| Internal Modal parse deployment | #22 | **adopted within qualified bounds**: CPU/OpenVINO warm `Cls`, parse-only, no public ingress. Production service work is split into #76/#87/#105. | — | deploy/modal, service | public product contract |
+| Standard/Flex service execution | #105 | **designed, not implemented**: PostgreSQL job/lease queue, object storage, authenticated worker-control API, demand-driven Modal CPU first; AWS Spot only after a measured cost win. | — | service API, job store, worker adapters | #76 and #87 product decisions |
+| Public/commercial API | #76 | **open, tracked-not-scheduled**: auth, tenant isolation, quotas, retention, public API contract. | — | gateway, storage, service contract | real consumer requirements |
+| HTTP admission and idempotency | #87 | **open**: stream uploads, reject overload before buffering, `429`, idempotency key, queue metrics, incremental polling. | — | service HTTP API | service-tier limits |
+| Service dependency slimming | #83 | **open, bounded**: express real runtime dependencies and stop copying the full dev toolchain into the image. | — | package manifests, Dockerfile | nothing |
+| GPU bottleneck follow-up | #97 | **parked**: instrumentation and B1/B4/B8 treatments did not earn a GPU deployment change. Resume only for a new measured hypothesis. | — | evaluation only | concrete throughput/cost trigger |
 | pdf-inspector WASM in browser (markdown parity) | #25 | open — low priority; CJK/CMap gate first (monotaro p61); pair with native 1.14.2→1.15.0 bump | — | src/browser, package.json | nothing |
 | Cross-family second opinion | PR #19 | **shipped** | session | — | — |
 | Pictorial threshold + residue-severity data check | #14 | parked, gold-gated | — | tuning, ink.ts | #1 |
