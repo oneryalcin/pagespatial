@@ -43,4 +43,5 @@ test('M3 evolves the pinned M2 image and reuses only the exact VM owner', () => 
   assert.match(dockerSource, /git -C \/opt\/paddlex-source apply \/root\/ultra-infer-m3-native-nvtx\.patch/u);
   assert.match(gcpSource, /elif args\.m3_native:\s*\n\s*reservations = \[reserve\(args\.ledger, "M3-NATIVE"\)\]/u);
   assert.match(gcpSource, /M3 does not authorize reuse of an M2 retry path/u);
+  assert.match(gcpSource, /reopen_m3_capacity_retry\(args\.ledger, args\.m3_capacity_retry\)/u);
 });

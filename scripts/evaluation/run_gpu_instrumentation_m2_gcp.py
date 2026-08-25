@@ -24,6 +24,7 @@ from gpu_instrumentation_budget import (
     complete,
     reopen_capacity_retry,
     reopen_fixed_image_retry,
+    reopen_m3_capacity_retry,
     reserve,
     reserve_bundle,
     validate_reservation,
@@ -527,6 +528,7 @@ def main() -> None:
     parser.add_argument("--capacity-retry-bundle")
     parser.add_argument("--fixed-image-retry-bundle")
     parser.add_argument("--m3-native", action="store_true")
+    parser.add_argument("--m3-capacity-retry")
     parser.add_argument(
         "--pdf",
         type=Path,
@@ -556,12 +558,16 @@ def main() -> None:
         raise RuntimeError(f"refusing existing {milestone.upper()} output directory: {args.out_dir}")
     if not args.pdf.is_file() or not args.native_evidence.is_file():
         raise RuntimeError(f"{milestone.upper()} private inputs are unavailable")
-    retry_modes = [args.capacity_retry_bundle, args.fixed_image_retry_bundle]
-    if args.m3_native and any(retry_modes):
+    retry_modes = [args.capacity_retry_bundle, args.fixed_image_retry_bundle, args.m3_capacity_retry]
+    if args.m3_capacity_retry and not args.m3_native:
+        raise RuntimeError("M3 capacity retry requires --m3-native")
+    if args.m3_native and any((args.capacity_retry_bundle, args.fixed_image_retry_bundle)):
         raise RuntimeError("M3 does not authorize reuse of an M2 retry path")
     if sum(value is not None for value in retry_modes) > 1:
         raise RuntimeError("only one M2 retry mode may be selected")
-    if args.fixed_image_retry_bundle:
+    if args.m3_capacity_retry:
+        reservations = [reopen_m3_capacity_retry(args.ledger, args.m3_capacity_retry)]
+    elif args.fixed_image_retry_bundle:
         if not FIXED_IMAGE_FAILURE_EVIDENCE.is_file():
             raise RuntimeError("fixed-image retry requires its integrity-pinned failure evidence")
         fixed_image_failure_sha256 = str(

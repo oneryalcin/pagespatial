@@ -118,6 +118,26 @@ final=m.load_ledger(p); print(json.dumps({"stage":r["stage"],"worst":r["worstCas
   assert.match(result.errors[2], /only one exact fresh M2/u);
 });
 
+test('M3 permits one same-reservation retry only after a retained L4 stockout', () => {
+  const ledger = join(mkdtempSync(join(tmpdir(), 'gpu-inst-m3-retry-')), 'ledger.json');
+  const code = String.raw`
+import importlib.util,json,sys
+from pathlib import Path
+spec=importlib.util.spec_from_file_location("budget",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.current_profile=lambda:"desia"; m.active_experiment_apps=lambda:[]; m.billing_rows=lambda:[]
+m.now_utc=lambda:m.datetime(2026,8,25,12,40,tzinfo=m.timezone.utc)
+p=Path(sys.argv[2]); r=m.reserve(p,"M3-NATIVE"); m.validate_reservation(p,r["id"],"M3-NATIVE"); m.complete(p,r["id"],"gcp:test",m.CAPACITY_FAILURE_MARKER)
+reopened=m.reopen_m3_capacity_retry(p,r["id"]); errors=[]
+try:m.reopen_m3_capacity_retry(p,r["id"])
+except Exception as e:errors.append(str(e))
+print(json.dumps({"id":reopened["id"],"status":reopened["status"],"history":reopened["capacityRetryHistory"],"errors":errors}))
+`;
+  const result = runPython(code, ledger);
+  assert.equal(result.status, 'reserved');
+  assert.equal(result.history.length, 1);
+  assert.match(result.errors[0], /already been reserved/u);
+});
+
 test('instrumentation reservation is single-use and retains completed exposure', () => {
   const ledger = join(mkdtempSync(join(tmpdir(), 'gpu-inst-budget-')), 'ledger.json');
   const code = String.raw`
