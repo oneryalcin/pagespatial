@@ -354,8 +354,23 @@ def reopen_m3_capacity_retry(path: Path, reservation_id: str) -> dict[str, Any]:
     rows = billing_rows()
     with ledger_lock(path):
         ledger = load_ledger(path)
-        if ledger.get(M3_CAPACITY_RETRY_LEDGER_KEY) is not None:
-            raise RuntimeError("the single same-VM M3 capacity retry has already been reserved")
+        retry_token = ledger.get(M3_CAPACITY_RETRY_LEDGER_KEY)
+        if retry_token is not None:
+            match = next(
+                (item for item in ledger["reservations"] if item.get("id") == reservation_id),
+                None,
+            )
+            if (
+                isinstance(retry_token, dict)
+                and retry_token.get("reservationId") == reservation_id
+                and isinstance(match, dict)
+                and match.get("stage") == "M3-NATIVE"
+                and match.get("status") == "reserved"
+                and match.get("claimedAt") is None
+                and match.get("capacityRetryHistory")
+            ):
+                return match
+            raise RuntimeError("the single same-VM M3 capacity retry has already been claimed")
         token = ledger.get(M3_NATIVE_LEDGER_KEY)
         if not isinstance(token, dict) or token.get("reservationId") != reservation_id:
             raise RuntimeError("M3 capacity retry requires the exact M3 reservation token")
