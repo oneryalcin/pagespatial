@@ -35,6 +35,9 @@ test('native patch contains only the six bounded TensorRT phase names', () => {
 test('M3 analyzer prevents nested H2D double counting and enforces coverage', () => {
   assert.match(analyzerSource, /_subtract\(intervals, stages\["trt\.host_to_device"\]\)/u);
   assert.match(analyzerSource, /nativeCoveragePercent/u);
+  assert.match(analyzerSource, /nativeMarkersExpected/u);
+  assert.match(analyzerSource, /unattributedPercent/u);
+  assert.match(analyzerSource, /backend == "tensorrt"/u);
   assert.match(analyzerSource, /less than 80%/u);
   assert.match(analyzerSource, /insufficient-native-visibility/u);
   assert.match(analyzerSource, /activity statements apply only to the traced PageSpatial CUDA context/u);

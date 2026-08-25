@@ -1,0 +1,111 @@
+{
+  "schemaVersion": "pagespatial-gpu-instrumentation-m3-summary-v1",
+  "date": "2026-08-25",
+  "status": "measurement-complete-gate-failed",
+  "source": {
+    "imageBuildRevision": "dafbeac5a35c9115587f831e803f803027bd8db6",
+    "captureFixRevision": "d7ff1ec",
+    "captureFixFileSha256": "76b0598034a65a5889f38513c73b34367e035318ea9e5cb0a0398420dbf587cf",
+    "imageId": "sha256:3514d9e0da6d4b045907370e5025e184d51d556854c7c696274f53a5adff6138",
+    "overlay": "The committed gpu_a2_modal.py capture-name fix was bind-mounted over the cached image. Native UltraInfer and TensorRT binaries were unchanged."
+  },
+  "measuredUnit": {
+    "host": "pagespatial-gpu-profiler-20260825",
+    "project": "red-studio-399209",
+    "zone": "us-central1-a",
+    "machineType": "g2-standard-8",
+    "gpu": "NVIDIA L4",
+    "gpuUuid": "GPU-b4454f02-bfd6-4e65-2b35-ae105359966a",
+    "driver": "580.173.02",
+    "modelTier": "tiny",
+    "precision": "fp32",
+    "recognitionBatchSize": 1,
+    "producerCount": 4,
+    "inferenceOwners": 2,
+    "capturePages": 10,
+    "detectorBackend": "onnxruntime",
+    "recognizerBackend": "tensorrt"
+  },
+  "verdict": {
+    "pass": false,
+    "reason": "TensorRT recognizer native phases cover 78.6706% of recognizer.backend, below the predeclared 80% gate.",
+    "correctnessPass": true,
+    "controlDriftPercent": 0.5855172646086082,
+    "profilerOverheadPercent": 50.30127953748178,
+    "timelineDurationsAreDiagnostic": true
+  },
+  "measurement": {
+    "captureWallMs": 4911.243698,
+    "controlPagesPerSecond": [2.504463161223744, 2.5191272254184716],
+    "tracePagesPerSecond": 1.6711592865684841,
+    "detector": {
+      "backend": "onnxruntime",
+      "occupiedUnionMs": 463.955966,
+      "nativeTensorRtMarkersExpected": false
+    },
+    "recognizer": {
+      "backend": "tensorrt",
+      "occupiedUnionMs": 2340.707084,
+      "nativeCoveragePercent": 78.67064224256434,
+      "unattributedOccupiedMs": 499.257788,
+      "unattributedPercent": 21.32935775743566,
+      "inferenceCalls": 1348,
+      "callsPerCapturedPage": 134.8,
+      "exclusiveSharePercent": {
+        "trt.input_prepare": 0.8365976731499482,
+        "trt.host_to_device": 5.664987554675166,
+        "trt.enqueue": 48.27339468162177,
+        "trt.synchronize": 0.4779800119577884,
+        "trt.device_to_host": 23.021604227348938,
+        "trt.output_materialize": 0.3960780938107332
+      },
+      "meanServiceMicrosecondsPerCall": {
+        "trt.input_prepare": 112.89544955489615,
+        "trt.host_to_device": 98.36852002967359,
+        "trt.enqueue": 838.2335081602373,
+        "trt.synchronize": 8.299786350148368,
+        "trt.device_to_host": 399.7539473293769,
+        "trt.output_materialize": 3.4388086053412463
+      }
+    }
+  },
+  "interpretation": {
+    "largestNamedRecognizerCost": "trt.enqueue",
+    "secondNamedRecognizerCost": "trt.device_to_host",
+    "batchingSignal": "The B1 lane issued 1,348 recognizer calls for 10 pages. A bounded B8 follow-up is the leading performance hypothesis, but the 21.33% runner-wrapper remainder must stay visible.",
+    "notEstablished": [
+      "production throughput from profiled timings",
+      "full attribution of recognizer.backend",
+      "TensorRT behavior for the ONNX Runtime detector",
+      "a production adoption decision"
+    ]
+  },
+  "rawEvidence": {
+    "location": ".evaluation/gpu-instrumentation/2026-08-25/m3-gcp-l4-final",
+    "files": {
+      "m3-native.1.sqlite": {
+        "bytes": 42516480,
+        "sha256": "49016bb54501dbd63c2793210dfc8bbeb4af592c58f601767fa52ad520b7a959"
+      },
+      "m3-native-results.json": {
+        "bytes": 53196764,
+        "sha256": "a17692c7ad4f07695719bea91a43e98110fdd709ce3e6edd0074173173648d94"
+      },
+      "m3-native.nsys-rep": {
+        "bytes": 10218655,
+        "sha256": "11020f72b580e84c3563093c2aa3856f2236ddf7c36e2b2e51f5af28581e0dba"
+      },
+      "m3-analysis.json": {
+        "bytes": 7526,
+        "sha256": "c292aba8a785a0cd8236c7360b5f36ef1eaa47f27646dcde7b7d2dbf3fe2de26"
+      }
+    }
+  },
+  "cleanup": {
+    "instanceStatus": "TERMINATED",
+    "externalAccessConfigs": 0,
+    "temporaryFirewallRule": "deleted",
+    "temporaryNetworkTag": "removed",
+    "startupMetadata": "restored"
+  }
+}

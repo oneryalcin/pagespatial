@@ -1,8 +1,8 @@
 # Trial: GPU bottleneck instrumentation
 
-**Status:** M0, M1, and M2 complete; Modal cannot collect the required trace,
-the GCP full-VM fallback supports it, and both M2 Systems windows select
-`producer-starvation`
+**Status:** M0 through M3 measured. M2 selects `producer-starvation`. M3
+identifies TensorRT enqueue and device-to-host transfer as the largest named
+recognizer costs, but fails its 80% visibility gate at 78.67%.
 
 **Date:** 2026-08-25
 
@@ -298,6 +298,58 @@ Do not test H100, enlarge recognition batches, add more producers, or rewrite
 the scheduler yet. M2 selects the `producer-starvation` row for the traced
 PageSpatial context, but it does not yet say which native operation should be
 removed.
+
+## M3 native TensorRT result
+
+M3 measurement completed on the same Tiny, FP32, recognition-B1, four-producer,
+two-owner L4 shape. The output correctness gate passed, the controls differed
+by only 0.59%, and the same worker served all four calls. The trace added 50.30%
+overhead, so its durations are diagnostic structure, not production throughput.
+
+The detector uses ONNX Runtime. The recognizer uses TensorRT. The first analyzer
+incorrectly required TensorRT markers under both roles. The corrected analyzer
+requires native TensorRT coverage only for roles whose retained backend
+attestation says `tensorrt`.
+
+| recognizer phase | calls | occupied time | recognizer share | mean per call |
+|---|---:|---:|---:|---:|
+| TensorRT enqueue | 1,348 | 1,129.94 ms | 48.27% | 838.23 us |
+| device to host | 1,348 | 538.87 ms | 23.02% | 399.75 us |
+| host to device | 1,348 | 132.60 ms | 5.66% | 98.37 us |
+| input preparation, excluding nested H2D | 1,348 | 19.58 ms | 0.84% | diagnostic aggregate |
+| synchronize | 1,348 | 11.19 ms | 0.48% | 8.30 us |
+| output materialization | 2,696 | 9.27 ms | 0.40% | 3.44 us |
+| unattributed PaddleX runner wrapper | - | 499.26 ms | 21.33% | - |
+
+The TensorRT recognizer occupied 2,340.71 ms of the 10-page capture. The six
+native phases cover 78.67% of that parent range. This misses the predeclared
+80% gate by 1.33 percentage points, so the formal M3 verdict is **FAIL:
+insufficient native visibility**. The threshold was not relaxed after seeing
+the result.
+
+This failure does not erase the measured structure. At B1, the recognizer made
+1,348 inference calls for 10 pages, or 134.8 calls per page. TensorRT enqueue is
+the largest named cost. Device-to-host transfer is the second. Together they
+occupy 71.30% of the recognizer parent. The leading performance hypothesis is
+therefore fewer, larger recognizer calls, tested with a bounded B8 lane. It is
+a hypothesis, not an adoption decision: the 21.33% PaddleX runner remainder
+must remain visible, and profiled timings must not be quoted as production
+speed.
+
+The first retained profiler attempt failed before capture because the shared
+core allowed only `m2.*` capture names. Commit `d7ff1ec` adds the exact
+`m3.native.capture` name. The successful measurement bind-mounted that one
+committed Python file over cached image
+`sha256:3514d9e0da6d4b045907370e5025e184d51d556854c7c696274f53a5adff6138`.
+Native UltraInfer and TensorRT binaries were unchanged. The capture-fix file
+SHA-256 is
+`76b0598034a65a5889f38513c73b34367e035318ea9e5cb0a0398420dbf587cf`.
+
+The compact result is
+[`m3-gcp-l4-summary-2026-08-25.json`](../../evaluation/gpu-instrumentation/m3-gcp-l4-summary-2026-08-25.json).
+It pins the measured unit, backend split, timings, formal failure, source and
+image identities, correctness, raw evidence hashes, and cleanup. Raw evidence
+stays under the ignored private `.evaluation/` tree.
 
 ## Spend, evidence, and cleanup
 

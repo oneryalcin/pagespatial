@@ -29,6 +29,10 @@ NATIVE_STAGES = (
     "trt.output_materialize",
 )
 PARENT_STAGES = ("detector.backend", "recognizer.backend")
+ROLE_BACKEND_ATTRS = {
+    "detector.backend": "ocr.paddlex_pipeline._pipeline.text_det_model.runner._config.backend",
+    "recognizer.backend": "ocr.paddlex_pipeline._pipeline.text_rec_model.runner._config.backend",
+}
 
 
 def _message_stage(message: str) -> str:
@@ -38,6 +42,14 @@ def _message_stage(message: str) -> str:
 def analyze(sqlite_path: Path, results_path: Path) -> dict[str, Any]:
     results = json.loads(results_path.read_text())
     lifetime = analyze_lifetime(results)
+    backend_attrs = results[0].get("backendAttrs", {}) if results else {}
+    role_backends = {
+        role: backend_attrs.get(attribute)
+        for role, attribute in ROLE_BACKEND_ATTRS.items()
+    }
+    expected_native_roles = {
+        role for role, backend in role_backends.items() if backend == "tensorrt"
+    }
     with sqlite3.connect(sqlite_path) as connection:
         rows = _nvtx_ranges(connection)
     captures = [row for row in rows if row["message"] == "m3.native.capture"]
@@ -74,7 +86,7 @@ def analyze(sqlite_path: Path, results_path: Path) -> dict[str, Any]:
         parent_ns = _duration(parent_intervals)
         stage_rows = {}
         for stage, intervals in stages.items():
-            if not intervals:
+            if role in expected_native_roles and not intervals:
                 missing.append(f"{role}:{stage}")
             exclusive = intervals
             if stage == "trt.input_prepare":
@@ -84,11 +96,20 @@ def analyze(sqlite_path: Path, results_path: Path) -> dict[str, Any]:
                 "summedServiceMs": sum(end - start for start, end in intervals) / 1_000_000,
                 "occupiedUnionMs": _duration(intervals) / 1_000_000,
                 "exclusiveOccupiedUnionMs": _duration(exclusive) / 1_000_000,
+                "meanServiceUs": (
+                    sum(end - start for start, end in intervals) / len(intervals) / 1_000
+                    if intervals else 0.0
+                ),
             }
-        coverage = 100 * _duration(_intersections(native_union, parent_intervals)) / parent_ns if parent_ns else 0
+        native_ns = _duration(_intersections(native_union, parent_intervals))
+        coverage = 100 * native_ns / parent_ns if parent_ns else 0
         roles[role] = {
+            "backend": role_backends.get(role),
+            "nativeMarkersExpected": role in expected_native_roles,
             "backendOccupiedUnionMs": parent_ns / 1_000_000,
             "nativeCoveragePercent": coverage,
+            "unattributedOccupiedMs": max(0, parent_ns - native_ns) / 1_000_000,
+            "unattributedPercent": 100 * max(0, parent_ns - native_ns) / parent_ns if parent_ns else 0,
             "stages": stage_rows,
         }
 
@@ -104,8 +125,10 @@ def analyze(sqlite_path: Path, results_path: Path) -> dict[str, Any]:
         reasons.append(f"{len(unowned)} native ranges lack a detector/recognizer backend parent")
     if missing:
         reasons.append(f"missing native marker observations: {missing}")
-    if min(role["nativeCoveragePercent"] for role in roles.values()) < 80:
-        reasons.append("native phases cover less than 80% of an opaque backend")
+    if not expected_native_roles:
+        reasons.append("no TensorRT backend role was attested")
+    elif min(roles[role]["nativeCoveragePercent"] for role in expected_native_roles) < 80:
+        reasons.append("native phases cover less than 80% of a TensorRT backend")
     correctness = compare_output(results_path)
     if not correctness.get("verdict", {}).get("pass"):
         reasons.append("owner-approved trusted-output correctness gate failed")
@@ -127,6 +150,7 @@ def analyze(sqlite_path: Path, results_path: Path) -> dict[str, Any]:
         "limitations": [
             "durations are diagnostic when profiler overhead exceeds 15%",
             "input preparation is reported exclusive of its nested host-to-device copies",
+            "native TensorRT marker coverage is required only for roles attested as TensorRT",
             "activity statements apply only to the traced PageSpatial CUDA context",
         ],
     }
