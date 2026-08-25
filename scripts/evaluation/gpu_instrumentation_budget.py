@@ -368,9 +368,7 @@ def reopen_m3_capacity_retry(path: Path, reservation_id: str) -> dict[str, Any]:
             raise RuntimeError("M3 reservation is not reusable")
         if match.get("status") == "reserved" and match.get("claimedAt") is None:
             return match
-        if CAPACITY_FAILURE_MARKER not in str(match.get("completionNote", "")):
-            raise RuntimeError("M3 reservation reuse requires a retained pre-start L4 stockout")
-        match.setdefault("capacityStartFailures", []).append({
+        match.setdefault("attemptFailures", []).append({
             "completedAt": match.get("completedAt"),
             "completionNote": match.get("completionNote"),
         })

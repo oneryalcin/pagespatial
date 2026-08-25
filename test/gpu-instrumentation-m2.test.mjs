@@ -294,6 +294,7 @@ print(json.dumps({"bothGood":m.output_pair_passes(good,good),"cpuCorrupt":m.outp
 test('host run pins the four-core shape and restores its only host sysctl', () => {
   assert.match(hostSource, /--cpuset-cpus=0-7/u);
   assert.match(hostSource, /--memory=24g/u);
+  assert.match(hostSource, /MIN_FREE_BYTES = 28 \* 1024\*\*3/u);
   assert.match(hostSource, /--privileged/u);
   assert.match(hostSource, /seccomp=unconfined/u);
   assert.match(hostSource, /kernel\.perf_event_paranoid=\{original_perf\}/u);

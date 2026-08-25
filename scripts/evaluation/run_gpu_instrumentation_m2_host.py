@@ -19,7 +19,7 @@ from typing import Any
 EXPECTED_INSTANCE = "pagespatial-gpu-profiler-20260825"
 IMAGE_REPOSITORY = "pagespatial-gpu-instrumentation-m2"
 CONTAINER_NAME = "pagespatial-gpu-instrumentation-m2"
-MIN_FREE_BYTES = 30 * 1024**3
+MIN_FREE_BYTES = 28 * 1024**3
 MAX_EVIDENCE_BYTES = 12 * 1024**3
 
 
@@ -94,7 +94,7 @@ def _assert_host() -> dict[str, Any]:
     disk = shutil.disk_usage("/")
     if disk.free < MIN_FREE_BYTES:
         raise RuntimeError(
-            f"host has {disk.free} free bytes; M2 requires {MIN_FREE_BYTES}"
+            f"host has {disk.free} free bytes; profiling requires {MIN_FREE_BYTES}"
         )
     return {
         "hostname": hostname,

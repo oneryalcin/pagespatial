@@ -129,7 +129,7 @@ m.now_utc=lambda:m.datetime(2026,8,25,12,40,tzinfo=m.timezone.utc)
 p=Path(sys.argv[2]); r=m.reserve(p,"M3-NATIVE"); m.validate_reservation(p,r["id"],"M3-NATIVE"); m.complete(p,r["id"],"gcp:test",m.CAPACITY_FAILURE_MARKER)
 first=m.reopen_m3_capacity_retry(p,r["id"]); same=m.reopen_m3_capacity_retry(p,r["id"]); m.validate_reservation(p,r["id"],"M3-NATIVE"); m.complete(p,r["id"],"gcp:test",m.CAPACITY_FAILURE_MARKER)
 second=m.reopen_m3_capacity_retry(p,r["id"]); state=m.load_ledger(p); final=next(x for x in state["reservations"] if x["id"]==r["id"])
-print(json.dumps({"id":first["id"],"sameId":same["id"],"secondId":second["id"],"failures":final["capacityStartFailures"]}))
+print(json.dumps({"id":first["id"],"sameId":same["id"],"secondId":second["id"],"failures":final["attemptFailures"]}))
 `;
   const result = runPython(code, ledger);
   assert.equal(result.sameId, result.id);
