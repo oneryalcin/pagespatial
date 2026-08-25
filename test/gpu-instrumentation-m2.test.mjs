@@ -150,6 +150,8 @@ test('GCP owner can mutate only the exact experiment VM and always stops it', ()
   assert.doesNotMatch(gcpSource, /start-iap-tunnel/u);
   assert.match(gcpSource, /HostKeyAlias=/u);
   assert.match(gcpSource, /StrictHostKeyChecking=yes/u);
+  assert.match(gcpSource, /SSH_PORT = 443/u);
+  assert.match(gcpSource, /Port 443/u);
   assert.match(gcpSource, /sudo -n python3 \{remote_root\}\/repo\/scripts\/evaluation\/run_gpu_instrumentation_m2_host\.py/u);
   assert.match(gcpSource, /--fixed-image-retry-bundle/u);
   assert.match(gcpSource, /327893a19271a4b71774dfa71192e1d4921da6edf7b44b5677ee9674abd741a9/u);

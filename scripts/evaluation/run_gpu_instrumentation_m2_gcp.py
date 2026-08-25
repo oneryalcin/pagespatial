@@ -41,6 +41,11 @@ M2_STAGES = ("M2-SYSTEMS", "M2-CPU")
 STARTUP_SCRIPT = """#!/bin/bash
 set -eu
 
+# Corporate egress blocks TCP/22. Keep the experiment VM reachable through the
+# VM-scoped, temporary TCP/443 firewall rule owned outside this runner.
+grep -qxF 'Port 443' /etc/ssh/sshd_config || printf '\nPort 443\n' >> /etc/ssh/sshd_config
+systemctl restart ssh
+
 # Bound accidental GPU runtime. A deliberate restart schedules a fresh window.
 /sbin/shutdown -h +360
 """
@@ -57,6 +62,7 @@ EXPECTED_ACCESS_CONFIG = {
 }
 SSH_KEY = Path.home() / ".ssh/google_compute_engine"
 KNOWN_HOSTS = Path.home() / ".ssh/google_compute_known_hosts"
+SSH_PORT = 443
 FIXED_IMAGE_FAILURE_EVIDENCE = Path(
     ".evaluation/gpu-instrumentation/2026-08-25/"
     "m2-gcp-retry-16e6599/m2-host-run.json"
@@ -449,6 +455,8 @@ def _ssh(
             f"HostKeyAlias={identity['hostAlias']}",
             "-o",
             "ConnectTimeout=30",
+            "-p",
+            str(SSH_PORT),
             f"{identity['username']}@{host}",
             remote_command,
         ],
@@ -515,6 +523,8 @@ def _scp(
             f"UserKnownHostsFile={identity['knownHostsPath']}",
             "-o",
             f"HostKeyAlias={identity['hostAlias']}",
+            "-P",
+            str(SSH_PORT),
             *[endpoint(value) for value in sources],
             endpoint(destination),
         ],
