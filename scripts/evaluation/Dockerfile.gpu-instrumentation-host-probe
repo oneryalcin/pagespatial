@@ -1,0 +1,20 @@
+FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:3.0.0-gpu-cuda11.8-cudnn8.9-trt8.6
+
+ARG NSYS_DEB=NsightSystems-linux-cli-public-2025.5.1.121-3638078.deb
+ARG NSYS_SHA256=506a8a3fdd94cec84c4c216d159ce3a6496170e8cf22b95b603b4bef4e0fb6e2
+
+RUN set -eu; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl; \
+    curl -fsSLo "/tmp/${NSYS_DEB}" \
+      "https://developer.download.nvidia.com/devtools/repos/ubuntu2004/amd64/${NSYS_DEB}"; \
+    echo "${NSYS_SHA256}  /tmp/${NSYS_DEB}" | sha256sum -c -; \
+    dpkg -i "/tmp/${NSYS_DEB}"; \
+    rm -f "/tmp/${NSYS_DEB}"; \
+    rm -rf /var/lib/apt/lists/*; \
+    python -m pip install --no-cache-dir nvtx==0.2.16; \
+    nsys --version
+
+COPY scripts/evaluation/gpu_instrumentation_probe_child.py /app/gpu_instrumentation_probe_child.py
+
+WORKDIR /app

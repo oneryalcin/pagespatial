@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +13,14 @@ const modalSource = readFileSync(
   new URL('../scripts/evaluation/gpu_instrumentation_modal.py', import.meta.url),
   'utf8',
 );
+const hostDockerfile = readFileSync(
+  new URL('../scripts/evaluation/Dockerfile.gpu-instrumentation-host-probe', import.meta.url),
+  'utf8',
+);
+const hostResult = JSON.parse(readFileSync(
+  new URL('../evaluation/gpu-instrumentation/m0-gcp-host-capability-result-v1.json', import.meta.url),
+  'utf8',
+));
 
 function runPython(code, ledger) {
   return JSON.parse(execFileSync('python3', ['-c', code, modulePath, ledger], { encoding: 'utf8' }));
@@ -92,4 +101,30 @@ test('M0 validates generated artifacts instead of treating exit status as eviden
 
 test('M0 event counts exclude schema enumeration rows', () => {
   assert.match(modalSource, /not name\.upper\(\)\.startswith\("ENUM_"\)/u);
+});
+
+test('M0 host probe preserves the exact Modal profiler and CUDA identities', () => {
+  assert.match(hostDockerfile, /paddle:3\.0\.0-gpu-cuda11\.8-cudnn8\.9-trt8\.6/u);
+  assert.match(hostDockerfile, /NsightSystems-linux-cli-public-2025\.5\.1\.121-3638078\.deb/u);
+  assert.match(hostDockerfile, /506a8a3fdd94cec84c4c216d159ce3a6496170e8cf22b95b603b4bef4e0fb6e2/u);
+  assert.match(hostDockerfile, /nvtx==0\.2\.16/u);
+  const digest = createHash('sha256').update(hostDockerfile).digest('hex');
+  assert.equal(hostResult.probeImage.dockerfileSha256, digest);
+});
+
+test('M0 host result requires real CUDA, NVTX, CPU, and scheduler events', () => {
+  assert.equal(hostResult.verdict.hostSupportsRequiredM2Trace, true);
+  for (const capability of [
+    'reportGeneration', 'sqliteExport', 'osRuntimeTrace', 'cpuSampling',
+    'cpuContextSwitchTrace', 'nvtxTrace', 'cudaApiTrace', 'cudaKernelTrace',
+    'cudaMemoryTrace',
+  ]) {
+    assert.equal(hostResult.capabilities[capability], true, capability);
+  }
+  assert.ok(hostResult.cudaTrace.nvtxEvents > 0);
+  assert.ok(hostResult.cudaTrace.cudaApiEvents > 0);
+  assert.ok(hostResult.cudaTrace.cudaKernelEvents > 0);
+  assert.ok(hostResult.cudaTrace.cudaMemoryEvents > 0);
+  assert.ok(hostResult.cpuTrace.sampledCallchains > 0);
+  assert.ok(hostResult.cpuTrace.schedulerEvents > 0);
 });

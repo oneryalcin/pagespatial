@@ -1,0 +1,122 @@
+{
+  "schemaVersion": "pagespatial-gpu-instrumentation-m0-host-result-v1",
+  "date": "2026-08-25",
+  "host": {
+    "provider": "Google Compute Engine",
+    "project": "red-studio-399209",
+    "instance": "pagespatial-gpu-profiler-20260825",
+    "zone": "us-central1-a",
+    "machineType": "g2-standard-8",
+    "cpuPlatform": "Intel Cascade Lake",
+    "physicalCpuCores": 4,
+    "logicalCpuThreads": 8,
+    "memoryMiB": 32768,
+    "kernel": "Linux 6.8.0-1066-gcp",
+    "image": "ubuntu-accelerator-2204-amd64-with-nvidia-580-v20260821",
+    "gpu": "NVIDIA L4",
+    "gpuUuid": "GPU-f89354dd-4e40-ff04-3241-6417145d7465",
+    "gpuMemoryMiB": 23034,
+    "driver": "580.173.02",
+    "cudaRuntime": "11.8",
+    "paddle": "3.0.0"
+  },
+  "isolation": {
+    "serviceAccount": null,
+    "apiScopes": [],
+    "blockProjectSshKeys": true,
+    "automaticRestart": false,
+    "maintenancePolicy": "TERMINATE",
+    "startupAutoShutdownMinutes": 360
+  },
+  "probeImage": {
+    "dockerImageId": "sha256:7c77d730ece1701b52d00c340961ef0c2dd37361742f7611941e9911215bc1b2",
+    "baseImageDigest": "sha256:2bd8830dafd258501e7313b320fa1bcc946c70318b3081647b90bc70182e7360",
+    "dockerfileSha256": "2f4737d0f5a48b03fba98ccd3a150af55f155c8f0a1963c94db34021686d45e8",
+    "probeChildSha256": "7fd580781b1a169c559e101c7082289e86dbaefff84fbc7f9d7b11db01617d33"
+  },
+  "tools": {
+    "nsightSystems": {
+      "version": "2025.5.1.121-255136380782v0",
+      "debSha256": "506a8a3fdd94cec84c4c216d159ce3a6496170e8cf22b95b603b4bef4e0fb6e2"
+    },
+    "nvtx": {
+      "version": "0.2.16",
+      "cp310X8664WheelSha256": "23f30fcaf68f53d1895282315cb35aed5f605d59aeb33e75e276545ff95c4af6"
+    },
+    "docker": "29.1.3",
+    "nvidiaContainerToolkit": "1.20.0",
+    "perf": "6.8.12"
+  },
+  "cudaTrace": {
+    "profileExitCode": 0,
+    "exportExitCode": 0,
+    "exportedEvents": 6581,
+    "nvtxEvents": 4,
+    "cudaApiEvents": 875,
+    "cudaKernelEvents": 28,
+    "cudaMemoryEvents": 1,
+    "report": {
+      "sha256": "0f6117568ad58ad8c791ed9c470a568edbfa871efbcb1493bd01ffbc81bf6c22",
+      "bytes": 181062
+    },
+    "sqlite": {
+      "sha256": "1f920135f486507a46e515b5e54ef1308d2d2dc055562d09811b002c4749278d",
+      "bytes": 843776
+    }
+  },
+  "cpuTrace": {
+    "profileExitCode": 0,
+    "exportExitCode": 0,
+    "exportedEvents": 8128,
+    "sampledCallchains": 10712,
+    "schedulerEvents": 612,
+    "osRuntimeEvents": 5108,
+    "report": {
+      "sha256": "258b40dd776c3617efb196db26871107459b04e9b0a8586d951b9e78820b6d20",
+      "bytes": 343364
+    },
+    "sqlite": {
+      "sha256": "aee568eab5740fcbb9d5c30864ede9971c9f466484258d5bff5522f6ff9fecc0",
+      "bytes": 1183744
+    }
+  },
+  "capabilities": {
+    "reportGeneration": true,
+    "sqliteExport": true,
+    "osRuntimeTrace": true,
+    "cpuSampling": true,
+    "cpuContextSwitchTrace": true,
+    "nvtxTrace": true,
+    "cudaApiTrace": true,
+    "cudaKernelTrace": true,
+    "cudaMemoryTrace": true
+  },
+  "verdict": {
+    "hostSupportsRequiredM2Trace": true,
+    "classification": "gcp-full-vm-supports-required-trace",
+    "next": "build M1 shared execution core and parity gate before tracing the PageSpatial workload"
+  },
+  "cost": {
+    "pricingBasisUsdPerHour": 0.853624312,
+    "startedAtUtc": "2026-08-25T00:19:45.091Z",
+    "stoppedAtUtc": "2026-08-25T00:43:37.220Z",
+    "runtimeSeconds": 1432.129,
+    "estimatedVmCostUsd": 0.3396,
+    "billingEstimateOnly": true,
+    "failedCapacityRequestsBillable": false,
+    "retainedDiskCostExcluded": true
+  },
+  "cleanup": {
+    "vmStoppedAfterEvidenceCopy": true,
+    "bootDiskRetainedForM1": true,
+    "bootDiskAutoDeleteWithVm": true
+  },
+  "limitations": [
+    "the probe image uses the exact pinned Paddle CUDA 11.8 base and profiler identities but does not yet contain the full A2 application layers",
+    "the outer VM has 32 GiB rather than the Modal allocation's 24 GiB; M1 and M2 must cap the workload container to 24 GiB",
+    "hardware PMU counters are unavailable through KVM; software-event CPU sampling and callchains are available",
+    "the privileged container and kernel.perf_event_paranoid=-1 are experiment-only host settings",
+    "the VM cost is a rate-times-runtime estimate pending billing export and excludes the retained boot disk",
+    "the raw trace artifacts remain in the ignored private evaluation tree"
+  ]
+}
