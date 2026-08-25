@@ -52,42 +52,6 @@ INSTRUMENTATION_MODE = _REQUESTED_APP_NAME.startswith(
     "pagespatial-gpu-instrumentation-m1-"
 )
 
-# Refuse before importing/constructing the TensorRT image. That imported image
-# contains a paid GPU build step, so validating inside the local entrypoint is
-# too late.
-if _LOCAL_BUILD_CONTEXT:
-    if INSTRUMENTATION_MODE:
-        from gpu_instrumentation_budget import (
-            DEFAULT_LEDGER,
-            validate_reservation,
-        )
-
-        _reservation_id = os.environ.get(
-            "PAGESPATIAL_GPU_INSTRUMENTATION_RESERVATION", ""
-        )
-        _ledger_path = Path(
-            os.environ.get(
-                "PAGESPATIAL_GPU_INSTRUMENTATION_LEDGER", str(DEFAULT_LEDGER)
-            )
-        )
-        if not _reservation_id:
-            raise RuntimeError(
-                "a paid GPU reservation is required before image construction"
-            )
-        validate_reservation(_ledger_path, _reservation_id, "M1-PARITY")
-    else:
-        from gpu_a2_budget import DEFAULT_LEDGER, validate_reservation
-
-        _reservation_id = os.environ.get("PAGESPATIAL_A2_RESERVATION", "")
-        _ledger_path = Path(
-            os.environ.get("PAGESPATIAL_A2_LEDGER", str(DEFAULT_LEDGER))
-        )
-        if not _reservation_id:
-            raise RuntimeError(
-                "a paid GPU reservation is required before image construction"
-            )
-        validate_reservation(_ledger_path, _reservation_id, "E1-GPU")
-
 from gpu_spike_modal import (
     GPU_TYPE,
     MODEL_MANIFEST,
@@ -1170,7 +1134,6 @@ def _run_m1_parity(
                     "child-cold-and-warm",
                     "ordinary-after",
                 ],
-                "reservationId": _reservation_id,
             },
             indent=1,
         )
@@ -1319,11 +1282,6 @@ def main(
             "bytes": len(native_evidence),
         },
         "repeats": repeats,
-        "budget": {
-            "ownerCeilingUsd": 100,
-            "operationalExposureStopUsd": 100,
-            "reservationId": _reservation_id,
-        },
     }
     (run_dir / "run.json").write_text(json.dumps(metadata, indent=1) + "\n")
     owner = GpuA2Container()

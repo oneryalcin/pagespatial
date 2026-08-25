@@ -18,8 +18,7 @@ test('A2 CPU runner cannot stop unrelated apps and always verifies drain', () =>
   assert.match(source, /while time\.monotonic\(\) < deadline/u);
 });
 
-test('A2 CPU control requires reservation, no retries, and four-call warm proof', () => {
-  assert.match(source, /validate_reservation\(args\.ledger, args\.reservation, "E1-CPU"\)/u);
+test('A2 CPU control disables retries and requires four-call warm proof', () => {
   assert.match(source, /with_options\(\n            retries=0, max_containers=1/u);
   assert.match(source, /args\.repeats != 4/u);
   assert.match(source, /\[True, False, False, False\]/u);

@@ -42,7 +42,7 @@ authorized from the Modal attempt.
 
 The compact machine-readable result is
 [`m0-capability-result-v1.json`](../../evaluation/gpu-instrumentation/m0-capability-result-v1.json).
-It pins all raw-result, report, SQLite, tool, app, and reservation identities.
+It pins all raw-result, report, SQLite, tool, and app identities.
 Raw artifacts stay under the ignored private `.evaluation/` tree.
 
 ## GCP host fallback
@@ -488,11 +488,12 @@ zero tasks.
 
 ## Spend, evidence, and cleanup
 
-At the successful M1 reservation snapshot, posted Modal instrumentation spend
-was `$0.30717691`. This was not a closed billing interval. The retained budget
-ledger continues to treat incomplete billing conservatively. GCP billing for
-the host has not posted into the project record, so this trial does not invent
-an actual cost. The work remained inside the owner's $130 ceiling.
+At the successful M1 snapshot, posted Modal instrumentation spend was
+`$0.30717691`. This was not a closed billing interval. GCP billing for the host
+had not posted into the project record, so this trial does not invent an actual
+cost. The work remained inside the owner's historical $130 ceiling. The
+experiment-only source-code reservation ledger was later removed; provider
+billing controls now own this concern.
 
 All five exact Modal apps were stopped with zero tasks:
 

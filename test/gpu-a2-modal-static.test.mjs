@@ -58,10 +58,7 @@ test('A2 concurrent-owner arm attests each owner before bounded overlap', () => 
   assert.match(source, /"backendAttestations": self\.backend_attestations/u);
 });
 
-test('A2 runner enforces spend and repeat bounds before remote work', () => {
-  const reservationCheck = source.indexOf('validate_reservation(_ledger_path, _reservation_id, "E1-GPU")');
-  const paidImageImport = source.indexOf('from gpu_spike_trt_modal import');
-  assert.ok(reservationCheck >= 0 && reservationCheck < paidImageImport);
+test('A2 runner enforces repeat and result bounds', () => {
   assert.match(source, /if repeats != 4/u);
   assert.match(source, /\[True, False, False, False\]/u);
   assert.match(source, /"containerId": snapshot\["container_id"\]/u);

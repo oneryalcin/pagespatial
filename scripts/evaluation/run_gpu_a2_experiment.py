@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""The only approved paid launcher for the bounded A2 E1 experiment.
-
-It reserves fixed worst-case exposure before deploy/image construction,
-serializes CPU and GPU arms, gives each arm a unique app identity, and stops
-that exact app in every terminal path. E2/E3 are intentionally absent until
-E1 correctness and speed gates pass.
-"""
+"""Run the bounded A2 E1 experiment and stop each exact Modal app."""
 
 from __future__ import annotations
 
@@ -20,9 +14,6 @@ import sys
 import time
 import uuid
 from pathlib import Path
-
-from gpu_a2_budget import DEFAULT_LEDGER, complete, complete_without_app, reserve
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKLOAD = REPO_ROOT / ".evaluation/gpu-spike/a2-50page-v1.pdf"
@@ -114,8 +105,7 @@ def new_run_dir(root: Path, before: set[Path]) -> Path:
     return created.pop()
 
 
-def run_cpu(ledger: Path, out_dir: Path, revision: str) -> tuple[str, str, Path]:
-    reservation = reserve(ledger, "E1-CPU")
+def run_cpu(out_dir: Path, revision: str) -> tuple[str, Path]:
     suffix = f"{time.strftime('%Y%m%d%H%M%S', time.gmtime())}-{uuid.uuid4().hex[:6]}"
     app_name = f"pagespatial-gpu-a2-e1-cpu-{suffix}"
     app_id = ""
@@ -139,32 +129,26 @@ def run_cpu(ledger: Path, out_dir: Path, revision: str) -> tuple[str, str, Path]
                 "--expected-app-id", app_id,
                 "--expected-adapter-revision", revision,
                 "--expected-image-pin-revision", image_pin_revision(),
-                "--reservation", reservation["id"],
-                "--ledger", str(ledger),
                 "--pdf-path", str(WORKLOAD),
                 "--out-dir", str(out_dir / "cpu"),
                 "--repeats", "4",
             ]
         )
-        return reservation["id"], app_id, new_run_dir(evidence_root, before)
+        return app_id, new_run_dir(evidence_root, before)
     finally:
         row = exact_app(app_name)
         if row is not None:
             app_id = stop_exact_app(app_name)
-        if app_id:
-            complete(ledger, reservation["id"], app_id)
 
 
 def run_gpu(
-    ledger: Path,
     out_dir: Path,
     native_evidence: Path,
     recognition_batch_size: int,
     inference_owners: int,
     model_tier: str,
     stage_profile: bool,
-) -> tuple[str, str, Path]:
-    reservation = reserve(ledger, "E1-GPU")
+) -> tuple[str, Path]:
     suffix = f"{time.strftime('%Y%m%d%H%M%S', time.gmtime())}-{uuid.uuid4().hex[:6]}"
     app_name = (
         f"pagespatial-gpu-a2-e1-gpu-{model_tier}-b{recognition_batch_size}"
@@ -177,8 +161,6 @@ def run_gpu(
     try:
         env = {
             **os.environ,
-            "PAGESPATIAL_A2_RESERVATION": reservation["id"],
-            "PAGESPATIAL_A2_LEDGER": str(ledger),
             "PAGESPATIAL_A2_APP_NAME": app_name,
             "PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE": str(recognition_batch_size),
             "PAGESPATIAL_A2_INFERENCE_OWNERS": str(inference_owners),
@@ -199,19 +181,11 @@ def run_gpu(
         if row is None:
             raise RuntimeError("GPU arm app identity was not recorded")
         app_id = row["app_id"]
-        return reservation["id"], app_id, new_run_dir(evidence_root, before)
+        return app_id, new_run_dir(evidence_root, before)
     finally:
         row = exact_app(app_name)
         if row is not None:
             app_id = stop_exact_app(app_name)
-        if app_id:
-            complete(ledger, reservation["id"], app_id)
-        else:
-            complete_without_app(
-                ledger,
-                reservation["id"],
-                "Modal launcher failed before a discoverable app was created",
-            )
 
 
 CPU_CONTROL_PATHS = (
@@ -339,7 +313,6 @@ def precompute_native_evidence(out_dir: Path) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
     parser.add_argument(
         "--out-dir", type=Path,
         default=Path(".evaluation/gpu-spike/2026-08-24/a2-e1"),
@@ -387,12 +360,11 @@ def main() -> None:
     args.out_dir.mkdir(parents=True, exist_ok=True)
     if args.cpu_evidence is not None:
         cpu_dir = validate_cpu_evidence(args.cpu_evidence)
-        cpu = ("reused", json.loads((cpu_dir / "run.json").read_text())["expectedAppId"], cpu_dir)
+        cpu = (json.loads((cpu_dir / "run.json").read_text())["expectedAppId"], cpu_dir)
     else:
-        cpu = run_cpu(args.ledger, args.out_dir, revision)
+        cpu = run_cpu(args.out_dir, revision)
     native_evidence = precompute_native_evidence(args.out_dir)
     gpu = run_gpu(
-        args.ledger,
         args.out_dir,
         native_evidence,
         args.recognition_batch_size,
@@ -400,10 +372,10 @@ def main() -> None:
         args.model_tier,
         args.stage_profile,
     )
-    decision = score_e1(cpu[2], gpu[2], args.out_dir, args.adjudications)
+    decision = score_e1(cpu[1], gpu[1], args.out_dir, args.adjudications)
     print(json.dumps({
-        "cpu": [cpu[0], cpu[1], str(cpu[2])],
-        "gpu": [gpu[0], gpu[1], str(gpu[2])],
+        "cpu": [cpu[0], str(cpu[1])],
+        "gpu": [gpu[0], str(gpu[1])],
         "outDir": str(args.out_dir),
         "decision": decision,
     }, indent=1))

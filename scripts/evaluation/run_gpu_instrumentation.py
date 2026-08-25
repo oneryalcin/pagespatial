@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Only approved paid launcher for the GPU instrumentation milestones."""
+"""Launch bounded GPU instrumentation runs and stop their exact Modal apps."""
 
 from __future__ import annotations
 
@@ -10,9 +10,6 @@ import subprocess
 import time
 import uuid
 from pathlib import Path
-
-from gpu_instrumentation_budget import DEFAULT_LEDGER, complete, reserve
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 M0_SCRIPT = "scripts/evaluation/gpu_instrumentation_modal.py"
@@ -96,19 +93,15 @@ def _new_evidence_dir(root: Path, before: set[Path]) -> Path:
     return created.pop()
 
 
-def run_m0(ledger: Path, out_dir: Path) -> dict:
+def run_m0(out_dir: Path) -> dict:
     revision = require_clean_revision()
-    reservation = reserve(ledger, "M0-CAPABILITY")
     suffix = f"{time.strftime('%Y%m%d%H%M%S', time.gmtime())}-{uuid.uuid4().hex[:6]}"
     app_name = f"pagespatial-gpu-instrumentation-m0-{suffix}"
     app_id: str | None = None
     before = {path for path in out_dir.glob("*") if path.is_dir()}
-    error: BaseException | None = None
     try:
         env = {
             **os.environ,
-            "PAGESPATIAL_GPU_INSTRUMENTATION_RESERVATION": reservation["id"],
-            "PAGESPATIAL_GPU_INSTRUMENTATION_LEDGER": str(ledger),
             "PAGESPATIAL_GPU_INSTRUMENTATION_APP_NAME": app_name,
         }
         subprocess.run(
@@ -134,43 +127,27 @@ def run_m0(ledger: Path, out_dir: Path) -> dict:
         result["launcher"] = {
             "appName": app_name,
             "appId": app_id,
-            "reservationId": reservation["id"],
             "gitRevision": revision,
         }
         result_path.write_text(json.dumps(result, indent=1) + "\n")
         return result
-    except BaseException as caught:
-        error = caught
-        raise
     finally:
         row = exact_app(app_name)
         if row is not None:
             app_id = stop_exact_app(app_name)
-        complete(
-            ledger,
-            reservation["id"],
-            app_id,
-            str(error) if error is not None else "stage completed and exact app stopped",
-        )
 
 
-def run_m1(
-    ledger: Path, out_dir: Path, pdf_path: Path, native_evidence_path: Path
-) -> dict:
+def run_m1(out_dir: Path, pdf_path: Path, native_evidence_path: Path) -> dict:
     revision = require_clean_revision()
     if not pdf_path.is_file() or not native_evidence_path.is_file():
         raise RuntimeError("M1 fixed PDF and native-evidence inputs must exist")
-    reservation = reserve(ledger, "M1-PARITY")
     suffix = f"{time.strftime('%Y%m%d%H%M%S', time.gmtime())}-{uuid.uuid4().hex[:6]}"
     app_name = f"pagespatial-gpu-instrumentation-m1-{suffix}"
     app_id: str | None = None
     before = {path for path in out_dir.glob("*") if path.is_dir()}
-    error: BaseException | None = None
     try:
         env = {
             **os.environ,
-            "PAGESPATIAL_GPU_INSTRUMENTATION_RESERVATION": reservation["id"],
-            "PAGESPATIAL_GPU_INSTRUMENTATION_LEDGER": str(ledger),
             "PAGESPATIAL_A2_APP_NAME": app_name,
             "PAGESPATIAL_A2_MODEL_TIER": "tiny",
             "PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE": "1",
@@ -211,29 +188,18 @@ def run_m1(
         result["launcher"] = {
             "appName": app_name,
             "appId": app_id,
-            "reservationId": reservation["id"],
             "gitRevision": revision,
         }
         result_path.write_text(json.dumps(result, indent=1) + "\n")
         return result
-    except BaseException as caught:
-        error = caught
-        raise
     finally:
         row = exact_app(app_name)
         if row is not None:
             app_id = stop_exact_app(app_name)
-        complete(
-            ledger,
-            reservation["id"],
-            app_id,
-            str(error) if error is not None else "stage completed and exact app stopped",
-        )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
     parser.add_argument(
         "--out-dir",
         type=Path,
@@ -251,13 +217,13 @@ def main() -> None:
         )
     args.out_dir.mkdir(parents=True, exist_ok=True)
     if args.stage == "m0":
-        result = run_m0(args.ledger, args.out_dir)
+        result = run_m0(args.out_dir)
         print(json.dumps({"classification": result["classification"]}, indent=1))
         if result["classification"] != "supported":
             raise SystemExit(2)
     else:
         result = run_m1(
-            args.ledger, args.out_dir, args.pdf_path, args.native_evidence_path
+            args.out_dir, args.pdf_path, args.native_evidence_path
         )
         print(json.dumps({"pass": result["pass"], "throughput": result["throughput"]}, indent=1))
 

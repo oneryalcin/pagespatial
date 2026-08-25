@@ -48,13 +48,6 @@ test('M3 analyzer prevents nested H2D double counting and enforces coverage', ()
 test('M3 evolves the pinned M2 image and reuses only the exact VM owner', () => {
   assert.match(dockerSource, /ULTRA_INFER_M3_PATCH_SHA256=8ae31bf3/u);
   assert.match(dockerSource, /git -C \/opt\/paddlex-source apply \/root\/ultra-infer-m3-native-nvtx\.patch/u);
-  assert.match(gcpSource, /elif args\.m3_native:\s*\n\s*reservations = \[reserve\(args\.ledger, "M3-NATIVE"\)\]/u);
-  assert.match(gcpSource, /M3 does not authorize reuse of an M2 retry path/u);
-  assert.match(gcpSource, /reopen_m3_capacity_retry\(args\.ledger, args\.m3_capacity_retry\)/u);
-  assert.match(
-    gcpSource,
-    /if args\.m3_capacity_retry:\s*\n\s*reservations = \[reopen_m3_capacity_retry[\s\S]*?elif args\.m3_native:\s*\n\s*reservations = \[reserve\(args\.ledger, "M3-NATIVE"\)\]/u,
-  );
   assert.match(gcpSource, /0 <= args\.capacity_wait_seconds <= 600/u);
   assert.match(gcpSource, /CAPACITY_FAILURE_MARKER not in start_attempt\["stderr"\]/u);
   assert.match(gcpSource, /time\.sleep\(min\(30,/u);

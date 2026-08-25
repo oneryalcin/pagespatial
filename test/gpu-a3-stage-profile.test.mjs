@@ -129,5 +129,4 @@ test('A3 profiling is evaluation-only, arm-bounded, persisted, and opt-in from t
   assert.match(modalSource, /stage profile did not reconcile exactly 50 pages/u);
   assert.match(runnerSource, /--stage-profile/u);
   assert.match(runnerSource, /--stage-profile requires --model-tier tiny/u);
-  assert.ok(runnerSource.indexOf('reserve(ledger, "E1-GPU")') < runnerSource.indexOf('"modal", "run"'));
 });

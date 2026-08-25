@@ -488,9 +488,10 @@ make storage immutable.
 
 ## 11. Cost and host fallback
 
-No paid execution is authorized by this design. Before the capability probe,
-record a new dated owner budget and a fixed worst-case reservation. The expired
-2026-08-24 ledger must not be reopened or edited to manufacture headroom.
+Paid experiments use the provider's billing controls and the operator's stated
+limit. The repository does not implement a second reservation ledger or make
+time-bound spending authorization part of source code or CI. Historical trial
+reports retain the costs and limits that applied when each run occurred.
 
 Use Modal first because it is the deployment host under investigation. The
 bounded retry rule in section 6.3 applies. If CUPTI, process launch, trace
@@ -514,41 +515,17 @@ refresh keys, or mutate any other GCP resource.
 After `RUNNING`, wait up to three minutes for `sshd` with a read-only `true`
 probe. Connection refusal is boot readiness and may retry; a host-key or
 identity error fails immediately. Every failed owner attempt gets a unique
-cleanup directory. If an M2 bundle fails at this access-only boundary before
-upload or build, that already-counted bundle may be reopened exactly once.
-Keep its prior completion in retry history and do not add a new $30
-reservation or reduce recorded exposure.
+cleanup directory.
 
 The OS Login user is not a member of the Docker group. Run the fixed host owner
 through non-interactive `sudo -n`; do not mutate users, groups, socket modes, or
 the Docker service. The host owner remains responsible for its bounded sysctl,
 container cleanup, and evidence permissions.
 
-After three pre-build host-access failures, the owner raised the 2026-08-25
-ceiling from $100 to $130 for one fresh M2 bundle. The stage bounds do not
-change: $20 for Systems plus $10 for CPU sampling. This is conservative
-exposure accounting, not a spend target; no further bundle is authorized by
-this amendment. The dated amendment is in
-`evaluation/gpu-instrumentation/authorization-2026-08-25.json`. The budget
-ledger records the new bundle ID as a durable, single-use continuation token.
-Once that token exists, completion does not erase it. Individual stages,
-partial M2 bundles, a second fresh bundle, and reopening any old bundle are
-all refused.
-
-The first authorized fresh bundle failed before boot because GCP reported L4
-stockout in `us-central1-a`. A second dated owner amendment permits one retry
-of that exact bundle and VM without adding exposure. Only if that retry fails
-with the same capacity reason may the experiment use one equivalent temporary
-VM in `us-central1-b` or `us-central1-c`; it must be deleted during cleanup.
-The same-zone retry has its own durable ledger token. It cannot reopen any
-earlier bundle or be repeated.
-
-The same-zone retry then started the VM but failed before profiling because
-pip attempted to uninstall Ubuntu's distutils-owned PyYAML. Commit `4548f31`
-installs pinned PyYAML 6.0.2 without removing the system copy. A third dated
-owner amendment permits one final fixed-image retry of the same bundle and VM,
-again without adding exposure. Its retained failure evidence is SHA-256 pinned
-in the authorization record and the retry has a third durable ledger token.
+The GCP runner may retry L4 capacity failures for up to the configured ten
+minutes. It must still operate only on the named VM and execute mandatory
+cleanup. Tool or image failures are fixed normally and retried by the operator;
+they do not require source-code authorization tokens.
 
 No additional global economic overturn threshold applies. The owner has
 decided that a real saving is material at the expected million-page scale.
