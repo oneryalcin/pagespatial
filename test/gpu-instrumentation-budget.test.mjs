@@ -66,6 +66,23 @@ print(json.dumps({"errors":errors,"status":state["reservations"][0]["status"],"e
   assert.equal(result.exposure, 5);
 });
 
+test('M2 host stages reserve atomically before one VM lifetime', () => {
+  const ledger = join(mkdtempSync(join(tmpdir(), 'gpu-inst-bundle-')), 'ledger.json');
+  const code = String.raw`
+import importlib.util,json,sys
+from pathlib import Path
+spec=importlib.util.spec_from_file_location("budget",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.current_profile=lambda:"desia"; m.active_experiment_apps=lambda:[]; m.billing_rows=lambda:[]
+m.now_utc=lambda:m.datetime(2026,8,25,12,0,tzinfo=m.timezone.utc)
+p=Path(sys.argv[2]); rows=m.reserve_bundle(p,["M2-SYSTEMS","M2-CPU"]); state=m.load_ledger(p)
+print(json.dumps({"stages":[r["stage"] for r in rows],"bundleIds":list({r["bundleId"] for r in rows}),"exposure":m.reserved_exposure(state)}))
+`;
+  const result = runPython(code, ledger);
+  assert.deepEqual(result.stages, ['M2-SYSTEMS', 'M2-CPU']);
+  assert.equal(result.bundleIds.length, 1);
+  assert.equal(result.exposure, 30);
+});
+
 test('instrumentation authorization expires at the stated boundary', () => {
   const ledger = join(mkdtempSync(join(tmpdir(), 'gpu-inst-expired-')), 'ledger.json');
   const code = String.raw`

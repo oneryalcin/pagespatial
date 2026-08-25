@@ -63,11 +63,23 @@ class StageProfiler:
         self.instrumented_paths: list[dict[str, str]] = []
         self.missing_paths: list[str] = []
         self._nvtx = None
+        self._nvtx_domain = None
         self.recognizer_last_prepare_stage: str | None = None
         if os.environ.get("PAGESPATIAL_A2_NVTX", "0") == "1":
             import nvtx
 
             self._nvtx = nvtx
+            self._nvtx_domain = nvtx.Domain("pagespatial.ocr")
+
+    def _nvtx_start(self, message: str) -> Any:
+        if self._nvtx_domain is None:
+            return None
+        registered = self._nvtx_domain.get_registered_string(message)
+        return self._nvtx_domain.start_range(message=registered)
+
+    def _nvtx_end(self, handle: Any) -> None:
+        if self._nvtx_domain is not None and handle is not None:
+            self._nvtx_domain.end_range(handle)
 
     def begin_method(self, started_ns: int | None = None) -> None:
         self._method_started_ns = started_ns or time.monotonic_ns()
@@ -113,8 +125,7 @@ class StageProfiler:
 
     def _close_recognizer_wait(self) -> None:
         handle = getattr(self._local, "recognizer_wait_handle", None)
-        if self._nvtx is not None and handle is not None:
-            self._nvtx.end_range(handle)
+        self._nvtx_end(handle)
         self._local.recognizer_wait_handle = None
 
     def _start_recognizer_wait(self, page: dict[str, Any]) -> None:
@@ -131,9 +142,7 @@ class StageProfiler:
             f"page={page['pageNumber']};owner={self.owner_index};"
             f"request={page['messageId']};crops={crop_count};batch={batch_ordinal}"
         )
-        self._local.recognizer_wait_handle = self._nvtx.start_range(
-            message=message, domain="pagespatial.ocr"
-        )
+        self._local.recognizer_wait_handle = self._nvtx_start(message)
 
     def observe_recognition_batch(self, batch: Any) -> None:
         page = getattr(self._local, "page", None)
@@ -182,9 +191,7 @@ class StageProfiler:
                 f"owner={self.owner_index};request={page['messageId']}"
                 f"{recognition_tags}"
             )
-            token["nvtxHandle"] = self._nvtx.start_range(
-                message=message, domain="pagespatial.ocr"
-            )
+            token["nvtxHandle"] = self._nvtx_start(message)
         page["stack"].append(token)
         return token
 
@@ -200,8 +207,7 @@ class StageProfiler:
         if page is None or not page["stack"] or page["stack"][-1] is not token:
             raise RuntimeError(f"stage profiler nesting violation at {token['stage']}")
         page["stack"].pop()
-        if self._nvtx is not None and token.get("nvtxHandle") is not None:
-            self._nvtx.end_range(token["nvtxHandle"])
+        self._nvtx_end(token.get("nvtxHandle"))
         ended_ns = time.monotonic_ns()
         ended_cpu_ns = time.thread_time_ns()
         event = {
@@ -232,8 +238,7 @@ class StageProfiler:
         if page is None or not page["stack"] or page["stack"][-1] is not token:
             raise RuntimeError(f"stage profiler nesting violation at {token['stage']}")
         page["stack"].pop()
-        if self._nvtx is not None and token.get("nvtxHandle") is not None:
-            self._nvtx.end_range(token["nvtxHandle"])
+        self._nvtx_end(token.get("nvtxHandle"))
 
     @contextlib.contextmanager
     def span(self, stage: str):

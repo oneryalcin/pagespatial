@@ -258,6 +258,13 @@ the first stop. The child must remain alive for `control-after` and then exit
 cleanly. Record every page and companion operation that actually overlaps each
 capture; do not discard boundary work.
 
+A window opens when the first page in its numeric target set enters the Python
+OCR owner path. It closes only after all ten target pages have completed the
+existing page-scoped `result.assemble` event. Record every non-target page and
+operation that overlaps the open interval. An incomplete window, or the second
+window opening before the first closes, invalidates the run. This rule measures
+ten completed target pages rather than ten queued submissions.
+
 Analyze both windows independently before aggregating them. The dominant cause
 must select the same section 9 decision-table row in both windows before it can
 be named. If the rows disagree, that disagreement is the finding and no
@@ -360,6 +367,9 @@ performance claim. If overhead exceeds 15%, shorten the capture window once.
 If it still exceeds 15%, the timeline remains qualitative and every duration
 claim must be taken from the bracketing controls.
 
+The one allowed retry uses submitted pages 11--15 and 31--35 with the same
+completion rule. No other page range may be selected after seeing the trace.
+
 ## 8. Required attribution
 
 CPU threads, CUDA APIs, copy engines, and GPU kernels can run at the same time.
@@ -443,6 +453,12 @@ The next implementation may change one row only. It must have a predeclared
 complete-document keep bar of at least 10% inner throughput improvement and no
 new incorrect, missing, or unresolved critical value in trusted,
 non-escalated output.
+
+The analyzer may select a row only when one row's stated condition is met and
+the same row is selected independently in both Systems windows. When two rows
+remain plausible, their thresholds tie, or required evidence is missing, the
+machine result is `ambiguous-stop`. A later reviewed decision record may
+interpret the retained evidence, but M2 must not encode a subjective tie-break.
 
 ## 10. Artifacts and provenance
 

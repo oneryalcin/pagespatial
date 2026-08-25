@@ -227,6 +227,59 @@ def reserve(path: Path, stage: str) -> dict[str, Any]:
         return reservation
 
 
+def reserve_bundle(path: Path, stages: list[str]) -> list[dict[str, Any]]:
+    """Atomically reserve sequential stages run in one bounded host lifetime."""
+    if not stages or len(stages) != len(set(stages)):
+        raise RuntimeError("paid stage bundle must be non-empty and unique")
+    unknown = [stage for stage in stages if stage not in STAGE_BOUNDS]
+    if unknown:
+        raise RuntimeError(f"unknown paid stages: {unknown}")
+    _assert_authorized()
+    active = active_experiment_apps()
+    if active:
+        raise RuntimeError(f"paid launch serialization refused: active apps: {active}")
+    rows = billing_rows()
+    with ledger_lock(path):
+        ledger = load_ledger(path)
+        live = [
+            item
+            for item in ledger["reservations"]
+            if item.get("status") in {"reserved", "active"}
+        ]
+        if live:
+            raise RuntimeError(f"paid launch serialization refused: live reservation: {live}")
+        posted = posted_spend(rows)
+        bundle_worst_case = sum(
+            float(STAGE_BOUNDS[stage]["worstCaseUsd"]) for stage in stages
+        )
+        exposure = posted + reserved_exposure(ledger) + bundle_worst_case
+        if exposure > OPERATIONAL_STOP_USD:
+            raise RuntimeError(
+                f"spend guard refused: exposure ${exposure:.4f} > "
+                f"${OPERATIONAL_STOP_USD:.2f}"
+            )
+        bundle_id = f"bundle-{int(time.time())}-{uuid.uuid4().hex[:8]}"
+        reservations = []
+        for stage in stages:
+            bound = STAGE_BOUNDS[stage]
+            reservation = {
+                "id": f"{int(time.time())}-{uuid.uuid4().hex[:8]}",
+                "bundleId": bundle_id,
+                "stage": stage,
+                "bound": bound,
+                "worstCaseUsd": float(bound["worstCaseUsd"]),
+                "status": "reserved",
+                "createdAt": int(time.time()),
+                "postedSpendAtReserveUsd": posted,
+                "bundleExposureAfterReserveUsd": exposure,
+            }
+            ledger["reservations"].append(reservation)
+            reservations.append(reservation)
+        ledger["lastBillingRows"] = rows
+        save_ledger(path, ledger)
+        return reservations
+
+
 def validate_reservation(path: Path, reservation_id: str, stage: str) -> dict[str, Any]:
     _assert_authorized()
     with ledger_lock(path):
@@ -295,6 +348,8 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
     add = sub.add_parser("reserve")
     add.add_argument("--stage", required=True)
+    bundle = sub.add_parser("reserve-bundle")
+    bundle.add_argument("--stages", required=True)
     claim = sub.add_parser("claim")
     claim.add_argument("--reservation", required=True)
     claim.add_argument("--stage", required=True)
@@ -306,6 +361,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "reserve":
         result = reserve(args.ledger, args.stage)
+    elif args.command == "reserve-bundle":
+        result = reserve_bundle(args.ledger, args.stages.split(","))
     elif args.command == "claim":
         result = validate_reservation(args.ledger, args.reservation, args.stage)
     elif args.command == "complete":

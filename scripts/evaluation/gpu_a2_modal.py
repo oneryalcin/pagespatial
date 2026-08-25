@@ -183,23 +183,29 @@ WORKLOAD_MANIFEST = REPO_ROOT / "evaluation/gpu-spike/a2-50page-v1.json"
 
 app = modal.App(APP_NAME)
 
+_nvtx_domain = None
+
 
 def _nvtx_start(stage: str, **identity: Any) -> Any:
     if not NVTX_ENABLED:
         return None
     import nvtx
 
+    global _nvtx_domain
+    if _nvtx_domain is None:
+        _nvtx_domain = nvtx.Domain("pagespatial.ocr")
     tags = ";".join(f"{key}={value}" for key, value in identity.items())
     message = stage if not tags else f"{stage};{tags}"
-    return nvtx.start_range(message=message, domain="pagespatial.ocr")
+    registered = _nvtx_domain.get_registered_string(message)
+    return _nvtx_domain.start_range(message=registered)
 
 
 def _nvtx_end(handle: Any) -> None:
     if handle is None:
         return
-    import nvtx
-
-    nvtx.end_range(handle)
+    if _nvtx_domain is None:
+        raise RuntimeError("NVTX range ended before domain initialization")
+    _nvtx_domain.end_range(handle)
 
 
 def _process_group_exists(process_group_id: int) -> bool:
@@ -636,6 +642,33 @@ class A2ExecutionCore:
         was_cold = self.container_cold
         self.container_cold = False
         run_id = payload.get("run_id") or f"gpu-a2-{uuid.uuid4().hex[:12]}"
+        capture_plan = payload.get("capture_plan")
+        capture_controller = None
+        if capture_plan is not None:
+            if not NVTX_ENABLED or not STAGE_PROFILE:
+                raise ValueError("capture_plan requires NVTX and stage profiling")
+            capture_name = capture_plan.get("captureName")
+            raw_windows = capture_plan.get("windows")
+            if not isinstance(capture_name, str) or not capture_name.startswith("m2."):
+                raise ValueError("capture_plan has an invalid capture name")
+            if not isinstance(raw_windows, (list, tuple)):
+                raise ValueError("capture_plan windows must be a sequence")
+            windows = tuple(
+                (int(window[0]), int(window[1]))
+                for window in raw_windows
+                if isinstance(window, (list, tuple)) and len(window) == 2
+            )
+            if len(windows) != len(raw_windows):
+                raise ValueError("capture_plan has an invalid window")
+            from gpu_instrumentation_capture import CaptureWindowController
+
+            capture_controller = CaptureWindowController(
+                run_id=run_id,
+                capture_name=capture_name,
+                windows=windows,
+                start_range=lambda name: _nvtx_start(name),
+                end_range=_nvtx_end,
+            )
         document_nvtx = _nvtx_start("document", run=run_id)
         scratch = Path(tempfile.mkdtemp(prefix="pagespatial-a2-", dir="/tmp"))
         pdf_path = scratch / "input.pdf"
@@ -705,6 +738,10 @@ class A2ExecutionCore:
                 def run_available(message: dict[str, Any]) -> tuple[dict[str, Any], float]:
                     owner_index = available_owners.get()
                     try:
+                        if capture_controller is not None:
+                            capture_controller.observe_ocr_enter(
+                                int(message["pageNumber"]), str(message["id"])
+                            )
                         return self._predict_page(owner_index, message, attest=False)
                     finally:
                         available_owners.put(owner_index)
@@ -808,6 +845,13 @@ class A2ExecutionCore:
                                         "nvtxRangeKind": "protocol-proxy",
                                     }
                                 )
+                                if (
+                                    capture_controller is not None
+                                    and started["scope"] == "page"
+                                ):
+                                    capture_controller.observe_assembly_end(
+                                        int(started["pageNumber"]), stage_id
+                                    )
                             else:
                                 raise RuntimeError(
                                     f"unknown result assembly phase: {message.get('phase')}"
@@ -838,6 +882,10 @@ class A2ExecutionCore:
                             None,
                         )
                         if unattested is not None:
+                            if capture_controller is not None:
+                                capture_controller.observe_ocr_enter(
+                                    int(message["pageNumber"]), str(message["id"])
+                                )
                             response, inference_ms = self._predict_page(
                                 unattested, message, attest=True
                             )
@@ -859,6 +907,11 @@ class A2ExecutionCore:
             if result.get("status") != "completed" or len(result.get("pages", [])) != EXPECTED_PAGES:
                 raise RuntimeError("A2 terminal result did not reconcile 50 successful pages")
             method_total_ms = (time.monotonic() - method_started) * 1000
+            capture_result = (
+                capture_controller.finish()
+                if capture_controller is not None
+                else None
+            )
             result.update(
                 {
                     "arm": ARM,
@@ -905,6 +958,7 @@ class A2ExecutionCore:
                             "domain": "pagespatial.ocr",
                         },
                         "nodeStages": assembly_stage_events,
+                        "capture": capture_result,
                     },
                     "gpuTelemetry": _numeric_gpu_summary(sampler.samples),
                     "batchObservations": [
