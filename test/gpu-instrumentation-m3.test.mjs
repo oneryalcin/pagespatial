@@ -44,4 +44,8 @@ test('M3 evolves the pinned M2 image and reuses only the exact VM owner', () => 
   assert.match(gcpSource, /elif args\.m3_native:\s*\n\s*reservations = \[reserve\(args\.ledger, "M3-NATIVE"\)\]/u);
   assert.match(gcpSource, /M3 does not authorize reuse of an M2 retry path/u);
   assert.match(gcpSource, /reopen_m3_capacity_retry\(args\.ledger, args\.m3_capacity_retry\)/u);
+  assert.match(
+    gcpSource,
+    /if args\.m3_capacity_retry:\s*\n\s*reservations = \[reopen_m3_capacity_retry[\s\S]*?elif args\.m3_native:\s*\n\s*reservations = \[reserve\(args\.ledger, "M3-NATIVE"\)\]/u,
+  );
 });

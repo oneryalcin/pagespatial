@@ -565,9 +565,7 @@ def main() -> None:
         raise RuntimeError("M3 does not authorize reuse of an M2 retry path")
     if sum(value is not None for value in retry_modes) > 1:
         raise RuntimeError("only one M2 retry mode may be selected")
-    if args.m3_capacity_retry:
-        reservations = [reopen_m3_capacity_retry(args.ledger, args.m3_capacity_retry)]
-    elif args.fixed_image_retry_bundle:
+    if args.fixed_image_retry_bundle:
         if not FIXED_IMAGE_FAILURE_EVIDENCE.is_file():
             raise RuntimeError("fixed-image retry requires its integrity-pinned failure evidence")
         fixed_image_failure_sha256 = str(
@@ -578,7 +576,9 @@ def main() -> None:
     before = _describe()
     _assert_scope(before, "TERMINATED", "absent")
     ssh_identity = _existing_ssh_identity(before)
-    if args.fixed_image_retry_bundle:
+    if args.m3_capacity_retry:
+        reservations = [reopen_m3_capacity_retry(args.ledger, args.m3_capacity_retry)]
+    elif args.fixed_image_retry_bundle:
         reservations = reopen_fixed_image_retry(
             args.ledger,
             args.fixed_image_retry_bundle,
