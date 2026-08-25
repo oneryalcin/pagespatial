@@ -12,12 +12,32 @@ import contextlib
 import hashlib
 import inspect
 import math
+import os
 import statistics
 import threading
 import time
 from collections.abc import Iterator, MutableMapping
 from pathlib import Path
 from typing import Any, Callable
+
+
+NVTX_STAGE_NAMES = {
+    "png.decode": "page.decode",
+    "predict.total": "predict.total",
+    "detector.backend": "detector.backend",
+    "detector.postprocess": "detector.postprocess",
+    "crop.total": "crop.generate",
+    "recognizer.backend": "recognizer.backend",
+    "recognizer.postprocess": "recognizer.decode",
+}
+
+
+def _nvtx_stage(stage: str) -> str | None:
+    if stage.startswith("detector.preprocess.") or stage == "detector.batch_sampler":
+        return "detector.prepare"
+    if stage.startswith("recognizer.preprocess."):
+        return "recognizer.prepare"
+    return NVTX_STAGE_NAMES.get(stage)
 
 
 def _percentile(values: list[float], percentile: float) -> float | None:
@@ -42,20 +62,31 @@ class StageProfiler:
         self._method_started_ns = 0
         self.instrumented_paths: list[dict[str, str]] = []
         self.missing_paths: list[str] = []
+        self._nvtx = None
+        self.recognizer_last_prepare_stage: str | None = None
+        if os.environ.get("PAGESPATIAL_A2_NVTX", "0") == "1":
+            import nvtx
+
+            self._nvtx = nvtx
 
     def begin_method(self, started_ns: int | None = None) -> None:
         self._method_started_ns = started_ns or time.monotonic_ns()
 
-    def begin_page(self, page_number: int, message_id: str) -> None:
+    def begin_page(
+        self, page_number: int, message_id: str, run_id: str | None = None
+    ) -> None:
         if getattr(self._local, "page", None) is not None:
             raise RuntimeError("stage profiler owner already has an active page")
         self._local.page = {
             "pageNumber": page_number,
             "messageId": message_id,
             "ownerIndex": self.owner_index,
+            "runId": run_id,
             "startedNs": time.monotonic_ns(),
             "events": [],
             "stack": [],
+            "recognitionBatchOrdinal": 0,
+            "recognitionCropCount": None,
         }
 
     def finish_page(self) -> dict[str, Any]:
@@ -64,6 +95,7 @@ class StageProfiler:
             raise RuntimeError("stage profiler owner has no active page")
         if page["stack"]:
             raise RuntimeError(f"stage profiler has unfinished spans: {page['stack']}")
+        self._close_recognizer_wait()
         ended_ns = time.monotonic_ns()
         record = {
             "pageNumber": page["pageNumber"],
@@ -76,12 +108,52 @@ class StageProfiler:
         return record
 
     def abort_page(self) -> None:
+        self._close_recognizer_wait()
         self._local.page = None
+
+    def _close_recognizer_wait(self) -> None:
+        handle = getattr(self._local, "recognizer_wait_handle", None)
+        if self._nvtx is not None and handle is not None:
+            self._nvtx.end_range(handle)
+        self._local.recognizer_wait_handle = None
+
+    def _start_recognizer_wait(self, page: dict[str, Any]) -> None:
+        if self._nvtx is None:
+            return
+        if getattr(self._local, "recognizer_wait_handle", None) is not None:
+            raise RuntimeError("recognizer wait range is already active")
+        crop_count = page.get("recognitionCropCount")
+        batch_ordinal = page.get("recognitionBatchOrdinal")
+        if not isinstance(crop_count, int) or crop_count < 1 or batch_ordinal < 1:
+            raise RuntimeError("recognizer wait lacks crop-count/batch identity")
+        message = (
+            f"recognizer.wait_backend;run={page.get('runId')};"
+            f"page={page['pageNumber']};owner={self.owner_index};"
+            f"request={page['messageId']};crops={crop_count};batch={batch_ordinal}"
+        )
+        self._local.recognizer_wait_handle = self._nvtx.start_range(
+            message=message, domain="pagespatial.ocr"
+        )
+
+    def observe_recognition_batch(self, batch: Any) -> None:
+        page = getattr(self._local, "page", None)
+        if page is None:
+            return
+        instances = getattr(batch, "instances", None)
+        if instances is None:
+            raise RuntimeError("recognizer batch has no observable instances")
+        crop_count = len(instances)
+        if crop_count < 1:
+            raise RuntimeError("recognizer batch has no crops")
+        page["recognitionBatchOrdinal"] += 1
+        page["recognitionCropCount"] = crop_count
 
     def _start(self, stage: str) -> dict[str, Any] | None:
         page = getattr(self._local, "page", None)
         if page is None:
             return None
+        if stage == "recognizer.backend":
+            self._close_recognizer_wait()
         started_ns = time.monotonic_ns()
         token = {
             "stage": stage,
@@ -90,6 +162,29 @@ class StageProfiler:
             "depth": len(page["stack"]),
             "threadId": threading.get_native_id(),
         }
+        nvtx_name = _nvtx_stage(stage)
+        if self._nvtx is not None and nvtx_name is not None:
+            recognition_tags = ""
+            if nvtx_name.startswith("recognizer."):
+                crop_count = page.get("recognitionCropCount")
+                batch_ordinal = page.get("recognitionBatchOrdinal")
+                if (
+                    not isinstance(crop_count, int)
+                    or crop_count < 1
+                    or batch_ordinal < 1
+                ):
+                    raise RuntimeError(
+                        f"{nvtx_name} lacks crop-count/batch identity"
+                    )
+                recognition_tags = f";crops={crop_count};batch={batch_ordinal}"
+            message = (
+                f"{nvtx_name};run={page.get('runId')};page={page['pageNumber']};"
+                f"owner={self.owner_index};request={page['messageId']}"
+                f"{recognition_tags}"
+            )
+            token["nvtxHandle"] = self._nvtx.start_range(
+                message=message, domain="pagespatial.ocr"
+            )
         page["stack"].append(token)
         return token
 
@@ -105,6 +200,8 @@ class StageProfiler:
         if page is None or not page["stack"] or page["stack"][-1] is not token:
             raise RuntimeError(f"stage profiler nesting violation at {token['stage']}")
         page["stack"].pop()
+        if self._nvtx is not None and token.get("nvtxHandle") is not None:
+            self._nvtx.end_range(token["nvtxHandle"])
         ended_ns = time.monotonic_ns()
         ended_cpu_ns = time.thread_time_ns()
         event = {
@@ -122,6 +219,11 @@ class StageProfiler:
         if error is not None:
             event["errorType"] = type(error).__name__
         page["events"].append(event)
+        if (
+            status == "success"
+            and token["stage"] == self.recognizer_last_prepare_stage
+        ):
+            self._start_recognizer_wait(page)
 
     def _discard(self, token: dict[str, Any] | None) -> None:
         if token is None:
@@ -130,6 +232,8 @@ class StageProfiler:
         if page is None or not page["stack"] or page["stack"][-1] is not token:
             raise RuntimeError(f"stage profiler nesting violation at {token['stage']}")
         page["stack"].pop()
+        if self._nvtx is not None and token.get("nvtxHandle") is not None:
+            self._nvtx.end_range(token["nvtxHandle"])
 
     @contextlib.contextmanager
     def span(self, stage: str):
@@ -182,6 +286,8 @@ class _TimedCallable:
                 self._profiler._finish(token, "error", error)
                 raise
             else:
+                if self._stage == "recognizer.batch_sampler":
+                    self._profiler.observe_recognition_batch(item)
                 self._profiler._finish(token, "success")
                 yield item
 
@@ -242,18 +348,23 @@ def _install_model_components(
 
     transforms = getattr(model, "pre_tfs", None)
     if isinstance(transforms, MutableMapping):
+        callable_transform_stages = []
         for name, value in list(transforms.items()):
             if callable(value):
                 stage_name = str(name).lower().replace(" ", "_")
+                wrapped_stage = f"{prefix}.preprocess.{stage_name}"
                 transforms[name] = profiler.wrap(
-                    f"{prefix}.preprocess.{stage_name}", value
+                    wrapped_stage, value
                 )
+                callable_transform_stages.append(wrapped_stage)
                 profiler.instrumented_paths.append(
                     {
                         "path": f"{path}.pre_tfs[{name!r}]",
                         "stage": f"{prefix}.preprocess.{stage_name}",
                     }
                 )
+        if prefix == "recognizer" and callable_transform_stages:
+            profiler.recognizer_last_prepare_stage = callable_transform_stages[-1]
     else:
         profiler.missing_paths.append(f"{path}.pre_tfs")
 

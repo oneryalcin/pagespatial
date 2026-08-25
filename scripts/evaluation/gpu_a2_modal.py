@@ -36,17 +36,57 @@ from typing import Any
 
 import modal
 
+from gpu_process_tree import reap_marked_process_groups
+
+_SOURCE_PATH = Path(__file__).resolve()
+_COPIED_REMOTE_SOURCE = _SOURCE_PATH in {
+    Path("/root/gpu_a2_modal.py"),
+    Path("/app/scripts/evaluation/gpu_a2_modal.py"),
+}
+_LOCAL_BUILD_CONTEXT = modal.is_local() and not _COPIED_REMOTE_SOURCE
+
+_REQUESTED_APP_NAME = os.environ.get(
+    "PAGESPATIAL_A2_APP_NAME", "pagespatial-gpu-a2-e2e-m1"
+)
+INSTRUMENTATION_MODE = _REQUESTED_APP_NAME.startswith(
+    "pagespatial-gpu-instrumentation-m1-"
+)
+
 # Refuse before importing/constructing the TensorRT image. That imported image
 # contains a paid GPU build step, so validating inside the local entrypoint is
 # too late.
-if modal.is_local():
-    from gpu_a2_budget import DEFAULT_LEDGER, validate_reservation
+if _LOCAL_BUILD_CONTEXT:
+    if INSTRUMENTATION_MODE:
+        from gpu_instrumentation_budget import (
+            DEFAULT_LEDGER,
+            validate_reservation,
+        )
 
-    _reservation_id = os.environ.get("PAGESPATIAL_A2_RESERVATION", "")
-    _ledger_path = Path(os.environ.get("PAGESPATIAL_A2_LEDGER", str(DEFAULT_LEDGER)))
-    if not _reservation_id:
-        raise RuntimeError("PAGESPATIAL_A2_RESERVATION is required before image construction")
-    validate_reservation(_ledger_path, _reservation_id, "E1-GPU")
+        _reservation_id = os.environ.get(
+            "PAGESPATIAL_GPU_INSTRUMENTATION_RESERVATION", ""
+        )
+        _ledger_path = Path(
+            os.environ.get(
+                "PAGESPATIAL_GPU_INSTRUMENTATION_LEDGER", str(DEFAULT_LEDGER)
+            )
+        )
+        if not _reservation_id:
+            raise RuntimeError(
+                "a paid GPU reservation is required before image construction"
+            )
+        validate_reservation(_ledger_path, _reservation_id, "M1-PARITY")
+    else:
+        from gpu_a2_budget import DEFAULT_LEDGER, validate_reservation
+
+        _reservation_id = os.environ.get("PAGESPATIAL_A2_RESERVATION", "")
+        _ledger_path = Path(
+            os.environ.get("PAGESPATIAL_A2_LEDGER", str(DEFAULT_LEDGER))
+        )
+        if not _reservation_id:
+            raise RuntimeError(
+                "a paid GPU reservation is required before image construction"
+            )
+        validate_reservation(_ledger_path, _reservation_id, "E1-GPU")
 
 from gpu_spike_modal import (
     GPU_TYPE,
@@ -74,7 +114,7 @@ ULTRA_INFER_PATCH_SHA256 = (
     "b03632bbfae1372f21a2e31babbf72f8936943a0848ff3db853a2f1cd5216bd6"
 )
 
-if modal.is_local():
+if _LOCAL_BUILD_CONTEXT:
     from gpu_spike_trt_modal import (
         ULTRA_INFER_PATCH_SHA256 as SPIKE_ULTRA_INFER_PATCH_SHA256,
         ULTRA_INFER_SOURCE_REV as SPIKE_ULTRA_INFER_SOURCE_REV,
@@ -92,9 +132,11 @@ else:
     trt_image = modal.Image.debian_slim(python_version="3.10")
 
 
-APP_NAME = os.environ.get("PAGESPATIAL_A2_APP_NAME", "pagespatial-gpu-a2-e2e-m1")
-if modal.is_local() and not APP_NAME.startswith("pagespatial-gpu-a2-"):
-    raise RuntimeError("A2 app name must start with pagespatial-gpu-a2-")
+APP_NAME = _REQUESTED_APP_NAME
+if _LOCAL_BUILD_CONTEXT and not (
+    APP_NAME.startswith("pagespatial-gpu-a2-") or INSTRUMENTATION_MODE
+):
+    raise RuntimeError("A2 app name has an unsupported prefix")
 CPU_CORES = 4.0
 MEMORY_MIB = 24576
 MAX_INPUT_BYTES = 90 * 1024 * 1024
@@ -104,6 +146,10 @@ MAX_RESULT_BYTES = 64 * 1024 * 1024
 NODE_VERSION = "26.0.0"
 NODE_LINUX_X64_SHA256 = (
     "345d558514c62622b5c7d1f7b5f2a19c31ab1405d217df49f010c5ea8decc0f4"
+)
+NVTX_VERSION = "0.2.16"
+NVTX_CP310_X86_64_WHEEL_SHA256 = (
+    "23f30fcaf68f53d1895282315cb35aed5f605d59aeb33e75e276545ff95c4af6"
 )
 RECOGNITION_BATCH_SIZE = int(
     os.environ.get("PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE", "1")
@@ -117,6 +163,7 @@ MODEL_TIER = os.environ.get("PAGESPATIAL_A2_MODEL_TIER", "small")
 if MODEL_TIER not in {"tiny", "small"}:
     raise ValueError("PAGESPATIAL_A2_MODEL_TIER must be tiny or small")
 STAGE_PROFILE = os.environ.get("PAGESPATIAL_A2_STAGE_PROFILE", "0") == "1"
+NVTX_ENABLED = os.environ.get("PAGESPATIAL_A2_NVTX", "0") == "1"
 if STAGE_PROFILE and (
     MODEL_TIER != "tiny"
     or RECOGNITION_BATCH_SIZE != 1
@@ -124,16 +171,35 @@ if STAGE_PROFILE and (
 ):
     raise ValueError("stage profiling is bounded to Tiny B1 with two owners")
 
-if modal.is_local():
+if _LOCAL_BUILD_CONTEXT:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 else:
     REPO_ROOT = Path("/app")
 
 CONTROLLER = REPO_ROOT / "scripts/evaluation/gpu_a2_controller.mjs"
 STAGE_PROFILER = REPO_ROOT / "scripts/evaluation/gpu_a3_stage_profile.py"
+TRACE_WORKER = REPO_ROOT / "scripts/evaluation/gpu_a2_trace_worker.py"
 WORKLOAD_MANIFEST = REPO_ROOT / "evaluation/gpu-spike/a2-50page-v1.json"
 
 app = modal.App(APP_NAME)
+
+
+def _nvtx_start(stage: str, **identity: Any) -> Any:
+    if not NVTX_ENABLED:
+        return None
+    import nvtx
+
+    tags = ";".join(f"{key}={value}" for key, value in identity.items())
+    message = stage if not tags else f"{stage};{tags}"
+    return nvtx.start_range(message=message, domain="pagespatial.ocr")
+
+
+def _nvtx_end(handle: Any) -> None:
+    if handle is None:
+        return
+    import nvtx
+
+    nvtx.end_range(handle)
 
 
 def _process_group_exists(process_group_id: int) -> bool:
@@ -182,7 +248,18 @@ def _node_install_command() -> str:
     )
 
 
-if modal.is_local():
+def _nvtx_install_command() -> str:
+    return (
+        "set -eu; mkdir -p /tmp/nvtx-wheel; "
+        f"python -m pip download --only-binary=:all: --no-deps --dest /tmp/nvtx-wheel nvtx=={NVTX_VERSION}; "
+        "wheel=$(find /tmp/nvtx-wheel -type f -name 'nvtx-*.whl'); "
+        f"echo '{NVTX_CP310_X86_64_WHEEL_SHA256}  '$wheel | sha256sum -c -; "
+        "python -m pip install --no-cache-dir --no-deps \"$wheel\"; "
+        "rm -rf /tmp/nvtx-wheel"
+    )
+
+
+if _LOCAL_BUILD_CONTEXT:
     a2_image = (
         trt_image
         .apt_install("curl", "xz-utils", "poppler-utils", "tesseract-ocr")
@@ -202,6 +279,24 @@ if modal.is_local():
         .add_local_dir(str(REPO_ROOT / "service"), "/app/service", copy=True)
         .add_local_file(str(CONTROLLER), "/app/scripts/evaluation/gpu_a2_controller.mjs", copy=True)
         .add_local_file(str(STAGE_PROFILER), "/root/gpu_a3_stage_profile.py", copy=True)
+        .add_local_file(str(STAGE_PROFILER), "/app/scripts/evaluation/gpu_a3_stage_profile.py", copy=True)
+        .add_local_file(
+            str(REPO_ROOT / "scripts/evaluation/gpu_spike_modal.py"),
+            "/app/scripts/evaluation/gpu_spike_modal.py",
+            copy=True,
+        )
+        .add_local_file(
+            str(REPO_ROOT / "scripts/evaluation/gpu_process_tree.py"),
+            "/app/scripts/evaluation/gpu_process_tree.py",
+            copy=True,
+        )
+        .add_local_file(
+            str(REPO_ROOT / "scripts/evaluation/gpu_process_tree.py"),
+            "/root/gpu_process_tree.py",
+            copy=True,
+        )
+        .add_local_file(str(Path(__file__)), "/app/scripts/evaluation/gpu_a2_modal.py", copy=True)
+        .add_local_file(str(TRACE_WORKER), "/app/scripts/evaluation/gpu_a2_trace_worker.py", copy=True)
         .add_local_file(
             str(WORKLOAD_MANIFEST),
             "/app/evaluation/gpu-spike/a2-50page-v1.json",
@@ -219,11 +314,16 @@ if modal.is_local():
                 "PAGESPATIAL_A2_INFERENCE_OWNERS": str(INFERENCE_OWNERS),
                 "PAGESPATIAL_A2_MODEL_TIER": MODEL_TIER,
                 "PAGESPATIAL_A2_STAGE_PROFILE": "1" if STAGE_PROFILE else "0",
+                "PAGESPATIAL_A2_NVTX": "1" if NVTX_ENABLED else "0",
+                "PAGESPATIAL_A2_APP_NAME": APP_NAME,
             }
         )
     )
 else:
     a2_image = modal.Image.debian_slim(python_version="3.10")
+
+if _LOCAL_BUILD_CONTEXT and INSTRUMENTATION_MODE:
+    a2_image = a2_image.run_commands(_nvtx_install_command())
 
 
 ARM = {
@@ -248,6 +348,7 @@ ARM = {
     },
     "deploymentProfile": "en-gpu",
     "stageProfile": STAGE_PROFILE,
+    "nvtx": NVTX_ENABLED,
 }
 
 
@@ -316,20 +417,9 @@ def _container_snapshot() -> dict[str, Any]:
     raise RuntimeError(f"expected one attributable GPU container, found {mine}")
 
 
-@app.cls(
-    image=a2_image,
-    gpu=GPU_TYPE,
-    cpu=CPU_CORES,
-    memory=MEMORY_MIB,
-    timeout=METHOD_TIMEOUT_S,
-    startup_timeout=1800,
-    retries=0,
-    min_containers=0,
-    buffer_containers=0,
-    max_containers=1,
-)
-class GpuA2Container:
-    @modal.enter()
+class A2ExecutionCore:
+    """One evaluation-only A2 implementation shared by every launch boundary."""
+
     def start_owner(self) -> None:
         import gpu_spike_modal as harness
         from ultra_infer import code_version
@@ -413,7 +503,11 @@ class GpuA2Container:
 
         profiler = self.stage_profilers[owner_index]
         if profiler is not None:
-            profiler.begin_page(int(message["pageNumber"]), str(message["id"]))
+            profiler.begin_page(
+                int(message["pageNumber"]),
+                str(message["id"]),
+                str(message["id"]).split(":", 1)[0],
+            )
         try:
             with (
                 profiler.span("png.decode")
@@ -510,7 +604,6 @@ class GpuA2Container:
             response["stageProfile"] = stage_profile
         return response, inference_ms
 
-    @modal.method()
     def parse_document(self, payload: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(payload, dict):
             raise ValueError("payload must be a dictionary")
@@ -543,6 +636,7 @@ class GpuA2Container:
         was_cold = self.container_cold
         self.container_cold = False
         run_id = payload.get("run_id") or f"gpu-a2-{uuid.uuid4().hex[:12]}"
+        document_nvtx = _nvtx_start("document", run=run_id)
         scratch = Path(tempfile.mkdtemp(prefix="pagespatial-a2-", dir="/tmp"))
         pdf_path = scratch / "input.pdf"
         native_evidence_path = scratch / "native-evidence.json"
@@ -557,22 +651,27 @@ class GpuA2Container:
             len(items) for items in self.batch_observations_by_owner
         ]
         controller = None
+        assembly_nvtx: dict[str, dict[str, Any]] = {}
+        assembly_stage_events: list[dict[str, Any]] = []
         ocr_calls = 0
         stage_profile_pages: list[dict[str, Any]] = []
         try:
             with stderr_path.open("wb") as stderr:
+                controller_command = [
+                    "/opt/node/bin/node",
+                    "/app/scripts/evaluation/gpu_a2_controller.mjs",
+                    "--pdf", str(pdf_path),
+                    "--native-evidence", str(native_evidence_path),
+                    "--result", str(result_path),
+                    "--scratch", str(controller_scratch),
+                    "--run-id", run_id,
+                    "--expected-pages", str(EXPECTED_PAGES),
+                    "--tier", MODEL_TIER,
+                ]
+                if NVTX_ENABLED:
+                    controller_command.append("--instrument-stages")
                 controller = subprocess.Popen(
-                    [
-                        "/opt/node/bin/node",
-                        "/app/scripts/evaluation/gpu_a2_controller.mjs",
-                        "--pdf", str(pdf_path),
-                        "--native-evidence", str(native_evidence_path),
-                        "--result", str(result_path),
-                        "--scratch", str(controller_scratch),
-                        "--run-id", run_id,
-                        "--expected-pages", str(EXPECTED_PAGES),
-                        "--tier", MODEL_TIER,
-                    ],
+                    controller_command,
                     cwd="/app",
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
@@ -632,12 +731,98 @@ class GpuA2Container:
                 with ThreadPoolExecutor(max_workers=INFERENCE_OWNERS) as executor:
                     for raw in controller.stdout:
                         message = json.loads(raw)
+                        if message.get("kind") == "stage":
+                            if message.get("stage") != "result.assemble":
+                                raise RuntimeError(
+                                    f"unknown controller stage: {message.get('stage')}"
+                                )
+                            stage_id = str(message.get("id"))
+                            stage_scope = message.get("scope")
+                            if stage_scope not in {"page", "document"}:
+                                raise RuntimeError(
+                                    "result assembly stage lacks a valid scope"
+                                )
+                            source_at_ns = message.get("atNs")
+                            if (
+                                not isinstance(source_at_ns, int)
+                                or source_at_ns <= 0
+                            ):
+                                raise RuntimeError(
+                                    "result assembly stage lacks a source timestamp"
+                                )
+                            if message.get("phase") == "start":
+                                if stage_id in assembly_nvtx:
+                                    raise RuntimeError(
+                                        f"duplicate result assembly start: {stage_id}"
+                                    )
+                                assembly_nvtx[stage_id] = {
+                                    "handle": _nvtx_start(
+                                        "result.assemble",
+                                        run=run_id,
+                                        page=message.get("pageNumber"),
+                                        request=stage_id,
+                                        owner="node",
+                                        scope=stage_scope,
+                                        proxy="protocol",
+                                        sourceStartNs=source_at_ns,
+                                    ),
+                                    "pageNumber": message.get("pageNumber"),
+                                    "scope": stage_scope,
+                                    "sourceStartedNs": source_at_ns,
+                                    "proxyStartedNs": time.monotonic_ns(),
+                                }
+                            elif message.get("phase") == "end":
+                                if stage_id not in assembly_nvtx:
+                                    raise RuntimeError(
+                                        f"result assembly end without start: {stage_id}"
+                                    )
+                                started = assembly_nvtx.pop(stage_id)
+                                if message.get("pageNumber") != started["pageNumber"]:
+                                    raise RuntimeError(
+                                        "result assembly page identity changed"
+                                    )
+                                if source_at_ns <= started["sourceStartedNs"]:
+                                    raise RuntimeError(
+                                        "result assembly timestamps are not increasing"
+                                    )
+                                _nvtx_end(started["handle"])
+                                assembly_stage_events.append(
+                                    {
+                                        "stage": "result.assemble",
+                                        "requestId": stage_id,
+                                        "pageNumber": started["pageNumber"],
+                                        "scope": started["scope"],
+                                        "sourceStartedNs": started[
+                                            "sourceStartedNs"
+                                        ],
+                                        "sourceEndedNs": source_at_ns,
+                                        "sourceWallMs": (
+                                            source_at_ns
+                                            - started["sourceStartedNs"]
+                                        )
+                                        / 1_000_000,
+                                        "proxyStartedNs": started[
+                                            "proxyStartedNs"
+                                        ],
+                                        "proxyEndedNs": time.monotonic_ns(),
+                                        "nvtxRangeKind": "protocol-proxy",
+                                    }
+                                )
+                            else:
+                                raise RuntimeError(
+                                    f"unknown result assembly phase: {message.get('phase')}"
+                                )
+                            continue
                         if message.get("kind") == "fatal":
                             detail = message.get("error")
                             if async_errors:
                                 detail = f"{detail}; owner error: {async_errors[0]}"
                             raise RuntimeError(f"A2 controller failed: {detail}")
                         if message.get("kind") == "done":
+                            if assembly_nvtx:
+                                raise RuntimeError(
+                                    f"unfinished result assembly ranges: {sorted(assembly_nvtx)}"
+                                )
                             done = True
                             break
                         if message.get("kind") != "ocr":
@@ -712,6 +897,15 @@ class GpuA2Container:
                         "sourceRevision": ULTRA_INFER_SOURCE_REV,
                         "patchSha256": ULTRA_INFER_PATCH_SHA256,
                     },
+                    "instrumentation": {
+                        "nvtx": {
+                            "enabled": NVTX_ENABLED,
+                            "version": self.versions.get("nvtx"),
+                            "wheelSha256": NVTX_CP310_X86_64_WHEEL_SHA256,
+                            "domain": "pagespatial.ocr",
+                        },
+                        "nodeStages": assembly_stage_events,
+                    },
                     "gpuTelemetry": _numeric_gpu_summary(sampler.samples),
                     "batchObservations": [
                         {**observation, "ownerIndex": owner_index}
@@ -765,8 +959,10 @@ class GpuA2Container:
         finally:
             sampler.stop()
             shutil.rmtree(scratch, ignore_errors=True)
+            for active in assembly_nvtx.values():
+                _nvtx_end(active["handle"])
+            _nvtx_end(document_nvtx)
 
-    @modal.method()
     def probe_last_response(self, mode: str) -> Any:
         if not hasattr(self, "last_result"):
             raise RuntimeError("response probe requires one completed parse")
@@ -782,6 +978,228 @@ class GpuA2Container:
         raise ValueError("response probe mode must be tiny, json-bytes, or object")
 
 
+@app.cls(
+    image=a2_image,
+    gpu=GPU_TYPE,
+    cpu=CPU_CORES,
+    memory=MEMORY_MIB,
+    timeout=METHOD_TIMEOUT_S,
+    startup_timeout=1800,
+    retries=0,
+    min_containers=0,
+    buffer_containers=0,
+    max_containers=1,
+)
+class GpuA2Container:
+    """Modal transport only; all document work remains in A2ExecutionCore."""
+
+    @modal.enter()
+    def start_owner(self) -> None:
+        self.core = A2ExecutionCore()
+        self.core.start_owner()
+
+    @modal.method()
+    def parse_document(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.core.parse_document(payload)
+
+    @modal.method()
+    def parse_child_sequence(
+        self, payload: dict[str, Any], repeats: int = 2
+    ) -> list[dict[str, Any]]:
+        """Run the shared core in one persistent child for launch-boundary parity."""
+        if repeats != 2:
+            raise ValueError("M1 child sequence requires one cold and one warm document")
+        pdf_bytes = payload.get("pdf_bytes")
+        native_bytes = payload.get("native_evidence_bytes")
+        if not isinstance(pdf_bytes, bytes) or not isinstance(native_bytes, bytes):
+            raise ValueError("child payload requires byte inputs")
+        scratch = Path(tempfile.mkdtemp(prefix="pagespatial-a2-child-", dir="/tmp"))
+        try:
+            pdf_path = scratch / "input.pdf"
+            native_path = scratch / "native-evidence.json"
+            manifest_path = scratch / "requests.json"
+            result_path = scratch / "results.json"
+            stderr_path = scratch / "worker.stderr"
+            pdf_path.write_bytes(pdf_bytes)
+            native_path.write_bytes(native_bytes)
+            requests = []
+            for repeat in range(1, repeats + 1):
+                requests.append(
+                    {
+                        "run_id": f"{payload['run_id']}-child-r{repeat}",
+                        "pdf_path": str(pdf_path),
+                        "native_evidence_path": str(native_path),
+                        "native_evidence_sha256": payload["native_evidence_sha256"],
+                        "expected_sha256": payload["expected_sha256"],
+                        "expected_pages": payload["expected_pages"],
+                    }
+                )
+            manifest_path.write_text(json.dumps(requests, separators=(",", ":")))
+            started = time.monotonic()
+            worker = None
+            with stderr_path.open("wb") as stderr:
+                worker = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "/app/scripts/evaluation/gpu_a2_trace_worker.py",
+                        "--requests",
+                        str(manifest_path),
+                        "--output",
+                        str(result_path),
+                    ],
+                    cwd="/app",
+                    stdout=subprocess.DEVNULL,
+                    stderr=stderr,
+                    start_new_session=True,
+                )
+                try:
+                    return_code = worker.wait(timeout=METHOD_TIMEOUT_S)
+                except subprocess.TimeoutExpired as error:
+                    _stop_process_group(worker, grace_s=3)
+                    reap_marked_process_groups(str(scratch), grace_s=3)
+                    raise RuntimeError("A2 child worker deadline exceeded") from error
+            cleanup_interventions = reap_marked_process_groups(str(scratch))
+            if return_code != 0:
+                detail = stderr_path.read_text(errors="replace")[-4000:]
+                raise RuntimeError(
+                    f"A2 child worker exited {return_code}: {detail}"
+                )
+            results = json.loads(result_path.read_text())
+            if not isinstance(results, list) or len(results) != repeats:
+                raise RuntimeError("A2 child worker returned an invalid result sequence")
+            child_pids = {item.get("launch", {}).get("workerPid") for item in results}
+            if None in child_pids or len(child_pids) != 1:
+                raise RuntimeError("A2 child worker did not preserve one process lifetime")
+            for item in results:
+                item["launch"]["processTreeClean"] = True
+                item["launch"]["cleanupInterventions"] = cleanup_interventions
+            results[-1]["launch"]["sequenceWallS"] = time.monotonic() - started
+            return results
+        finally:
+            reap_marked_process_groups(str(scratch), grace_s=1)
+            shutil.rmtree(scratch, ignore_errors=True)
+
+    @modal.method()
+    def probe_last_response(self, mode: str) -> Any:
+        return self.core.probe_last_response(mode)
+
+
+def _run_m1_parity(
+    *,
+    pdf: bytes,
+    pdf_sha: str,
+    native_evidence: bytes,
+    native_evidence_sha: str,
+    out_dir: Path,
+    source: dict[str, Any],
+    manifest: dict[str, Any],
+) -> None:
+    """Four remote calls: cold, control-before, child sequence, control-after."""
+    run_id = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{uuid.uuid4().hex[:8]}"
+    run_dir = out_dir / run_id
+    run_dir.mkdir(parents=True, exist_ok=False)
+    (run_dir / "run.json").write_text(
+        json.dumps(
+            {
+                "schemaVersion": "pagespatial-gpu-instrumentation-m1-run-v1",
+                "runId": run_id,
+                "appName": APP_NAME,
+                "source": source,
+                "workload": manifest,
+                "arm": ARM,
+                "remoteCalls": [
+                    "ordinary-cold",
+                    "ordinary-before",
+                    "child-cold-and-warm",
+                    "ordinary-after",
+                ],
+                "reservationId": _reservation_id,
+            },
+            indent=1,
+        )
+        + "\n"
+    )
+    owner = GpuA2Container()
+
+    def payload(label: str) -> dict[str, Any]:
+        return {
+            "run_id": f"{run_id}-{label}",
+            "pdf_bytes": pdf,
+            "native_evidence_bytes": native_evidence,
+            "native_evidence_sha256": native_evidence_sha,
+            "expected_sha256": pdf_sha,
+            "expected_pages": EXPECTED_PAGES,
+        }
+
+    container_ids: list[str] = []
+
+    def ordinary(label: str) -> dict[str, Any]:
+        started = time.monotonic()
+        result = owner.parse_document.remote(payload(label))
+        snapshot = _container_snapshot()
+        result["client"] = {
+            "launchBoundary": "modal-method",
+            "spawnToResultS": time.monotonic() - started,
+            "containerId": snapshot["container_id"],
+            "appId": snapshot["app_id"],
+        }
+        container_ids.append(snapshot["container_id"])
+        return result
+
+    cold = ordinary("ordinary-cold")
+    before = ordinary("ordinary-before")
+    child_started = time.monotonic()
+    child_results = owner.parse_child_sequence.remote(payload("child"), repeats=2)
+    snapshot = _container_snapshot()
+    container_ids.append(snapshot["container_id"])
+    for result in child_results:
+        result["client"] = {
+            "launchBoundary": "child-worker",
+            "sequenceSpawnToResultS": time.monotonic() - child_started,
+            "containerId": snapshot["container_id"],
+            "appId": snapshot["app_id"],
+        }
+    after = ordinary("ordinary-after")
+    if len(set(container_ids)) != 1:
+        raise RuntimeError(f"M1 parity crossed container lifetimes: {container_ids}")
+
+    named = {
+        "ordinary-cold": cold,
+        "ordinary-before": before,
+        "child-cold": child_results[0],
+        "child-warm": child_results[1],
+        "ordinary-after": after,
+    }
+    paths = {}
+    for name, result in named.items():
+        path = run_dir / f"{name}.json"
+        path.write_text(json.dumps(result, indent=1) + "\n")
+        paths[name] = path
+
+    analysis_path = run_dir / "m1-parity.json"
+    subprocess.run(
+        [
+            "/opt/node/bin/node" if Path("/opt/node/bin/node").exists() else "node",
+            str(REPO_ROOT / "scripts/evaluation/analyze_gpu_instrumentation_m1.mjs"),
+            "--cold",
+            str(paths["ordinary-cold"]),
+            "--before",
+            str(paths["ordinary-before"]),
+            "--child-cold",
+            str(paths["child-cold"]),
+            "--child-warm",
+            str(paths["child-warm"]),
+            "--after",
+            str(paths["ordinary-after"]),
+            "--output",
+            str(analysis_path),
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+    print(f"M1 parity evidence -> {run_dir}", flush=True)
+
+
 @app.local_entrypoint()
 def main(
     pdf_path: str,
@@ -789,9 +1207,12 @@ def main(
     out_dir: str,
     repeats: int = 4,
     allow_dirty: bool = False,
+    mode: str = "a2",
 ) -> None:
+    if mode not in {"a2", "m1-parity"}:
+        raise ValueError("mode must be a2 or m1-parity")
     if repeats != 4:
-        raise ValueError("E1 requires exactly four calls: one cold plus three warm")
+        raise ValueError("A2 and M1 require exactly four remote calls")
     source = _source_state(allow_dirty)
     pdf = Path(pdf_path).read_bytes()
     pdf_sha = hashlib.sha256(pdf).hexdigest()
@@ -802,6 +1223,26 @@ def main(
     )
     if pdf_sha != manifest["output"]["sha256"] or len(pdf) != manifest["output"]["bytes"]:
         raise RuntimeError("50-page workload identity does not match the frozen manifest")
+
+    if mode == "m1-parity":
+        if not INSTRUMENTATION_MODE:
+            raise RuntimeError("M1 parity requires an instrumentation-prefixed app")
+        if not (
+            MODEL_TIER == "tiny"
+            and RECOGNITION_BATCH_SIZE == 1
+            and INFERENCE_OWNERS == 2
+        ):
+            raise RuntimeError("M1 parity is fixed to Tiny FP32 B1 O2")
+        _run_m1_parity(
+            pdf=pdf,
+            pdf_sha=pdf_sha,
+            native_evidence=native_evidence,
+            native_evidence_sha=native_evidence_sha,
+            out_dir=Path(out_dir),
+            source=source,
+            manifest=manifest,
+        )
+        return
 
     run_id = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{uuid.uuid4().hex[:8]}"
     run_dir = Path(out_dir) / run_id

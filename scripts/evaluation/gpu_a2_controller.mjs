@@ -11,6 +11,7 @@
  *
  * Controller -> Python:
  *   {kind:"ocr", id, pageNumber, pngPath, geometry, producedAtNs}
+ *   {kind:"stage", stage:"result.assemble", phase, id, pageNumber, atNs}
  *   {kind:"done", resultPath}
  *   {kind:"fatal", error}
  * Python -> controller:
@@ -286,43 +287,59 @@ export async function runController(options) {
   const finishIfComplete = async () => {
     if (finished || fatal || results.size !== expectedPages || pending.size || assemblyTasks.size) return;
     finished = true;
-    const pages = orderedTerminalPages(results, expectedPages);
-    const endedNs = nowNs();
-    const payload = {
-      schemaVersion: 'pagespatial-gpu-a2-result-v1',
-      status: 'completed',
-      runId,
-      document: context.identity,
-      pageCount: expectedPages,
-      pages,
-      timing: {
-        wallMs: (endedNs - startedNs) / 1e6,
-        pagesPerS: expectedPages / ((endedNs - startedNs) / 1e9),
-        scope: 'render+queue+tensorrt-ocr+assembly',
-        nativePrecompute: {
-          includedInWall: false,
-          totalWallMs: nativeEvidence.timing?.totalWallMs,
-          summedPageMs: nativeEvidence.timing?.summedPageMs,
-          host: nativeEvidence.host
+    const terminalStageId = `${runId}:terminal-result`;
+    if (options.instrumentStages) {
+      protocolWrite({
+        kind: 'stage', stage: 'result.assemble', phase: 'start', scope: 'document',
+        id: terminalStageId, pageNumber: 0, atNs: nowNs()
+      });
+    }
+    try {
+      const pages = orderedTerminalPages(results, expectedPages);
+      const endedNs = nowNs();
+      const payload = {
+        schemaVersion: 'pagespatial-gpu-a2-result-v1',
+        status: 'completed',
+        runId,
+        document: context.identity,
+        pageCount: expectedPages,
+        pages,
+        timing: {
+          wallMs: (endedNs - startedNs) / 1e6,
+          pagesPerS: expectedPages / ((endedNs - startedNs) / 1e9),
+          scope: 'render+queue+tensorrt-ocr+assembly',
+          nativePrecompute: {
+            includedInWall: false,
+            totalWallMs: nativeEvidence.timing?.totalWallMs,
+            summedPageMs: nativeEvidence.timing?.summedPageMs,
+            host: nativeEvidence.host
+          }
+        },
+        queue: {
+          maxPages: budget.maxPages,
+          maxBytes: budget.maxBytes,
+          peakPages: budget.peakPages,
+          peakBytes: budget.peakBytes
+        },
+        provenance: {
+          deploymentProfile: 'en-gpu',
+          adapter: adapter.descriptor,
+          producerCount,
+          renderScale: RENDER_SCALE,
+          nativeEvidenceMode: 'precomputed-cpu',
+          nativeAdapter: nativeEvidence.adapter,
+          modelTier
         }
-      },
-      queue: {
-        maxPages: budget.maxPages,
-        maxBytes: budget.maxBytes,
-        peakPages: budget.peakPages,
-        peakBytes: budget.peakBytes
-      },
-      provenance: {
-        deploymentProfile: 'en-gpu',
-        adapter: adapter.descriptor,
-        producerCount,
-        renderScale: RENDER_SCALE,
-        nativeEvidenceMode: 'precomputed-cpu',
-        nativeAdapter: nativeEvidence.adapter,
-        modelTier
+      };
+      writeFileSync(resultPath, `${JSON.stringify(payload)}\n`);
+    } finally {
+      if (options.instrumentStages) {
+        protocolWrite({
+          kind: 'stage', stage: 'result.assemble', phase: 'end', scope: 'document',
+          id: terminalStageId, pageNumber: 0, atNs: nowNs()
+        });
       }
-    };
-    writeFileSync(resultPath, `${JSON.stringify(payload)}\n`);
+    }
     protocolWrite({ kind: 'done', resultPath });
   };
 
@@ -396,23 +413,39 @@ export async function runController(options) {
     const task = (async () => {
       const observations = validateOcrLines(message.lines, entry.pageNumber, modelTier);
       const ocrPage = { pageNumber: entry.pageNumber, observations, backend: 'onnxruntime+tensorrt' };
-      const assembled = await assemblyStage(
-        context,
-        entry.pageNumber,
-        adapter,
-        entry.nativePage,
-        entry.renderedPage,
-        ocrPage,
-        {
-          runId,
-          ocrAdapterId: adapter.descriptor,
-          configuration: {
-            renderScale: RENDER_SCALE,
-            deploymentProfile: 'en-gpu',
-            ocrBackend: adapter.backend
+      if (options.instrumentStages) {
+        protocolWrite({
+          kind: 'stage', stage: 'result.assemble', phase: 'start', scope: 'page',
+          id: entry.id, pageNumber: entry.pageNumber, atNs: nowNs()
+        });
+      }
+      let assembled;
+      try {
+        assembled = await assemblyStage(
+          context,
+          entry.pageNumber,
+          adapter,
+          entry.nativePage,
+          entry.renderedPage,
+          ocrPage,
+          {
+            runId,
+            ocrAdapterId: adapter.descriptor,
+            configuration: {
+              renderScale: RENDER_SCALE,
+              deploymentProfile: 'en-gpu',
+              ocrBackend: adapter.backend
+            }
           }
+        );
+      } finally {
+        if (options.instrumentStages) {
+          protocolWrite({
+            kind: 'stage', stage: 'result.assemble', phase: 'end', scope: 'page',
+            id: entry.id, pageNumber: entry.pageNumber, atNs: nowNs()
+          });
         }
-      );
+      }
       if (results.has(entry.pageNumber)) throw new Error(`duplicate terminal page ${entry.pageNumber}`);
       results.set(entry.pageNumber, {
         pageNumber: entry.pageNumber,
@@ -469,7 +502,8 @@ async function cli() {
       scratchDir: value('--scratch'),
       runId: value('--run-id'),
       expectedPages: Number(value('--expected-pages')),
-      modelTier: value('--tier')
+      modelTier: value('--tier'),
+      instrumentStages: process.argv.includes('--instrument-stages')
     });
   } catch (error) {
     protocolWrite({ kind: 'fatal', error: errorText(error) });

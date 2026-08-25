@@ -1,7 +1,7 @@
 # Trial: GPU bottleneck instrumentation
 
-**Status:** M0 complete; the tested Modal container shape is unsupported, the
-GCP full-VM fallback supports the required trace; M1 and M2 not started
+**Status:** M0 and M1 complete; the tested Modal container shape cannot collect
+the required trace, the GCP full-VM fallback supports it; M2 not started
 
 **Date:** 2026-08-25
 
@@ -90,6 +90,52 @@ required the recorded NVTX wheel hash. This improves future reproduction; it
 does not retroactively claim that the historical image was built from the
 amended Dockerfile.
 
+## M1 shared-core parity
+
+M1 passed on the unprofiled Modal deployment host at source revision
+`9962f96427acc2101bc340c7aa84acc29c31353e`. The fixed arm was Tiny, FP32,
+recognition batch 1, four render producers, two inference owners, four physical
+CPU cores, 24 GiB, and one L4. The ordinary method and the child trace worker
+used the same `gpu_a2_modal.A2ExecutionCore`.
+
+| measurement | result |
+|---|---:|
+| ordinary control before | 2.3653 pages/s |
+| ordinary control after | 2.3898 pages/s |
+| ordinary bracket mean | 2.3776 pages/s |
+| shared child, warm | 2.3472 pages/s |
+| control-bracket drift | 1.03% |
+| launch-boundary drift | 1.28% |
+| maximum allowed drift | 10% |
+
+The deterministic projection was exact. The ordinary null repeat and the
+shared child each differed by one critical token and one raw OCR line from the
+control. Both equal the derived null tolerance, so the predeclared output gate
+passed. This is a parity result, not Tiny production qualification.
+
+The first attempt, app `ap-oyXNUPBwRhZBYr3qTwf7tq`, failed before child parse.
+Operator-observed console output showed that when a plain child process imported the copied Modal source,
+`modal.is_local()` was true and the import entered the local budget path. It
+raised `ModuleNotFoundError` for `gpu_instrumentation_budget`. That console log
+was not retained; the pinned failed-attempt artifact is the invocation manifest.
+The fix gives
+copied `/root` and `/app` source paths a remote-import context and prevents
+budget, repository-path, and real image-build work in the child. The full suite
+and Linux CI passed before the retry.
+
+The successful retry used app `ap-nov49mC4hCDTdeO9vBcRK8` and container
+`ta-01M0VCHGSZGDZGBD7W2S7E4ZJR`. The exact app stopped with zero tasks.
+Operator-observed console output showed PaddleX downloading `simfang.ttf`
+during cold initialization. That console log was not retained. The event was
+before the measured bracket, so it is not part of the reported OCR rate; bake
+the font into the image if this runtime advances.
+
+The compact result is
+[`m1-parity-result-v1.json`](../../evaluation/gpu-instrumentation/m1-parity-result-v1.json).
+It pins the failed and successful attempts, source, workload, model/runtime,
+device, cleanup, parity verdict, and every private result artifact by byte count
+and SHA-256. The private records remain under the ignored `.evaluation/` tree.
+
 ## Modal analyzer correction
 
 The first derived Modal result falsely marked CPU samples and scheduling events as
@@ -100,15 +146,23 @@ corrected result is CPU sampling `false` and CPU context-switch trace `false`.
 
 ## Spend and cleanup
 
-At the final status snapshot, posted instrumentation spend was `$0.03867405`.
-This is not a closed billing interval. Three fixed `$5` reservations remain
-charged as `$15` conservative exposure under the `$100` owner ceiling.
+At the successful M1 reservation snapshot, posted instrumentation spend was
+`$0.30717691`. This is not a closed billing interval. Three fixed `$5` M0
+reservations and two fixed `$10` M1 reservations remain charged as `$35`
+conservative exposure under the `$100` owner ceiling. The first M1 reservation
+includes the failed child-import attempt; the second includes the successful
+retry and its image rebuild.
 
 All three exact Modal apps were stopped with zero tasks:
 
 - `ap-YUWekHlpnKTfOSBGebuNbm`;
 - `ap-kh3ORTuip6RcmCr73sEggn`; and
 - `ap-aPx94y7VW1rS8cKGHRh7Ix`.
+
+Both M1 apps were also stopped with zero tasks:
+
+- `ap-oyXNUPBwRhZBYr3qTwf7tq`; and
+- `ap-nov49mC4hCDTdeO9vBcRK8`.
 
 The GCP VM was created without a service account or API scopes, with project
 SSH keys blocked, automatic restart disabled, and a six-hour shutdown guard.
@@ -121,10 +175,9 @@ cost.
 
 ## Decision
 
-M0 does not authorize M1 or M2 on Modal. The GCP full-VM fallback supports the
-required CUDA, NVTX, OS-runtime, scheduler, and CPU evidence, so M1 is now
-authorized on that host. M1 must reproduce the complete A2 image, cap the
-container to four physical cores and 24 GiB, extract the shared execution core,
-and pass the unprofiled launch-boundary parity gate before M2 can begin. One
-unprofiled Modal control remains required before a GCP bottleneck conclusion is
-transferred to the deployment host.
+M1 closes the shared-core and deployment-host transfer-control gate. It does
+not authorize a bottleneck claim. Before M2, the exact shared core must be
+reproduced on the dedicated GCP L4 host with the workload container capped to
+four physical cores and 24 GiB. M2 then runs the unprofiled controls and both
+fixed trace windows in one bounded host lifetime. The passed Modal M1 bracket
+is the contemporaneous deployment-host control for transferring a GCP finding.
