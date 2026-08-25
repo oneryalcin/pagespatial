@@ -104,7 +104,7 @@ print(json.dumps(errors))
 });
 
 test('worker preserves M1 and confines M2 capture to the third request', () => {
-  assert.match(workerSource, /choices=\("m1", "m2-systems", "m2-systems-short", "m2-cpu"\)/u);
+  assert.match(workerSource, /choices=\("m1", "m2-systems", "m2-systems-short", "m2-cpu", "m3-native"\)/u);
   assert.match(workerSource, /request_capture = capture_plan if index == 3 else None/u);
   assert.match(workerSource, /"warmup", "control-before", "trace", "control-after"/u);
   assert.match(workerSource, /default="m1"/u);
@@ -262,7 +262,7 @@ print(json.dumps({"readyAttempts":ready,"identityError":error}))
 });
 
 test('failed retained analysis fails the owner before its mandatory cleanup', () => {
-  assert.match(gcpSource, /_require_analysis_success\(analysis, args\.out_dir \/ "m2-analysis\.json"\)/u);
+  assert.match(gcpSource, /_require_analysis_success\(analysis, args\.out_dir \/ f"\{milestone\}-analysis\.json"\)/u);
   assert.match(gcpSource, /finally:\s*\n\s*try:\s*\n\s*cleanup = _cleanup_exact_vm\(\)/u);
   const code = String.raw`
 import importlib.util,json,pathlib,sys,tempfile
@@ -297,7 +297,7 @@ test('host run pins the four-core shape and restores its only host sysctl', () =
   assert.match(hostSource, /--privileged/u);
   assert.match(hostSource, /seccomp=unconfined/u);
   assert.match(hostSource, /kernel\.perf_event_paranoid=\{original_perf\}/u);
-  assert.match(hostSource, /GPU processes remain after M2 container exit/u);
+  assert.match(hostSource, /GPU processes remain after \{milestone\.upper\(\)\} container exit/u);
 });
 
 test('profiler commands use repeat/defer and separate CUDA from CPU sampling', () => {

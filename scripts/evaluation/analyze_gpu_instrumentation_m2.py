@@ -796,7 +796,7 @@ def analyze_lifetime(results: list[dict[str, Any]]) -> dict[str, Any]:
     if labels != ["warmup", "control-before", "trace", "control-after"]:
         reasons.append(f"four-call labels are invalid: {labels}")
     modes = {result.get("launch", {}).get("mode") for result in results}
-    if len(modes) != 1 or next(iter(modes)) not in {"m2-systems", "m2-cpu"}:
+    if len(modes) != 1 or next(iter(modes)) not in {"m2-systems", "m2-cpu", "m3-native"}:
         reasons.append(f"four-call profiler mode is invalid: {modes}")
     for field in ("document", "arm", "resources", "modelVerification", "deviceTruth", "ultraInferPatch"):
         if any(result.get(field) != results[0].get(field) for result in results[1:]):
@@ -829,11 +829,11 @@ def analyze_lifetime(results: list[dict[str, Any]]) -> dict[str, Any]:
         reasons.append("trace result lacks completed capture-window evidence")
     else:
         mode = next(iter(modes)) if len(modes) == 1 else None
-        expected_targets = (
-            [list(range(11, 21)), list(range(31, 41))]
-            if mode == "m2-systems"
-            else [list(range(1, 51))]
-        )
+        expected_targets = {
+            "m2-systems": [list(range(11, 21)), list(range(31, 41))],
+            "m2-cpu": [list(range(1, 51))],
+            "m3-native": [list(range(11, 21))],
+        }.get(mode, [])
         observed_targets = [window.get("targetPages") for window in capture["windows"]]
         if observed_targets != expected_targets:
             reasons.append(

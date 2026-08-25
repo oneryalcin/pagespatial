@@ -119,21 +119,23 @@ def main() -> None:
     parser.add_argument("--input-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--revision", required=True)
+    parser.add_argument("--m3-native", action="store_true")
     args = parser.parse_args()
+    milestone = "m3" if args.m3_native else "m2"
     repo = args.repo_root.resolve()
     inputs = args.input_dir.resolve()
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=False)
     manifest: dict[str, Any] = {
-        "schemaVersion": "pagespatial-gpu-instrumentation-m2-host-run-v1",
+        "schemaVersion": f"pagespatial-gpu-instrumentation-{milestone}-host-run-v1",
         "startedAtUtc": _utc(),
         "revision": args.revision,
         "status": "running",
         "host": _assert_host(),
         "commands": [],
     }
-    manifest_path = output / "m2-host-run.json"
-    image_tag = f"{IMAGE_REPOSITORY}:{args.revision[:12]}"
+    manifest_path = output / f"{milestone}-host-run.json"
+    image_tag = f"pagespatial-gpu-instrumentation-{milestone}:{args.revision[:12]}"
     requests = inputs / "requests.json"
     original_perf = None
     try:
@@ -169,7 +171,7 @@ def main() -> None:
                 "docker",
                 "run",
                 "--name",
-                CONTAINER_NAME,
+                f"pagespatial-gpu-instrumentation-{milestone}",
                 "--rm",
                 "--privileged",
                 "--security-opt",
@@ -184,7 +186,7 @@ def main() -> None:
                 f"{output}:/output",
                 image_tag,
                 "python",
-                "/app/scripts/evaluation/run_gpu_instrumentation_m2_container.py",
+                f"/app/scripts/evaluation/run_gpu_instrumentation_{milestone}_container.py",
                 "--requests",
                 "/inputs/requests.json",
                 "--output-dir",
@@ -195,7 +197,7 @@ def main() -> None:
         )
         manifest["commands"].append(profile)
         if profile["returnCode"] != 0:
-            raise RuntimeError("M2 profiler container failed")
+            raise RuntimeError(f"{milestone.upper()} profiler container failed")
         gpu_processes = _run(
             [
                 "nvidia-smi",
@@ -207,7 +209,7 @@ def main() -> None:
         )
         manifest["gpuProcessesAfter"] = gpu_processes
         if gpu_processes["stdout"].strip():
-            raise RuntimeError("GPU processes remain after M2 container exit")
+            raise RuntimeError(f"GPU processes remain after {milestone.upper()} container exit")
         evidence = [
             _sha(path, output)
             for path in sorted(output.rglob("*"))
@@ -216,7 +218,7 @@ def main() -> None:
         evidence_bytes = sum(item["bytes"] for item in evidence)
         if evidence_bytes > MAX_EVIDENCE_BYTES:
             raise RuntimeError(
-                f"M2 evidence is {evidence_bytes} bytes; cap is {MAX_EVIDENCE_BYTES}"
+                f"{milestone.upper()} evidence is {evidence_bytes} bytes; cap is {MAX_EVIDENCE_BYTES}"
             )
         manifest["artifacts"] = evidence
         manifest["evidenceBytes"] = evidence_bytes
@@ -226,7 +228,7 @@ def main() -> None:
         manifest["error"] = f"{type(error).__name__}: {error}"
         raise
     finally:
-        _run(["docker", "rm", "--force", CONTAINER_NAME], 60, check=False)
+        _run(["docker", "rm", "--force", f"pagespatial-gpu-instrumentation-{milestone}"], 60, check=False)
         if original_perf is not None:
             manifest["perfEventRestore"] = _run(
                 [

@@ -38,7 +38,7 @@ test('instrumentation budget records the owner-approved USD 130 continuation', (
   assert.doesNotMatch(source, /a2-budget-v1/u);
   assert.equal(authorization.ownerCeilingUsd, 100);
   assert.equal(authorization.operationalStopUsd, 100);
-  assert.deepEqual(authorization.amendments.at(-3), {
+  assert.deepEqual(authorization.amendments.at(-4), {
     authorizedAtUtc: '2026-08-25T09:33:09Z',
     scope: 'one fresh M2 Systems plus CPU bundle after three pre-build GCP host-access failures',
     reason: 'owner approved a USD 30 continuation after reviewing the USD 20 Systems and USD 10 CPU stage bounds',
@@ -50,7 +50,7 @@ test('instrumentation budget records the owner-approved USD 130 continuation', (
     noFurtherBundles: true,
     oldBundleReopeningDisabled: true,
   });
-  assert.deepEqual(authorization.amendments.at(-1), {
+  assert.deepEqual(authorization.amendments.at(-2), {
     authorizedAtUtc: '2026-08-25T09:57:23Z',
     scope: 'one final fixed-image retry of bundle-1787650684-b39227dc on pagespatial-gpu-profiler-20260825 in us-central1-a',
     reason: 'the capacity retry started the VM but the pinned image build failed before profiling when pip attempted to uninstall Ubuntu-owned distutils PyYAML 5.3.1; commit 4548f31 installs pinned PyYAML 6.0.2 without uninstalling the system copy',
@@ -60,7 +60,7 @@ test('instrumentation budget records the owner-approved USD 130 continuation', (
     fixedImageRetryLimit: 1,
     otherInfrastructureChangesAuthorized: false,
   });
-  assert.deepEqual(authorization.amendments.at(-2), {
+  assert.deepEqual(authorization.amendments.at(-3), {
     authorizedAtUtc: '2026-08-25T09:40:39Z',
     scope: 'one capacity-only retry of bundle-1787650684-b39227dc in us-central1-a; after a repeated L4 stockout, one equivalent temporary experiment VM in us-central1-b or us-central1-c',
     reason: 'the authorized fresh bundle reached GCP but the exact VM could not start because us-central1-a reported ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS',
@@ -72,6 +72,15 @@ test('instrumentation budget records the owner-approved USD 130 continuation', (
     fallbackMustBeDeletedDuringCleanup: true,
     otherInfrastructureChangesAuthorized: false,
   });
+  assert.deepEqual(authorization.amendments.at(-1), {
+    authorizedAtUtc: '2026-08-25T12:30:23Z',
+    scope: 'one M3 native-visibility run on the existing pagespatial-gpu-profiler-20260825 VM in us-central1-a; six UltraInfer NVTX markers, one fixed trace window, and one warm control bracket only',
+    reason: 'owner approved the smallest justified continuation after M2 left the TensorRT backend opaque',
+    reservationWorstCaseUsd: 4,
+    reusesExistingExperimentVm: true,
+    modelGpuBatchingAndProducerChangesAuthorized: false,
+    otherInfrastructureChangesAuthorized: false,
+  });
 });
 
 test('instrumentation reservations are fixed and total less than the ceiling', () => {
@@ -81,8 +90,32 @@ spec=importlib.util.spec_from_file_location("budget",sys.argv[1]); m=importlib.u
 print(json.dumps({"total":sum(v["worstCaseUsd"] for v in m.STAGE_BOUNDS.values()),"stages":sorted(m.STAGE_BOUNDS)}))
 `;
   const result = runPython(code, join(mkdtempSync(join(tmpdir(), 'gpu-inst-bounds-')), 'ledger.json'));
-  assert.deepEqual(result.stages, ['M0-CAPABILITY', 'M1-PARITY', 'M2-CPU', 'M2-SYSTEMS']);
-  assert.equal(result.total, 45);
+  assert.deepEqual(result.stages, ['M0-CAPABILITY', 'M1-PARITY', 'M2-CPU', 'M2-SYSTEMS', 'M3-NATIVE']);
+  assert.equal(result.total, 49);
+});
+
+test('M3 native visibility is one exact USD 4 reservation and does not reopen M2', () => {
+  const ledger = join(mkdtempSync(join(tmpdir(), 'gpu-inst-m3-')), 'ledger.json');
+  const code = String.raw`
+import importlib.util,json,sys
+from pathlib import Path
+spec=importlib.util.spec_from_file_location("budget",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.current_profile=lambda:"desia"; m.active_experiment_apps=lambda:[]; m.billing_rows=lambda:[{"description":"pagespatial-gpu-instrumentation-posted","cost":0.54140977}]
+m.now_utc=lambda:m.datetime(2026,8,25,12,31,tzinfo=m.timezone.utc)
+p=Path(sys.argv[2]); state=m._new_ledger(); state["reservations"].append({"id":"prior","stage":"prior","worstCaseUsd":125,"status":"completed-unposted"}); m.save_ledger(p,state)
+r=m.reserve(p,"M3-NATIVE"); errors=[]
+for action in (lambda:m.reserve(p,"M3-NATIVE"),lambda:m.reserve(p,"M2-CPU"),lambda:m.reserve_bundle(p,["M3-NATIVE"])):
+ try:action()
+ except Exception as e:errors.append(str(e))
+final=m.load_ledger(p); print(json.dumps({"stage":r["stage"],"worst":r["worstCaseUsd"],"exposure":m.reserved_exposure(final),"token":final[m.M3_NATIVE_LEDGER_KEY],"errors":errors}))
+`;
+  const result = runPython(code, ledger);
+  assert.equal(result.stage, 'M3-NATIVE');
+  assert.equal(result.worst, 4);
+  assert.equal(result.exposure, 129);
+  assert.match(result.errors[0], /already been reserved/u);
+  assert.match(result.errors[1], /only one exact fresh M2/u);
+  assert.match(result.errors[2], /only one exact fresh M2/u);
 });
 
 test('instrumentation reservation is single-use and retains completed exposure', () => {

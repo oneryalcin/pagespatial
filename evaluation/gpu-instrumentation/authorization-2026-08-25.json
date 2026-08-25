@@ -58,6 +58,15 @@
       "reusesExistingWorstCaseReservationUsd": 30,
       "fixedImageRetryLimit": 1,
       "otherInfrastructureChangesAuthorized": false
+    },
+    {
+      "authorizedAtUtc": "2026-08-25T12:30:23Z",
+      "scope": "one M3 native-visibility run on the existing pagespatial-gpu-profiler-20260825 VM in us-central1-a; six UltraInfer NVTX markers, one fixed trace window, and one warm control bracket only",
+      "reason": "owner approved the smallest justified continuation after M2 left the TensorRT backend opaque",
+      "reservationWorstCaseUsd": 4,
+      "reusesExistingExperimentVm": true,
+      "modelGpuBatchingAndProducerChangesAuthorized": false,
+      "otherInfrastructureChangesAuthorized": false
     }
   ],
   "source": "owner instructions in the 2026-08-25 conversation: go ahead and start the instrumentation implementation as per docs and measure; today's experimentation ceiling is USD 100 and any increase requires a new request"

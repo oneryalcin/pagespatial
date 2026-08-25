@@ -42,6 +42,7 @@ def _validate_requests(requests: object, mode: str) -> list[dict]:
             "control-after",
         ],
         "m2-cpu": ["warmup", "control-before", "trace", "control-after"],
+        "m3-native": ["warmup", "control-before", "trace", "control-after"],
     }[mode]
     if not isinstance(requests, list) or len(requests) != len(expected_labels):
         raise ValueError(
@@ -59,7 +60,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--mode",
-        choices=("m1", "m2-systems", "m2-systems-short", "m2-cpu"),
+        choices=("m1", "m2-systems", "m2-systems-short", "m2-cpu", "m3-native"),
         default="m1",
     )
     args = parser.parse_args()

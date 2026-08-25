@@ -24,6 +24,7 @@ from gpu_instrumentation_budget import (
     complete,
     reopen_capacity_retry,
     reopen_fixed_image_retry,
+    reserve,
     reserve_bundle,
     validate_reservation,
 )
@@ -525,6 +526,7 @@ def main() -> None:
     parser.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
     parser.add_argument("--capacity-retry-bundle")
     parser.add_argument("--fixed-image-retry-bundle")
+    parser.add_argument("--m3-native", action="store_true")
     parser.add_argument(
         "--pdf",
         type=Path,
@@ -543,17 +545,20 @@ def main() -> None:
         default=Path(".evaluation/gpu-instrumentation/2026-08-25/m2-gcp"),
     )
     args = parser.parse_args()
+    milestone = "m3" if args.m3_native else "m2"
     fixed_image_failure_sha256: str | None = None
     _assert_gcloud_identity()
     source = _run(["git", "status", "--porcelain"], 30)["stdout"]
     if source:
-        raise RuntimeError("M2 GCP execution requires a clean committed revision")
+        raise RuntimeError(f"{milestone.upper()} GCP execution requires a clean committed revision")
     revision = _run(["git", "rev-parse", "HEAD"], 30)["stdout"].strip()
     if args.out_dir.exists():
-        raise RuntimeError(f"refusing existing M2 output directory: {args.out_dir}")
+        raise RuntimeError(f"refusing existing {milestone.upper()} output directory: {args.out_dir}")
     if not args.pdf.is_file() or not args.native_evidence.is_file():
-        raise RuntimeError("M2 private inputs are unavailable")
+        raise RuntimeError(f"{milestone.upper()} private inputs are unavailable")
     retry_modes = [args.capacity_retry_bundle, args.fixed_image_retry_bundle]
+    if args.m3_native and any(retry_modes):
+        raise RuntimeError("M3 does not authorize reuse of an M2 retry path")
     if sum(value is not None for value in retry_modes) > 1:
         raise RuntimeError("only one M2 retry mode may be selected")
     if args.fixed_image_retry_bundle:
@@ -575,12 +580,14 @@ def main() -> None:
         )
     elif args.capacity_retry_bundle:
         reservations = reopen_capacity_retry(args.ledger, args.capacity_retry_bundle)
+    elif args.m3_native:
+        reservations = [reserve(args.ledger, "M3-NATIVE")]
     else:
         reservations = reserve_bundle(args.ledger, list(M2_STAGES))
     for reservation in reservations:
         validate_reservation(args.ledger, reservation["id"], reservation["stage"])
 
-    remote_root = f"/tmp/pagespatial-m2-{revision[:12]}"
+    remote_root = f"/tmp/pagespatial-{milestone}-{revision[:12]}"
     app_id = f"gcp:{PROJECT}:{ZONE}:{INSTANCE}"
     failure: str | None = None
     copied = False
@@ -589,7 +596,7 @@ def main() -> None:
     cleanup: dict[str, Any] | None = None
     ssh_readiness: list[dict[str, Any]] = []
     attempt_id = f"{time.time_ns()}-{revision[:12]}"
-    with tempfile.TemporaryDirectory(prefix="pagespatial-m2-transfer-") as temp:
+    with tempfile.TemporaryDirectory(prefix=f"pagespatial-{milestone}-transfer-") as temp:
         temp_root = Path(temp)
         archive = temp_root / "source.tar.gz"
         revision_file = temp_root / "source-revision.txt"
@@ -656,6 +663,7 @@ def main() -> None:
                 f"sudo -n python3 {remote_root}/repo/scripts/evaluation/run_gpu_instrumentation_m2_host.py "
                 f"--repo-root {remote_root}/repo --input-dir {remote_root}/inputs "
                 f"--output-dir {remote_root}/output --revision {revision}"
+                + (" --m3-native" if args.m3_native else "")
             )
             _ssh(remote, 10800, ssh_identity, ssh_host)
             args.out_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -673,30 +681,32 @@ def main() -> None:
                 raise RuntimeError("GCP evidence copy did not produce the output directory")
             shutil.move(str(copied_output), str(args.out_dir))
             copied = True
-            analysis = _run(
+            analysis_command = (
                 [
-                    "python3",
-                    "scripts/evaluation/analyze_gpu_instrumentation_m2.py",
-                    "--systems-sqlite",
-                    str(args.out_dir / "m2-systems.1.sqlite"),
-                    "--systems-sqlite",
-                    str(args.out_dir / "m2-systems.2.sqlite"),
-                    "--cpu-sqlite",
-                    str(args.out_dir / "m2-cpu.1.sqlite"),
-                    "--systems-results",
-                    str(args.out_dir / "m2-systems-results.json"),
-                    "--cpu-results",
-                    str(args.out_dir / "m2-cpu-results.json"),
-                    "--output",
-                    str(args.out_dir / "m2-analysis.json"),
-                ],
+                    "python3", "scripts/evaluation/analyze_gpu_instrumentation_m3.py",
+                    "--sqlite", str(args.out_dir / "m3-native.1.sqlite"),
+                    "--results", str(args.out_dir / "m3-native-results.json"),
+                    "--output", str(args.out_dir / "m3-analysis.json"),
+                ]
+                if args.m3_native else [
+                    "python3", "scripts/evaluation/analyze_gpu_instrumentation_m2.py",
+                    "--systems-sqlite", str(args.out_dir / "m2-systems.1.sqlite"),
+                    "--systems-sqlite", str(args.out_dir / "m2-systems.2.sqlite"),
+                    "--cpu-sqlite", str(args.out_dir / "m2-cpu.1.sqlite"),
+                    "--systems-results", str(args.out_dir / "m2-systems-results.json"),
+                    "--cpu-results", str(args.out_dir / "m2-cpu-results.json"),
+                    "--output", str(args.out_dir / "m2-analysis.json"),
+                ]
+            )
+            analysis = _run(
+                analysis_command,
                 600,
                 check=False,
             )
-            (args.out_dir / "m2-local-analysis-process.json").write_text(
+            (args.out_dir / f"{milestone}-local-analysis-process.json").write_text(
                 json.dumps(analysis, indent=1) + "\n"
             )
-            _require_analysis_success(analysis, args.out_dir / "m2-analysis.json")
+            _require_analysis_success(analysis, args.out_dir / f"{milestone}-analysis.json")
         except BaseException as error:
             failure = f"{type(error).__name__}: {error}"
             if not copied and ssh_host is not None:
@@ -748,7 +758,7 @@ def main() -> None:
                     args.ledger,
                     reservation["id"],
                     app_id,
-                    failure or "M2 host lifetime completed; exact VM stopped",
+                    failure or f"{milestone.upper()} host lifetime completed; exact VM stopped",
                 )
             if failure is not None:
                 raise RuntimeError(failure)

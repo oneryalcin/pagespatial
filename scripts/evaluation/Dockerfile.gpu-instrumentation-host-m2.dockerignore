@@ -21,7 +21,11 @@
 !scripts/evaluation/gpu_process_tree.py
 !scripts/evaluation/gpu_spike_modal.py
 !scripts/evaluation/run_gpu_instrumentation_m2_container.py
+!scripts/evaluation/run_gpu_instrumentation_m3_container.py
+!scripts/evaluation/analyze_gpu_instrumentation_m2.py
+!scripts/evaluation/analyze_gpu_instrumentation_m2_output.mjs
 !scripts/evaluation/ultra-infer-trt-runtime-lifetime.patch
+!scripts/evaluation/ultra-infer-m3-native-nvtx.patch
 !evaluation/
 !evaluation/gpu-spike/
 !evaluation/gpu-spike/a2-50page-v1.json

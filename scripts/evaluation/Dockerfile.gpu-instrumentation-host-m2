@@ -7,6 +7,7 @@ ARG NODE_VERSION=26.0.0
 ARG NODE_SHA256=345d558514c62622b5c7d1f7b5f2a19c31ab1405d217df49f010c5ea8decc0f4
 ARG ULTRA_INFER_REV=ffb64904d23708863ff5b8da312a5cbd52a7f462
 ARG ULTRA_INFER_PATCH_SHA256=b03632bbfae1372f21a2e31babbf72f8936943a0848ff3db853a2f1cd5216bd6
+ARG ULTRA_INFER_M3_PATCH_SHA256=8ae31bf3c66e74904ced789a033487d05fdda5d6dea591db21cb04f5f579a8e1
 
 ENV PATH=/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     PAGESPATIAL_A2_RECOGNITION_BATCH_SIZE=1 \
@@ -14,7 +15,7 @@ ENV PATH=/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/
     PAGESPATIAL_A2_MODEL_TIER=tiny \
     PAGESPATIAL_A2_STAGE_PROFILE=1 \
     PAGESPATIAL_A2_NVTX=1 \
-    PAGESPATIAL_A2_APP_NAME=pagespatial-gpu-instrumentation-m2-host \
+    PAGESPATIAL_A2_APP_NAME=pagespatial-gpu-instrumentation-m3-host \
     PAGESPATIAL_A2_STANDALONE=1
 
 RUN set -eu; \
@@ -63,8 +64,10 @@ RUN python /opt/pagespatial/fetch_gpu_spike_models.py \
       --verification-out /opt/pagespatial/model-verification.json
 
 COPY scripts/evaluation/ultra-infer-trt-runtime-lifetime.patch /root/ultra-infer-trt-runtime-lifetime.patch
+COPY scripts/evaluation/ultra-infer-m3-native-nvtx.patch /root/ultra-infer-m3-native-nvtx.patch
 RUN set -eu; \
     echo "${ULTRA_INFER_PATCH_SHA256}  /root/ultra-infer-trt-runtime-lifetime.patch" | sha256sum -c -; \
+    echo "${ULTRA_INFER_M3_PATCH_SHA256}  /root/ultra-infer-m3-native-nvtx.patch" | sha256sum -c -; \
     git init /opt/paddlex-source; \
     git -C /opt/paddlex-source remote add origin https://github.com/PaddlePaddle/PaddleX.git; \
     git -C /opt/paddlex-source config core.sparseCheckout true; \
@@ -73,6 +76,7 @@ RUN set -eu; \
     git -C /opt/paddlex-source fetch --depth=1 origin "${ULTRA_INFER_REV}"; \
     git -C /opt/paddlex-source checkout --detach FETCH_HEAD; \
     git -C /opt/paddlex-source apply /root/ultra-infer-trt-runtime-lifetime.patch; \
+    git -C /opt/paddlex-source apply /root/ultra-infer-m3-native-nvtx.patch; \
     cd /opt/paddlex-source/deploy/ultra-infer/python; \
     WITH_GPU=ON DEVICE_TYPE=GPU ENABLE_ORT_BACKEND=ON ENABLE_TRT_BACKEND=ON \
       ENABLE_PADDLE_BACKEND=OFF ENABLE_OPENVINO_BACKEND=OFF ENABLE_VISION=OFF \
@@ -106,6 +110,9 @@ COPY scripts/evaluation/gpu_process_tree.py /app/scripts/evaluation/gpu_process_
 COPY scripts/evaluation/gpu_spike_modal.py /app/scripts/evaluation/gpu_spike_modal.py
 COPY scripts/evaluation/gpu_instrumentation_m2_preflight.py /app/scripts/evaluation/gpu_instrumentation_m2_preflight.py
 COPY scripts/evaluation/run_gpu_instrumentation_m2_container.py /app/scripts/evaluation/run_gpu_instrumentation_m2_container.py
+COPY scripts/evaluation/run_gpu_instrumentation_m3_container.py /app/scripts/evaluation/run_gpu_instrumentation_m3_container.py
+COPY scripts/evaluation/analyze_gpu_instrumentation_m2.py /app/scripts/evaluation/analyze_gpu_instrumentation_m2.py
+COPY scripts/evaluation/analyze_gpu_instrumentation_m2_output.mjs /app/scripts/evaluation/analyze_gpu_instrumentation_m2_output.mjs
 
 RUN nsys --version; \
     python -c 'import json,nvtx,tensorrt,ultra_infer; print(json.dumps({"tensorrt":tensorrt.__version__,"ultraInfer":ultra_infer.__version__}))'; \

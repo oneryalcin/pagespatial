@@ -26,6 +26,8 @@ FRESH_M2_CONTINUATION_ACTIVE = True
 FRESH_M2_CONTINUATION_AUTHORIZED_AT_UTC = "2026-08-25T09:33:09Z"
 FRESH_M2_CONTINUATION_LEDGER_KEY = "owner130FreshM2Continuation"
 FRESH_M2_CONTINUATION_STAGES = ("M2-SYSTEMS", "M2-CPU")
+M3_NATIVE_AUTHORIZED_AT_UTC = "2026-08-25T12:30:23Z"
+M3_NATIVE_LEDGER_KEY = "owner130M3NativeVisibility"
 CAPACITY_RETRY_AUTHORIZED_AT_UTC = "2026-08-25T09:40:39Z"
 CAPACITY_RETRY_BUNDLE_ID = "bundle-1787650684-b39227dc"
 CAPACITY_RETRY_LEDGER_KEY = "owner130M2CapacityRetry"
@@ -75,6 +77,15 @@ STAGE_BOUNDS: dict[str, dict[str, Any]] = {
         "physicalCpuCores": 4.0,
         "timeoutSecondsPerCall": 1200,
         "buildAndIdleAllowanceUsd": 4.0,
+    },
+    "M3-NATIVE": {
+        "worstCaseUsd": 4.0,
+        "calls": 4,
+        "containers": 1,
+        "gpu": "L4",
+        "physicalCpuCores": 4.0,
+        "timeoutSecondsPerCall": 1200,
+        "buildAndIdleAllowanceUsd": 3.0,
     },
 }
 
@@ -201,7 +212,7 @@ def _assert_authorized() -> None:
 def reserve(path: Path, stage: str) -> dict[str, Any]:
     if stage not in STAGE_BOUNDS:
         raise RuntimeError(f"unknown paid stage: {stage!r}")
-    if FRESH_M2_CONTINUATION_ACTIVE:
+    if FRESH_M2_CONTINUATION_ACTIVE and stage != "M3-NATIVE":
         raise RuntimeError(
             "the $130 amendment authorizes only one exact fresh M2 stage bundle"
         )
@@ -212,6 +223,8 @@ def reserve(path: Path, stage: str) -> dict[str, Any]:
     rows = billing_rows()
     with ledger_lock(path):
         ledger = load_ledger(path)
+        if stage == "M3-NATIVE" and ledger.get(M3_NATIVE_LEDGER_KEY) is not None:
+            raise RuntimeError("the single M3 native-visibility run has already been reserved")
         live = [
             item
             for item in ledger["reservations"]
@@ -240,6 +253,13 @@ def reserve(path: Path, stage: str) -> dict[str, Any]:
             "exposureAfterReserveUsd": exposure,
         }
         ledger["reservations"].append(reservation)
+        if stage == "M3-NATIVE":
+            ledger[M3_NATIVE_LEDGER_KEY] = {
+                "authorizedAtUtc": M3_NATIVE_AUTHORIZED_AT_UTC,
+                "reservationId": reservation["id"],
+                "reservedAt": int(time.time()),
+                "stage": stage,
+            }
         ledger["lastBillingRows"] = rows
         save_ledger(path, ledger)
         return reservation

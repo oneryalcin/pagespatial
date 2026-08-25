@@ -17,6 +17,7 @@ from typing import Any
 SYSTEMS_WINDOWS = ((11, 20), (31, 40))
 SHORT_SYSTEMS_WINDOWS = ((11, 15), (31, 35))
 CPU_WINDOWS = ((1, 50),)
+M3_NATIVE_WINDOWS = ((11, 20),)
 
 
 class CaptureWindowController:
@@ -158,6 +159,8 @@ def plan_for_mode(mode: str) -> dict[str, Any] | None:
         return {"captureName": "m2.capture", "windows": SHORT_SYSTEMS_WINDOWS}
     if mode == "m2-cpu":
         return {"captureName": "m2.cpu.capture", "windows": CPU_WINDOWS}
+    if mode == "m3-native":
+        return {"captureName": "m3.native.capture", "windows": M3_NATIVE_WINDOWS}
     if mode == "m1":
         return None
     raise ValueError(f"unsupported trace-worker mode: {mode}")
