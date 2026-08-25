@@ -77,6 +77,29 @@ page=p.finish_page(); print(json.dumps({"error":error,"events":page["events"]}))
   assert.equal(result.events.at(-1).errorType, 'ValueError');
 });
 
+test('NVTX ranges use the fixed domain and expose recognizer wait without a new lock', () => {
+  const code = String.raw`
+import importlib.util,json,os,sys,types
+events=[]
+fake=types.SimpleNamespace(
+ start_range=lambda **kwargs: events.append(["start",kwargs["domain"],kwargs["message"]]) or len(events),
+ end_range=lambda handle: events.append(["end",handle]))
+sys.modules["nvtx"]=fake; os.environ["PAGESPATIAL_A2_NVTX"]="1"
+spec=importlib.util.spec_from_file_location("profile",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+p=m.StageProfiler(1); p.recognizer_last_prepare_stage="recognizer.preprocess.to_batch"; p.begin_method(); p.begin_page(3,"req-3","run-1")
+with p.span("recognizer.preprocess.to_batch"): pass
+with p.span("recognizer.backend"): pass
+p.finish_page(); print(json.dumps(events))
+`;
+  const result = runPython(code);
+  assert.equal(result[0][1], 'pagespatial.ocr');
+  assert.match(result[0][2], /^recognizer\.prepare;run=run-1;page=3;owner=1;request=req-3$/u);
+  assert.equal(result[1][0], 'end');
+  assert.match(result[2][2], /^recognizer\.wait_backend;/u);
+  assert.equal(result[3][0], 'end');
+  assert.match(result[4][2], /^recognizer\.backend;/u);
+});
+
 test('stage profiler merges overlapping owner backend intervals without calling them GPU kernels', () => {
   const code = String.raw`
 import importlib.util,json,sys
