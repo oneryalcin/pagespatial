@@ -67,6 +67,15 @@
       "reusesExistingExperimentVm": true,
       "modelGpuBatchingAndProducerChangesAuthorized": false,
       "otherInfrastructureChangesAuthorized": false
+    },
+    {
+      "authorizedAtUtc": "2026-08-25T12:55:34Z",
+      "scope": "one additional capacity retry of the existing M3 reservation on pagespatial-gpu-profiler-20260825 in us-central1-a",
+      "reason": "owner explicitly authorized another retry after two pre-start GCP L4 stockouts",
+      "reservationWorstCaseUsd": 0,
+      "reusesExistingWorstCaseReservationUsd": 4,
+      "sameVmRetryLimitAdded": 1,
+      "otherInfrastructureChangesAuthorized": false
     }
   ],
   "source": "owner instructions in the 2026-08-25 conversation: go ahead and start the instrumentation implementation as per docs and measure; today's experimentation ceiling is USD 100 and any increase requires a new request"

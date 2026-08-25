@@ -29,6 +29,7 @@ FRESH_M2_CONTINUATION_STAGES = ("M2-SYSTEMS", "M2-CPU")
 M3_NATIVE_AUTHORIZED_AT_UTC = "2026-08-25T12:30:23Z"
 M3_NATIVE_LEDGER_KEY = "owner130M3NativeVisibility"
 M3_CAPACITY_RETRY_LEDGER_KEY = "owner130M3CapacityRetry"
+M3_SECOND_CAPACITY_RETRY_AUTHORIZED_AT_UTC = "2026-08-25T12:55:34Z"
 CAPACITY_RETRY_AUTHORIZED_AT_UTC = "2026-08-25T09:40:39Z"
 CAPACITY_RETRY_BUNDLE_ID = "bundle-1787650684-b39227dc"
 CAPACITY_RETRY_LEDGER_KEY = "owner130M2CapacityRetry"
@@ -346,7 +347,7 @@ def reopen_preflight_bundle(path: Path, bundle_id: str) -> list[dict[str, Any]]:
 
 
 def reopen_m3_capacity_retry(path: Path, reservation_id: str) -> dict[str, Any]:
-    """Retry the same authorized M3 run once after a pre-start L4 stockout."""
+    """Retry the same authorized M3 run after a retained pre-start stockout."""
     _assert_authorized()
     active = active_experiment_apps()
     if active:
@@ -370,7 +371,36 @@ def reopen_m3_capacity_retry(path: Path, reservation_id: str) -> dict[str, Any]:
                 and match.get("capacityRetryHistory")
             ):
                 return match
-            raise RuntimeError("the single same-VM M3 capacity retry has already been claimed")
+            history = match.get("capacityRetryHistory") if isinstance(match, dict) else None
+            if (
+                isinstance(retry_token, dict)
+                and retry_token.get("reservationId") == reservation_id
+                and isinstance(match, dict)
+                and match.get("stage") == "M3-NATIVE"
+                and match.get("status") == "completed-unposted"
+                and isinstance(history, list)
+                and len(history) == 1
+                and CAPACITY_FAILURE_MARKER in str(match.get("completionNote", ""))
+            ):
+                history.append({
+                    "status": match["status"],
+                    "completedAt": match.get("completedAt"),
+                    "completionNote": match.get("completionNote"),
+                    "appId": match.get("appId"),
+                })
+                match["status"] = "reserved"
+                match["secondCapacityReopenedAt"] = int(time.time())
+                for key in ("claimedAt", "claimedByPid", "completedAt", "completionNote", "appId"):
+                    match.pop(key, None)
+                retry_token.update({
+                    "retryCount": 2,
+                    "secondAuthorizedAtUtc": M3_SECOND_CAPACITY_RETRY_AUTHORIZED_AT_UTC,
+                    "secondReservedAt": int(time.time()),
+                })
+                ledger["lastBillingRows"] = rows
+                save_ledger(path, ledger)
+                return match
+            raise RuntimeError("the authorized same-VM M3 capacity retries are exhausted or claimed")
         token = ledger.get(M3_NATIVE_LEDGER_KEY)
         if not isinstance(token, dict) or token.get("reservationId") != reservation_id:
             raise RuntimeError("M3 capacity retry requires the exact M3 reservation token")
@@ -398,6 +428,7 @@ def reopen_m3_capacity_retry(path: Path, reservation_id: str) -> dict[str, Any]:
         ledger[M3_CAPACITY_RETRY_LEDGER_KEY] = {
             "reservationId": reservation_id,
             "reservedAt": int(time.time()),
+            "retryCount": 1,
             "reason": "same exact VM pre-start L4 stockout",
         }
         ledger["lastBillingRows"] = rows
