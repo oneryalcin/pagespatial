@@ -543,6 +543,13 @@ VM in `us-central1-b` or `us-central1-c`; it must be deleted during cleanup.
 The same-zone retry has its own durable ledger token. It cannot reopen any
 earlier bundle or be repeated.
 
+The same-zone retry then started the VM but failed before profiling because
+pip attempted to uninstall Ubuntu's distutils-owned PyYAML. Commit `4548f31`
+installs pinned PyYAML 6.0.2 without removing the system copy. A third dated
+owner amendment permits one final fixed-image retry of the same bundle and VM,
+again without adding exposure. Its retained failure evidence is SHA-256 pinned
+in the authorization record and the retry has a third durable ledger token.
+
 No additional global economic overturn threshold applies. The owner has
 decided that a real saving is material at the expected million-page scale.
 The evidence gates still prevent drift: a removable cause must reach 20% of
@@ -575,6 +582,17 @@ throughput by at least 10% without violating the output gate.
 - produce the wall-union, service-time, CUDA, CPU, and unattributed tables; and
 - require both windows to select the same decision-table row, then name the
   largest removable cause or stop.
+
+**Measured 2026-08-25:** M2 passes on the dedicated GCP L4 host. Both windows
+select `producer-starvation`. The 77.24% Systems profiler overhead makes exact
+timeline shares non-quantitative, but the same structural result repeats:
+named host preparation covers nearly all gaps in PageSpatial device activity.
+CPU sampling cannot yet name one low-level operation because 77.25% of leaf
+samples are unresolved. The strict raw OCR diagnostic fails on two
+control-only low-confidence `5` occurrences on non-trusted pages; deterministic
+native evidence is exact and the owner-approved trusted-output gate passes.
+See the [M2 trial](../trials/2026-08-25-gpu-bottleneck-instrumentation.md) and
+its [compact summary](../../evaluation/gpu-instrumentation/m2-gcp-l4-summary-2026-08-25.json).
 
 ### M3 — conditional native visibility
 

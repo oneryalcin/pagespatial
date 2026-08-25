@@ -20,7 +20,7 @@ ENV PATH=/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/
 RUN set -eu; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      curl xz-utils git patchelf python3.10-dev rapidjson-dev \
+      curl xz-utils git cmake patchelf python3.10-dev rapidjson-dev \
       poppler-utils tesseract-ocr libgl1 libglib2.0-0 libgomp1 ccache; \
     curl -fsSLo "/tmp/${NSYS_DEB}" \
       "https://developer.download.nvidia.com/devtools/repos/ubuntu2004/amd64/${NSYS_DEB}"; \
@@ -44,7 +44,9 @@ RUN set -eu; \
       -name 'tensorrt-8.6.1-cp310-none-linux_x86_64.whl'); \
     test -n "${trt_wheel}"; \
     python -m pip install --no-cache-dir "${trt_wheel}"; \
-    paddleocr install_hpi_deps gpu; \
+    python -m pip install --no-cache-dir \
+      wheel==0.48.0 paddle2onnx==2.0.2rc3 onnx==1.17.0 \
+      onnxoptimizer==0.3.13 polygraphy==0.53.4; \
     mkdir -p /tmp/nvtx-wheel; \
     python -m pip download --only-binary=:all: --no-deps \
       --dest /tmp/nvtx-wheel nvtx==0.2.16; \
@@ -76,6 +78,7 @@ RUN set -eu; \
       ENABLE_PADDLE_BACKEND=OFF ENABLE_OPENVINO_BACKEND=OFF ENABLE_VISION=OFF \
       ENABLE_TEXT=OFF TRT_DIRECTORY=/usr/local/TensorRT-8.6.1.6 \
       CC=/usr/local/gcc-8.2/bin/gcc CXX=/usr/local/gcc-8.2/bin/g++ \
+      CUDACXX=/usr/local/cuda/bin/nvcc \
       CMAKE_ARGS='-DPython_EXECUTABLE=/usr/bin/python -DPython_INCLUDE_DIR=/usr/include/python3.10 -DPython_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.10.so' \
       python setup.py build; \
     patchelf --set-rpath \
@@ -105,5 +108,5 @@ COPY scripts/evaluation/gpu_instrumentation_m2_preflight.py /app/scripts/evaluat
 COPY scripts/evaluation/run_gpu_instrumentation_m2_container.py /app/scripts/evaluation/run_gpu_instrumentation_m2_container.py
 
 RUN nsys --version; \
-    python -c 'import json,nvtx,onnxruntime,paddle,tensorrt,ultra_infer; print(json.dumps({"paddle":paddle.__version__,"cuda":paddle.version.cuda(),"tensorrt":tensorrt.__version__,"onnxruntime":onnxruntime.__version__}))'; \
+    python -c 'import json,nvtx,tensorrt,ultra_infer; print(json.dumps({"tensorrt":tensorrt.__version__,"ultraInfer":ultra_infer.__version__}))'; \
     node --version

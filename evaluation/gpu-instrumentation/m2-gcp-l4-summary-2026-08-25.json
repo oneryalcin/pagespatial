@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "pagespatial-gpu-instrumentation-m2-summary-v1",
+  "measuredAtUtc": "2026-08-25T11:20:10Z",
+  "result": "pass",
+  "selectedDecisionRow": "producer-starvation",
+  "source": {
+    "baseRevision": "4548f3103485970f2a35bbacabedf15af168c9e0",
+    "note": "The retained host manifest names the base revision. The measured image was assembled through live-debug layers. The final committed implementation is a future clean-archive rebuild recipe, not proof of the measured layer history."
+  },
+  "host": {
+    "provider": "gcp",
+    "instance": "pagespatial-gpu-profiler-20260825",
+    "zone": "us-central1-a",
+    "gpu": "NVIDIA L4",
+    "gpuUuid": "GPU-447307de-e52e-e2fa-4099-9bd9e2b01260",
+    "driver": "580.173.02",
+    "gpuMemoryMiB": 23034,
+    "imageId": "sha256:522688d5325ee4d6096e9152931b02476fe5190ea2d8907998e8fbb04d82bffc",
+    "imageBytes": 22922244922,
+    "cleanupObservedAtUtc": "2026-08-25T12:04:52Z",
+    "finalState": "TERMINATED",
+    "finalAccessConfigs": 0,
+    "gpuProcessesAfter": 0
+  },
+  "workload": {
+    "documentPages": 50,
+    "pdfSha256": "46ba5fc15613a260cf019ff6f9be0bb579279be4f5892694a76e02a536d8fcda",
+    "nativeEvidenceSha256": "8e1f5bf2bc2b8a45b5c1cf6699fa275a6a4199acb0f9e308d7183d12ce7f10ef",
+    "modelTier": "tiny",
+    "recognitionBatchSize": 1,
+    "inferenceOwners": 2
+  },
+  "controls": {
+    "systemsPagesPerSecond": [
+      1.981687578697557,
+      2.0734541957190125,
+      1.1567299843970815,
+      2.027511367764915
+    ],
+    "systemsControlDriftPercent": 2.2157628583719844,
+    "systemsProfilerOverheadPercent": 77.24321684978668,
+    "cpuPagesPerSecond": [
+      2.0397150692125834,
+      2.1265635769016455,
+      1.0206163080467696,
+      2.144635843224276
+    ],
+    "cpuControlDriftPercent": 0.8498342828273744,
+    "cpuProfilerOverheadPercent": 109.24234304392186,
+    "timelineDurationsAreQuantitative": false
+  },
+  "systemsWindows": [
+    {
+      "window": 1,
+      "wallMs": 5970.893369,
+      "namedStageCoveragePercent": 99.80474765523256,
+      "pageSpatialDeviceActivityMs": 900.005688,
+      "noPageSpatialDeviceActivityMs": 5070.887681,
+      "namedPreparationDuringDeviceGapsMs": 4989.109192,
+      "decision": "producer-starvation"
+    },
+    {
+      "window": 2,
+      "wallMs": 5397.879201,
+      "namedStageCoveragePercent": 99.79392007854565,
+      "pageSpatialDeviceActivityMs": 855.949593,
+      "noPageSpatialDeviceActivityMs": 4541.929608,
+      "namedPreparationDuringDeviceGapsMs": 4471.896943,
+      "decision": "producer-starvation"
+    }
+  ],
+  "cpuSampling": {
+    "samples": 28770,
+    "unresolvedLeafSamplePercent": 77.25408411539799,
+    "dominantNamedStage": "recognizer.backend",
+    "dominantNamedStageUnresolvedLeafSamplePercent": 94.06127258444619,
+    "mayNameLowLevelFunction": false
+  },
+  "correctness": {
+    "productGatePass": true,
+    "rawEquivalencePass": false,
+    "deterministicProjectionExact": true,
+    "candidateOnlyCriticalValues": 0,
+    "controlOnlyCriticalValues": 2,
+    "trustedDifferencePages": [],
+    "untrustedDifferencePages": [31, 49]
+  },
+  "privateEvidence": {
+    "archive": ".evaluation/gpu-instrumentation/2026-08-25/m2-gcp-l4-live-run4.tar.zst",
+    "archiveBytes": 116645234,
+    "archiveSha256": "bf88f2610dacae8e73a0734ca9a0d0a8f8e5f21890f0dd0c8cd5f53f1dbaf083",
+    "analysisSha256": "a7ed87d58c9854686e73d85f275e476249ec28be6fbfcca59c115776bb344296",
+    "systemsReport1Sha256": "a2c3b6dddefbd9f1068e85bccd2c7bfe358c464b5e16eefea1650b3070b23c74",
+    "systemsReport2Sha256": "877ade36790a00e864f053a660da831f78e77718ef02d1538025aa4f133d33a7",
+    "cpuReportSha256": "ce92da6dd788a63df7814663cea61c325df43c769db4bdcfb7868fc9baff4a3c"
+  },
+  "cleanupEvidence": {
+    "path": "evaluation/gpu-instrumentation/m2-gcp-l4-cleanup-2026-08-25.json",
+    "sha256": "e088f20bb205d4d16bf189825ac9f430dce65dbbddc84d98be5d641cfa612172"
+  },
+  "limitations": [
+    "The profiler overhead invalidates exact traced duration shares as production timing.",
+    "The host control has a different driver and is not a Modal throughput measurement.",
+    "Tiny is used for bottleneck attribution and is not the adopted production witness.",
+    "Unresolved native symbols prevent naming one low-level function."
+  ]
+}

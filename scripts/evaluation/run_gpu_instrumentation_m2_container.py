@@ -91,6 +91,23 @@ def _stats(report: Path, output: Path, *, cpu_sampling: bool) -> dict[str, Any]:
     return result
 
 
+def _captured_reports(report_base: Path, repeat: int) -> list[Path]:
+    unnumbered = report_base.with_suffix(".nsys-rep")
+    if unnumbered.is_file():
+        reports = [unnumbered]
+    else:
+        reports = [
+            report_base.parent / f"{report_base.name}.{index}.nsys-rep"
+            for index in range(1, repeat + 1)
+        ]
+    missing = [path for path in reports if not path.is_file()]
+    if len(reports) != repeat or missing:
+        raise RuntimeError(
+            f"expected {repeat} Nsight reports for {report_base}, missing {missing}"
+        )
+    return reports
+
+
 def _profile(
     *,
     output_dir: Path,
@@ -102,8 +119,6 @@ def _profile(
     cpu_sampling: bool,
 ) -> dict[str, Any]:
     report_base = output_dir / name
-    report = report_base.with_suffix(".nsys-rep")
-    sqlite_path = report_base.with_suffix(".sqlite")
     result_path = output_dir / f"{name}-results.json"
     command = [
         "nsys",
@@ -136,23 +151,22 @@ def _profile(
     profile = _run(command, 3600)
     if profile["returnCode"] != 0:
         raise RuntimeError(f"Nsight profile exited nonzero: {profile}")
-    if not report.is_file():
-        raise RuntimeError(f"Nsight profile produced no report: {profile}")
+    reports = _captured_reports(report_base, repeat)
     if not result_path.is_file():
         raise RuntimeError(f"trace worker produced no result: {profile}")
-    export = _export(report, sqlite_path)
-    stats_path = output_dir / f"{name}-stats.csv"
-    stats = _stats(report, stats_path, cpu_sampling=cpu_sampling)
+    captures = []
+    artifacts = [_sha(result_path)]
+    for index, report in enumerate(reports, start=1):
+        sqlite_path = output_dir / f"{name}.{index}.sqlite"
+        stats_path = output_dir / f"{name}.{index}-stats.csv"
+        export = _export(report, sqlite_path)
+        stats = _stats(report, stats_path, cpu_sampling=cpu_sampling)
+        captures.append({"report": report.name, "export": export, "stats": stats})
+        artifacts.extend((_sha(report), _sha(sqlite_path), _sha(stats_path)))
     return {
         "profile": profile,
-        "export": export,
-        "stats": stats,
-        "artifacts": [
-            _sha(report),
-            _sha(sqlite_path),
-            _sha(result_path),
-            _sha(stats_path),
-        ],
+        "captures": captures,
+        "artifacts": artifacts,
     }
 
 
@@ -181,8 +195,6 @@ def _registered_range_count(sqlite_path: Path, name: str) -> int:
 
 def _preflight(output_dir: Path) -> dict[str, Any]:
     report_base = output_dir / "m2-preflight"
-    report = report_base.with_suffix(".nsys-rep")
-    sqlite_path = report_base.with_suffix(".sqlite")
     profile = _run(
         [
             "nsys",
@@ -202,17 +214,26 @@ def _preflight(output_dir: Path) -> dict[str, Any]:
     )
     if profile["returnCode"] != 0:
         raise RuntimeError(f"two-range preflight exited nonzero: {profile}")
-    if not report.is_file():
-        raise RuntimeError(f"two-range preflight produced no report: {profile}")
-    export = _export(report, sqlite_path)
-    count = _registered_range_count(sqlite_path, "m2.preflight")
-    if count != 2:
-        raise RuntimeError(f"two-range preflight retained {count} ranges, expected 2")
+    reports = _captured_reports(report_base, 2)
+    captures = []
+    artifacts = []
+    retained = 0
+    for index, report in enumerate(reports, start=1):
+        sqlite_path = output_dir / f"m2-preflight.{index}.sqlite"
+        export = _export(report, sqlite_path)
+        count = _registered_range_count(sqlite_path, "m2.preflight")
+        if count != 1:
+            raise RuntimeError(
+                f"preflight capture {index} retained {count} ranges, expected 1"
+            )
+        retained += count
+        captures.append({"report": report.name, "export": export, "retainedRanges": count})
+        artifacts.extend((_sha(report), _sha(sqlite_path)))
     return {
         "profile": profile,
-        "export": export,
-        "retainedRanges": count,
-        "artifacts": [_sha(report), _sha(sqlite_path)],
+        "captures": captures,
+        "retainedRanges": retained,
+        "artifacts": artifacts,
     }
 
 

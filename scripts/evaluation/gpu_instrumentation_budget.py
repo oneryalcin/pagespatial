@@ -30,6 +30,12 @@ CAPACITY_RETRY_AUTHORIZED_AT_UTC = "2026-08-25T09:40:39Z"
 CAPACITY_RETRY_BUNDLE_ID = "bundle-1787650684-b39227dc"
 CAPACITY_RETRY_LEDGER_KEY = "owner130M2CapacityRetry"
 CAPACITY_FAILURE_MARKER = "ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS"
+FIXED_IMAGE_RETRY_AUTHORIZED_AT_UTC = "2026-08-25T09:57:23Z"
+FIXED_IMAGE_RETRY_BUNDLE_ID = "bundle-1787650684-b39227dc"
+FIXED_IMAGE_RETRY_LEDGER_KEY = "owner130M2FixedImageRetry"
+FIXED_IMAGE_FAILURE_EVIDENCE_SHA256 = (
+    "327893a19271a4b71774dfa71192e1d4921da6edf7b44b5677ee9674abd741a9"
+)
 EXPERIMENT_PREFIX = "pagespatial-gpu-instrumentation-"
 DEFAULT_LEDGER = Path(".evaluation/gpu-instrumentation/budget-2026-08-25.json")
 
@@ -386,6 +392,84 @@ def reopen_capacity_retry(path: Path, bundle_id: str) -> list[dict[str, Any]]:
             "bundleId": bundle_id,
             "reservedAt": reopened_at,
             "reason": "retained GCP L4 zone stockout",
+        }
+        ledger["lastBillingRows"] = rows
+        ledger["lastReusedExposureUsd"] = exposure
+        save_ledger(path, ledger)
+        return matches
+
+
+def reopen_fixed_image_retry(
+    path: Path, bundle_id: str, failure_evidence_sha256: str
+) -> list[dict[str, Any]]:
+    """Reopen only the authorized bundle after its retained image-build failure."""
+    if bundle_id != FIXED_IMAGE_RETRY_BUNDLE_ID:
+        raise RuntimeError("fixed-image retry is authorized only for the exact failed bundle")
+    if failure_evidence_sha256 != FIXED_IMAGE_FAILURE_EVIDENCE_SHA256:
+        raise RuntimeError("fixed-image retry requires the pinned host-run failure evidence")
+    _assert_authorized()
+    active = active_experiment_apps()
+    if active:
+        raise RuntimeError(f"paid launch serialization refused: active apps: {active}")
+    rows = billing_rows()
+    with ledger_lock(path):
+        ledger = load_ledger(path)
+        if ledger.get(FIXED_IMAGE_RETRY_LEDGER_KEY) is not None:
+            raise RuntimeError("the single fixed-image retry has already been reserved")
+        continuation = ledger.get(FRESH_M2_CONTINUATION_LEDGER_KEY)
+        if not isinstance(continuation, dict) or continuation.get("bundleId") != bundle_id:
+            raise RuntimeError("fixed-image retry requires the fresh-continuation token")
+        capacity_retry = ledger.get(CAPACITY_RETRY_LEDGER_KEY)
+        if not isinstance(capacity_retry, dict) or capacity_retry.get("bundleId") != bundle_id:
+            raise RuntimeError("fixed-image retry requires the capacity-retry token")
+        live = [
+            item
+            for item in ledger["reservations"]
+            if item.get("status") in {"reserved", "active"}
+        ]
+        if live:
+            raise RuntimeError(f"paid launch serialization refused: live reservation: {live}")
+        matches = [
+            item for item in ledger["reservations"] if item.get("bundleId") == bundle_id
+        ]
+        if [item.get("stage") for item in matches] != list(
+            FRESH_M2_CONTINUATION_STAGES
+        ):
+            raise RuntimeError("fixed-image retry requires the exact M2 stage bundle")
+        if any(item.get("status") != "completed-unposted" for item in matches):
+            raise RuntimeError("fixed-image retry bundle is not completed-unposted")
+        exposure = posted_spend(rows) + reserved_exposure(ledger)
+        if exposure > OPERATIONAL_STOP_USD:
+            raise RuntimeError(
+                f"spend guard refused reused exposure ${exposure:.4f} > "
+                f"${OPERATIONAL_STOP_USD:.2f}"
+            )
+        reopened_at = int(time.time())
+        for item in matches:
+            item["fixedImageRetryHistory"] = [
+                {
+                    "status": item["status"],
+                    "completedAt": item.get("completedAt"),
+                    "completionNote": item.get("completionNote"),
+                    "appId": item.get("appId"),
+                }
+            ]
+            item["status"] = "reserved"
+            item["fixedImageReopenedAt"] = reopened_at
+            for key in (
+                "claimedAt",
+                "claimedByPid",
+                "completedAt",
+                "completionNote",
+                "appId",
+            ):
+                item.pop(key, None)
+        ledger[FIXED_IMAGE_RETRY_LEDGER_KEY] = {
+            "authorizedAtUtc": FIXED_IMAGE_RETRY_AUTHORIZED_AT_UTC,
+            "bundleId": bundle_id,
+            "reservedAt": reopened_at,
+            "reason": "retained pre-profile image-build failure",
+            "failureEvidenceSha256": failure_evidence_sha256,
         }
         ledger["lastBillingRows"] = rows
         ledger["lastReusedExposureUsd"] = exposure

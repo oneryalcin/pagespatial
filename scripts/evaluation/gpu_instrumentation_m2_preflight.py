@@ -11,12 +11,11 @@ import paddle
 
 def main() -> None:
     domain = nvtx.Domain("pagespatial.ocr")
-    message = domain.get_registered_string("m2.preflight")
     paddle.device.set_device("gpu:0")
     left = paddle.randn([1024, 1024])
     right = paddle.randn([1024, 1024])
     for _ in range(2):
-        handle = domain.start_range(message=message)
+        handle = domain.start_range(message="m2.preflight")
         value = paddle.matmul(left, right)
         _ = float(value[0, 0])
         paddle.device.cuda.synchronize()

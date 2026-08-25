@@ -3,8 +3,43 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { comparePages, evaluateComparison } from './lib/modal-comparator.mjs';
+import { criticalTokenDifferences } from './score_gpu_merged_output.mjs';
 
 const pages = (run) => run.pages.map((entry) => entry.pageSpatial);
+
+export function evaluateTrustedOutput(controlPages, candidatePages, deterministicExact) {
+  if (controlPages.length !== candidatePages.length) {
+    throw new Error('trusted-output comparison requires equal page counts');
+  }
+  const differencesByPage = [];
+  for (let index = 0; index < controlPages.length; index += 1) {
+    const control = controlPages[index];
+    const candidate = candidatePages[index];
+    if (control.pageNumber !== candidate.pageNumber) {
+      throw new Error('trusted-output comparison requires ordered matching pages');
+    }
+    const differences = criticalTokenDifferences(
+      control.ocrObservations.map(({ text, box, confidence }) => ({ text, box, score: confidence ?? null })),
+      candidate.ocrObservations.map(({ text, box, confidence }) => ({ text, box, score: confidence ?? null })),
+    );
+    if (differences.controlOnly.length || differences.candidateOnly.length) {
+      differencesByPage.push({
+        pageNumber: candidate.pageNumber,
+        candidateTrusted: candidate.diagnostics.requiresEscalation === false,
+        controlOnly: differences.controlOnly,
+        candidateOnly: differences.candidateOnly,
+      });
+    }
+  }
+  const trustedDifferences = differencesByPage.filter((page) => page.candidateTrusted);
+  return {
+    pass: deterministicExact && trustedDifferences.length === 0,
+    acceptanceRule: 'zero newly incorrect, missing, or unresolved critical values in trusted non-escalated output; raw OCR evidence differences are diagnostic',
+    deterministicExact,
+    trustedDifferencePages: trustedDifferences.map((page) => page.pageNumber),
+    differences: differencesByPage,
+  };
+}
 
 export function compareM2Output(runs) {
   if (!Array.isArray(runs) || runs.length !== 4) {
@@ -16,12 +51,18 @@ export function compareM2Output(runs) {
     rawLines: nullComparison.ocrScore.rawLines.differingLines,
   };
   const traceComparison = comparePages(pages(runs[1]), pages(runs[2]));
+  const rawEquivalenceVerdict = evaluateComparison(traceComparison, nullTolerance);
+  const productVerdict = evaluateTrustedOutput(
+    pages(runs[1]), pages(runs[2]), traceComparison.deterministic.exact,
+  );
   return {
-    schemaVersion: 'pagespatial-gpu-instrumentation-m2-output-v1',
+    schemaVersion: 'pagespatial-gpu-instrumentation-m2-output-v2',
     nullTolerance,
     nullComparison,
     traceComparison,
-    verdict: evaluateComparison(traceComparison, nullTolerance),
+    rawEquivalenceVerdict,
+    productVerdict,
+    verdict: productVerdict,
   };
 }
 

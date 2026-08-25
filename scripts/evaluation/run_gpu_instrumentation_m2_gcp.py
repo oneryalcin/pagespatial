@@ -23,6 +23,7 @@ from gpu_instrumentation_budget import (
     DEFAULT_LEDGER,
     complete,
     reopen_capacity_retry,
+    reopen_fixed_image_retry,
     reserve_bundle,
     validate_reservation,
 )
@@ -53,6 +54,13 @@ EXPECTED_ACCESS_CONFIG = {
 }
 SSH_KEY = Path.home() / ".ssh/google_compute_engine"
 KNOWN_HOSTS = Path.home() / ".ssh/google_compute_known_hosts"
+FIXED_IMAGE_FAILURE_EVIDENCE = Path(
+    ".evaluation/gpu-instrumentation/2026-08-25/"
+    "m2-gcp-retry-16e6599/m2-host-run.json"
+)
+FIXED_IMAGE_FAILURE_EVIDENCE_SHA256 = (
+    "327893a19271a4b71774dfa71192e1d4921da6edf7b44b5677ee9674abd741a9"
+)
 
 
 def _run(
@@ -516,6 +524,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
     parser.add_argument("--capacity-retry-bundle")
+    parser.add_argument("--fixed-image-retry-bundle")
     parser.add_argument(
         "--pdf",
         type=Path,
@@ -534,6 +543,7 @@ def main() -> None:
         default=Path(".evaluation/gpu-instrumentation/2026-08-25/m2-gcp"),
     )
     args = parser.parse_args()
+    fixed_image_failure_sha256: str | None = None
     _assert_gcloud_identity()
     source = _run(["git", "status", "--porcelain"], 30)["stdout"]
     if source:
@@ -543,14 +553,30 @@ def main() -> None:
         raise RuntimeError(f"refusing existing M2 output directory: {args.out_dir}")
     if not args.pdf.is_file() or not args.native_evidence.is_file():
         raise RuntimeError("M2 private inputs are unavailable")
+    retry_modes = [args.capacity_retry_bundle, args.fixed_image_retry_bundle]
+    if sum(value is not None for value in retry_modes) > 1:
+        raise RuntimeError("only one M2 retry mode may be selected")
+    if args.fixed_image_retry_bundle:
+        if not FIXED_IMAGE_FAILURE_EVIDENCE.is_file():
+            raise RuntimeError("fixed-image retry requires its integrity-pinned failure evidence")
+        fixed_image_failure_sha256 = str(
+            _sha(FIXED_IMAGE_FAILURE_EVIDENCE)["sha256"]
+        )
+        if fixed_image_failure_sha256 != FIXED_IMAGE_FAILURE_EVIDENCE_SHA256:
+            raise RuntimeError("fixed-image retry requires its integrity-pinned failure evidence")
     before = _describe()
     _assert_scope(before, "TERMINATED", "absent")
     ssh_identity = _existing_ssh_identity(before)
-    reservations = (
-        reopen_capacity_retry(args.ledger, args.capacity_retry_bundle)
-        if args.capacity_retry_bundle
-        else reserve_bundle(args.ledger, list(M2_STAGES))
-    )
+    if args.fixed_image_retry_bundle:
+        reservations = reopen_fixed_image_retry(
+            args.ledger,
+            args.fixed_image_retry_bundle,
+            fixed_image_failure_sha256 or "",
+        )
+    elif args.capacity_retry_bundle:
+        reservations = reopen_capacity_retry(args.ledger, args.capacity_retry_bundle)
+    else:
+        reservations = reserve_bundle(args.ledger, list(M2_STAGES))
     for reservation in reservations:
         validate_reservation(args.ledger, reservation["id"], reservation["stage"])
 
@@ -652,9 +678,11 @@ def main() -> None:
                     "python3",
                     "scripts/evaluation/analyze_gpu_instrumentation_m2.py",
                     "--systems-sqlite",
-                    str(args.out_dir / "m2-systems.sqlite"),
+                    str(args.out_dir / "m2-systems.1.sqlite"),
+                    "--systems-sqlite",
+                    str(args.out_dir / "m2-systems.2.sqlite"),
                     "--cpu-sqlite",
-                    str(args.out_dir / "m2-cpu.sqlite"),
+                    str(args.out_dir / "m2-cpu.1.sqlite"),
                     "--systems-results",
                     str(args.out_dir / "m2-systems-results.json"),
                     "--cpu-results",

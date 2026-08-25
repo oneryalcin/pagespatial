@@ -48,6 +48,16 @@
       "fallbackRequiresRepeatedL4Stockout": true,
       "fallbackMustBeDeletedDuringCleanup": true,
       "otherInfrastructureChangesAuthorized": false
+    },
+    {
+      "authorizedAtUtc": "2026-08-25T09:57:23Z",
+      "scope": "one final fixed-image retry of bundle-1787650684-b39227dc on pagespatial-gpu-profiler-20260825 in us-central1-a",
+      "reason": "the capacity retry started the VM but the pinned image build failed before profiling when pip attempted to uninstall Ubuntu-owned distutils PyYAML 5.3.1; commit 4548f31 installs pinned PyYAML 6.0.2 without uninstalling the system copy",
+      "failureEvidenceSha256": "327893a19271a4b71774dfa71192e1d4921da6edf7b44b5677ee9674abd741a9",
+      "reservationWorstCaseUsd": 0,
+      "reusesExistingWorstCaseReservationUsd": 30,
+      "fixedImageRetryLimit": 1,
+      "otherInfrastructureChangesAuthorized": false
     }
   ],
   "source": "owner instructions in the 2026-08-25 conversation: go ahead and start the instrumentation implementation as per docs and measure; today's experimentation ceiling is USD 100 and any increase requires a new request"

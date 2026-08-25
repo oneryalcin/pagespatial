@@ -83,7 +83,6 @@ import importlib.util,json,os,sys,types
 events=[]
 class Domain:
  def __init__(self,name): self.name=name
- def get_registered_string(self,message): return "registered:"+message
  def start_range(self,**kwargs): events.append(["start",self.name,kwargs["message"]]); return len(events)
  def end_range(self,handle): events.append(["end",handle])
 fake=types.SimpleNamespace(Domain=Domain)
@@ -97,11 +96,11 @@ p.finish_page(); print(json.dumps(events))
 `;
   const result = runPython(code);
   assert.equal(result[0][1], 'pagespatial.ocr');
-  assert.match(result[0][2], /^registered:recognizer\.prepare;run=run-1;page=3;owner=1;request=req-3;crops=3;batch=1$/u);
+  assert.match(result[0][2], /^recognizer\.prepare;run=run-1;page=3;owner=1;request=req-3;crops=3;batch=1$/u);
   assert.equal(result[1][0], 'end');
-  assert.match(result[2][2], /^registered:recognizer\.wait_backend;.*;crops=3;batch=1$/u);
+  assert.match(result[2][2], /^recognizer\.wait_backend;.*;crops=3;batch=1$/u);
   assert.equal(result[3][0], 'end');
-  assert.match(result[4][2], /^registered:recognizer\.backend;.*;crops=3;batch=1$/u);
+  assert.match(result[4][2], /^recognizer\.backend;.*;crops=3;batch=1$/u);
 });
 
 test('stage profiler merges overlapping owner backend intervals without calling them GPU kernels', () => {

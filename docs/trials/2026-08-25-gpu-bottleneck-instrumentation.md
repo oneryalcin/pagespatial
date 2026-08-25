@@ -1,7 +1,8 @@
 # Trial: GPU bottleneck instrumentation
 
-**Status:** M0 and M1 complete; the tested Modal container shape cannot collect
-the required trace, the GCP full-VM fallback supports it; M2 not started
+**Status:** M0, M1, and M2 complete; Modal cannot collect the required trace,
+the GCP full-VM fallback supports it, and both M2 Systems windows select
+`producer-starvation`
 
 **Date:** 2026-08-25
 
@@ -28,7 +29,7 @@ unsupported.
 
 This is a capability result, not a bottleneck result. No claim about GPU idle
 time, kernel time, copies, synchronization, or a dominant PageSpatial stage is
-authorized.
+authorized from the Modal attempt.
 
 ## Modal attempts
 
@@ -48,7 +49,7 @@ Raw artifacts stay under the ignored private `.evaluation/` tree.
 The host fallback passed the capability gate on a Google Compute Engine
 `g2-standard-8` VM in `us-central1-a`. The VM exposed exactly four physical
 Cascade Lake cores as eight logical threads, one full NVIDIA L4, and 32 GiB of
-memory. The measured workload container will be capped to the design's 24 GiB.
+memory. The measured workload container was capped to the design's 24 GiB.
 The VM used the pinned Ubuntu 22.04 accelerator image and NVIDIA 580 driver.
 
 The probe container used the same pinned Paddle CUDA 11.8 base, Nsight Systems
@@ -114,14 +115,14 @@ control. Both equal the derived null tolerance, so the predeclared output gate
 passed. This is a parity result, not Tiny production qualification.
 
 The first attempt, app `ap-oyXNUPBwRhZBYr3qTwf7tq`, failed before child parse.
-Operator-observed console output showed that when a plain child process imported the copied Modal source,
-`modal.is_local()` was true and the import entered the local budget path. It
-raised `ModuleNotFoundError` for `gpu_instrumentation_budget`. That console log
-was not retained; the pinned failed-attempt artifact is the invocation manifest.
-The fix gives
-copied `/root` and `/app` source paths a remote-import context and prevents
-budget, repository-path, and real image-build work in the child. The full suite
-and Linux CI passed before the retry.
+Operator-observed console output showed that when a plain child process imported
+the copied Modal source, `modal.is_local()` was true and the import entered the
+local budget path. It raised `ModuleNotFoundError` for
+`gpu_instrumentation_budget`. That console log was not retained; the pinned
+failed-attempt artifact is the invocation manifest. The fix gives copied
+`/root` and `/app` source paths a remote-import context and prevents budget,
+repository-path, and real image-build work in the child. The full suite and
+Linux CI passed before the retry.
 
 The successful retry used app `ap-nov49mC4hCDTdeO9vBcRK8` and container
 `ta-01M0VCHGSZGDZGBD7W2S7E4ZJR`. The exact app stopped with zero tasks.
@@ -138,46 +139,201 @@ and SHA-256. The private records remain under the ignored `.evaluation/` tree.
 
 ## Modal analyzer correction
 
-The first derived Modal result falsely marked CPU samples and scheduling events as
-present because it matched the non-empty `ENUM_SAMPLING_THREAD_STATE` and
+The first derived Modal result falsely marked CPU samples and scheduling events
+as present because it matched the non-empty `ENUM_SAMPLING_THREAD_STATE` and
 `ENUM_SCHEDULING_THREAD_BLOCK` schema tables. Those rows define values; they
 are not captured events. The analyzer now excludes `ENUM_` tables. The
 corrected result is CPU sampling `false` and CPU context-switch trace `false`.
 
-## Spend and cleanup
+## M2 result in plain English
 
-At the successful M1 reservation snapshot, posted instrumentation spend was
-`$0.30717691`. This is not a closed billing interval. Three fixed `$5` M0
-reservations and two fixed `$10` M1 reservations remain charged as `$35`
-conservative exposure under the `$100` owner ceiling. The first M1 reservation
-includes the failed child-import attempt; the second includes the successful
-retry and its image rebuild.
+In both profiled windows, PageSpatial's traced CUDA context has long intervals
+with no PageSpatial device activity while named host preparation runs. OCR
+kernels do not occupy most of either perturbed trace window.
 
-All three exact Modal apps were stopped with zero tasks:
+In both retained trace windows, PageSpatial GPU work occupies a small part of
+the window. Most of each gap overlaps named host preparation. Recognition
+decode is also substantial. Copies and TensorRT kernels are present, but they
+are not the largest measured cause.
+
+This result does **not** identify one C++ function to optimize. The CPU sample
+profile leaves 77.25% of leaf samples unresolved, and 94.06% of the dominant
+`recognizer.backend` stage unresolved. The next justified measurement is the
+design's bounded M3 native visibility pass. It must split the opaque backend
+into its existing low-level phases before any scheduler rewrite or larger GPU
+test.
+
+## M2 measured unit
+
+- Host: `pagespatial-gpu-profiler-20260825`, `us-central1-a`.
+- GPU: NVIDIA L4, UUID
+  `GPU-447307de-e52e-e2fa-4099-9bd9e2b01260`, driver `580.173.02`,
+  23,034 MiB.
+- Container image ID:
+  `sha256:522688d5325ee4d6096e9152931b02476fe5190ea2d8907998e8fbb04d82bffc`.
+- Workload: one 50-page document, Tiny, recognition B1, two inference owners.
+- PDF SHA-256:
+  `46ba5fc15613a260cf019ff6f9be0bb579279be4f5892694a76e02a536d8fcda`.
+- Native-evidence SHA-256:
+  `8e1f5bf2bc2b8a45b5c1cf6699fa275a6a4199acb0f9e308d7183d12ce7f10ef`.
+- Nsight Systems: `2025.5.1.121`.
+- Host measurement: 11:20:10Z to 11:29:52Z.
+
+The host manifest names base revision `4548f31`. Live debugging then fixed the
+runtime faults listed below without restarting the expensive native build from
+zero. The measured image was assembled through live-debug layers whose exact
+layer history was not retained. The image ID identifies the measured binary
+identity. The branch commit containing this trial is a future clean-archive
+rebuild recipe; it is not presented as the source identity of the measured
+image.
+
+## M2 control bracket
+
+| lifetime | warm-up | control before | traced call | control after | control drift | profiler overhead |
+|---|---:|---:|---:|---:|---:|---:|
+| Systems, pages/s | 1.982 | 2.073 | 1.157 | 2.028 | 2.22% | 77.24% |
+| CPU sampling, pages/s | 2.040 | 2.127 | 1.021 | 2.145 | 0.85% | 109.24% |
+
+Both lifetimes have the required cold/warm pattern, one stable worker PID,
+and controls within 10%. Both profilers exceed the 15% overhead limit.
+Therefore, traced interval durations are **diagnostic structure**, not
+production timing or cost numbers.
+
+## M2 Systems evidence
+
+| evidence | window 1 | window 2 |
+|---|---:|---:|
+| capture wall | 5,970.9 ms | 5,397.9 ms |
+| named-stage coverage | 99.80% | 99.79% |
+| PageSpatial device activity | 900.0 ms | 855.9 ms |
+| no PageSpatial device activity | 5,070.9 ms | 4,541.9 ms |
+| named preparation during device gaps | 4,989.1 ms | 4,471.9 ms |
+| selected row | `producer-starvation` | `producer-starvation` |
+
+These values describe the profiled windows only. They do not prove the
+physical L4 was globally idle, and they must not be projected as unprofiled
+percentages. They do prove the same qualitative structure twice: when this
+PageSpatial CUDA context has no device event, named host preparation covers
+nearly all of the gap. The selection is not a kernel-saturation result.
+
+The analyzer reports CPU preparation and recognition decode as material
+secondary candidates in both windows. Host-to-device and device-to-host copies
+are not the leading row. Blocking backend wait is below one percent in both
+traced windows.
+
+## M2 CPU evidence
+
+The CPU capture retained 28,770 samples. The most visible resolved leaves are
+NumPy `argmax`, NumPy maximum/copy/cast operations, Python evaluation, Poppler
+rendering, locks, and allocation. This is useful direction, but it is not
+enough to name a surgical target:
+
+- unresolved leaf samples: 77.25%;
+- dominant named stage: `recognizer.backend`;
+- unresolved leaves inside that stage: 94.06%;
+- `mayNameLowLevelFunction`: false.
+
+No Nsight Compute run is justified. Kernels are not the measured dominant
+cause. This trace does not predict another GPU's behavior.
+
+## M2 correctness
+
+The strict raw-equivalence diagnostic fails: two critical-token occurrences
+and four raw-line positions differ from the control, against a zero null
+tolerance. The product safety gate passes under the owner-approved rule:
+
+- deterministic native projection is exact;
+- the trace introduces zero candidate-only critical values;
+- page 31 drops a low-confidence OCR `5` (`0.2627`);
+- page 49 changes a low-confidence OCR `5` (`0.2903`) to `S` (`0.8948`);
+- native observations and conflict records are unchanged;
+- page 31 retains a blocking critical-token conflict;
+- page 49 has only an advisory low-confidence reason, but remains escalated
+  and `untrusted-document-content`;
+- both candidate pages remain non-trusted; and
+- no difference occurs on a trusted, non-escalated page.
+
+The raw evidence remains retained. The pass means that no new incorrect,
+missing, or unresolved critical value entered trusted output. It does not mean
+the OCR bytes were identical.
+
+## M2 implementation corrections
+
+The live measurement exposed runtime faults that the simulated tests missed:
+
+1. Docker's root ignore file excluded every evaluation input. A
+   Dockerfile-specific path allowlist now supplies the required trees and
+   files. The GCP owner always builds from `git archive`, so untracked files
+   cannot enter that context; the private `.evaluation` tree remains excluded.
+2. The pinned NVTX Python API requires raw strings at `start_range`; passing a
+   pre-registered object fails at runtime.
+3. Nsight `repeat:2` writes two numbered reports. The runner now exports and
+   analyzes both before choosing a decision row.
+4. The CUDA compiler existed at `/usr/local/cuda/bin/nvcc` but was hidden by
+   the image `PATH`; the build now pins `CUDACXX` directly.
+5. The HPI convenience installer tried to download a redundant prebuilt
+   UltraInfer package. The image installs only the pinned build dependencies.
+6. The result reader now decodes UTF-8 explicitly.
+7. Interval subtraction is linear rather than quadratic, so retained trace
+   analysis finishes in about one minute instead of stalling.
+
+`uv` was not substituted into the completed image build. The expensive time
+was native UltraInfer compilation and TensorRT engine creation, not Python
+package resolution. Changing the installer would have invalidated a working
+cached layer without improving the measured path.
+
+## M2 decision and next experiment
+
+M2 closes. The smallest justified continuation is M3 from the design:
+
+1. add only the six bounded native markers around the existing UltraInfer
+   input preparation, H2D, execute, D2H, synchronization, and output decode
+   phases;
+2. capture one fixed window on the same Tiny B1/O2 unit;
+3. require at least 80% of the opaque backend to receive a stable name; and
+4. only then select one unprofiled A/B optimization with the existing 10%
+   complete-document keep bar.
+
+Do not test H100, enlarge recognition batches, add more producers, or rewrite
+the scheduler yet. M2 selects the `producer-starvation` row for the traced
+PageSpatial context, but it does not yet say which native operation should be
+removed.
+
+## Spend, evidence, and cleanup
+
+At the successful M1 reservation snapshot, posted Modal instrumentation spend
+was `$0.30717691`. This was not a closed billing interval. The retained budget
+ledger continues to treat incomplete billing conservatively. GCP billing for
+the host has not posted into the project record, so this trial does not invent
+an actual cost. The work remained inside the owner's $130 ceiling.
+
+All five exact Modal apps were stopped with zero tasks:
 
 - `ap-YUWekHlpnKTfOSBGebuNbm`;
-- `ap-kh3ORTuip6RcmCr73sEggn`; and
-- `ap-aPx94y7VW1rS8cKGHRh7Ix`.
-
-Both M1 apps were also stopped with zero tasks:
-
+- `ap-kh3ORTuip6RcmCr73sEggn`;
+- `ap-aPx94y7VW1rS8cKGHRh7Ix`;
 - `ap-oyXNUPBwRhZBYr3qTwf7tq`; and
 - `ap-nov49mC4hCDTdeO9vBcRK8`.
 
-The GCP VM was created without a service account or API scopes, with project
-SSH keys blocked, automatic restart disabled, and a six-hour shutdown guard.
-London and Belgium requests failed for lack of capacity and created no
-resources. The successful US VM was stopped after the evidence was copied
-back. Its auto-delete boot disk is retained only to reuse the downloaded image
-layers for M1. GCP billing is not yet final; the committed result records the
-published hourly pricing basis and does not present an estimate as billed
-cost.
+The private M2 archive is
+`.evaluation/gpu-instrumentation/2026-08-25/m2-gcp-l4-live-run4.tar.zst`:
 
-## Decision
+- bytes: 116,645,234;
+- SHA-256:
+  `bf88f2610dacae8e73a0734ca9a0d0a8f8e5f21890f0dd0c8cd5f53f1dbaf083`;
+- combined analysis SHA-256:
+  `a7ed87d58c9854686e73d85f275e476249ec28be6fbfcca59c115776bb344296`.
 
-M1 closes the shared-core and deployment-host transfer-control gate. It does
-not authorize a bottleneck claim. Before M2, the exact shared core must be
-reproduced on the dedicated GCP L4 host with the workload container capped to
-four physical cores and 24 GiB. M2 then runs the unprofiled controls and both
-fixed trace windows in one bounded host lifetime. The passed Modal M1 bracket
-is the contemporaneous deployment-host control for transferring a GCP finding.
+The committed compact summary is
+[`m2-gcp-l4-summary-2026-08-25.json`](../../evaluation/gpu-instrumentation/m2-gcp-l4-summary-2026-08-25.json).
+The raw archive is private and ignored by Git.
+
+The final read-only GCP state is retained in
+[`m2-gcp-l4-cleanup-2026-08-25.json`](../../evaluation/gpu-instrumentation/m2-gcp-l4-cleanup-2026-08-25.json),
+SHA-256
+`e088f20bb205d4d16bf189825ac9f430dce65dbbddc84d98be5d641cfa612172`.
+
+After all artifacts were copied and hash-verified, the temporary external
+access configuration was removed. The exact VM reached `TERMINATED` with zero
+access configurations, zero GPU processes remained after the run, and the
+proposed `pagespatial-gpu-profiler-20260825-b` fallback VM did not exist.

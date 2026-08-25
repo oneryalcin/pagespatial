@@ -196,8 +196,7 @@ def _nvtx_start(stage: str, **identity: Any) -> Any:
         _nvtx_domain = nvtx.Domain("pagespatial.ocr")
     tags = ";".join(f"{key}={value}" for key, value in identity.items())
     message = stage if not tags else f"{stage};{tags}"
-    registered = _nvtx_domain.get_registered_string(message)
-    return _nvtx_domain.start_range(message=registered)
+    return _nvtx_domain.start_range(message=message)
 
 
 def _nvtx_end(handle: Any) -> None:
@@ -903,7 +902,7 @@ class A2ExecutionCore:
                 if exit_code != 0:
                     raise RuntimeError(f"A2 controller exited {exit_code}")
                 _stop_process_group(controller, grace_s=10)
-            result = json.loads(result_path.read_text())
+            result = json.loads(result_path.read_text(encoding="utf-8"))
             if result.get("status") != "completed" or len(result.get("pages", [])) != EXPECTED_PAGES:
                 raise RuntimeError("A2 terminal result did not reconcile 50 successful pages")
             method_total_ms = (time.monotonic() - method_started) * 1000

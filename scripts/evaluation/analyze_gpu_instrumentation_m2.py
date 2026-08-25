@@ -112,19 +112,27 @@ def _intersections(
 def _subtract(
     base: Iterable[tuple[int, int]], remove: Iterable[tuple[int, int]]
 ) -> list[tuple[int, int]]:
-    remaining = _merge(base)
-    for cut_start, cut_end in _merge(remove):
-        next_rows = []
-        for start, end in remaining:
-            if cut_end <= start or cut_start >= end:
-                next_rows.append((start, end))
-                continue
-            if start < cut_start:
-                next_rows.append((start, cut_start))
-            if cut_end < end:
-                next_rows.append((cut_end, end))
-        remaining = next_rows
-    return remaining
+    bases = _merge(base)
+    cuts = _merge(remove)
+    output = []
+    cut_index = 0
+    for start, end in bases:
+        while cut_index < len(cuts) and cuts[cut_index][1] <= start:
+            cut_index += 1
+        cursor = start
+        index = cut_index
+        while index < len(cuts) and cuts[index][0] < end:
+            cut_start, cut_end = cuts[index]
+            if cut_start > cursor:
+                output.append((cursor, min(cut_start, end)))
+            cursor = max(cursor, cut_end)
+            if cursor >= end:
+                break
+            index += 1
+        if cursor < end:
+            output.append((cursor, end))
+        cut_index = index
+    return output
 
 
 def _percentile(values: list[float], quantile: float) -> float | None:
@@ -504,19 +512,38 @@ def _analyze_window(
     }
 
 
-def analyze_systems(sqlite_path: Path) -> dict[str, Any]:
+def analyze_systems(sqlite_path: Path, *, first_window_index: int = 1) -> dict[str, Any]:
     with sqlite3.connect(sqlite_path) as connection:
         _require_tables(connection, REQUIRED_SYSTEMS_TABLES)
         nvtx = _nvtx_ranges(connection)
         captures = [row for row in nvtx if row["message"] == "m2.capture"]
-        if len(captures) != 2:
-            raise RuntimeError(f"Systems trace has {len(captures)} capture ranges, expected 2")
+        if len(captures) not in {1, 2}:
+            raise RuntimeError(
+                f"Systems trace has {len(captures)} capture ranges, expected 1 or 2"
+            )
         windows = [
             _analyze_window(connection, nvtx, capture, index)
-            for index, capture in enumerate(captures, start=1)
+            for index, capture in enumerate(captures, start=first_window_index)
         ]
     rows = [window["decision"]["row"] for window in windows]
-    agreement = rows[0] == rows[1] and rows[0] != "ambiguous-stop"
+    agreement = len(set(rows)) == 1 and rows[0] != "ambiguous-stop"
+    return {
+        "windows": windows,
+        "decisionRows": rows,
+        "decisionAgreement": agreement,
+        "selectedDecisionRow": rows[0] if agreement else "ambiguous-stop",
+    }
+
+
+def analyze_systems_reports(sqlite_paths: list[Path]) -> dict[str, Any]:
+    windows = []
+    for sqlite_path in sqlite_paths:
+        report = analyze_systems(sqlite_path, first_window_index=len(windows) + 1)
+        windows.extend(report["windows"])
+    if len(windows) != 2:
+        raise RuntimeError(f"Systems analysis retained {len(windows)} windows, expected 2")
+    rows = [window["decision"]["row"] for window in windows]
+    agreement = len(set(rows)) == 1 and rows[0] != "ambiguous-stop"
     return {
         "windows": windows,
         "decisionRows": rows,
@@ -574,7 +601,7 @@ def corroborate_cpu_decisions(
         )
         window["cpuCorroboration"] = evidence
     rows = [window["decision"]["row"] for window in systems["windows"]]
-    agreement = rows[0] == rows[1] and rows[0] != "ambiguous-stop"
+    agreement = len(set(rows)) == 1 and rows[0] != "ambiguous-stop"
     systems.update(
         {
             "decisionRows": rows,
@@ -863,7 +890,9 @@ def output_pair_passes(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--systems-sqlite", type=Path, required=True)
+    parser.add_argument(
+        "--systems-sqlite", type=Path, action="append", required=True
+    )
     parser.add_argument("--cpu-sqlite", type=Path, required=True)
     parser.add_argument("--systems-results", type=Path, required=True)
     parser.add_argument("--cpu-results", type=Path, required=True)
@@ -872,7 +901,10 @@ def main() -> None:
     systems_results = json.loads(args.systems_results.read_text())
     cpu_results = json.loads(args.cpu_results.read_text())
     cpu = analyze_cpu(args.cpu_sqlite)
-    systems = corroborate_cpu_decisions(analyze_systems(args.systems_sqlite), cpu)
+    systems = corroborate_cpu_decisions(
+        analyze_systems_reports(args.systems_sqlite),
+        cpu,
+    )
     systems_output = compare_output(args.systems_results)
     cpu_output = compare_output(args.cpu_results)
     result = {

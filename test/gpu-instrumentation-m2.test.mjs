@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { evaluateTrustedOutput } from '../scripts/evaluation/analyze_gpu_instrumentation_m2_output.mjs';
 
 const capturePath = new URL(
   '../scripts/evaluation/gpu_instrumentation_capture.py',
@@ -46,6 +47,10 @@ const gcpPath = new URL(
 ).pathname;
 const dockerfile = readFileSync(
   new URL('../scripts/evaluation/Dockerfile.gpu-instrumentation-host-m2', import.meta.url),
+  'utf8',
+);
+const dockerIgnore = readFileSync(
+  new URL('../scripts/evaluation/Dockerfile.gpu-instrumentation-host-m2.dockerignore', import.meta.url),
   'utf8',
 );
 
@@ -105,8 +110,9 @@ test('worker preserves M1 and confines M2 capture to the third request', () => {
   assert.match(workerSource, /default="m1"/u);
 });
 
-test('shared core uses registered strings and capture completion evidence', () => {
-  assert.match(modalSource, /get_registered_string\(message\)/u);
+test('shared core passes raw NVTX messages and records capture completion evidence', () => {
+  assert.match(modalSource, /start_range\(message=message\)/u);
+  assert.doesNotMatch(modalSource, /get_registered_string\(message\)/u);
   assert.match(modalSource, /capture_controller\.observe_ocr_enter/u);
   assert.match(modalSource, /capture_controller\.observe_assembly_end/u);
   assert.match(modalSource, /capture_controller\.finish\(\)/u);
@@ -145,6 +151,9 @@ test('GCP owner can mutate only the exact experiment VM and always stops it', ()
   assert.match(gcpSource, /HostKeyAlias=/u);
   assert.match(gcpSource, /StrictHostKeyChecking=yes/u);
   assert.match(gcpSource, /sudo -n python3 \{remote_root\}\/repo\/scripts\/evaluation\/run_gpu_instrumentation_m2_host\.py/u);
+  assert.match(gcpSource, /--fixed-image-retry-bundle/u);
+  assert.match(gcpSource, /327893a19271a4b71774dfa71192e1d4921da6edf7b44b5677ee9674abd741a9/u);
+  assert.match(gcpSource, /fixed-image retry requires its integrity-pinned failure evidence/u);
 });
 
 test('GCP owner rejects drift in every retained M0 loss boundary', () => {
@@ -297,6 +306,8 @@ test('profiler commands use repeat/defer and separate CUDA from CPU sampling', (
   assert.match(containerSource, /capture_name="m2\.cpu\.capture"[\s\S]*repeat=1[\s\S]*cpu_sampling=True/u);
   assert.match(containerSource, /--sample=process-tree/u);
   assert.match(containerSource, /--backtrace=dwarf/u);
+  assert.match(containerSource, /_captured_reports\(report_base, repeat\)/u);
+  assert.match(containerSource, /f"\{name\}\.\{index\}\.sqlite"/u);
 });
 
 test('M2 image pins the measured runtime, models, profiler, and shared core', () => {
@@ -312,6 +323,17 @@ test('M2 image pins the measured runtime, models, profiler, and shared core', ()
   );
   assert.match(dockerfile, /gpu_a2_modal\.py/u);
   assert.match(dockerfile, /gpu_instrumentation_capture\.py/u);
+  assert.match(dockerfile, /CUDACXX=\/usr\/local\/cuda\/bin\/nvcc/u);
+  assert.match(dockerfile, /paddle2onnx==2\.0\.2rc3/u);
+});
+
+test('M2 Docker context is a clean archive with a private-data deny-by-default allowlist', () => {
+  assert.match(gcpSource, /"git",\s*"archive",\s*"--format=tar\.gz"/u);
+  assert.equal(dockerIgnore.split('\n')[0], '**');
+  assert.match(dockerIgnore, /!scripts\/evaluation\/gpu_a2_modal\.py/u);
+  assert.match(dockerIgnore, /!evaluation\/gpu-spike\/model-pins-v1\.json/u);
+  assert.doesNotMatch(dockerIgnore, /!\.evaluation/u);
+  assert.doesNotMatch(dockerIgnore, /!service\/data/u);
 });
 
 test('analyzer interval algebra does not double count overlap and stops ambiguous ties', () => {
@@ -336,6 +358,44 @@ print(json.dumps({
     ambiguous: 'ambiguous-stop', clear: 'a', kernel60: 'ambiguous-stop',
     unattributed: 'ambiguous-stop', cpuUnproven: 'ambiguous-stop', cpuProven: 'cpu-preparation',
   });
+});
+
+test('analyzer combines exactly two numbered Systems captures before deciding', () => {
+  assert.match(analyzerSource, /def analyze_systems_reports/u);
+  assert.match(analyzerSource, /len\(windows\) != 2/u);
+  assert.match(analyzerSource, /action="append"/u);
+  assert.match(gcpSource, /m2-systems\.1\.sqlite/u);
+  assert.match(gcpSource, /m2-systems\.2\.sqlite/u);
+  assert.match(gcpSource, /m2-cpu\.1\.sqlite/u);
+});
+
+test('M2 output keeps raw evidence drift visible but gates trusted output', () => {
+  const source = readFileSync(
+    new URL('../scripts/evaluation/analyze_gpu_instrumentation_m2_output.mjs', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /rawEquivalenceVerdict/u);
+  assert.match(source, /productVerdict/u);
+  assert.match(source, /candidate\.diagnostics\.requiresEscalation === false/u);
+  assert.match(source, /zero newly incorrect, missing, or unresolved critical values/u);
+
+  const page = (pageNumber, text, requiresEscalation) => ({
+    pageNumber,
+    ocrObservations: [{ text, box: [0, 0, 10, 10], confidence: 0.5 }],
+    diagnostics: { requiresEscalation },
+  });
+  const untrusted = evaluateTrustedOutput(
+    [page(1, 'value 5', true)], [page(1, 'value S', true)], true,
+  );
+  assert.equal(untrusted.pass, true);
+  assert.equal(untrusted.differences[0].controlOnly[0].token, '5');
+  assert.deepEqual(untrusted.trustedDifferencePages, []);
+
+  const trusted = evaluateTrustedOutput(
+    [page(1, 'value 5', false)], [page(1, 'value S', false)], true,
+  );
+  assert.equal(trusted.pass, false);
+  assert.deepEqual(trusted.trustedDifferencePages, [1]);
 });
 
 test('CPU cause requires dominant resolved on-CPU stage evidence', () => {

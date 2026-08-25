@@ -74,8 +74,7 @@ class StageProfiler:
     def _nvtx_start(self, message: str) -> Any:
         if self._nvtx_domain is None:
             return None
-        registered = self._nvtx_domain.get_registered_string(message)
-        return self._nvtx_domain.start_range(message=registered)
+        return self._nvtx_domain.start_range(message=message)
 
     def _nvtx_end(self, handle: Any) -> None:
         if self._nvtx_domain is not None and handle is not None:
