@@ -1,0 +1,92 @@
+{
+  "schemaVersion": "pagespatial-gpu-batch-compare-summary-v1",
+  "date": "2026-08-25",
+  "status": "complete-b8-rejected",
+  "decision": "Keep Tiny FP32 B1 with two inference owners. B8 with two owners is slower.",
+  "measuredUnit": {
+    "host": "pagespatial-gpu-profiler-20260825",
+    "project": "red-studio-399209",
+    "zone": "us-central1-a",
+    "machineType": "g2-standard-8",
+    "gpu": "NVIDIA L4",
+    "imageId": "sha256:3514d9e0da6d4b045907370e5025e184d51d556854c7c696274f53a5adff6138",
+    "modelTier": "tiny",
+    "precision": "fp32",
+    "producerCount": 4,
+    "inferenceOwners": 2,
+    "pagesPerDocument": 50,
+    "warmDocumentsPerLifetime": 3,
+    "lifetimeOrder": ["b1-a", "b8-a", "b8-b", "b1-b"],
+    "profilerAttached": false
+  },
+  "throughput": {
+    "b1PagesPerSecond": {
+      "a": [2.4761140945698683, 2.4725507781254206, 2.515426024793383],
+      "b": [2.3424495191321735, 2.375082328220956, 2.3671075580653707],
+      "pooledMedian": 2.4238165531731886
+    },
+    "b8PagesPerSecond": {
+      "a": [2.1333095478534645, 2.1695666820612436, 2.1412251097046044],
+      "b": [2.0973470817252258, 2.083995145500862, 2.09550852442101],
+      "pooledMedian": 2.115328314789345
+    },
+    "b8ToB1Ratio": 0.8727262432546804,
+    "b8RegressionPercent": 12.72737567453196,
+    "independentLifetimeRatios": [0.8647521995857633, 0.8852612198719276]
+  },
+  "treatmentEvidence": {
+    "b8RecognitionBatchCountsAcrossWarmCalls": {
+      "1": 18,
+      "2": 42,
+      "3": 60,
+      "4": 48,
+      "5": 42,
+      "6": 36,
+      "7": 35,
+      "8": 3553
+    },
+    "b8FullBatchPercent": 92.67083985393845,
+    "medianGpuUtilPercent": {"b1": 16.0, "b8": 11.75},
+    "peakMemoryUsedMiB": {"b1": 1390, "b8": 1566}
+  },
+  "output": {
+    "trustedOutputPassesAllFourCrossArmComparisons": true,
+    "sameArmNullTolerance": {"criticalTokens": 2, "rawLines": 4},
+    "crossArmCriticalTokenDifferenceRange": [6, 8],
+    "crossArmRawLineDifferenceRange": [57, 61],
+    "rawEquivalencePass": false,
+    "interpretation": "B8 changes raw OCR beyond same-arm noise, but introduces no incorrect, missing, or unresolved critical value in trusted non-escalated output under the accepted product gate."
+  },
+  "startup": {
+    "ownerInitSeconds": {
+      "b1": [271.607099753, 277.764946837],
+      "b8": [274.7836508230001, 269.2212559100001]
+    },
+    "includedInWarmThroughput": false,
+    "note": "Each fresh container built its TensorRT engine. Startup is reported but excluded from the three warm document rates."
+  },
+  "source": {
+    "harnessRevision": "766b986aacc2a49eb0a04549433f3aa4f618a85d",
+    "workerSha256": "d4b83f7de640c517b330061738d6f10fec5358ae552d5ca2eb05384fb2fd18e8",
+    "capturePlanSha256": "162659ca937a683c90bb96153840d409b48ac78739b567df0423c3ffdcad1b32",
+    "overlay": "The two committed comparison files were bind-mounted over the cached image. The OCR pipeline, UltraInfer, TensorRT, models, and native binaries were unchanged."
+  },
+  "rawEvidence": {
+    "location": ".evaluation/gpu-instrumentation/2026-08-25/b8-o2-gcp",
+    "files": {
+      "b1-a.json": {"bytes": 28011008, "sha256": "1faddff6c81e0ff474c0721bf8e3125ddda5411b1adbea2879e46f743efacd5b"},
+      "b1-b.json": {"bytes": 28013781, "sha256": "5b98f20cf0c2c94f40fbca2cae8b0cb777f3b77f1f7d082388e29bd75fa4f8fd"},
+      "b8-a.json": {"bytes": 25745966, "sha256": "48d0a0aa71ad6259d319c5f8ed54d20a6bcf5d6c05d5db283f389d5c238e5627"},
+      "b8-b.json": {"bytes": 25746473, "sha256": "ad217ed0c27736173b07db9fdbcbc28cbbd330c87aae3615ace4e7475a159538"}
+    }
+  },
+  "hostLifetime": {"seconds": 1701.141, "postedCostUsd": null},
+  "cleanup": {
+    "instanceStatus": "TERMINATED",
+    "externalAccessConfigs": 0,
+    "temporaryFirewallRule": "deleted",
+    "temporaryNetworkTag": "removed",
+    "startupMetadata": "restored"
+  },
+  "next": "No automatic M4 or M5. Recognition batch size is closed as a throughput lever for this architecture."
+}

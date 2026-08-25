@@ -2,7 +2,8 @@
 
 **Status:** M0 through M3 measured. M2 selects `producer-starvation`. M3
 identifies TensorRT enqueue and device-to-host transfer as the largest named
-recognizer costs, but fails its 80% visibility gate at 78.67%.
+recognizer costs, but fails its 80% visibility gate at 78.67%. The bounded
+B8/O2 follow-up is complete and rejects B8: it is 12.7% slower than B1/O2.
 
 **Date:** 2026-08-25
 
@@ -350,6 +351,48 @@ The compact result is
 It pins the measured unit, backend split, timings, formal failure, source and
 image identities, correctness, raw evidence hashes, and cleanup. Raw evidence
 stays under the ignored private `.evaluation/` tree.
+
+## B8 with two owners: batching hypothesis rejected
+
+M3 observed 134.8 B1 recognizer calls per captured page. The smallest direct
+test was therefore Tiny FP32 B1 versus B8 with the same two inference owners.
+The comparison used the same cached image, dedicated GCP L4 VM, frozen 50-page
+document, four producers, and no profiler. The lifetime order was B1, B8, B8,
+B1. Each fresh container ran one warm-up and three measured documents.
+
+| lifetime | warm pages/s | median |
+|---|---|---:|
+| B1 A | 2.476, 2.473, 2.515 | 2.476 |
+| B8 A | 2.133, 2.170, 2.141 | 2.141 |
+| B8 B | 2.097, 2.084, 2.096 | 2.096 |
+| B1 B | 2.342, 2.375, 2.367 | 2.367 |
+
+The pooled median is 2.424 pages/s for B1 and 2.115 pages/s for B8. B8 is
+12.7% slower. Both independent lifetime comparisons agree: B8 is 13.5% and
+11.5% slower. The treatment was real: 3,553 of 3,834 observed recognition
+batches were full batches of eight (92.7%). Median GPU utilization fell from
+16.0% at B1 to 11.75% at B8, while peak memory rose from 1,390 MiB to
+1,566 MiB.
+
+Trusted output passes all four cross-arm comparisons under the accepted product
+gate. Raw equivalence does not pass: cross-arm comparisons differ by 6-8
+critical tokens and 57-61 raw lines, above the same-arm null tolerance of two
+tokens and four lines. These differences remain on non-trusted pages and do not
+create an incorrect, missing, or unresolved critical value in trusted output.
+
+Each fresh container spent about 269-278 seconds building its TensorRT engine.
+That startup is reported separately and is not included in the warm document
+rates. The VM ran for 1,701 seconds; posted billing is not yet available.
+
+**Decision:** keep B1 with two owners. Recognition batch size is closed as a
+throughput lever for this architecture. This result does not trigger M4 kernel
+analysis, and there is no automatic M5. A new optimization requires a separate,
+specific hypothesis.
+
+The compact result is
+[`b8-o2-gcp-summary-2026-08-25.json`](../../evaluation/gpu-instrumentation/b8-o2-gcp-summary-2026-08-25.json).
+Raw results remain under the ignored private `.evaluation/` tree and are pinned
+by SHA-256 in that summary.
 
 ## Spend, evidence, and cleanup
 

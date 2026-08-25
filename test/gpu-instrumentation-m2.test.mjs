@@ -104,7 +104,7 @@ print(json.dumps(errors))
 });
 
 test('worker preserves M1 and confines M2 capture to the third request', () => {
-  assert.match(workerSource, /choices=\("m1", "m2-systems", "m2-systems-short", "m2-cpu", "m3-native"\)/u);
+  assert.match(workerSource, /"m1",[\s\S]*?"m2-systems",[\s\S]*?"m3-native",[\s\S]*?"batch-compare"/u);
   assert.match(workerSource, /request_capture = capture_plan if index == 3 else None/u);
   assert.match(workerSource, /"warmup", "control-before", "trace", "control-after"/u);
   assert.match(workerSource, /default="m1"/u);
