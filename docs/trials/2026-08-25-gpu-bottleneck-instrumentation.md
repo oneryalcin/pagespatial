@@ -65,7 +65,8 @@ Both bounded traces completed normally and exported valid SQLite databases:
 | CUDA API | 875 |
 | CUDA kernels | 28 |
 | CUDA memory copies | 1 |
-| sampled CPU callchains | 10,712 |
+| CPU sample events / callchains | 1,668 |
+| sampled callchain frames | 10,712 |
 | scheduler events | 612 |
 
 `nsys status -e` reported `perf_event_open` and the sampling trigger as `OK`,
@@ -77,12 +78,21 @@ the design.
 The compact host result is
 [`m0-gcp-host-capability-result-v1.json`](../../evaluation/gpu-instrumentation/m0-gcp-host-capability-result-v1.json).
 It pins the host, image, driver, GPU UUID, tool versions, event counts, raw
-artifact sizes, and SHA-256 values. Raw `.nsys-rep` and SQLite files remain in
-the ignored private `.evaluation/` tree.
+artifact sizes, and SHA-256 values. It also pins the host-identity, profiler
+capability, and read-only GCP instance snapshots that support the host-shape and
+isolation claims. Raw evidence remains in the ignored private `.evaluation/`
+tree.
 
-## Analyzer correction
+The first host run used the recorded final Docker image ID, but its source
+Dockerfile selected the Paddle base by mutable tag and selected NVTX by version.
+After review, the reproduction Dockerfile pinned the recorded Paddle digest and
+required the recorded NVTX wheel hash. This improves future reproduction; it
+does not retroactively claim that the historical image was built from the
+amended Dockerfile.
 
-The first derived result falsely marked CPU samples and scheduling events as
+## Modal analyzer correction
+
+The first derived Modal result falsely marked CPU samples and scheduling events as
 present because it matched the non-empty `ENUM_SAMPLING_THREAD_STATE` and
 `ENUM_SCHEDULING_THREAD_BLOCK` schema tables. Those rows define values; they
 are not captured events. The analyzer now excludes `ENUM_` tables. The

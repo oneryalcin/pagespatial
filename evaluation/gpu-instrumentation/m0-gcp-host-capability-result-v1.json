@@ -31,7 +31,8 @@
   "probeImage": {
     "dockerImageId": "sha256:7c77d730ece1701b52d00c340961ef0c2dd37361742f7611941e9911215bc1b2",
     "baseImageDigest": "sha256:2bd8830dafd258501e7313b320fa1bcc946c70318b3081647b90bc70182e7360",
-    "dockerfileSha256": "2f4737d0f5a48b03fba98ccd3a150af55f155c8f0a1963c94db34021686d45e8",
+    "sourceDockerfileSha256AtRun": "2f4737d0f5a48b03fba98ccd3a150af55f155c8f0a1963c94db34021686d45e8",
+    "reproductionDockerfileSha256": "8adb452efa886bfa7ffece9ac0af4e4b1bc4ec582bd67e85d38cc6715a284afe",
     "probeChildSha256": "7fd580781b1a169c559e101c7082289e86dbaefff84fbc7f9d7b11db01617d33"
   },
   "tools": {
@@ -50,7 +51,6 @@
   "cudaTrace": {
     "profileExitCode": 0,
     "exportExitCode": 0,
-    "exportedEvents": 6581,
     "nvtxEvents": 4,
     "cudaApiEvents": 875,
     "cudaKernelEvents": 28,
@@ -67,8 +67,9 @@
   "cpuTrace": {
     "profileExitCode": 0,
     "exportExitCode": 0,
-    "exportedEvents": 8128,
-    "sampledCallchains": 10712,
+    "sampleEvents": 1668,
+    "sampledCallchains": 1668,
+    "sampledCallchainFrames": 10712,
     "schedulerEvents": 612,
     "osRuntimeEvents": 5108,
     "report": {
@@ -91,6 +92,22 @@
     "cudaKernelTrace": true,
     "cudaMemoryTrace": true
   },
+  "supportingEvidence": {
+    "hostIdentity": {
+      "sha256": "544d524d5429aad700332ab77a9736341d825c2d6f19040bfcc178d46a7c0937",
+      "bytes": 3882
+    },
+    "nsysStatus": {
+      "sha256": "dce6f055aeff7200eb787287e6d717d93ec454b710190fff3d2fd89b815ae625",
+      "bytes": 1159
+    },
+    "gcpInstanceDescribe": {
+      "sha256": "07ebca3b1b764a4a399691664474ee66074b7be1c0c59de0cfe2c2c05f8e53d4",
+      "bytes": 1939,
+      "capturedAtUtc": "2026-08-25T01:56:35Z",
+      "instanceStatus": "TERMINATED"
+    }
+  },
   "verdict": {
     "hostSupportsRequiredM2Trace": true,
     "classification": "gcp-full-vm-supports-required-trace",
@@ -112,7 +129,7 @@
     "bootDiskAutoDeleteWithVm": true
   },
   "limitations": [
-    "the probe image uses the exact pinned Paddle CUDA 11.8 base and profiler identities but does not yet contain the full A2 application layers",
+    "the historical probe image ID pins the environment that produced these traces; the committed reproduction Dockerfile subsequently added digest and wheel-hash enforcement without rerunning M0",
     "the outer VM has 32 GiB rather than the Modal allocation's 24 GiB; M1 and M2 must cap the workload container to 24 GiB",
     "hardware PMU counters are unavailable through KVM; software-event CPU sampling and callchains are available",
     "the privileged container and kernel.perf_event_paranoid=-1 are experiment-only host settings",

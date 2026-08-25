@@ -103,13 +103,19 @@ test('M0 event counts exclude schema enumeration rows', () => {
   assert.match(modalSource, /not name\.upper\(\)\.startswith\("ENUM_"\)/u);
 });
 
-test('M0 host probe preserves the exact Modal profiler and CUDA identities', () => {
-  assert.match(hostDockerfile, /paddle:3\.0\.0-gpu-cuda11\.8-cudnn8\.9-trt8\.6/u);
+test('M0 host reproduction recipe enforces the recorded profiler and CUDA identities', () => {
+  assert.match(hostDockerfile, /paddle:3\.0\.0-gpu-cuda11\.8-cudnn8\.9-trt8\.6@sha256:2bd8830dafd258501e7313b320fa1bcc946c70318b3081647b90bc70182e7360/u);
   assert.match(hostDockerfile, /NsightSystems-linux-cli-public-2025\.5\.1\.121-3638078\.deb/u);
   assert.match(hostDockerfile, /506a8a3fdd94cec84c4c216d159ce3a6496170e8cf22b95b603b4bef4e0fb6e2/u);
   assert.match(hostDockerfile, /nvtx==0\.2\.16/u);
+  assert.match(hostDockerfile, /23f30fcaf68f53d1895282315cb35aed5f605d59aeb33e75e276545ff95c4af6/u);
+  assert.match(hostDockerfile, /--require-hashes/u);
   const digest = createHash('sha256').update(hostDockerfile).digest('hex');
-  assert.equal(hostResult.probeImage.dockerfileSha256, digest);
+  assert.equal(hostResult.probeImage.reproductionDockerfileSha256, digest);
+  assert.notEqual(
+    hostResult.probeImage.sourceDockerfileSha256AtRun,
+    hostResult.probeImage.reproductionDockerfileSha256,
+  );
 });
 
 test('M0 host result requires real CUDA, NVTX, CPU, and scheduler events', () => {
@@ -125,6 +131,24 @@ test('M0 host result requires real CUDA, NVTX, CPU, and scheduler events', () =>
   assert.ok(hostResult.cudaTrace.cudaApiEvents > 0);
   assert.ok(hostResult.cudaTrace.cudaKernelEvents > 0);
   assert.ok(hostResult.cudaTrace.cudaMemoryEvents > 0);
-  assert.ok(hostResult.cpuTrace.sampledCallchains > 0);
+  assert.equal(hostResult.cpuTrace.sampleEvents, 1668);
+  assert.equal(hostResult.cpuTrace.sampledCallchains, 1668);
+  assert.equal(hostResult.cpuTrace.sampledCallchainFrames, 10712);
   assert.ok(hostResult.cpuTrace.schedulerEvents > 0);
+});
+
+test('M0 host result integrity-pins every private supporting artifact', () => {
+  assert.deepEqual(hostResult.supportingEvidence.hostIdentity, {
+    sha256: '544d524d5429aad700332ab77a9736341d825c2d6f19040bfcc178d46a7c0937',
+    bytes: 3882,
+  });
+  assert.deepEqual(hostResult.supportingEvidence.nsysStatus, {
+    sha256: 'dce6f055aeff7200eb787287e6d717d93ec454b710190fff3d2fd89b815ae625',
+    bytes: 1159,
+  });
+  assert.equal(
+    hostResult.supportingEvidence.gcpInstanceDescribe.sha256,
+    '07ebca3b1b764a4a399691664474ee66074b7be1c0c59de0cfe2c2c05f8e53d4',
+  );
+  assert.equal(hostResult.supportingEvidence.gcpInstanceDescribe.bytes, 1939);
 });

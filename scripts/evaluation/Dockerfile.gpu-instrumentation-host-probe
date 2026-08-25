@@ -1,7 +1,8 @@
-FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:3.0.0-gpu-cuda11.8-cudnn8.9-trt8.6
+FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:3.0.0-gpu-cuda11.8-cudnn8.9-trt8.6@sha256:2bd8830dafd258501e7313b320fa1bcc946c70318b3081647b90bc70182e7360
 
 ARG NSYS_DEB=NsightSystems-linux-cli-public-2025.5.1.121-3638078.deb
 ARG NSYS_SHA256=506a8a3fdd94cec84c4c216d159ce3a6496170e8cf22b95b603b4bef4e0fb6e2
+ARG NVTX_SHA256=23f30fcaf68f53d1895282315cb35aed5f605d59aeb33e75e276545ff95c4af6
 
 RUN set -eu; \
     apt-get update; \
@@ -12,7 +13,9 @@ RUN set -eu; \
     dpkg -i "/tmp/${NSYS_DEB}"; \
     rm -f "/tmp/${NSYS_DEB}"; \
     rm -rf /var/lib/apt/lists/*; \
-    python -m pip install --no-cache-dir nvtx==0.2.16; \
+    printf 'nvtx==0.2.16 --hash=sha256:%s\n' "${NVTX_SHA256}" > /tmp/nvtx-requirements.txt; \
+    python -m pip install --no-cache-dir --require-hashes -r /tmp/nvtx-requirements.txt; \
+    rm -f /tmp/nvtx-requirements.txt; \
     nsys --version
 
 COPY scripts/evaluation/gpu_instrumentation_probe_child.py /app/gpu_instrumentation_probe_child.py
