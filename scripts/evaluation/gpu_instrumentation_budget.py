@@ -20,8 +20,12 @@ BILLING_START = "2026-08-24"
 BILLING_END = "2026-08-26"
 AUTHORIZATION_END_UTC = datetime(2026, 8, 25, 23, 0, tzinfo=timezone.utc)
 REQUIRED_PROFILE = "desia"
-OWNER_CEILING_USD = 100.0
-OPERATIONAL_STOP_USD = 100.0
+OWNER_CEILING_USD = 130.0
+OPERATIONAL_STOP_USD = 130.0
+FRESH_M2_CONTINUATION_ACTIVE = True
+FRESH_M2_CONTINUATION_AUTHORIZED_AT_UTC = "2026-08-25T09:33:09Z"
+FRESH_M2_CONTINUATION_LEDGER_KEY = "owner130FreshM2Continuation"
+FRESH_M2_CONTINUATION_STAGES = ("M2-SYSTEMS", "M2-CPU")
 EXPERIMENT_PREFIX = "pagespatial-gpu-instrumentation-"
 DEFAULT_LEDGER = Path(".evaluation/gpu-instrumentation/budget-2026-08-25.json")
 
@@ -187,6 +191,10 @@ def _assert_authorized() -> None:
 def reserve(path: Path, stage: str) -> dict[str, Any]:
     if stage not in STAGE_BOUNDS:
         raise RuntimeError(f"unknown paid stage: {stage!r}")
+    if FRESH_M2_CONTINUATION_ACTIVE:
+        raise RuntimeError(
+            "the $130 amendment authorizes only one exact fresh M2 stage bundle"
+        )
     _assert_authorized()
     active = active_experiment_apps()
     if active:
@@ -234,6 +242,10 @@ def reserve_bundle(path: Path, stages: list[str]) -> list[dict[str, Any]]:
     unknown = [stage for stage in stages if stage not in STAGE_BOUNDS]
     if unknown:
         raise RuntimeError(f"unknown paid stages: {unknown}")
+    if FRESH_M2_CONTINUATION_ACTIVE and tuple(stages) != FRESH_M2_CONTINUATION_STAGES:
+        raise RuntimeError(
+            "the $130 amendment authorizes only one exact fresh M2 stage bundle"
+        )
     _assert_authorized()
     active = active_experiment_apps()
     if active:
@@ -241,6 +253,13 @@ def reserve_bundle(path: Path, stages: list[str]) -> list[dict[str, Any]]:
     rows = billing_rows()
     with ledger_lock(path):
         ledger = load_ledger(path)
+        if (
+            FRESH_M2_CONTINUATION_ACTIVE
+            and ledger.get(FRESH_M2_CONTINUATION_LEDGER_KEY) is not None
+        ):
+            raise RuntimeError(
+                "the single fresh M2 continuation bundle has already been reserved"
+            )
         live = [
             item
             for item in ledger["reservations"]
@@ -275,77 +294,24 @@ def reserve_bundle(path: Path, stages: list[str]) -> list[dict[str, Any]]:
             }
             ledger["reservations"].append(reservation)
             reservations.append(reservation)
+        if FRESH_M2_CONTINUATION_ACTIVE:
+            ledger[FRESH_M2_CONTINUATION_LEDGER_KEY] = {
+                "authorizedAtUtc": FRESH_M2_CONTINUATION_AUTHORIZED_AT_UTC,
+                "bundleId": bundle_id,
+                "reservedAt": int(time.time()),
+                "stages": list(FRESH_M2_CONTINUATION_STAGES),
+            }
         ledger["lastBillingRows"] = rows
         save_ledger(path, ledger)
         return reservations
 
 
 def reopen_preflight_bundle(path: Path, bundle_id: str) -> list[dict[str, Any]]:
-    """Reuse one already-counted M2 bundle after a proven access-only failure."""
-    _assert_authorized()
-    active = active_experiment_apps()
-    if active:
-        raise RuntimeError(f"paid launch serialization refused: active apps: {active}")
-    rows = billing_rows()
-    with ledger_lock(path):
-        ledger = load_ledger(path)
-        live = [
-            item
-            for item in ledger["reservations"]
-            if item.get("status") in {"reserved", "active"}
-        ]
-        if live:
-            raise RuntimeError(f"paid launch serialization refused: live reservation: {live}")
-        matches = [
-            item for item in ledger["reservations"] if item.get("bundleId") == bundle_id
-        ]
-        if sorted(item.get("stage") for item in matches) != sorted(
-            ["M2-SYSTEMS", "M2-CPU"]
-        ):
-            raise RuntimeError("retry requires one exact M2 stage bundle")
-        if any(item.get("status") != "completed-unposted" for item in matches):
-            raise RuntimeError("retry bundle is not completed-unposted")
-        if any(item.get("retryHistory") for item in matches):
-            raise RuntimeError("M2 preflight bundle may be reopened only once")
-        if any(
-            not str(item.get("appId", "")).startswith("gcp:")
-            or not any(
-                marker in str(item.get("completionNote", ""))
-                for marker in ("IAP tunnel failed", "Connection refused")
-            )
-            for item in matches
-        ):
-            raise RuntimeError("retry requires a retained GCP access-only failure")
-        exposure = posted_spend(rows) + reserved_exposure(ledger)
-        if exposure > OPERATIONAL_STOP_USD:
-            raise RuntimeError(
-                f"spend guard refused reused exposure ${exposure:.4f} > "
-                f"${OPERATIONAL_STOP_USD:.2f}"
-            )
-        reopened_at = int(time.time())
-        for item in matches:
-            item["retryHistory"] = [
-                {
-                    "status": item["status"],
-                    "completedAt": item.get("completedAt"),
-                    "completionNote": item.get("completionNote"),
-                    "appId": item.get("appId"),
-                }
-            ]
-            item["status"] = "reserved"
-            item["reopenedAt"] = reopened_at
-            for key in (
-                "claimedAt",
-                "claimedByPid",
-                "completedAt",
-                "completionNote",
-                "appId",
-            ):
-                item.pop(key, None)
-        ledger["lastBillingRows"] = rows
-        ledger["lastReusedExposureUsd"] = exposure
-        save_ledger(path, ledger)
-        return matches
+    """Reject old M2 bundle reuse after the fresh-continuation amendment."""
+    del path, bundle_id
+    raise RuntimeError(
+        "old M2 bundle reopening is disabled by the $130 fresh-continuation amendment"
+    )
 
 
 def validate_reservation(path: Path, reservation_id: str, stage: str) -> dict[str, Any]:

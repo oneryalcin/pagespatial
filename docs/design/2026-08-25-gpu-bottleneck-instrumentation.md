@@ -524,6 +524,17 @@ through non-interactive `sudo -n`; do not mutate users, groups, socket modes, or
 the Docker service. The host owner remains responsible for its bounded sysctl,
 container cleanup, and evidence permissions.
 
+After three pre-build host-access failures, the owner raised the 2026-08-25
+ceiling from $100 to $130 for one fresh M2 bundle. The stage bounds do not
+change: $20 for Systems plus $10 for CPU sampling. This is conservative
+exposure accounting, not a spend target; no further bundle is authorized by
+this amendment. The dated amendment is in
+`evaluation/gpu-instrumentation/authorization-2026-08-25.json`. The budget
+ledger records the new bundle ID as a durable, single-use continuation token.
+Once that token exists, completion does not erase it. Individual stages,
+partial M2 bundles, a second fresh bundle, and reopening any old bundle are
+all refused.
+
 No additional global economic overturn threshold applies. The owner has
 decided that a real saving is material at the expected million-page scale.
 The evidence gates still prevent drift: a removable cause must reach 20% of

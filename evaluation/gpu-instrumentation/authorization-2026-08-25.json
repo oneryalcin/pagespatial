@@ -24,6 +24,18 @@
       "scope": "one additional bounded M0 attempt",
       "reason": "attempt two generated an nsys report but the harness discarded it solely because nsys exited 139 after generation",
       "reservationWorstCaseUsd": 5
+    },
+    {
+      "authorizedAtUtc": "2026-08-25T09:33:09Z",
+      "scope": "one fresh M2 Systems plus CPU bundle after three pre-build GCP host-access failures",
+      "reason": "owner approved a USD 30 continuation after reviewing the USD 20 Systems and USD 10 CPU stage bounds",
+      "previousOwnerCeilingUsd": 100,
+      "newOwnerCeilingUsd": 130,
+      "previousOperationalStopUsd": 100,
+      "newOperationalStopUsd": 130,
+      "reservationWorstCaseUsd": 30,
+      "noFurtherBundles": true,
+      "oldBundleReopeningDisabled": true
     }
   ],
   "source": "owner instructions in the 2026-08-25 conversation: go ahead and start the instrumentation implementation as per docs and measure; today's experimentation ceiling is USD 100 and any increase requires a new request"

@@ -9,6 +9,10 @@ import { join } from 'node:path';
 const moduleUrl = new URL('../scripts/evaluation/gpu_instrumentation_budget.py', import.meta.url);
 const modulePath = moduleUrl.pathname;
 const source = readFileSync(moduleUrl, 'utf8');
+const authorization = JSON.parse(readFileSync(
+  new URL('../evaluation/gpu-instrumentation/authorization-2026-08-25.json', import.meta.url),
+  'utf8',
+));
 const modalSource = readFileSync(
   new URL('../scripts/evaluation/gpu_instrumentation_modal.py', import.meta.url),
   'utf8',
@@ -26,12 +30,26 @@ function runPython(code, ledger) {
   return JSON.parse(execFileSync('python3', ['-c', code, modulePath, ledger], { encoding: 'utf8' }));
 }
 
-test('instrumentation budget is dated, separate, and capped at USD 100', () => {
+test('instrumentation budget records the owner-approved USD 130 continuation', () => {
   assert.match(source, /AUTHORIZATION_END_UTC = datetime\(2026, 8, 25, 23, 0/u);
-  assert.match(source, /OWNER_CEILING_USD = 100\.0/u);
-  assert.match(source, /OPERATIONAL_STOP_USD = 100\.0/u);
+  assert.match(source, /OWNER_CEILING_USD = 130\.0/u);
+  assert.match(source, /OPERATIONAL_STOP_USD = 130\.0/u);
   assert.match(source, /pagespatial-gpu-instrumentation-/u);
   assert.doesNotMatch(source, /a2-budget-v1/u);
+  assert.equal(authorization.ownerCeilingUsd, 100);
+  assert.equal(authorization.operationalStopUsd, 100);
+  assert.deepEqual(authorization.amendments.at(-1), {
+    authorizedAtUtc: '2026-08-25T09:33:09Z',
+    scope: 'one fresh M2 Systems plus CPU bundle after three pre-build GCP host-access failures',
+    reason: 'owner approved a USD 30 continuation after reviewing the USD 20 Systems and USD 10 CPU stage bounds',
+    previousOwnerCeilingUsd: 100,
+    newOwnerCeilingUsd: 130,
+    previousOperationalStopUsd: 100,
+    newOperationalStopUsd: 130,
+    reservationWorstCaseUsd: 30,
+    noFurtherBundles: true,
+    oldBundleReopeningDisabled: true,
+  });
 });
 
 test('instrumentation reservations are fixed and total less than the ceiling', () => {
@@ -53,6 +71,7 @@ from pathlib import Path
 spec=importlib.util.spec_from_file_location("budget",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 m.current_profile=lambda:"desia"; m.active_experiment_apps=lambda:[]; m.billing_rows=lambda:[]
 m.now_utc=lambda:m.datetime(2026,8,25,12,0,tzinfo=m.timezone.utc)
+m.FRESH_M2_CONTINUATION_ACTIVE=False
 p=Path(sys.argv[2]); r=m.reserve(p,"M0-CAPABILITY"); m.validate_reservation(p,r["id"],"M0-CAPABILITY"); errors=[]
 try: m.validate_reservation(p,r["id"],"M0-CAPABILITY")
 except Exception as e: errors.append(str(e))
@@ -83,27 +102,42 @@ print(json.dumps({"stages":[r["stage"] for r in rows],"bundleIds":list({r["bundl
   assert.equal(result.exposure, 30);
 });
 
-test('one proven GCP access-only retry reuses existing M2 exposure', () => {
-  const ledger = join(mkdtempSync(join(tmpdir(), 'gpu-inst-retry-')), 'ledger.json');
+test('USD 130 amendment permits one fresh M2 bundle and permanently rejects all continuations', () => {
+  const ledger = join(mkdtempSync(join(tmpdir(), 'gpu-inst-continuation-')), 'ledger.json');
   const code = String.raw`
 import importlib.util,json,sys
 from pathlib import Path
 spec=importlib.util.spec_from_file_location("budget",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-m.current_profile=lambda:"desia"; m.active_experiment_apps=lambda:[]; m.billing_rows=lambda:[]
+m.current_profile=lambda:"desia"; m.active_experiment_apps=lambda:[]; m.billing_rows=lambda:[{"description":"pagespatial-gpu-instrumentation-posted","cost":0.54140977}]
 m.now_utc=lambda:m.datetime(2026,8,25,12,0,tzinfo=m.timezone.utc)
-p=Path(sys.argv[2]); rows=m.reserve_bundle(p,["M2-SYSTEMS","M2-CPU"])
-for row in rows:m.validate_reservation(p,row["id"],row["stage"]); m.complete(p,row["id"],"gcp:test","ssh: Connection refused")
-before=m.reserved_exposure(m.load_ledger(p)); reopened=m.reopen_preflight_bundle(p,rows[0]["bundleId"]); after=m.reserved_exposure(m.load_ledger(p)); errors=[]
-try:m.reopen_preflight_bundle(p,rows[0]["bundleId"])
-except Exception as e:errors.append(str(e))
-print(json.dumps({"before":before,"after":after,"statuses":[r["status"] for r in reopened],"history":[len(r["retryHistory"]) for r in reopened],"errors":errors}))
+p=Path(sys.argv[2]); state=m._new_ledger(); now=1787640000
+old_bundle="bundle-1787644975-72c9dbee"
+for stage,bound in (("M2-SYSTEMS",20.0),("M2-CPU",10.0)):
+ state["reservations"].append({"id":f"old-{stage}","bundleId":old_bundle,"stage":stage,"worstCaseUsd":bound,"status":"completed-unposted","createdAt":now,"completedAt":now+1,"appId":"gcp:pagespatial-gpu-profiler-20260825","completionNote":"IAP tunnel failed before build"})
+state["reservations"].append({"id":"prior-exposure","stage":"prior-work","worstCaseUsd":65.0,"status":"completed-unposted","createdAt":now})
+m.save_ledger(p,state)
+rows=m.reserve_bundle(p,["M2-SYSTEMS","M2-CPU"]); fresh_bundle=rows[0]["bundleId"]
+for row in rows:m.validate_reservation(p,row["id"],row["stage"]); m.complete(p,row["id"],"gcp:test","complete")
+errors=[]
+for action in (
+ lambda:m.reserve_bundle(p,["M2-SYSTEMS","M2-CPU"]),
+ lambda:m.reopen_preflight_bundle(p,old_bundle),
+ lambda:m.reserve_bundle(p,["M2-SYSTEMS"]),
+ lambda:m.reserve(p,"M2-CPU"),
+):
+ try:action()
+ except Exception as e:errors.append(str(e))
+final=m.load_ledger(p); token=final[m.FRESH_M2_CONTINUATION_LEDGER_KEY]
+print(json.dumps({"freshBundle":fresh_bundle,"token":token,"exposure":m.reserved_exposure(final),"errors":errors}))
 `;
   const result = runPython(code, ledger);
-  assert.equal(result.before, 30);
-  assert.equal(result.after, 30);
-  assert.deepEqual(result.statuses, ['reserved', 'reserved']);
-  assert.deepEqual(result.history, [1, 1]);
-  assert.match(result.errors[0], /live reservation/u);
+  assert.equal(result.token.bundleId, result.freshBundle);
+  assert.deepEqual(result.token.stages, ['M2-SYSTEMS', 'M2-CPU']);
+  assert.equal(result.exposure, 125);
+  assert.match(result.errors[0], /already been reserved/u);
+  assert.match(result.errors[1], /old M2 bundle reopening is disabled/u);
+  assert.match(result.errors[2], /only one exact fresh M2 stage bundle/u);
+  assert.match(result.errors[3], /only one exact fresh M2 stage bundle/u);
 });
 
 test('instrumentation authorization expires at the stated boundary', () => {
@@ -114,7 +148,7 @@ from pathlib import Path
 spec=importlib.util.spec_from_file_location("budget",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 m.current_profile=lambda:"desia"; m.active_experiment_apps=lambda:[]; m.billing_rows=lambda:[]
 m.now_utc=lambda:m.datetime(2026,8,25,23,0,tzinfo=m.timezone.utc)
-try: m.reserve(Path(sys.argv[2]),"M0-CAPABILITY")
+try: m.reserve_bundle(Path(sys.argv[2]),["M2-SYSTEMS","M2-CPU"])
 except Exception as e: print(json.dumps({"error":str(e)}))
 `;
   const result = runPython(code, ledger);
