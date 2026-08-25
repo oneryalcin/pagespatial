@@ -143,6 +143,9 @@ def main() -> None:
         source_revision = (inputs / "source-revision.txt").read_text().strip()
         if source_revision != args.revision:
             raise RuntimeError("host source revision marker mismatch")
+        build_ignore = repo / "scripts/evaluation/Dockerfile.gpu-instrumentation-host-m2.dockerignore"
+        shutil.copyfile(build_ignore, repo / ".dockerignore")
+        manifest["buildContextIgnore"] = _sha(build_ignore, repo)
         build = _run(
             [
                 "docker",

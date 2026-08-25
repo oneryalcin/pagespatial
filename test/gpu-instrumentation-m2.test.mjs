@@ -329,6 +329,7 @@ test('M2 image pins the measured runtime, models, profiler, and shared core', ()
 });
 
 test('M2 Docker context is a clean archive with a private-data deny-by-default allowlist', () => {
+  assert.match(hostSource, /shutil\.copyfile\(build_ignore, repo \/ "\.dockerignore"\)/u);
   assert.match(gcpSource, /"git",\s*"archive",\s*"--format=tar\.gz"/u);
   assert.equal(dockerIgnore.split('\n')[0], '**');
   assert.match(dockerIgnore, /!scripts\/evaluation\/gpu_a2_modal\.py/u);
