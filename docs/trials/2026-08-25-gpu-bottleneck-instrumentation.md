@@ -394,6 +394,56 @@ The compact result is
 Raw results remain under the ignored private `.evaluation/` tree and are pinned
 by SHA-256 in that summary.
 
+## Independent CPU hotspot follow-up
+
+A separate six-logical-CPU Ubuntu x86 host was used to name the host-side work that
+the L4 trace could not resolve. This is a diagnostic attribution run, not a
+production throughput comparison. It used the same pinned Tiny models, the
+same 50-page PDF, recognition B1, and ONNX Runtime for both detector and
+recognizer. The model ran sequentially with four provider threads. Three warm
+pages completed before measurement.
+
+The exact four-producer Node render path completed all 50 pages in 3.98 seconds.
+Its overlapping render service total was 12.15 seconds, with a 233.15 ms median
+per page. Rendering is real work, but it is not the dominant interval exposed
+by this follow-up.
+
+The unprofiled OCR control took 56.06 seconds. The stage-profiled run took
+55.79 seconds, a -0.50% difference. That is ordinary run noise and below the
+10% validity limit. Named Python-visible stages cover 99.70% of `predict()`
+wall.
+
+| stage | calls | summed wall | share of `predict()` |
+|---|---:|---:|---:|
+| recognizer total | 4,929 | 44.87 s | 81.38% |
+| recognizer backend | 4,929 | 37.07 s | 67.24% |
+| detector total | 50 | 9.31 s | 16.88% |
+| recognizer decode | 4,929 | 3.32 s | 6.03% |
+| recognizer resize/normalize | 4,929 | 1.89 s | 3.44% |
+| recognizer to-batch | 4,929 | 1.32 s | 2.39% |
+| crop generation | 50 | 0.80 s | 1.45% |
+| PNG decode | 50 | 0.64 s | 1.17% |
+
+The recognizer made 98.58 B1 calls per page over the complete document. A
+separate `perf` capture retained 42,139 software `cpu-clock` samples with zero
+loss. ONNX Runtime accounts for 88.62% of samples; Python itself accounts for
+1.83%, NumPy for 1.82%, and OpenCV for 0.63%. The distributed ONNX Runtime
+library is stripped, so this evidence does not name one internal convolution
+or memory function. It does name the useful boundary: recognizer model
+execution, repeated once per crop, dominates host work.
+
+This refutes PDF rendering, crop generation, CTC decoding, and generic Python
+scheduling as the first optimization target. It also explains why the L4 M3
+trace saw thousands of small TensorRT calls dominated by enqueue and D2H
+transfer. It does not reopen ordinary B8: the direct L4 B8 experiment remains
+12.7% slower. Any further treatment must change recognizer-call economics or
+execution overlap, then prove the gain on the L4 complete-document path.
+
+The compact result is
+[`cpu-hotspot-vm-summary-2026-08-25.json`](../../evaluation/gpu-instrumentation/cpu-hotspot-vm-summary-2026-08-25.json).
+It pins the controls, stage totals, native DSO shares, host/runtime identity,
+and hashes for the large raw artifacts retained in the isolated VM directory.
+
 ## Spend, evidence, and cleanup
 
 At the successful M1 reservation snapshot, posted Modal instrumentation spend

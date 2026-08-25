@@ -1,0 +1,194 @@
+{
+  "schemaVersion": "pagespatial-cpu-hotspot-vm-summary-v1",
+  "capturedAt": "2026-08-25",
+  "sourceRevision": "c115b5f0bab956f330cf002149ce4051f43982da",
+  "decision": "The dominant host workload is text-recognition inference: 4929 B1 recognizer backend calls consume 67.24% of predict wall. Do not optimize PDF rendering, crop generation, CTC decoding, or Python scheduling first.",
+  "scope": {
+    "purpose": "Independent CPU attribution for the host intervals left opaque by the L4 trace",
+    "notClaimed": [
+      "L4 throughput",
+      "TensorRT kernel attribution",
+      "production host equivalence",
+      "a new adoption decision"
+    ]
+  },
+  "host": {
+    "os": "Ubuntu 26.04 LTS",
+    "kernel": "7.0.0-28-generic",
+    "architecture": "x86_64",
+    "cpu": "Intel Core Processor (Haswell, no TSX)",
+    "logicalCpus": 6,
+    "threadsPerCore": 1,
+    "perfVersion": "7.0.12",
+    "perfEvent": "cpu-clock at 199 Hz with DWARF call graphs",
+    "hardwarePmuAvailable": false
+  },
+  "workload": {
+    "pages": 50,
+    "pdfSha256": "46ba5fc15613a260cf019ff6f9be0bb579279be4f5892694a76e02a536d8fcda",
+    "nativeEvidenceSha256": "8e1f5bf2bc2b8a45b5c1cf6699fa275a6a4199acb0f9e308d7183d12ce7f10ef",
+    "renderedPngCount": 50,
+    "renderedPngBytes": 10043136,
+    "orderedRenderedPngHashListSha256": "7436305d290b99271f71f0880539659388be928c8e48459bd256df3844104199"
+  },
+  "runtime": {
+    "model": "PP-OCRv6 Tiny",
+    "recognitionBatchSize": 1,
+    "providerCpuThreads": 4,
+    "detectorBackend": "onnxruntime",
+    "recognizerBackend": "onnxruntime",
+    "packages": {
+      "python": "3.10.21",
+      "paddleocr": "3.7.0",
+      "paddlex": "3.7.2",
+      "paddlepaddle": "3.2.1",
+      "ultra-infer-python": "1.2.0",
+      "onnx": "1.17.0",
+      "paddle2onnx": "2.0.2rc3",
+      "opencv-contrib-python-headless": "4.10.0.84"
+    },
+    "popplerUtils": "26.01.0"
+  },
+  "render": {
+    "producerProcesses": 4,
+    "documentWallS": 3.975445601001411,
+    "documentPagesPerS": 12.577206436281017,
+    "summedRenderServiceMs": 12145.7,
+    "medianRenderServiceMsPerPage": 233.15,
+    "maxRenderServiceMsPerPage": 426.9,
+    "summedAssemblyServiceMs": 459.5,
+    "note": "The controller received empty OCR observations so this arm measures the real render and assembly path, not OCR correctness. Summed render service overlaps across four producers and is not document wall."
+  },
+  "ocrControl": {
+    "warmupPages": 3,
+    "measuredPages": 50,
+    "unprofiledWallS": 56.06310327599931,
+    "unprofiledPagesPerS": 0.891852164405695,
+    "profiledWallS": 55.78540176899696,
+    "profiledPagesPerS": 0.8962918328892949,
+    "profiledToControlOverheadPercent": -0.4953373801575345,
+    "interpretation": "The 0.50% difference is ordinary run noise and is below the 10% validity limit."
+  },
+  "pythonVisibleAttribution": {
+    "predictWallMs": 55137.60196300001,
+    "namedCoveragePercent": 99.70437467681478,
+    "unattributedPredictWallMs": 163.0007139997033,
+    "recognizerCalls": 4929,
+    "recognizerCallsPerPage": 98.58,
+    "stages": [
+      {
+        "stage": "recognizer.total",
+        "calls": 4929,
+        "summedWallMs": 44871.3753090003,
+        "shareOfPredictPercent": 81.38071608393699
+      },
+      {
+        "stage": "recognizer.backend",
+        "calls": 4929,
+        "summedWallMs": 37072.31506799993,
+        "shareOfPredictPercent": 67.23599458111589
+      },
+      {
+        "stage": "recognizer.postprocess",
+        "calls": 4929,
+        "summedWallMs": 3322.7805779999962,
+        "shareOfPredictPercent": 6.026342205142948
+      },
+      {
+        "stage": "recognizer.preprocess.resize_normalize",
+        "calls": 4929,
+        "summedWallMs": 1894.7946969999994,
+        "shareOfPredictPercent": 3.436483687251212
+      },
+      {
+        "stage": "recognizer.preprocess.to_batch",
+        "calls": 4929,
+        "summedWallMs": 1315.7069940000015,
+        "shareOfPredictPercent": 2.3862245494153056
+      },
+      {
+        "stage": "detector.total",
+        "calls": 50,
+        "summedWallMs": 9305.081833,
+        "shareOfPredictPercent": 16.87610904667954
+      },
+      {
+        "stage": "detector.backend",
+        "calls": 50,
+        "summedWallMs": 7306.4801259999995,
+        "shareOfPredictPercent": 13.251356362764923
+      },
+      {
+        "stage": "detector.postprocess",
+        "calls": 50,
+        "summedWallMs": 941.5952129999998,
+        "shareOfPredictPercent": 1.7077188333867976
+      },
+      {
+        "stage": "crop.generate",
+        "calls": 50,
+        "summedWallMs": 798.1441069999998,
+        "shareOfPredictPercent": 1.4475495461982424
+      },
+      {
+        "stage": "png.decode",
+        "calls": 50,
+        "summedWallMs": 643.1639490000001,
+        "shareOfPredictPercent": 1.1664706590460612
+      }
+    ]
+  },
+  "nativeCpuSampling": {
+    "samples": 42139,
+    "lostSamples": 0,
+    "dsoSharesPercent": {
+      "libonnxruntime.so.1": 88.62,
+      "libc.so.6": 4.81,
+      "kernel": 1.9,
+      "python3.10": 1.83,
+      "numpy_multiarray": 1.82,
+      "opencv": 0.63,
+      "zlib": 0.17
+    },
+    "symbolLimitation": "The distributed ONNX Runtime library is stripped. The capture can name the library and the enclosing recognizer stage, but not one internal convolution or memory function."
+  },
+  "interpretation": [
+    "The earlier producer-starvation label is not mainly PDF rendering or crop generation.",
+    "The CPU pipeline spends most of its time executing the recognizer model through ONNX Runtime, once per detected crop at B1.",
+    "The L4 M3 trace independently found many small TensorRT recognizer calls dominated by enqueue and device-to-host transfer.",
+    "Generic Python optimization cannot materially change this result; Python accounts for 1.83% of native CPU samples.",
+    "The already-rejected B8 result remains authoritative for the current TensorRT architecture. This CPU attribution does not reopen it."
+  ],
+  "rawArtifacts": [
+    {
+      "name": "cpu-stage-profile.json",
+      "bytes": 11584765,
+      "sha256": "7e8837da52de34b1286a5fc1e95882e09af7dd6389a314647e0d7f37aee3ee75"
+    },
+    {
+      "name": "cpu-unprofiled-control.json",
+      "bytes": 1837,
+      "sha256": "2ab8d57197737d0b94a589dcdf9809103525df5e82161e2e6786ee675504429b"
+    },
+    {
+      "name": "cpu-ocr-perf.data",
+      "bytes": 355352180,
+      "sha256": "b4db976f8333df00b1c787e927b9288c74abaa18a9e86069baa08de6b2f9ad41"
+    },
+    {
+      "name": "render-capture-metadata.json",
+      "bytes": 60966,
+      "sha256": "5b53bbbb8929a4d20a746a7565b948bb789fc7e36186c86ce0d87e0b78ed0bfb"
+    },
+    {
+      "name": "render-capture-result.json",
+      "bytes": 3111417,
+      "sha256": "0b923d01a29fc8d349ffb1bcc88811caf74294a4dcd383f976c1288a82a75c55"
+    },
+    {
+      "name": "render-perf.data",
+      "bytes": 25974636,
+      "sha256": "84e53df8455c95ce918be1bbc475fd0ddafe86cd5f4c70df0e4b82465f04d088"
+    }
+  ]
+}
