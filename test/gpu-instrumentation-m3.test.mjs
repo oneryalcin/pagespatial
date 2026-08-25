@@ -8,6 +8,7 @@ const patchSource = readFileSync(new URL('../scripts/evaluation/ultra-infer-m3-n
 const analyzerSource = readFileSync(new URL('../scripts/evaluation/analyze_gpu_instrumentation_m3.py', import.meta.url), 'utf8');
 const dockerSource = readFileSync(new URL('../scripts/evaluation/Dockerfile.gpu-instrumentation-host-m2', import.meta.url), 'utf8');
 const gcpSource = readFileSync(new URL('../scripts/evaluation/run_gpu_instrumentation_m2_gcp.py', import.meta.url), 'utf8');
+const modalSource = readFileSync(new URL('../scripts/evaluation/gpu_a2_modal.py', import.meta.url), 'utf8');
 
 test('M3 has exactly one fixed 10-page window', () => {
   const code = String.raw`
@@ -18,6 +19,7 @@ print(json.dumps(m.plan_for_mode("m3-native")))
   const plan = JSON.parse(execFileSync('python3', ['-c', code, capturePath], { encoding: 'utf8' }));
   assert.equal(plan.captureName, 'm3.native.capture');
   assert.deepEqual(plan.windows, [[11, 20]]);
+  assert.match(modalSource, /"m3\.native\.capture"/u);
 });
 
 test('native patch contains only the six bounded TensorRT phase names', () => {

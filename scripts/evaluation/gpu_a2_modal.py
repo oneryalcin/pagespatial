@@ -648,7 +648,11 @@ class A2ExecutionCore:
                 raise ValueError("capture_plan requires NVTX and stage profiling")
             capture_name = capture_plan.get("captureName")
             raw_windows = capture_plan.get("windows")
-            if not isinstance(capture_name, str) or not capture_name.startswith("m2."):
+            if capture_name not in {
+                "m2.capture",
+                "m2.cpu.capture",
+                "m3.native.capture",
+            }:
                 raise ValueError("capture_plan has an invalid capture name")
             if not isinstance(raw_windows, (list, tuple)):
                 raise ValueError("capture_plan windows must be a sequence")
