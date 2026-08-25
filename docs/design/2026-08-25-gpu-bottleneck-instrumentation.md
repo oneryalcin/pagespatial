@@ -499,6 +499,18 @@ bypassing the container boundary. Run the exact image and L4 shape on a
 dedicated Linux x86 host or VM, and label it a different host control. Re-run
 one unprofiled Modal control beside it before transferring a conclusion.
 
+For the 2026-08-25 GCP host control, the owner explicitly permits temporary
+external SSH access on only
+`pagespatial-gpu-profiler-20260825`. The project account lacks IAP tunnel
+authorization, and IAM or firewall mutation is out of scope. The owner must
+prove the VM starts and ends `TERMINATED` with no access configuration. Inside
+the protected lifetime it may attach one exact ephemeral `external-nat`
+configuration, use direct SSH/SCP with the existing OS Login key and pinned
+host key, then stop the VM and remove that configuration in mandatory cleanup.
+The project has an existing world-reachable SSH rule, so this is a deliberate,
+time-bounded public port-22 exposure. Do not run a public service, create or
+refresh keys, or mutate any other GCP resource.
+
 No additional global economic overturn threshold applies. The owner has
 decided that a real saving is material at the expected million-page scale.
 The evidence gates still prevent drift: a removable cause must reach 20% of

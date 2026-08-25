@@ -125,7 +125,9 @@ test('GCP owner can mutate only the exact experiment VM and always stops it', ()
   assert.match(gcpSource, /ACCOUNT = "mehmet@desia\.ai"/u);
   assert.match(gcpSource, /"instances",\s*"start",\s*INSTANCE/u);
   assert.match(gcpSource, /"instances",\s*"stop",\s*INSTANCE/u);
-  assert.doesNotMatch(gcpSource, /instances",\s*"(create|delete|set-|add-|remove-|update|move|attach|detach)/u);
+  assert.match(gcpSource, /"instances",\s*"add-access-config",\s*INSTANCE/u);
+  assert.match(gcpSource, /"instances",\s*"delete-access-config",\s*INSTANCE/u);
+  assert.doesNotMatch(gcpSource, /instances",\s*"(create|delete(?!-access-config)|set-|add-(?!access-config)|remove-|update|move|attach|detach)/u);
   assert.doesNotMatch(gcpSource, /firewall|service-accounts|iam|networks",\s*"(create|delete|update)/u);
   assert.match(gcpSource, /serviceAccounts/u);
   assert.match(gcpSource, /shutdown -h \+360/u);
@@ -134,12 +136,14 @@ test('GCP owner can mutate only the exact experiment VM and always stops it', ()
   assert.match(gcpSource, /accessConfigs/u);
   assert.match(gcpSource, /gcp-instance-before\.json/u);
   assert.match(gcpSource, /gcp-instance-after\.json/u);
-  assert.match(gcpSource, /def _stop_exact_vm/u);
+  assert.match(gcpSource, /def _cleanup_exact_vm/u);
   assert.match(gcpSource, /time\.sleep\(5\)/u);
-  assert.match(gcpSource, /start-iap-tunnel/u);
   assert.match(gcpSource, /os-login", "describe-profile/u);
   assert.match(gcpSource, /refusing to register or refresh it/u);
   assert.doesNotMatch(gcpSource, /"compute",\s*"(ssh|scp)"/u);
+  assert.doesNotMatch(gcpSource, /start-iap-tunnel/u);
+  assert.match(gcpSource, /HostKeyAlias=/u);
+  assert.match(gcpSource, /StrictHostKeyChecking=yes/u);
 });
 
 test('GCP owner rejects drift in every retained M0 loss boundary', () => {
@@ -156,15 +160,15 @@ base={
  "disks":[{"deviceName":m.INSTANCE,"boot":True,"autoDelete":True,"mode":"READ_WRITE","diskSizeGb":"100"}],
  "networkInterfaces":[{"network":"projects/p/global/networks/default","subnetwork":"projects/p/regions/us-central1/subnetworks/default"}],
  "canIpForward":False}
-m._assert_scope(base,"TERMINATED"); errors=[]
+m._assert_scope(base,"TERMINATED","absent"); errors=[]
 for mutate in (
  lambda x:x["scheduling"].__setitem__("automaticRestart",True),
  lambda x:next(i for i in x["metadata"]["items"] if i["key"]=="startup-script").__setitem__("value","echo unsafe"),
- lambda x:x["networkInterfaces"][0].__setitem__("accessConfigs",[{"natIP":"1.2.3.4"}]),
+ lambda x:x["networkInterfaces"][0].__setitem__("accessConfigs",[dict(m.EXPECTED_ACCESS_CONFIG)]),
  lambda x:x["disks"][0].__setitem__("autoDelete",False),
 ):
  value=copy.deepcopy(base); mutate(value)
- try:m._assert_scope(value,"TERMINATED")
+ try:m._assert_scope(value,"TERMINATED","absent")
  except Exception as e:errors.append(str(e))
 print(json.dumps(errors))
 `;
@@ -172,9 +176,66 @@ print(json.dumps(errors))
   assert.equal(errors.length, 4);
 });
 
+test('temporary external access is exact, globally routable only while running, and restored absent', () => {
+  const code = String.raw`
+import copy,importlib.util,json,pathlib,sys
+sys.path.insert(0,str(pathlib.Path(sys.argv[1]).parent))
+spec=importlib.util.spec_from_file_location("gcp",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+base={
+ "id":"123456789", "name":m.INSTANCE, "status":"TERMINATED",
+ "zone":f"projects/p/zones/{m.ZONE}", "machineType":f"projects/p/zones/{m.ZONE}/machineTypes/{m.MACHINE_TYPE}",
+ "serviceAccounts":[], "scheduling":{"automaticRestart":False,"onHostMaintenance":"TERMINATE","preemptible":False,"provisioningModel":"STANDARD"},
+ "metadata":{"items":[{"key":"block-project-ssh-keys","value":"TRUE"},{"key":"enable-oslogin","value":"TRUE"},{"key":"startup-script","value":m.STARTUP_SCRIPT}]},
+ "labels":m.EXPECTED_LABELS,
+ "disks":[{"deviceName":m.INSTANCE,"boot":True,"autoDelete":True,"mode":"READ_WRITE","diskSizeGb":"100"}],
+ "networkInterfaces":[{"network":"projects/p/global/networks/default","subnetwork":"projects/p/regions/us-central1/subnetworks/default","accessConfigs":[dict(m.EXPECTED_ACCESS_CONFIG)]}],
+ "canIpForward":False}
+m._assert_scope(base,"TERMINATED","attached")
+running=copy.deepcopy(base); running["status"]="RUNNING"; running["networkInterfaces"][0]["accessConfigs"][0]["natIP"]="34.1.2.3"
+m._assert_scope(running,"RUNNING","attached")
+bad=copy.deepcopy(running); bad["networkInterfaces"][0]["accessConfigs"][0]["natIP"]="10.0.0.1"
+try:m._assert_scope(bad,"RUNNING","attached")
+except Exception as e:print(json.dumps(str(e)))
+`;
+  const error = JSON.parse(execFileSync('python3', ['-c', code, gcpPath], { encoding: 'utf8' }));
+  assert.match(error, /valid external IP/u);
+  assert.match(gcpSource, /access_attach = _attach_external_access\(\)/u);
+  assert.match(gcpSource, /cleanup = _cleanup_exact_vm\(\)/u);
+  assert.match(gcpSource, /_assert_scope\(final, "TERMINATED", "absent"\)/u);
+});
+
+test('temporary access removal still runs when VM stop fails', () => {
+  const code = String.raw`
+import copy,importlib.util,json,pathlib,sys
+sys.path.insert(0,str(pathlib.Path(sys.argv[1]).parent))
+spec=importlib.util.spec_from_file_location("gcp",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+base={
+ "id":"123456789", "name":m.INSTANCE, "status":"RUNNING",
+ "zone":f"projects/p/zones/{m.ZONE}", "machineType":f"projects/p/zones/{m.ZONE}/machineTypes/{m.MACHINE_TYPE}",
+ "serviceAccounts":[], "scheduling":{"automaticRestart":False,"onHostMaintenance":"TERMINATE","preemptible":False,"provisioningModel":"STANDARD"},
+ "metadata":{"items":[{"key":"block-project-ssh-keys","value":"TRUE"},{"key":"enable-oslogin","value":"TRUE"},{"key":"startup-script","value":m.STARTUP_SCRIPT}]},
+ "labels":m.EXPECTED_LABELS,
+ "disks":[{"deviceName":m.INSTANCE,"boot":True,"autoDelete":True,"mode":"READ_WRITE","diskSizeGb":"100"}],
+ "networkInterfaces":[{"network":"projects/p/global/networks/default","subnetwork":"projects/p/regions/us-central1/subnetworks/default","accessConfigs":[dict(m.EXPECTED_ACCESS_CONFIG,natIP="34.1.2.3")]}],
+ "canIpForward":False}
+absent=copy.deepcopy(base); absent["networkInterfaces"][0].pop("accessConfigs")
+states=iter([base,absent,absent,absent]); deletes=[]
+m._describe=lambda:next(states)
+m._gcloud=lambda *args,**kwargs:deletes.append(args) or {"returnCode":0}
+m._stop_exact_vm=lambda access_state:(_ for _ in ()).throw(RuntimeError("stop boom"))
+try:m._cleanup_exact_vm()
+except Exception as e:error=str(e)
+print(json.dumps({"deleteCalls":sum("delete-access-config" in row for row in deletes),"error":error}))
+`;
+  const result = JSON.parse(execFileSync('python3', ['-c', code, gcpPath], { encoding: 'utf8' }));
+  assert.equal(result.deleteCalls, 1);
+  assert.match(result.error, /stop boom/u);
+  assert.match(result.error, /final boundary failed/u);
+});
+
 test('failed retained analysis fails the owner before its mandatory cleanup', () => {
   assert.match(gcpSource, /_require_analysis_success\(analysis, args\.out_dir \/ "m2-analysis\.json"\)/u);
-  assert.match(gcpSource, /finally:\s*\n\s*try:\s*\n\s*cleanup = _stop_exact_vm\(\)/u);
+  assert.match(gcpSource, /finally:\s*\n\s*try:\s*\n\s*cleanup = _cleanup_exact_vm\(\)/u);
   const code = String.raw`
 import importlib.util,json,pathlib,sys,tempfile
 sys.path.insert(0,str(pathlib.Path(sys.argv[1]).parent))

@@ -9,11 +9,10 @@ resized, relabelled, re-networked, or given credentials.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import hashlib
+import ipaddress
 import json
 import shutil
-import socket
 import subprocess
 import tempfile
 import time
@@ -45,6 +44,11 @@ EXPECTED_LABELS = {
     "owner": "mehmet",
     "purpose": "pagespatial-gpu-instrumentation",
     "repo": "pagespatial",
+}
+EXPECTED_ACCESS_CONFIG = {
+    "name": "external-nat",
+    "networkTier": "PREMIUM",
+    "type": "ONE_TO_ONE_NAT",
 }
 SSH_KEY = Path.home() / ".ssh/google_compute_engine"
 KNOWN_HOSTS = Path.home() / ".ssh/google_compute_known_hosts"
@@ -93,7 +97,9 @@ def _describe() -> dict[str, Any]:
     return json.loads(result["stdout"])
 
 
-def _assert_scope(instance: dict[str, Any], required_status: str) -> None:
+def _assert_scope(
+    instance: dict[str, Any], required_status: str, access_state: str = "absent"
+) -> None:
     if instance.get("name") != INSTANCE or instance.get("status") != required_status:
         raise RuntimeError("experiment VM identity or state mismatch")
     if not str(instance.get("zone", "")).endswith(f"/zones/{ZONE}"):
@@ -135,9 +141,11 @@ def _assert_scope(instance: dict[str, Any], required_status: str) -> None:
     ):
         raise RuntimeError("experiment VM disk boundary changed")
     interfaces = instance.get("networkInterfaces") or []
+    access_configs = (
+        interfaces[0].get("accessConfigs") or [] if len(interfaces) == 1 else []
+    )
     if (
         len(interfaces) != 1
-        or interfaces[0].get("accessConfigs") not in (None, [])
         or not str(interfaces[0].get("network", "")).endswith(
             "/global/networks/default"
         )
@@ -146,6 +154,26 @@ def _assert_scope(instance: dict[str, Any], required_status: str) -> None:
         )
     ):
         raise RuntimeError("experiment VM network boundary changed")
+    if access_state == "absent":
+        if access_configs:
+            raise RuntimeError("experiment VM external access boundary changed")
+    elif access_state == "attached":
+        if len(access_configs) != 1 or any(
+            access_configs[0].get(key) != value
+            for key, value in EXPECTED_ACCESS_CONFIG.items()
+        ):
+            raise RuntimeError("experiment VM external access boundary changed")
+    else:
+        raise RuntimeError(f"unknown experiment VM access state: {access_state}")
+    nat_ip = access_configs[0].get("natIP") if access_configs else None
+    if access_state == "attached" and required_status == "RUNNING":
+        try:
+            if not nat_ip or not ipaddress.ip_address(str(nat_ip)).is_global:
+                raise ValueError("not a global address")
+        except ValueError as error:
+            raise RuntimeError("running experiment VM lacks a valid external IP") from error
+    elif access_state == "attached" and required_status == "TERMINATED" and nat_ip is not None:
+        raise RuntimeError("stopped experiment VM unexpectedly retains an external IP")
     if instance.get("canIpForward") not in (None, False):
         raise RuntimeError("experiment VM unexpectedly permits IP forwarding")
 
@@ -170,7 +198,7 @@ def _narrow_snapshot(instance: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _stop_exact_vm() -> dict[str, Any]:
+def _stop_exact_vm(access_state: str) -> dict[str, Any]:
     def issue_stop() -> dict[str, Any]:
         try:
             return _gcloud(
@@ -206,8 +234,95 @@ def _stop_exact_vm() -> dict[str, Any]:
             f"exact experiment VM failed to stop after {len(attempts)} attempts: "
             f"{last.get('status')}"
         )
-    _assert_scope(last, "TERMINATED")
+    _assert_scope(last, "TERMINATED", access_state)
     return {"attempts": attempts, "final": _narrow_snapshot(last)}
+
+
+def _attach_external_access() -> dict[str, Any]:
+    command = _gcloud(
+        "compute",
+        "instances",
+        "add-access-config",
+        INSTANCE,
+        "--zone",
+        ZONE,
+        "--access-config-name",
+        EXPECTED_ACCESS_CONFIG["name"],
+        "--network-tier",
+        EXPECTED_ACCESS_CONFIG["networkTier"],
+        timeout=180,
+    )
+    _assert_scope(_describe(), "TERMINATED", "attached")
+    return command
+
+
+def _cleanup_exact_vm() -> dict[str, Any]:
+    def delete_access() -> list[dict[str, Any]]:
+        attempts = []
+        for attempt in range(2):
+            attempts.append(
+                _gcloud(
+                    "compute",
+                    "instances",
+                    "delete-access-config",
+                    INSTANCE,
+                    "--zone",
+                    ZONE,
+                    "--access-config-name",
+                    EXPECTED_ACCESS_CONFIG["name"],
+                    timeout=180,
+                    check=False,
+                )
+            )
+            if attempts[-1].get("returnCode") == 0:
+                break
+            if attempt == 0:
+                time.sleep(5)
+        return attempts
+
+    errors: list[str] = []
+    current = _describe()
+    access_configs = (current.get("networkInterfaces") or [{}])[0].get(
+        "accessConfigs"
+    ) or []
+    access_state = "attached" if access_configs else "absent"
+    _assert_scope(current, str(current.get("status")), access_state)
+    detached: list[dict[str, Any]] = []
+    if access_state == "attached":
+        detached.extend(delete_access())
+        if detached[-1].get("returnCode") != 0:
+            errors.append(f"pre-stop external access removal failed: {detached}")
+    after_detach = _describe()
+    remaining_access = (after_detach.get("networkInterfaces") or [{}])[0].get(
+        "accessConfigs"
+    ) or []
+    stop_access_state = "attached" if remaining_access else "absent"
+    stopped: dict[str, Any] | None = None
+    try:
+        stopped = _stop_exact_vm(stop_access_state)
+    except BaseException as error:
+        errors.append(f"stop failed: {type(error).__name__}: {error}")
+    after_stop = _describe()
+    still_attached = (after_stop.get("networkInterfaces") or [{}])[0].get(
+        "accessConfigs"
+    ) or []
+    if still_attached:
+        detached.extend(delete_access())
+        if detached[-1].get("returnCode") != 0:
+            errors.append(f"post-stop external access removal failed: {detached}")
+    final = _describe()
+    try:
+        _assert_scope(final, "TERMINATED", "absent")
+    except BaseException as error:
+        errors.append(f"final boundary failed: {type(error).__name__}: {error}")
+    result = {
+        "stop": stopped,
+        "accessDetachAttempts": detached,
+        "final": _narrow_snapshot(final),
+    }
+    if errors:
+        raise RuntimeError(f"exact VM cleanup failed: {errors}; record={result}")
+    return result
 
 
 def _assert_gcloud_identity() -> None:
@@ -281,52 +396,6 @@ def _existing_ssh_identity(instance: dict[str, Any]) -> dict[str, str]:
     }
 
 
-@contextlib.contextmanager
-def _iap_tunnel():
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = int(probe.getsockname()[1])
-    command = [
-        "gcloud",
-        "compute",
-        "start-iap-tunnel",
-        INSTANCE,
-        "22",
-        f"--local-host-port=127.0.0.1:{port}",
-        "--zone",
-        ZONE,
-        "--project",
-        PROJECT,
-    ]
-    process = subprocess.Popen(
-        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-    )
-    try:
-        deadline = time.monotonic() + 60
-        while time.monotonic() < deadline:
-            if process.poll() is not None:
-                stdout, stderr = process.communicate(timeout=5)
-                raise RuntimeError(
-                    f"read-only IAP tunnel failed: rc={process.returncode}, "
-                    f"stdout={stdout!r}, stderr={stderr!r}"
-                )
-            with socket.socket() as connection:
-                connection.settimeout(0.25)
-                if connection.connect_ex(("127.0.0.1", port)) == 0:
-                    yield port
-                    return
-            time.sleep(0.25)
-        raise RuntimeError("read-only IAP tunnel did not become ready")
-    finally:
-        if process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=5)
-
-
 def _sha(path: Path) -> dict[str, Any]:
     data = path.read_bytes()
     return {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
@@ -348,34 +417,32 @@ def _ssh(
     remote_command: str,
     timeout: int,
     identity: dict[str, str],
+    host: str,
     check: bool = True,
 ) -> dict[str, Any]:
-    with _iap_tunnel() as port:
-        return _run(
-            [
-                "ssh",
-                "-i",
-                identity["keyPath"],
-                "-p",
-                str(port),
-                "-o",
-                "BatchMode=yes",
-                "-o",
-                "IdentitiesOnly=yes",
-                "-o",
-                "StrictHostKeyChecking=yes",
-                "-o",
-                f"UserKnownHostsFile={identity['knownHostsPath']}",
-                "-o",
-                f"HostKeyAlias={identity['hostAlias']}",
-                "-o",
-                "ConnectTimeout=30",
-                f"{identity['username']}@127.0.0.1",
-                remote_command,
-            ],
-            timeout,
-            check=check,
-        )
+    return _run(
+        [
+            "ssh",
+            "-i",
+            identity["keyPath"],
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "IdentitiesOnly=yes",
+            "-o",
+            "StrictHostKeyChecking=yes",
+            "-o",
+            f"UserKnownHostsFile={identity['knownHostsPath']}",
+            "-o",
+            f"HostKeyAlias={identity['hostAlias']}",
+            "-o",
+            "ConnectTimeout=30",
+            f"{identity['username']}@{host}",
+            remote_command,
+        ],
+        timeout,
+        check=check,
+    )
 
 
 def _scp(
@@ -383,41 +450,39 @@ def _scp(
     destination: str,
     timeout: int,
     identity: dict[str, str],
+    host: str,
     check: bool = True,
 ) -> dict[str, Any]:
     def endpoint(value: str) -> str:
         prefix = f"{INSTANCE}:"
         return (
-            f"{identity['username']}@127.0.0.1:{value[len(prefix):]}"
+            f"{identity['username']}@{host}:{value[len(prefix):]}"
             if value.startswith(prefix)
             else value
         )
 
-    with _iap_tunnel() as port:
-        return _run(
-            [
-                "scp",
-                "-r",
-                "-i",
-                identity["keyPath"],
-                "-P",
-                str(port),
-                "-o",
-                "BatchMode=yes",
-                "-o",
-                "IdentitiesOnly=yes",
-                "-o",
-                "StrictHostKeyChecking=yes",
-                "-o",
-                f"UserKnownHostsFile={identity['knownHostsPath']}",
-                "-o",
-                f"HostKeyAlias={identity['hostAlias']}",
-                *[endpoint(value) for value in sources],
-                endpoint(destination),
-            ],
-            timeout,
-            check=check,
-        )
+    return _run(
+        [
+            "scp",
+            "-r",
+            "-i",
+            identity["keyPath"],
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "IdentitiesOnly=yes",
+            "-o",
+            "StrictHostKeyChecking=yes",
+            "-o",
+            f"UserKnownHostsFile={identity['knownHostsPath']}",
+            "-o",
+            f"HostKeyAlias={identity['hostAlias']}",
+            *[endpoint(value) for value in sources],
+            endpoint(destination),
+        ],
+        timeout,
+        check=check,
+    )
 
 
 def main() -> None:
@@ -451,7 +516,7 @@ def main() -> None:
     if not args.pdf.is_file() or not args.native_evidence.is_file():
         raise RuntimeError("M2 private inputs are unavailable")
     before = _describe()
-    _assert_scope(before, "TERMINATED")
+    _assert_scope(before, "TERMINATED", "absent")
     ssh_identity = _existing_ssh_identity(before)
     reservations = reserve_bundle(args.ledger, list(M2_STAGES))
     for reservation in reservations:
@@ -461,6 +526,8 @@ def main() -> None:
     app_id = f"gcp:{PROJECT}:{ZONE}:{INSTANCE}"
     failure: str | None = None
     copied = False
+    ssh_host: str | None = None
+    access_attach: dict[str, Any] | None = None
     cleanup: dict[str, Any] | None = None
     with tempfile.TemporaryDirectory(prefix="pagespatial-m2-transfer-") as temp:
         temp_root = Path(temp)
@@ -491,6 +558,7 @@ def main() -> None:
             + "\n"
         )
         try:
+            access_attach = _attach_external_access()
             _gcloud(
                 "compute",
                 "instances",
@@ -500,11 +568,14 @@ def main() -> None:
                 ZONE,
                 timeout=600,
             )
-            _assert_scope(_describe(), "RUNNING")
+            running = _describe()
+            _assert_scope(running, "RUNNING", "attached")
+            ssh_host = str(running["networkInterfaces"][0]["accessConfigs"][0]["natIP"])
             _ssh(
                 f"mkdir -p {remote_root}/repo {remote_root}/inputs",
                 120,
                 ssh_identity,
+                ssh_host,
             )
             _scp(
                 [
@@ -517,6 +588,7 @@ def main() -> None:
                 f"{INSTANCE}:{remote_root}/inputs/",
                 1800,
                 ssh_identity,
+                ssh_host,
             )
             remote = (
                 f"tar -xzf {remote_root}/inputs/source.tar.gz -C {remote_root}/repo && "
@@ -524,7 +596,7 @@ def main() -> None:
                 f"--repo-root {remote_root}/repo --input-dir {remote_root}/inputs "
                 f"--output-dir {remote_root}/output --revision {revision}"
             )
-            _ssh(remote, 10800, ssh_identity)
+            _ssh(remote, 10800, ssh_identity, ssh_host)
             args.out_dir.parent.mkdir(parents=True, exist_ok=True)
             local_transfer = temp_root / "evidence"
             local_transfer.mkdir()
@@ -533,6 +605,7 @@ def main() -> None:
                 str(local_transfer),
                 7200,
                 ssh_identity,
+                ssh_host,
             )
             copied_output = local_transfer / "output"
             if not copied_output.is_dir():
@@ -563,19 +636,21 @@ def main() -> None:
             _require_analysis_success(analysis, args.out_dir / "m2-analysis.json")
         except BaseException as error:
             failure = f"{type(error).__name__}: {error}"
-            if not copied:
+            if not copied and ssh_host is not None:
                 args.out_dir.parent.mkdir(parents=True, exist_ok=True)
                 _scp(
                     [f"{INSTANCE}:{remote_root}/output"],
                     str(args.out_dir),
                     7200,
                     ssh_identity,
+                    ssh_host,
                     check=False,
                 )
             raise
         finally:
             try:
-                cleanup = _stop_exact_vm()
+                cleanup = _cleanup_exact_vm()
+                cleanup["accessAttach"] = access_attach
             except BaseException as stop_error:
                 failure = (
                     f"{failure}; cleanup: {type(stop_error).__name__}: {stop_error}"
