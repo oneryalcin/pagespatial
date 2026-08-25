@@ -263,6 +263,23 @@ print(json.dumps({"readyAttempts":ready,"identityError":error}))
   assert.match(gcpSource, /-cleanup-\{attempt_id\}/u);
 });
 
+test('SSH retries only failures that occur before a remote command can start', () => {
+  const code = String.raw`
+import importlib.util,json,pathlib,sys
+sys.path.insert(0,str(pathlib.Path(sys.argv[1]).parent))
+spec=importlib.util.spec_from_file_location("gcp",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+identity={"keyPath":"key","knownHostsPath":"hosts","hostAlias":"alias","username":"user"}; m.time.sleep=lambda _:None
+rows=iter([{"returnCode":255,"stderr":"Operation timed out"},{"returnCode":0,"stderr":""}]); m._run=lambda *args,**kwargs:next(rows)
+retried=m._ssh("true",1,identity,"34.1.2.3")
+rows=iter([{"returnCode":255,"stderr":"Host key verification failed"},{"returnCode":0,"stderr":""}]); m._run=lambda *args,**kwargs:next(rows)
+terminal=m._ssh("true",1,identity,"34.1.2.3",check=False)
+print(json.dumps({"retried":len(retried["connectAttempts"]),"terminal":len(terminal["connectAttempts"])}))
+`;
+  const result = JSON.parse(execFileSync('python3', ['-c', code, gcpPath], { encoding: 'utf8' }));
+  assert.equal(result.retried, 2);
+  assert.equal(result.terminal, 1);
+});
+
 test('failed retained analysis fails the owner before its mandatory cleanup', () => {
   assert.match(gcpSource, /_require_analysis_success\(analysis, args\.out_dir \/ f"\{milestone\}-analysis\.json"\)/u);
   assert.match(gcpSource, /finally:\s*\n\s*try:\s*\n\s*cleanup = _cleanup_exact_vm\(\)/u);

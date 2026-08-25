@@ -42,7 +42,7 @@ STARTUP_SCRIPT = """#!/bin/bash
 set -eu
 
 # Corporate egress blocks TCP/22. Keep the experiment VM reachable through the
-# VM-scoped, temporary TCP/443 firewall rule owned outside this runner.
+# VM-scoped, temporary TCP/443 ingress rule owned outside this runner.
 grep -qxF 'Port 443' /etc/ssh/sshd_config || printf '\nPort 443\n' >> /etc/ssh/sshd_config
 systemctl restart ssh
 
@@ -437,9 +437,9 @@ def _ssh(
     identity: dict[str, str],
     host: str,
     check: bool = True,
+    connect_attempts: int = 4,
 ) -> dict[str, Any]:
-    return _run(
-        [
+    command = [
             "ssh",
             "-i",
             identity["keyPath"],
@@ -459,10 +459,22 @@ def _ssh(
             str(SSH_PORT),
             f"{identity['username']}@{host}",
             remote_command,
-        ],
-        timeout,
-        check=check,
-    )
+        ]
+    attempts = []
+    for index in range(connect_attempts):
+        result = _run(command, timeout, check=False)
+        attempts.append(result)
+        error = str(result.get("stderr", ""))
+        transient = any(
+            marker in error for marker in ("Operation timed out", "Connection refused")
+        )
+        if result.get("returnCode") == 0 or not transient or index + 1 == connect_attempts:
+            result["connectAttempts"] = attempts
+            if check and result.get("returnCode") != 0:
+                raise RuntimeError(f"command failed: {result}")
+            return result
+        time.sleep(5)
+    raise AssertionError("unreachable")
 
 
 def _wait_for_ssh(
@@ -472,7 +484,7 @@ def _wait_for_ssh(
     deadline = time.monotonic() + timeout_seconds
     attempts = []
     while True:
-        attempt = _ssh("true", 45, identity, host, check=False)
+        attempt = _ssh("true", 45, identity, host, check=False, connect_attempts=1)
         attempts.append(attempt)
         if attempt.get("returnCode") == 0:
             return attempts
@@ -507,8 +519,7 @@ def _scp(
             else value
         )
 
-    return _run(
-        [
+    command = [
             "scp",
             "-r",
             "-i",
@@ -527,10 +538,22 @@ def _scp(
             str(SSH_PORT),
             *[endpoint(value) for value in sources],
             endpoint(destination),
-        ],
-        timeout,
-        check=check,
-    )
+        ]
+    attempts = []
+    for index in range(4):
+        result = _run(command, timeout, check=False)
+        attempts.append(result)
+        error = str(result.get("stderr", ""))
+        transient = any(
+            marker in error for marker in ("Operation timed out", "Connection refused")
+        )
+        if result.get("returnCode") == 0 or not transient or index == 3:
+            result["connectAttempts"] = attempts
+            if check and result.get("returnCode") != 0:
+                raise RuntimeError(f"command failed: {result}")
+            return result
+        time.sleep(5)
+    raise AssertionError("unreachable")
 
 
 def main() -> None:
