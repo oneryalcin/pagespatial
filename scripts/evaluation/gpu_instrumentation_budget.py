@@ -26,6 +26,10 @@ FRESH_M2_CONTINUATION_ACTIVE = True
 FRESH_M2_CONTINUATION_AUTHORIZED_AT_UTC = "2026-08-25T09:33:09Z"
 FRESH_M2_CONTINUATION_LEDGER_KEY = "owner130FreshM2Continuation"
 FRESH_M2_CONTINUATION_STAGES = ("M2-SYSTEMS", "M2-CPU")
+CAPACITY_RETRY_AUTHORIZED_AT_UTC = "2026-08-25T09:40:39Z"
+CAPACITY_RETRY_BUNDLE_ID = "bundle-1787650684-b39227dc"
+CAPACITY_RETRY_LEDGER_KEY = "owner130M2CapacityRetry"
+CAPACITY_FAILURE_MARKER = "ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS"
 EXPERIMENT_PREFIX = "pagespatial-gpu-instrumentation-"
 DEFAULT_LEDGER = Path(".evaluation/gpu-instrumentation/budget-2026-08-25.json")
 
@@ -312,6 +316,81 @@ def reopen_preflight_bundle(path: Path, bundle_id: str) -> list[dict[str, Any]]:
     raise RuntimeError(
         "old M2 bundle reopening is disabled by the $130 fresh-continuation amendment"
     )
+
+
+def reopen_capacity_retry(path: Path, bundle_id: str) -> list[dict[str, Any]]:
+    """Reopen only the owner-authorized fresh bundle after a retained L4 stockout."""
+    if bundle_id != CAPACITY_RETRY_BUNDLE_ID:
+        raise RuntimeError("capacity retry is authorized only for the exact failed bundle")
+    _assert_authorized()
+    active = active_experiment_apps()
+    if active:
+        raise RuntimeError(f"paid launch serialization refused: active apps: {active}")
+    rows = billing_rows()
+    with ledger_lock(path):
+        ledger = load_ledger(path)
+        if ledger.get(CAPACITY_RETRY_LEDGER_KEY) is not None:
+            raise RuntimeError("the single same-zone capacity retry has already been reserved")
+        continuation = ledger.get(FRESH_M2_CONTINUATION_LEDGER_KEY)
+        if not isinstance(continuation, dict) or continuation.get("bundleId") != bundle_id:
+            raise RuntimeError("capacity retry requires the fresh-continuation bundle token")
+        live = [
+            item
+            for item in ledger["reservations"]
+            if item.get("status") in {"reserved", "active"}
+        ]
+        if live:
+            raise RuntimeError(f"paid launch serialization refused: live reservation: {live}")
+        matches = [
+            item for item in ledger["reservations"] if item.get("bundleId") == bundle_id
+        ]
+        if [item.get("stage") for item in matches] != list(
+            FRESH_M2_CONTINUATION_STAGES
+        ):
+            raise RuntimeError("capacity retry requires the exact M2 stage bundle")
+        if any(item.get("status") != "completed-unposted" for item in matches):
+            raise RuntimeError("capacity retry bundle is not completed-unposted")
+        if any(
+            CAPACITY_FAILURE_MARKER not in str(item.get("completionNote", ""))
+            for item in matches
+        ):
+            raise RuntimeError("capacity retry requires a retained GCP L4 stockout")
+        exposure = posted_spend(rows) + reserved_exposure(ledger)
+        if exposure > OPERATIONAL_STOP_USD:
+            raise RuntimeError(
+                f"spend guard refused reused exposure ${exposure:.4f} > "
+                f"${OPERATIONAL_STOP_USD:.2f}"
+            )
+        reopened_at = int(time.time())
+        for item in matches:
+            item["capacityRetryHistory"] = [
+                {
+                    "status": item["status"],
+                    "completedAt": item.get("completedAt"),
+                    "completionNote": item.get("completionNote"),
+                    "appId": item.get("appId"),
+                }
+            ]
+            item["status"] = "reserved"
+            item["capacityReopenedAt"] = reopened_at
+            for key in (
+                "claimedAt",
+                "claimedByPid",
+                "completedAt",
+                "completionNote",
+                "appId",
+            ):
+                item.pop(key, None)
+        ledger[CAPACITY_RETRY_LEDGER_KEY] = {
+            "authorizedAtUtc": CAPACITY_RETRY_AUTHORIZED_AT_UTC,
+            "bundleId": bundle_id,
+            "reservedAt": reopened_at,
+            "reason": "retained GCP L4 zone stockout",
+        }
+        ledger["lastBillingRows"] = rows
+        ledger["lastReusedExposureUsd"] = exposure
+        save_ledger(path, ledger)
+        return matches
 
 
 def validate_reservation(path: Path, reservation_id: str, stage: str) -> dict[str, Any]:

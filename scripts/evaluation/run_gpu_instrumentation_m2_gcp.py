@@ -22,6 +22,7 @@ from typing import Any
 from gpu_instrumentation_budget import (
     DEFAULT_LEDGER,
     complete,
+    reopen_capacity_retry,
     reserve_bundle,
     validate_reservation,
 )
@@ -514,6 +515,7 @@ def _scp(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
+    parser.add_argument("--capacity-retry-bundle")
     parser.add_argument(
         "--pdf",
         type=Path,
@@ -544,7 +546,11 @@ def main() -> None:
     before = _describe()
     _assert_scope(before, "TERMINATED", "absent")
     ssh_identity = _existing_ssh_identity(before)
-    reservations = reserve_bundle(args.ledger, list(M2_STAGES))
+    reservations = (
+        reopen_capacity_retry(args.ledger, args.capacity_retry_bundle)
+        if args.capacity_retry_bundle
+        else reserve_bundle(args.ledger, list(M2_STAGES))
+    )
     for reservation in reservations:
         validate_reservation(args.ledger, reservation["id"], reservation["stage"])
 

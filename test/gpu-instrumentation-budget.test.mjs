@@ -38,7 +38,7 @@ test('instrumentation budget records the owner-approved USD 130 continuation', (
   assert.doesNotMatch(source, /a2-budget-v1/u);
   assert.equal(authorization.ownerCeilingUsd, 100);
   assert.equal(authorization.operationalStopUsd, 100);
-  assert.deepEqual(authorization.amendments.at(-1), {
+  assert.deepEqual(authorization.amendments.at(-2), {
     authorizedAtUtc: '2026-08-25T09:33:09Z',
     scope: 'one fresh M2 Systems plus CPU bundle after three pre-build GCP host-access failures',
     reason: 'owner approved a USD 30 continuation after reviewing the USD 20 Systems and USD 10 CPU stage bounds',
@@ -49,6 +49,18 @@ test('instrumentation budget records the owner-approved USD 130 continuation', (
     reservationWorstCaseUsd: 30,
     noFurtherBundles: true,
     oldBundleReopeningDisabled: true,
+  });
+  assert.deepEqual(authorization.amendments.at(-1), {
+    authorizedAtUtc: '2026-08-25T09:40:39Z',
+    scope: 'one capacity-only retry of bundle-1787650684-b39227dc in us-central1-a; after a repeated L4 stockout, one equivalent temporary experiment VM in us-central1-b or us-central1-c',
+    reason: 'the authorized fresh bundle reached GCP but the exact VM could not start because us-central1-a reported ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS',
+    reservationWorstCaseUsd: 0,
+    reusesExistingWorstCaseReservationUsd: 30,
+    sameZoneRetryLimit: 1,
+    fallbackTemporaryVmLimit: 1,
+    fallbackRequiresRepeatedL4Stockout: true,
+    fallbackMustBeDeletedDuringCleanup: true,
+    otherInfrastructureChangesAuthorized: false,
   });
 });
 
@@ -138,6 +150,34 @@ print(json.dumps({"freshBundle":fresh_bundle,"token":token,"exposure":m.reserved
   assert.match(result.errors[1], /old M2 bundle reopening is disabled/u);
   assert.match(result.errors[2], /only one exact fresh M2 stage bundle/u);
   assert.match(result.errors[3], /only one exact fresh M2 stage bundle/u);
+});
+
+test('one exact same-zone retry reuses exposure only after a retained L4 stockout', () => {
+  const ledger = join(mkdtempSync(join(tmpdir(), 'gpu-inst-capacity-retry-')), 'ledger.json');
+  const code = String.raw`
+import importlib.util,json,sys
+from pathlib import Path
+spec=importlib.util.spec_from_file_location("budget",sys.argv[1]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.current_profile=lambda:"desia"; m.active_experiment_apps=lambda:[]; m.billing_rows=lambda:[{"description":"pagespatial-gpu-instrumentation-posted","cost":0.54140977}]
+m.now_utc=lambda:m.datetime(2026,8,25,12,0,tzinfo=m.timezone.utc)
+p=Path(sys.argv[2]); rows=m.reserve_bundle(p,["M2-SYSTEMS","M2-CPU"]); bundle=rows[0]["bundleId"]; m.CAPACITY_RETRY_BUNDLE_ID=bundle
+for row in rows:m.validate_reservation(p,row["id"],row["stage"]); m.complete(p,row["id"],"gcp:test","ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS")
+before=m.reserved_exposure(m.load_ledger(p)); reopened=m.reopen_capacity_retry(p,bundle); after=m.reserved_exposure(m.load_ledger(p))
+for row in reopened:m.validate_reservation(p,row["id"],row["stage"]); m.complete(p,row["id"],"gcp:test","ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS")
+errors=[]
+for candidate in (bundle,"bundle-old"):
+ try:m.reopen_capacity_retry(p,candidate)
+ except Exception as e:errors.append(str(e))
+state=m.load_ledger(p); token=state[m.CAPACITY_RETRY_LEDGER_KEY]
+print(json.dumps({"before":before,"after":after,"statuses":[r["status"] for r in state["reservations"]],"history":[len(r["capacityRetryHistory"]) for r in state["reservations"]],"token":token,"errors":errors}))
+`;
+  const result = runPython(code, ledger);
+  assert.equal(result.before, 30);
+  assert.equal(result.after, 30);
+  assert.deepEqual(result.statuses, ['completed-unposted', 'completed-unposted']);
+  assert.deepEqual(result.history, [1, 1]);
+  assert.match(result.errors[0], /already been reserved/u);
+  assert.match(result.errors[1], /only for the exact failed bundle/u);
 });
 
 test('instrumentation authorization expires at the stated boundary', () => {

@@ -535,6 +535,14 @@ Once that token exists, completion does not erase it. Individual stages,
 partial M2 bundles, a second fresh bundle, and reopening any old bundle are
 all refused.
 
+The first authorized fresh bundle failed before boot because GCP reported L4
+stockout in `us-central1-a`. A second dated owner amendment permits one retry
+of that exact bundle and VM without adding exposure. Only if that retry fails
+with the same capacity reason may the experiment use one equivalent temporary
+VM in `us-central1-b` or `us-central1-c`; it must be deleted during cleanup.
+The same-zone retry has its own durable ledger token. It cannot reopen any
+earlier bundle or be repeated.
+
 No additional global economic overturn threshold applies. The owner has
 decided that a real saving is material at the expected million-page scale.
 The evidence gates still prevent drift: a removable cause must reach 20% of

@@ -36,6 +36,18 @@
       "reservationWorstCaseUsd": 30,
       "noFurtherBundles": true,
       "oldBundleReopeningDisabled": true
+    },
+    {
+      "authorizedAtUtc": "2026-08-25T09:40:39Z",
+      "scope": "one capacity-only retry of bundle-1787650684-b39227dc in us-central1-a; after a repeated L4 stockout, one equivalent temporary experiment VM in us-central1-b or us-central1-c",
+      "reason": "the authorized fresh bundle reached GCP but the exact VM could not start because us-central1-a reported ZONE_RESOURCE_POOL_EXHAUSTED_WITH_DETAILS",
+      "reservationWorstCaseUsd": 0,
+      "reusesExistingWorstCaseReservationUsd": 30,
+      "sameZoneRetryLimit": 1,
+      "fallbackTemporaryVmLimit": 1,
+      "fallbackRequiresRepeatedL4Stockout": true,
+      "fallbackMustBeDeletedDuringCleanup": true,
+      "otherInfrastructureChangesAuthorized": false
     }
   ],
   "source": "owner instructions in the 2026-08-25 conversation: go ahead and start the instrumentation implementation as per docs and measure; today's experimentation ceiling is USD 100 and any increase requires a new request"
