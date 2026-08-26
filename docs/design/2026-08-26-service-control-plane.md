@@ -646,8 +646,9 @@ The app was stopped after the run (0 tasks).
 
 ### M1 — job plane
 
-Schema and migrations, R2 wiring, presigned upload + finalize, `parse_object`
-and its focused qualification, dispatch, attempts, reconciler.
+Schema and migrations, R2 wiring, the database contract for presigned upload
+and finalize, `parse_object` and its focused qualification, dispatch, attempts,
+reconciler. The public HTTP upload/finalize routes belong to M2.
 
 *Acceptance:* a job inserted by raw SQL is dispatched, parsed, its result
 lands at its own execution key, and the row reaches `succeeded` with
@@ -666,6 +667,22 @@ attempt, then allow the original call to complete. The job must hold
 exactly one `accepted_attempt_id`, and the losing execution's bytes must
 still sit untouched at their own key.
 
+### M1 RESULT: PASS (2026-08-26, PRs #108/#109)
+
+The live R2 → Modal → reconciler qualification took a raw-SQL job to
+`succeeded` with `pages_actual` and `accepted_attempt_id` set. Direct and
+pointer results matched at the derived 0/0 tolerance. Wrong digests published
+nothing; duplicate executions wrote distinct immutable keys; prefix LIST
+recovered results whose Modal return path was unavailable.
+
+The crash-window and liveness suite proves the limits of the guarantee:
+dispatch is at-least-once, one replacement is allowed, and an original whose
+call id was lost remains harvestable. Either valid attempt may win; the
+database fence prevents a loser from replacing the authoritative result. A
+genuinely silent original can therefore keep the job non-terminal until its
+24-hour deadline. That is honest uncertainty, not a claim that work is still
+running.
+
 ### M2 — identity
 
 Cloudflare Access + Tunnel, invite list, `users` mapping, API key
@@ -678,6 +695,22 @@ to completion. User B gets 404 on all of user A's routes. A replayed
 a replay with a different body gets 422. **A request to the API hostname
 carrying a forged `Cf-Access-Authenticated-User-Email` header gets 401 on
 every dashboard route.**
+
+Implement M2 as one vertical path before adding the dashboard:
+
+1. `POST /v1/jobs` creates an `uploading` row and returns a one-hour
+   presigned input PUT.
+2. `POST /v1/jobs/:id/finalize` verifies existence and the 90 MiB size bound,
+   then moves the row to `queued`; the worker remains the SHA-256 gate.
+3. The existing dispatcher and reconciler drive the job to a terminal state.
+4. `GET /v1/jobs/:id` returns the tenant-scoped status and summary.
+5. `GET /v1/jobs/:id/result` returns a short-lived URL only for the accepted
+   object and only before `retention_expires_at`.
+
+Do not add an `outcome_uncertain` database state. For a `dispatched` job with
+an open `dispatch_unknown` attempt, the status API derives
+`outcome_uncertain: true` and returns the job deadline. This tells the truth
+without expanding the adjudication state machine.
 
 ### M3 — dashboard
 
