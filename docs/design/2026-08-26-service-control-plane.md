@@ -243,7 +243,11 @@ Modal calls at the same result key and destroy the exact property the
 immutable-key scheme exists to provide. An attempt whose call id never
 landed goes to `dispatch_unknown` and stays there; after a bounded wait the
 reconciler mints a *different* attempt and dispatches that one. The
-uncertain call may still be running, and that is accepted.
+uncertain call may still be running, so the original stays harvestable. It can
+still win if the replacement fails, or complete truthfully as a losing attempt
+if the replacement won first. The 24-hour job deadline bounds that uncertainty.
+A replacement is never itself replaced: if its dispatch is also unknown, both
+attempts remain bounded by the same job deadline instead of growing a chain.
 
 **Dispatch is at-least-once. Stated as a property, not a footnote:**
 
@@ -283,7 +287,9 @@ One background loop in the api process, advisory-locked so replicas do not
 double-run:
 
 - attempts stuck in `dispatch_unknown` past a bounded wait → mint a **new**
-  attempt and dispatch that (never re-spawn the same attempt id);
+  attempt and dispatch that (never re-spawn the same attempt id); keep the
+  original harvestable until it produces a result or the 24-hour job deadline;
+  at most one replacement is allowed;
 - attempts with a call ID → `fromId(id).get({timeoutMs: 0})`, install
   terminal results, record failures;
 - `uploading` rows past `upload_expires_at` → fail;
@@ -305,19 +311,20 @@ that object for acceptance. Do not derive it from reconciliation time: a late
 reconciler would otherwise issue URLs after R2's own lifecycle clock elapsed.
 
 **Modal outputs expire 7 days after completion**, after which `get()`
-returns an expired response. Two consequences:
+returns an expired response. R2 objects expire earlier, after two days, so R2
+is not a seven-day archive of Modal output. The system instead has two tighter
+bounds:
 
-1. The reconciler must observe completions inside that window. At this
-   scale it trivially does, but a multi-day outage is then a real recovery
-   event, not a nuisance.
+1. An unresolved job becomes terminal after 24 hours. No live job waits for
+   Modal's seven-day output expiry.
 2. **`modal@0.9.0` exports no `OutputExpiredError`** — the Python SDK has
    one, the JS SDK does not (verified against the shipped type
-   definitions). So the reconciler *cannot* reliably distinguish expired
-   from failed by error class. This promotes the design's own backstop from
-   incidental to primary: because keys are
+   definitions). So the reconciler does not classify a Modal terminal error
+   until it has consulted R2. Within the two-day object window, keys are
    `results/{job_id}/{attempt_id}/{execution_id}.json`, **a result whose
-   Modal output expired is still recoverable by R2 prefix LIST.** Recover
-   from storage, not from the call.
+   Modal return path was lost is recoverable by R2 prefix LIST.** After two
+   days the object is intentionally gone; the 24-hour job deadline has already
+   made that job terminal.
 
 M0 must therefore record which error classes actually arrive from
 `get({timeoutMs: 0})` — pending, expired, and function-failed must be
@@ -610,10 +617,9 @@ terminal-successful. If `retries=1` left two valid objects under one
 attempt prefix, pick deterministically (lowest `execution_id`) so the
 choice is reproducible rather than listing-order dependent.
 
-In normal operation this path is never taken — the reconciler polls
-minutely, so expiry only bites after a **>7-day reconciler outage**. It is
-a disaster-recovery route, which is precisely why storage, not the call,
-must be the source of truth there.
+In normal operation this path is rare — the reconciler polls minutely. It
+recovers ambiguous or unavailable Modal return paths while the result object
+still exists; it is not a recovery promise after the two-day R2 lifecycle.
 
 **Timing, n=1, stated as such:**
 

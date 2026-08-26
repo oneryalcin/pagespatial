@@ -26,9 +26,12 @@ import assert from 'node:assert/strict';
 import pg from 'pg';
 import { migrate } from '../src/migrate.mjs';
 import { acceptAttempt as acceptAttemptRaw, failAttempt } from '../src/accept.mjs';
+import { reconcileOnce } from '../src/reconciler.mjs';
 
 const acceptAttempt = (database, input) =>
-  acceptAttemptRaw(database, { status: 'completed', ...input });
+  acceptAttemptRaw(database, {
+    status: 'completed', resultCreatedAt: new Date('2026-08-26T12:00:00Z'), ...input,
+  });
 
 const URL = process.env.PAGESPATIAL_TEST_DATABASE_URL;
 
@@ -67,12 +70,14 @@ describe('native Postgres', {
        VALUES ($1,'queued','r2://in',$2,1000, now() + interval '1 hour') RETURNING id`,
       [u[0].id, 'a'.repeat(64)],
     );
-    const mk = async () => (await a.query(
-      `INSERT INTO job_attempts (job_id, state, modal_call_id, dispatched_at)
-       VALUES ($1, 'dispatched', $2, now()) RETURNING id`,
-      [j[0].id, `fc-${randomUUID()}`],
+    const mk = async (replacesAttemptId = null) => (await a.query(
+      `INSERT INTO job_attempts (
+         job_id, state, modal_call_id, dispatched_at, replaces_attempt_id
+       ) VALUES ($1, 'dispatched', $2, now(), $3) RETURNING id`,
+      [j[0].id, `fc-${randomUUID()}`, replacesAttemptId],
     )).rows[0].id;
-    return { jobId: j[0].id, one: await mk(), two: await mk() };
+    const one = await mk();
+    return { jobId: j[0].id, one, two: await mk(one) };
   };
 
   test('the migration applies cleanly to a fresh server', async () => {
@@ -102,8 +107,8 @@ describe('native Postgres', {
       await left.query(`SET search_path TO ${quoted}`);
       await right.query(`SET search_path TO ${quoted}`);
       const [one, two] = await Promise.all([migrate(left), migrate(right)]);
-      assert.equal(one.applied.length + two.applied.length, 2,
-        'the two migration files must be applied exactly once in total');
+      assert.equal(one.applied.length + two.applied.length, 4,
+        'the four migration files must be applied exactly once in total');
       assert.deepEqual(
         [one.pending.length, two.pending.length], [0, 0],
       );
@@ -111,6 +116,16 @@ describe('native Postgres', {
       await right.end();
       await left.query(`DROP SCHEMA IF EXISTS ${quoted} CASCADE`);
       await left.end();
+    }
+  });
+
+  test('one reconciler session excludes another replica', async () => {
+    await a.query('SELECT pg_advisory_lock(731945822)');
+    try {
+      const result = await reconcileOnce({ db: b });
+      assert.deepEqual(result, { acquired: false, outcomes: [] });
+    } finally {
+      await a.query('SELECT pg_advisory_unlock(731945822)');
     }
   });
 
