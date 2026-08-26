@@ -2,7 +2,9 @@ import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { acceptAttempt } from '../src/accept.mjs';
-import { authenticateApiKey, issueApiKey } from '../src/api-keys.mjs';
+import {
+  authenticateApiKey, issueApiKey, listApiKeys, revokeApiKey,
+} from '../src/api-keys.mjs';
 import { migrate } from '../src/migrate.mjs';
 import {
   createOrReplayJob, finalizeJob, jobView, ownedJob, resultGrant,
@@ -62,6 +64,21 @@ test('API keys can be issued only to active users', async () => {
     issueApiKey(db, { userId: invited.id, name: 'inert key' }),
     /active user does not exist/u,
   );
+});
+
+test('key management lists safe fields and revokes only an owned key idempotently', async () => {
+  const first = await issueApiKey(db, { userId, name: 'first' });
+  const second = await issueApiKey(db, { userId, name: 'second' });
+  const listed = await listApiKeys(db, { userId });
+  assert.deepEqual(listed.map((key) => key.name).sort(), ['first', 'second']);
+  assert.doesNotMatch(JSON.stringify(listed), /ps_live_[A-Za-z0-9_-]{43}|"hash"/u);
+
+  assert.equal(await revokeApiKey(db, { userId, keyId: first.key.id }), true);
+  assert.equal(await revokeApiKey(db, { userId, keyId: first.key.id }), true);
+  const foreign = (await db.query(
+    "INSERT INTO users (email, status) VALUES ('foreign@example.test','active') RETURNING id",
+  )).rows[0];
+  assert.equal(await revokeApiKey(db, { userId: foreign.id, keyId: second.key.id }), false);
 });
 
 test('submission creates one uploading job and exact replay returns it', async () => {
