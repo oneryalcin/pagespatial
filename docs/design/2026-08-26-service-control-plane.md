@@ -150,8 +150,9 @@ original job.
 
 `jobs` carries **two** deadline columns, not one overloaded `expires_at`:
 `upload_expires_at` (while `uploading`) and `retention_expires_at` (once
-terminal). One column with two meanings invites sweeper bugs that delete
-live jobs.
+terminal). The latter stops the API issuing result URLs and makes terminal
+metadata eligible for later pruning; it does not drive R2 object deletion.
+One column with two meanings invites sweeper bugs that expire live jobs.
 
 **No `usage_events` table.** Usage is 1:1 with jobs, so a second table is
 redundant until refunds or adjustments exist. **No `pricing` table** — the
@@ -260,8 +261,8 @@ can execute twice — and both executions would receive the *same*
 therefore not enough.
 
 The execution mints its own key and reports it back. Abandoned execution
-objects are harmless and retention removes them. The alternative — a signed
-conditional `PUT` with `If-None-Match: *` plus a defined
+objects are harmless and the R2 bucket lifecycle removes them. The
+alternative — a signed conditional `PUT` with `If-None-Match: *` plus a defined
 already-exists behaviour — is workable but strictly more machinery for the
 same guarantee.
 
@@ -278,8 +279,17 @@ double-run:
   attempt and dispatch that (never re-spawn the same attempt id);
 - attempts with a call ID → `fromId(id).get({timeoutMs: 0})`, install
   terminal results, record failures;
-- `uploading` and expired rows → sweep;
-- retention expiry.
+- `uploading` rows past `upload_expires_at` → fail;
+- non-terminal jobs still unresolved 24 hours after `queued_at` → fail; late
+  executions may finish but the existing terminal fence refuses them;
+- terminal jobs past `retention_expires_at` → stop serving result URLs and
+  make their non-accounting metadata eligible for later pruning.
+
+The reconciler does **not** normally delete R2 objects one by one. Dedicated
+input and result buckets must each carry a two-day R2 lifecycle rule. This keeps
+object deletion outside the application state machine and also removes
+abandoned uploads and losing execution objects. Physical deletion can lag the
+lifecycle deadline; API access still ends at `retention_expires_at`.
 
 **Modal outputs expire 7 days after completion**, after which `get()`
 returns an expired response. Two consequences:
@@ -668,10 +678,15 @@ the backup cron; it does not remove the need to test recovery.
    before public release. The first drill does not test this, and an
    untested restore is decoration whoever holds the backup.
 
-## Open questions for the owner
+## Owner decisions and open questions
 
-1. **Retention default** for result objects and uploaded PDFs. 30 days
-   assumed.
+1. **R2 lifecycle default: 2 days** (owner decision, 2026-08-26). Input
+   objects expire two days after upload; result objects expire two days after
+   creation. The API stops serving a result at `retention_expires_at`, set to
+   two days after terminal completion. A job unresolved 24 hours after
+   `queued_at` fails, leaving a full-day cushion before its input can expire.
+   This is an age-based storage policy, not exact per-job deletion by the
+   reconciler.
 2. **Per-user concurrency cap.** A flat 5 is assumed; per-tier implies tiers
    exist, which implies #105's Standard/Flex lands first.
 3. **Domain** — needed for Cloudflare Access and Tunnel, external lead time,

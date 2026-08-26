@@ -12,17 +12,19 @@ Onboarding order: [principles](principles.md) →
 
 ## State snapshot (update the date when you touch this)
 
-*As of 2026-08-26, evening.*
+*As of 2026-08-26, after PR #108.*
 
-- **main**: through PR #104 (`b96e891`). CI is green. Current record
+- **main**: through PR #108 (`70b0380`). CI is green. Current record
   versions remain schema 0.6.0 and enrichment-0.2.0.
 - **Internal Modal parse is ADOPTED**: the CPU/OpenVINO warm-`Cls` adapter
   passed its 12/12 qualification for controlled internal, parse-only jobs.
-  Qualified bounds are 90 MiB input, 200 pages, 64 MiB serialized result,
-  100 jobs per warm lifetime, and `max_containers` in `{1, 4, 16}`.
+  Qualified document bounds are 90 MiB input, 200 pages, 100 jobs per warm
+  lifetime, and `max_containers` in `{1, 4, 16}`. Direct result return retains
+  its 64 MiB boundary; PR #108 separately qualified R2 pointer publication
+  with a 128 MiB cap.
   Enrichment and public ingress remain off. The current Modal adapter has
   `min_containers=0`, `buffer_containers=0`, and no memory snapshot support;
-  measured cold readiness remains 70–88 seconds. Trial:
+  observed cold readiness spans roughly 70–102 seconds. Trial:
   `docs/trials/2026-08-23-modal-qualification.md`.
 - **GPU optimization workstream CLOSED without adoption (PR #104)**:
   M2 selected producer starvation; M3 showed thousands of small recognizer
@@ -35,14 +37,13 @@ Onboarding order: [principles](principles.md) →
   analysis, or automatic M5 is justified. Trial:
   `docs/trials/2026-08-25-gpu-bottleneck-instrumentation.md`; follow-up issue
   #97 stays as a record, not an active commitment.
-- **Standard/Flex service architecture recorded in #105**: private
-  PostgreSQL is initially the authoritative job database and queue; object
-  storage holds PDFs/results; provider workers use an authenticated
-  worker-control API and never receive database credentials. Modal CPU is
-  first. AWS Spot is only a measured cost candidate. Flex provisions no
-  workers without queued demand. No SQS, Kubernetes, custom multi-cloud
-  scheduler, or GPU tier is justified for v1.
-- **Control plane DESIGNED, M0 verified (PR #107, 2026-08-26)**:
+- **Standard/Flex pull-worker architecture PARKED in #105**: it remains a
+  possible future shape only after a second compute provider is earned by
+  measurement. Modal-native dispatch is the current implementation. No SQS,
+  Kubernetes, custom multi-cloud scheduler, AWS Spot adapter, or GPU tier is
+  justified for v1.
+- **Control plane M0 verified and M1 foundation shipped (PRs #107/#108,
+  2026-08-26)**:
   `docs/design/2026-08-26-service-control-plane.md`. Modal is the queue and
   autoscaler — **the #105 pull-worker architecture is withdrawn**, because a
   worker at `min_containers=0` cannot poll for work and, once the API must
@@ -55,12 +56,22 @@ Onboarding order: [principles](principles.md) →
   taxonomy is pending=`FunctionTimeoutError` / failed=`RemoteError` /
   expired=UNKNOWN — `modal@0.9.0` has **no `OutputExpiredError`**, so the
   reconciler must consult R2 before calling any Modal terminal error
-  permanent. Survived three adversarial passes; fourteen retractions are in
-  the doc's corrections section.
-- **Still not public-service ready**: #87 owns admission and incremental
-  polling; #76 retains quotas, spend caps, and API versioning; #83 owns
-  runtime dependency slimming. The existing HTTP service remains
-  trusted-caller only.
+  permanent. PR #108 adds the four-table Postgres migration, guarded attempt
+  settlement, and the R2 `parse_object` transport. A fresh live run proved
+  split bucket credentials, wrong-digest rejection, distinct immutable
+  execution keys, prefix-LIST recovery, and direct-versus-pointer plus repeat
+  parity at 0/0 tolerance. The next M1 slice is the dispatcher and reconciler,
+  including the database-to-Modal crash seam and R2 recovery validation.
+  Dedicated input and result buckets will use **two-day R2 lifecycle rules**:
+  inputs age from upload and results age from creation. Jobs unresolved for
+  24 hours after queueing fail before their input can expire; the reconciler
+  does not normally delete objects individually (owner decision, 2026-08-26).
+- **Still not public-service ready**: no submission/finalize API, dispatcher,
+  reconciler, API-key authentication, tenant-facing routes, or dashboard
+  exists. M2 absorbs #87's admission, idempotency, and `429` requirements;
+  progressive page polling is deliberately deferred in v1. #76 retains
+  quotas, spend caps, and API versioning; #83 owns runtime dependency
+  slimming. The existing HTTP service remains trusted-caller only.
 - **Retrieval thesis measured (issue #36 CLOSED)**: pre-registered
   outcome "flat everywhere" — trust metadata does NOT pay in ranking,
   not even the corroboration links (five-way ablation, n=101 queries,
@@ -350,10 +361,10 @@ current scorer; decides instrument-fix vs detector-project).
 | Recovery tile budget (cost bound) | #13 | open — small, well-specified; good first task | — | src/browser/region-recovery.ts, tuning | nothing |
 | Batch API + residue-crop rungs | #20 | **shipped** (PR #23) | session | — | — |
 | Internal Modal parse deployment | #22 | **adopted within qualified bounds**: CPU/OpenVINO warm `Cls`, parse-only, no public ingress. Production service work is split into #76/#87/#105. | — | deploy/modal, service | public product contract |
-| Service control plane (accounts, keys, dashboard) | #76 | **designed, M0 verified — PR #107**: Modal-native dispatch, managed Postgres ledger, R2, four tables, execution-minted result keys, Cloudflare Access + Tunnel. M0 PASS on `desia`. Next: M1 job plane. | — | new api process, deploy/modal, service | owner answers: retention, concurrency cap, domain |
+| Service control plane (accounts, keys, dashboard) | #76 | **M1 foundation shipped — PRs #107/#108**: design and spawn recovery verified; four-table Postgres ledger, guarded attempt transitions, split-credential R2 pointer transport, immutable execution keys, and 0/0 output parity proven live. Owner decision: dedicated R2 buckets get two-day age-based lifecycle rules; unresolved jobs fail after 24 hours. Next: dispatcher + reconciler; then M2 identity/API and M3 dashboard. | — | service/api, deploy/modal | dispatcher/reconciler; domain blocks M2 deployment |
 | Standard/Flex pull-worker execution | #105 | **PARKED — pull architecture withdrawn (PR #107)**: a worker at `min_containers=0` cannot poll for work, so a Postgres lease queue would be a second queue over Modal's qualified one. Unpark only when a second compute provider (AWS Spot) is genuinely earned. | — | — | a measured second-provider win |
 | Commercial hardening (quotas, tenancy, retention) | #76 | **partly absorbed by PR #107** (auth, tenant isolation, API keys, retention columns). Still open: per-tenant quotas, spend caps, public API versioning + deprecation policy. | — | service contract | a real consumer |
-| HTTP admission and idempotency | #87 | **open**: stream uploads, reject overload before buffering, `429`, idempotency key, queue metrics, incremental polling. | — | service HTTP API | service-tier limits |
+| HTTP admission and idempotency | #87 | **partly absorbed by control-plane M2**: presigned intake removes body buffering; add admission limits, `429`, idempotency, and queue metrics at the public API. Progressive page polling remains deliberately out of v1. | — | service/api | service-tier limits |
 | Service dependency slimming | #83 | **open, bounded**: express real runtime dependencies and stop copying the full dev toolchain into the image. | — | package manifests, Dockerfile | nothing |
 | GPU bottleneck follow-up | #97 | **parked**: instrumentation and B1/B4/B8 treatments did not earn a GPU deployment change. Resume only for a new measured hypothesis. | — | evaluation only | concrete throughput/cost trigger |
 | pdf-inspector WASM in browser (markdown parity) | #25 | open — low priority; CJK/CMap gate first (monotaro p61); pair with native 1.14.2→1.15.0 bump | — | src/browser, package.json | nothing |
