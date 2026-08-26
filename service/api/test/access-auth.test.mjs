@@ -42,6 +42,16 @@ test('Access verifies both rotation keys and activates one canonical invited use
   const user = (await db.query(
     "INSERT INTO users (email, status) VALUES ('user@example.com','invited') RETURNING id",
   )).rows[0];
+  await db.exec(`
+    CREATE TABLE user_update_audit (user_id uuid NOT NULL);
+    CREATE FUNCTION audit_user_update() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      INSERT INTO user_update_audit (user_id) VALUES (NEW.id);
+      RETURN NEW;
+    END $$;
+    CREATE TRIGGER users_updated AFTER UPDATE ON users
+      FOR EACH ROW EXECUTE FUNCTION audit_user_update();
+  `);
   const authenticate = createAccessAuthenticator({
     db,
     issuer: ISSUER,
@@ -54,12 +64,21 @@ test('Access verifies both rotation keys and activates one canonical invited use
     await authenticate(await token({ key: keys[1] })),
     { userId: user.id, email: 'user@example.com' },
   );
+  assert.deepEqual(
+    await authenticate(await token({ expiration: Math.floor(Date.now() / 1000) - 15 })),
+    { userId: user.id, email: 'user@example.com' },
+  );
   assert.equal((await db.query('SELECT status FROM users WHERE id = $1', [user.id])).rows[0].status, 'active');
+  assert.equal((await db.query(
+    'SELECT count(*)::int AS count FROM user_update_audit WHERE user_id = $1', [user.id],
+  )).rows[0].count, 1);
 });
 
 test('Access rejects invalid claims, unknown users, and suspended users with one safe error', async () => {
   await db.query(
-    "INSERT INTO users (email, status) VALUES ('suspended@example.com','suspended')",
+    `INSERT INTO users (email, status) VALUES
+      ('user@example.com','active'),
+      ('suspended@example.com','suspended')`,
   );
   const authenticate = createAccessAuthenticator({
     db,
@@ -70,7 +89,7 @@ test('Access rejects invalid claims, unknown users, and suspended users with one
   const rejected = [
     await token({ audience: 'wrong-audience' }),
     await token({ issuer: 'https://wrong.cloudflareaccess.com' }),
-    await token({ expiration: Math.floor(Date.now() / 1000) - 1 }),
+    await token({ expiration: Math.floor(Date.now() / 1000) - 60 }),
     await token({ type: 'service' }),
     await token({ email: 'unknown@example.com' }),
     await token({ email: 'suspended@example.com' }),

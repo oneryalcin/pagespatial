@@ -21,7 +21,7 @@ export function createAccessAuthenticator({ db, issuer, audience, jwks }) {
     let payload;
     try {
       ({ payload } = await jwtVerify(jwt, keySet, {
-        issuer, audience, algorithms: ['RS256'],
+        issuer, audience, algorithms: ['RS256'], clockTolerance: 30,
       }));
     } catch {
       throw denied();
@@ -30,12 +30,26 @@ export function createAccessAuthenticator({ db, issuer, audience, jwks }) {
     const email = payload.email.trim().toLowerCase();
     if (!email) throw denied();
     const { rows } = await db.query(
-      `UPDATE users SET status = 'active'
-        WHERE email = $1 AND status IN ('invited','active')
-        RETURNING id`,
+      `SELECT id, status FROM users
+        WHERE email = $1 AND status IN ('invited','active')`,
       [email],
     );
     if (!rows[0]) throw denied();
-    return { userId: rows[0].id, email };
+    if (rows[0].status === 'active') return { userId: rows[0].id, email };
+
+    const activated = await db.query(
+      `UPDATE users SET status = 'active'
+        WHERE id = $1 AND status = 'invited'
+        RETURNING id`,
+      [rows[0].id],
+    );
+    if (activated.rows[0]) return { userId: activated.rows[0].id, email };
+
+    const concurrent = await db.query(
+      "SELECT id FROM users WHERE id = $1 AND status = 'active'",
+      [rows[0].id],
+    );
+    if (!concurrent.rows[0]) throw denied();
+    return { userId: concurrent.rows[0].id, email };
   };
 }

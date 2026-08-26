@@ -56,6 +56,8 @@ RUN python /sidecar/fetch_models.py --models-dir /opt/models
 # Stage 3 — runtime: Debian slim + Node + Python 3.11 venv + poppler +
 # tesseract + pinned paddle with HPI deps. Non-root. No corpus data.
 ########################################################################
+# Qualified parse-worker image. The public control plane gets a separate
+# deployment artifact in M2.4; this entrypoint remains the worker service.
 FROM --platform=linux/amd64 node:26-bookworm-slim AS runtime
 
 # bookworm's python3 IS 3.11 (deb package python3.11). libgl1/libglib2.0-0/
