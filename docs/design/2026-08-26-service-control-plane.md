@@ -689,6 +689,10 @@ Cloudflare Access + Tunnel, invite list, `users` mapping, API key
 issue/revoke, key auth on `/v1/jobs`. Public surface: presigned intake,
 `Idempotency-Key`, 429 + `Retry-After` (#87 items 1–4).
 
+The exact HTTP, authentication, admission, and acceptance contract lives in
+`docs/design/2026-08-26-service-m2-api-contract.md`. This parent document
+continues to own architecture; the M2 contract must not reopen it.
+
 *Acceptance:* an invited user logs in, creates a key, submits a PDF, polls
 to completion. User B gets 404 on all of user A's routes. A replayed
 `Idempotency-Key` returns the original job rather than parsing twice, while
