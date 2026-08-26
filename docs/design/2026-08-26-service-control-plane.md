@@ -339,8 +339,9 @@ This removes the qualified 64 MiB Modal result-boundary cap. It does not mean
 unbounded output: pointer mode has a separate 128 MiB canonical JSON
 publication cap. An oversized result raises `ObjectResultTooLarge` before PUT
 and publishes no object. The check occurs after serialization; streaming JSON
-would avoid that allocation but is not justified by the measured ~25 MiB
-projection for a typical 200-page result.
+would avoid that allocation but is not justified by the two measured document
+densities, which project to 24--53 MiB for 200 pages and leave 2.4x--5.3x
+headroom under the cap. This observed range is not a general size bound.
 
 ### Focused transport qualification
 
