@@ -1,6 +1,10 @@
 import { TextDecoder } from 'node:util';
 import { ApiError } from './api-errors.mjs';
-import { issueApiKey, listApiKeys, revokeApiKey } from './api-keys.mjs';
+import {
+  InactiveApiKeyOwnerError, InvalidApiKeyNameError,
+  issueApiKey, listApiKeys, revokeApiKey,
+} from './api-keys.mjs';
+import { logFailure } from './safe-log.mjs';
 
 const MAX_FORM_BYTES = 4 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -71,7 +75,14 @@ function keysPage(keys) {
 
 const createdPage = (secret) => `<section><h1>API key created</h1><p>Copy it now. It will not be shown again.</p><code>${escapeHtml(secret)}</code><p><a href="/keys">Return to keys</a></p></section>`;
 
-export function createDashboardHandler({ db, appOrigin, authenticateAccess }) {
+function dashboardOperation(method, path) {
+  if (method === 'GET' && path === '/keys') return 'keys_list';
+  if (method === 'POST' && path === '/keys') return 'keys_create';
+  if (method === 'POST' && /^\/keys\/[^/]+\/revoke$/u.test(path)) return 'keys_revoke';
+  return 'dashboard_unknown';
+}
+
+export function createDashboardHandler({ db, appOrigin, authenticateAccess, log = console }) {
   if (!db?.query) throw new TypeError('dashboard requires a database');
   if (typeof appOrigin !== 'string' || !appOrigin.startsWith('https://')) {
     throw new TypeError('dashboard requires an https appOrigin');
@@ -80,15 +91,23 @@ export function createDashboardHandler({ db, appOrigin, authenticateAccess }) {
     throw new TypeError('dashboard requires Access authentication');
   }
 
-  return async function dashboard(req, res) {
+  return async function dashboard(req, res, requestId) {
+    let operation = 'dashboard_unknown';
+    let rejectionLogged = false;
     try {
-      const identity = await authenticateAccess(req.headers['cf-access-jwt-assertion']);
       const path = new URL(req.url, appOrigin).pathname;
+      operation = dashboardOperation(req.method, path);
+      const identity = await authenticateAccess(req.headers['cf-access-jwt-assertion']);
       if (req.method === 'GET' && path === '/keys') {
         return sendHtml(res, 200, keysPage(await listApiKeys(db, identity)));
       }
       if (req.method === 'POST') {
         if (req.headers.origin !== appOrigin) {
+          logFailure(log, 'dashboard_csrf_rejected', {
+            requestId, method: req.method, operation,
+            reason: req.headers.origin == null ? 'missing_origin' : 'foreign_origin',
+          });
+          rejectionLogged = true;
           throw new ApiError(403, 'forbidden', 'Access denied.');
         }
         if (path === '/keys') {
@@ -97,8 +116,11 @@ export function createDashboardHandler({ db, appOrigin, authenticateAccess }) {
           try {
             issued = await issueApiKey(db, { userId: identity.userId, name: body.name });
           } catch (error) {
-            if (error instanceof TypeError) {
+            if (error instanceof InvalidApiKeyNameError) {
               throw new ApiError(400, 'invalid_request', 'Key name must contain 1 to 64 characters.');
+            }
+            if (error instanceof InactiveApiKeyOwnerError) {
+              throw new ApiError(403, 'forbidden', 'Access denied.', { cause: error });
             }
             throw error;
           }
@@ -118,6 +140,16 @@ export function createDashboardHandler({ db, appOrigin, authenticateAccess }) {
     } catch (error) {
       const failure = error instanceof ApiError
         ? error : new ApiError(503, 'service_unavailable', 'Service is temporarily unavailable.');
+      if (failure.status === 403 && !rejectionLogged) {
+        logFailure(log, 'dashboard_request_rejected', {
+          requestId, method: req.method, operation, reason: failure.code, error,
+        });
+      }
+      if (failure.status >= 500) {
+        logFailure(log, 'dashboard_request_failed', {
+          requestId, method: req.method, operation, error,
+        });
+      }
       return sendHtml(res, failure.status, `<h1>${escapeHtml(failure.message)}</h1>`);
     }
   };

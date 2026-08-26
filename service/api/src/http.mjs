@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { ApiError, invalidRequest } from './api-errors.mjs';
 import { authenticateApiKey } from './api-keys.mjs';
 import { createDashboardHandler } from './dashboard.mjs';
+import { logFailure } from './safe-log.mjs';
 import {
   createOrReplayJob, finalizeJob, jobView, ownedJob, resultGrant,
 } from './jobs.mjs';
@@ -56,26 +57,37 @@ function jobId(parts) {
   return value;
 }
 
+function apiOperation(method, pathname) {
+  if (method === 'GET' && pathname === '/health') return 'health';
+  if (method === 'POST' && pathname === '/v1/jobs') return 'job_submit';
+  if (method === 'POST' && /^\/v1\/jobs\/[^/]+\/finalize$/u.test(pathname)) return 'job_finalize';
+  if (method === 'GET' && /^\/v1\/jobs\/[^/]+\/result$/u.test(pathname)) return 'job_result';
+  if (method === 'GET' && /^\/v1\/jobs\/[^/]+$/u.test(pathname)) return 'job_status';
+  return 'route_unknown';
+}
+
 export function createApiHandler({
   db, pool, inputStore, resultStore, inputBucket = inputStore?.bucket,
   unitPriceMicros = 1000, apiHost, appHost, appOrigin, authenticateAccess,
   authenticate = (authorization) => authenticateApiKey(db, authorization),
-  createRequestId = randomUUID,
+  createRequestId = randomUUID, log = console,
 }) {
   if (typeof apiHost !== 'string' || !apiHost) throw new TypeError('apiHost is required');
   if (typeof appHost !== 'string' || !appHost || appHost === apiHost) {
     throw new TypeError('a distinct appHost is required');
   }
-  const dashboard = createDashboardHandler({ db, appOrigin, authenticateAccess });
-  return async function apiHandler(req, res) {
-    const requestId = createRequestId();
+  const dashboard = createDashboardHandler({ db, appOrigin, authenticateAccess, log });
+  return async function apiHandler(req, res, suppliedRequestId) {
+    const requestId = suppliedRequestId ?? createRequestId();
+    let operation = 'route_unknown';
     try {
       const host = req.headers.host?.split(':', 1)[0];
-      if (host === appHost) return dashboard(req, res);
+      if (host === appHost) return dashboard(req, res, requestId);
       if (host !== apiHost) {
         throw new ApiError(421, 'invalid_request', 'Request was sent to the wrong host.');
       }
       const url = new URL(req.url, 'http://api.invalid');
+      operation = apiOperation(req.method, url.pathname);
       if (req.method === 'GET' && url.pathname === '/health') {
         await db.query('SELECT 1');
         return sendJson(res, 200, { status: 'ready' }, requestId);
@@ -131,7 +143,15 @@ export function createApiHandler({
     } catch (error) {
       const failure = error instanceof ApiError
         ? error : new ApiError(503, 'service_unavailable', 'Service is temporarily unavailable.');
-      if (!(error instanceof ApiError)) console.error({ requestId, error });
+      if (failure.status >= 500) {
+        logFailure(log, 'api_request_failed', {
+          requestId, method: req.method, operation, error,
+        });
+      } else if ([401, 403, 429].includes(failure.status)) {
+        logFailure(log, 'api_request_rejected', {
+          requestId, method: req.method, operation, reason: failure.code, error,
+        });
+      }
       return sendJson(res, failure.status, {
         error: { code: failure.code, message: failure.message, request_id: requestId },
       }, requestId, failure.headers);

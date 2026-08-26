@@ -2,7 +2,7 @@ import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import {
-  createLocalJWKSet, exportJWK, generateKeyPair, SignJWT,
+  createLocalJWKSet, errors, exportJWK, generateKeyPair, SignJWT,
 } from 'jose';
 import { createAccessAuthenticator } from '../src/access-auth.mjs';
 import { migrate } from '../src/migrate.mjs';
@@ -101,4 +101,40 @@ test('Access rejects invalid claims, unknown users, and suspended users with one
         && error.message === 'Access denied.',
     );
   }
+});
+
+test('Access reports JWKS provider failures as unavailable, not forbidden', async () => {
+  for (const cause of [
+    new errors.JWKSTimeout(),
+    new errors.JOSEError('Expected 200 OK from JWKS'),
+    new errors.JWKSMultipleMatchingKeys(),
+    new TypeError('fetch failed'),
+  ]) {
+    const authenticate = createAccessAuthenticator({
+      db,
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      jwks: async () => { throw cause; },
+    });
+    await assert.rejects(
+      authenticate(await token()),
+      (error) => error.status === 503 && error.code === 'service_unavailable'
+        && error.message === 'Service is temporarily unavailable.'
+        && error.cause === cause,
+    );
+  }
+});
+
+test('Access treats an unknown signing key as invalid credentials', async () => {
+  const authenticate = createAccessAuthenticator({
+    db,
+    issuer: ISSUER,
+    audience: AUDIENCE,
+    jwks: async () => { throw new errors.JWKSNoMatchingKey(); },
+  });
+  await assert.rejects(
+    authenticate(await token()),
+    (error) => error.status === 403 && error.code === 'forbidden'
+      && error.cause instanceof errors.JWKSNoMatchingKey,
+  );
 });

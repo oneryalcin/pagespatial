@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import pg from 'pg';
 import { createAccessAuthenticator } from './access-auth.mjs';
@@ -11,6 +12,7 @@ import {
 } from './object-stores.mjs';
 import { createR2ResultStore } from './r2-results.mjs';
 import { reconcileOnce } from './reconciler.mjs';
+import { logFailure } from './safe-log.mjs';
 
 const PASS_TIMEOUT_MS = 45_000;
 
@@ -122,6 +124,7 @@ export async function startRuntime({ env = process.env, log = console } = {}) {
   const authenticateAccess = createAccessAuthenticator({
     db: pool, issuer: accessIssuer, audience: accessAudience,
   });
+  const createRequestId = randomUUID;
   const handler = createApiHandler({
     db: pool,
     pool,
@@ -132,11 +135,16 @@ export async function startRuntime({ env = process.env, log = console } = {}) {
     appHost,
     appOrigin: `https://${appHost}`,
     authenticateAccess,
+    createRequestId,
+    log,
     unitPriceMicros: Number(env.PAGESPATIAL_UNIT_PRICE_MICROS ?? 1000),
   });
   const server = createServer((req, res) => {
-    handler(req, res).catch((error) => {
-      log.error({ error }, 'unhandled HTTP handler failure');
+    const requestId = createRequestId();
+    handler(req, res, requestId).catch((error) => {
+      logFailure(log, 'http_handler_unhandled', {
+        requestId, method: req.method, operation: 'http_handler', error,
+      });
       res.destroy();
     });
   });
@@ -147,18 +155,20 @@ export async function startRuntime({ env = process.env, log = console } = {}) {
     );
   });
 
-  const report = (name) => (error) => log.error({ error }, `${name} failed`);
+  const report = (name) => (error) => logFailure(log, 'background_pass_failed', {
+    reason: name, error,
+  });
   const stopDispatch = loop(
     () => withDeadline(dispatchQueuedOnce({
       db: pool, modalCalls, inputBucket, limit: 8,
     }), PASS_TIMEOUT_MS, 'queued dispatch pass'),
     5_000,
-    report('queued dispatch pass'),
+    report('queued_dispatch'),
   );
   const stopReconciler = loop(
     () => reconcilerPass({ pool, modalCalls, resultStore, inputBucket }),
     60_000,
-    report('reconciler pass'),
+    report('reconciler'),
   );
 
   return {

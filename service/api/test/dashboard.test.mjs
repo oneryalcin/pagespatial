@@ -3,7 +3,9 @@ import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { test, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { inspect } from 'node:util';
 import { PGlite } from '@electric-sql/pglite';
+import { errors } from 'jose';
 import { ApiError } from '../src/api-errors.mjs';
 import { issueApiKey } from '../src/api-keys.mjs';
 import { createApiHandler } from '../src/http.mjs';
@@ -13,10 +15,12 @@ let db;
 let userId;
 let server;
 let port;
+let logs;
 
 before(async () => { db = await PGlite.create(); });
 
 beforeEach(async () => {
+  logs = [];
   await db.exec('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   await migrate(db);
   userId = (await db.query(
@@ -33,7 +37,18 @@ beforeEach(async () => {
     apiHost: 'api.test',
     appHost: 'app.test',
     appOrigin: 'https://app.test',
+    log: { error(...args) { logs.push(args); } },
     async authenticateAccess(jwt) {
+      if (jwt === 'unavailable') {
+        throw new ApiError(503, 'service_unavailable', 'Service is temporarily unavailable.', {
+          cause: new Error('https://r2.invalid/object?X-Amz-Signature=secret'),
+        });
+      }
+      if (jwt === 'unknown-key') {
+        throw new ApiError(403, 'forbidden', 'Access denied.', {
+          cause: new errors.JWKSNoMatchingKey(),
+        });
+      }
       if (jwt !== 'valid') throw new ApiError(403, 'forbidden', 'Access denied.');
       return { userId, email: 'dashboard@example.test' };
     },
@@ -113,6 +128,9 @@ test('dashboard rejects forged identity, foreign Origin, extra fields, and forei
     method: 'POST', headers: { ...form, origin: 'https://evil.test' }, body: 'name=x',
   })).status, 403);
   assert.equal((await request('/keys', {
+    method: 'POST', headers: access, body: 'name=x',
+  })).status, 403);
+  assert.equal((await request('/keys', {
     method: 'POST', headers: form, body: 'name=x&extra=y',
   })).status, 400);
   assert.equal((await request('/keys', {
@@ -135,6 +153,41 @@ test('dashboard rejects forged identity, foreign Origin, extra fields, and forei
   assert.equal((await request(`/keys/${foreignKey.key.id}/revoke`, {
     method: 'POST', headers: form,
   })).status, 404);
+  const serialized = inspect(logs, { depth: 10 });
+  assert.match(serialized, /foreign_origin/u);
+  assert.match(serialized, /missing_origin/u);
+  assert.doesNotMatch(serialized, /evil\.test/u);
+});
+
+test('dashboard logs provider failure without leaking its message', async () => {
+  const response = await request('/keys', {
+    headers: { 'cf-access-jwt-assertion': 'unavailable' },
+  });
+  assert.equal(response.status, 503);
+  assert.doesNotMatch(response.body, /Signature|secret|r2\.invalid/u);
+  const serialized = inspect(logs, { depth: 10 });
+  assert.match(serialized, /dashboard_request_failed/u);
+  assert.doesNotMatch(serialized, /Signature|secret|r2\.invalid/u);
+});
+
+test('dashboard reports a concurrent owner suspension as forbidden', async () => {
+  await db.query("UPDATE users SET status = 'suspended' WHERE id = $1", [userId]);
+  const response = await request('/keys', {
+    method: 'POST', headers: form, body: 'name=valid',
+  });
+  assert.equal(response.status, 403);
+  assert.doesNotMatch(response.body, /Key name/u);
+  assert.match(inspect(logs, { depth: 10 }), /dashboard_request_rejected/u);
+});
+
+test('dashboard logs an unknown signing key without turning it into 503', async () => {
+  const response = await request('/keys', {
+    headers: { 'cf-access-jwt-assertion': 'unknown-key' },
+  });
+  assert.equal(response.status, 403);
+  const rendered = inspect(logs, { depth: 10 });
+  assert.match(rendered, /ERR_JWKS_NO_MATCHING_KEY/u);
+  assert.match(rendered, /keys_list/u);
 });
 
 test('API and dashboard hosts expose only their own routes', async () => {
