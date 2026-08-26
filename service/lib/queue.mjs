@@ -166,6 +166,7 @@ export class ParseService {
     if (this.maxPagesPerJob > 0 && identity.pageCount > this.maxPagesPerJob) {
       const error = new Error(`Document has ${identity.pageCount} pages; this service accepts at most ${this.maxPagesPerJob} pages per job (SERVICE_MAX_PAGES_PER_JOB).`);
       error.statusCode = 400;
+      error.code = 'page_limit_exceeded';
       throw error;
     }
     const jobId = `job_${randomBytes(6).toString('hex')}`;

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
+import { assertFailureCode } from './failure-codes.mjs';
 
 const MAX_RESULT_BYTES = 128 * 1024 * 1024;
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -79,43 +80,66 @@ export function validateModalPointer(value, expected) {
   return pointer;
 }
 
-function validateParseResult(value, expected) {
-  const result = object(value, 'parse_result');
-  if (result.status !== 'completed' || result.failure != null) {
-    throw new InvalidResultError('parse_result must be terminal-successful');
+/** Validate a returned terminal failure. No result object should exist. */
+export function validateModalFailure(value, expected) {
+  const failure = object(value, 'Modal failure');
+  exactKeys(failure, [
+    'job_id', 'attempt_id', 'document_sha256', 'status',
+    'failure_code', 'failure_detail', 'timing',
+  ], 'Modal failure');
+  if (failure.status !== 'failed') throw new InvalidResultError('Modal failure status must be failed');
+  if (failure.job_id !== expected.jobId || failure.attempt_id !== expected.attemptId
+      || failure.document_sha256 !== expected.inputDigest) {
+    throw new InvalidResultError('Modal failure identity does not match the attempt');
   }
-  if (result.request_id !== expected.attemptId
-      || result.document_sha256 !== expected.inputDigest) {
-    throw new InvalidResultError('parse_result identity does not match the attempt');
+  try {
+    assertFailureCode(failure.failure_code);
+  } catch (error) {
+    throw new InvalidResultError(error.message);
   }
-  if (!Number.isSafeInteger(result.page_count) || result.page_count < 1
-      || !Array.isArray(result.pages) || result.pages.length !== result.page_count) {
-    throw new InvalidResultError('parse_result page_count does not match its pages');
+  if (typeof failure.failure_detail !== 'string' || failure.failure_detail.length > 500) {
+    throw new InvalidResultError('Modal failure detail must be a bounded string');
   }
-  const ok = result.pages.filter((page) => page?.ok === true).length;
-  const failed = result.pages.filter((page) => page?.ok === false).length;
-  if (ok + failed !== result.pages.length
-      || result.pages_ok !== ok || result.pages_failed !== failed) {
-    throw new InvalidResultError('parse_result page counters are inconsistent');
+  object(failure.timing, 'Modal failure timing');
+  return failure;
+}
+
+function validatePublicPages(envelope, expected) {
+  if (!Number.isSafeInteger(envelope.page_count)
+      || envelope.page_count < 1 || envelope.page_count > 200
+      || !Array.isArray(envelope.pages)
+      || envelope.pages.length !== envelope.page_count) {
+    throw new InvalidResultError('stored result page_count does not match its pages');
   }
-  for (let i = 0; i < result.pages.length; i += 1) {
-    const page = object(result.pages[i], `parse_result.pages[${i}]`);
-    if (page.pageNumber !== i + 1) throw new InvalidResultError('parse_result pages are not ordered');
-    if (page.ok) {
-      if (page.pageSpatial?.documentSha256 !== expected.inputDigest
-          || page.pageSpatial?.pageNumber !== page.pageNumber) {
-        throw new InvalidResultError(`parse_result page ${i + 1} identity does not match the job`);
+  for (let i = 0; i < envelope.pages.length; i += 1) {
+    const page = object(envelope.pages[i], `stored result pages[${i}]`);
+    if (page.page_number !== i + 1) {
+      throw new InvalidResultError('stored result pages are not contiguous');
+    }
+    if (page.ok === true) {
+      exactKeys(page, ['page_number', 'ok', 'page_spatial'], `stored result page ${i + 1}`);
+      if (page.page_spatial?.documentSha256 !== expected.inputDigest
+          || page.page_spatial?.pageNumber !== page.page_number) {
+        throw new InvalidResultError(`stored result page ${i + 1} identity does not match the job`);
       }
-      if (!validatePageSpatial(page.pageSpatial)) {
+      if (!validatePageSpatial(page.page_spatial)) {
         const detail = validatePageSpatial.errors?.[0];
         throw new InvalidResultError(
-          `parse_result page ${i + 1} is not schema-valid: `
+          `stored result page ${i + 1} is not schema-valid: `
           + `${detail?.instancePath ?? ''} ${detail?.message ?? 'unknown error'}`,
         );
       }
+    } else if (page.ok === false) {
+      exactKeys(page, ['page_number', 'ok', 'failure'], `stored result page ${i + 1}`);
+      const failure = object(page.failure, `stored result page ${i + 1} failure`);
+      exactKeys(failure, ['code', 'message'], `stored result page ${i + 1} failure`);
+      if (failure.code !== 'page_failed' || failure.message !== 'Page could not be parsed.') {
+        throw new InvalidResultError(`stored result page ${i + 1} failure is not public-safe`);
+      }
+    } else {
+      throw new InvalidResultError(`stored result page ${i + 1} has no boolean outcome`);
     }
   }
-  return result;
 }
 
 /**
@@ -142,12 +166,11 @@ export function validateStoredResult({ bytes, lastModified, pointer = null, expe
   object(envelope, 'stored result envelope');
   exactKeys(envelope, [
     'schema_version', 'job_id', 'attempt_id', 'execution_id',
-    'input_key', 'input_sha256', 'parse_result',
+    'input_sha256', 'page_count', 'pages',
   ], 'stored result envelope');
   if (envelope.schema_version !== 1
       || envelope.job_id !== expected.jobId
       || envelope.attempt_id !== expected.attemptId
-      || envelope.input_key !== expected.inputKey
       || envelope.input_sha256 !== expected.inputDigest) {
     throw new InvalidResultError('stored result envelope identity does not match the job');
   }
@@ -157,8 +180,8 @@ export function validateStoredResult({ bytes, lastModified, pointer = null, expe
   if (pointer && envelope.execution_id !== pointer.execution_id) {
     throw new InvalidResultError('stored result execution_id does not match its Modal pointer');
   }
-  const parseResult = validateParseResult(envelope.parse_result, expected);
-  if (pointer && parseResult.page_count !== pointer.page_count) {
+  validatePublicPages(envelope, expected);
+  if (pointer && envelope.page_count !== pointer.page_count) {
     throw new InvalidResultError('stored result page_count does not match its Modal pointer');
   }
   const key = `results/${expected.jobId}/${expected.attemptId}/${envelope.execution_id}.json`;
@@ -167,7 +190,7 @@ export function validateStoredResult({ bytes, lastModified, pointer = null, expe
     resultUri: `r2://${expected.resultsBucket}/${key}`,
     resultDigest: digest,
     resultCreatedAt: modified,
-    pages: parseResult.page_count,
+    pages: envelope.page_count,
     status: 'completed',
   };
 }

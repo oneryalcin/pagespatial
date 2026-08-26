@@ -41,37 +41,24 @@ async function job() {
 async function attempt(jobId, state = 'dispatched', callId = `fc-${randomUUID()}`) {
   return (await db.query(
     `INSERT INTO job_attempts (
-       job_id, state, modal_call_id, dispatched_at, created_at
+       job_id, state, modal_call_id, dispatched_at, created_at, failure_code
      ) VALUES ($1, $2, $3, CASE WHEN $3::text IS NULL THEN NULL ELSE now() END,
-               now() - interval '20 minutes') RETURNING *`,
+               now() - interval '20 minutes',
+               CASE WHEN $2::text = 'failed' THEN 'processing_failed' ELSE NULL END)
+     RETURNING *`,
     [jobId, state, state === 'dispatched' ? callId : null],
   )).rows[0];
 }
 
 function objectFor(jobRow, attemptId, executionId = 'a'.repeat(32)) {
-  const parseResult = {
-    request_id: attemptId,
-    document_sha256: INPUT_DIGEST,
-    page_count: 1,
-    status: 'completed',
-    pages: [{
-      pageNumber: 1, ok: true, pageSpatial,
-      attempts: 1, rssBytes: 1, stageTimingsMs: {}, wallMs: 1,
-    }],
-    pages_ok: 1,
-    pages_failed: 0,
-    failure: null,
-    timing: {}, retry: {}, resources: {}, app_name: 'test',
-    adapter_revision: 'test', image_pin_revision: 'test',
-  };
   const envelope = {
     schema_version: 1,
     job_id: jobRow.id,
     attempt_id: attemptId,
     execution_id: executionId,
-    input_key: 'inputs/job.pdf',
     input_sha256: INPUT_DIGEST,
-    parse_result: parseResult,
+    page_count: 1,
+    pages: [{ page_number: 1, ok: true, page_spatial: pageSpatial }],
   };
   const bytes = new Uint8Array(Buffer.from(JSON.stringify(envelope)));
   const key = `results/${jobRow.id}/${attemptId}/${executionId}.json`;
@@ -137,16 +124,25 @@ test('completed Modal output is not accepted until its R2 bytes validate', async
 test('a returned status=failed value is rejected and fails only after R2 is checked', async () => {
   const j = await job();
   const a = await attempt(j.id);
-  const object = objectFor(j, a.id);
-  const bad = { ...object.pointer, status: 'failed' };
-  const calls = modal(new Map([[a.modal_call_id, { kind: 'completed', output: bad }]]));
+  const failure = {
+    job_id: j.id,
+    attempt_id: a.id,
+    document_sha256: INPUT_DIGEST,
+    status: 'failed',
+    failure_code: 'page_limit_exceeded',
+    failure_detail: 'document has too many pages',
+    timing: {},
+  };
+  const calls = modal(new Map([[a.modal_call_id, { kind: 'completed', output: failure }]]));
   const outcome = await reconcileAttempt({
     db, modalCalls: calls, resultStore: fakeStore(), inputBucket: INPUT_BUCKET,
     attemptId: a.id,
   });
   assert.equal(outcome.kind, 'failed');
-  assert.match(outcome.error, /status must be completed/);
+  assert.match(outcome.error, /too many pages/);
   assert.equal((await row('job_attempts', a.id)).state, 'failed');
+  assert.equal((await row('job_attempts', a.id)).failure_code, 'page_limit_exceeded');
+  assert.equal((await row('jobs', j.id)).failure_code, 'page_limit_exceeded');
 });
 
 test('Modal failure checks R2 and recovers a valid completed object first', async () => {

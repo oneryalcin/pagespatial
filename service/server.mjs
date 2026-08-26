@@ -274,9 +274,15 @@ const server = createServer(async (req, res) => {
       } catch (error) {
         // A rejected upload is dead weight (and its bytes may be sensitive).
         if (uploaded) rmSync(pdfPath, { force: true });
-        if (error.statusCode === 400) return json(res, 400, { error: error.message });
-        if (error.statusCode === 503) return json(res, 503, { error: error.message });
-        return json(res, 422, { error: `Could not open PDF: ${error.message}` });
+        if (error.statusCode === 400) {
+          return json(res, 400, { code: error.code ?? 'invalid_pdf', error: error.message });
+        }
+        if (error.statusCode === 503) {
+          return json(res, 503, { code: 'processing_failed', error: error.message });
+        }
+        return json(res, 422, {
+          code: 'invalid_pdf', error: `Could not open PDF: ${error.message}`,
+        });
       }
     }
 

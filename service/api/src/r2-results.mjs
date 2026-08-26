@@ -2,6 +2,7 @@ import {
   GetObjectCommand, ListObjectsV2Command, S3Client,
 } from '@aws-sdk/client-s3';
 import { InvalidResultError, RESULT_LIMIT_BYTES } from './result-contract.mjs';
+import { sendWithDeadline } from './deadline.mjs';
 
 const MAX_ATTEMPT_OBJECTS = 16;
 
@@ -33,7 +34,7 @@ async function readBounded(body, declaredLength) {
 }
 
 /** A narrow R2 reader. It has no write method by design. */
-export function createR2ResultStore({ client, bucket }) {
+export function createR2ResultStore({ client, bucket, operationTimeoutMs = 10_000 }) {
   if (!client || typeof client.send !== 'function') throw new TypeError('R2 client must provide send()');
   if (typeof bucket !== 'string' || !bucket) throw new TypeError('R2 results bucket is required');
   return {
@@ -45,10 +46,10 @@ export function createR2ResultStore({ client, bucket }) {
       do {
         let response;
         try {
-          response = await client.send(new ListObjectsV2Command({
+          response = await sendWithDeadline(client, new ListObjectsV2Command({
             Bucket: bucket, Prefix: prefix, ContinuationToken: continuationToken,
             MaxKeys: MAX_ATTEMPT_OBJECTS + 1,
-          }));
+          }), operationTimeoutMs, 'R2 result list');
         } catch (error) {
           throw new ResultStoreUnavailableError('R2 result prefix could not be listed', { cause: error });
         }
@@ -65,7 +66,10 @@ export function createR2ResultStore({ client, bucket }) {
     async readResult({ key }) {
       let response;
       try {
-        response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+        response = await sendWithDeadline(
+          client, new GetObjectCommand({ Bucket: bucket, Key: key }),
+          operationTimeoutMs, 'R2 result get',
+        );
       } catch (error) {
         throw new ResultStoreUnavailableError('R2 result object could not be fetched', { cause: error });
       }

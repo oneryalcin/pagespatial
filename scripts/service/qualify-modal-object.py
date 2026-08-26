@@ -68,6 +68,31 @@ def require_access_denied(label: str, operation) -> None:
     raise RuntimeError(f"{label} unexpectedly succeeded")
 
 
+def public_to_comparator(envelope: dict) -> dict:
+    """Project the public wire object into the established comparator shape.
+
+    The public object deliberately excludes Modal and operator diagnostics. The
+    comparator needs only document identity and canonical PageSpatial pages.
+    """
+    return {
+        "request_id": envelope["attempt_id"],
+        "status": "completed",
+        "document_sha256": envelope["input_sha256"],
+        "pages": [
+            ({
+                "pageNumber": page["page_number"],
+                "ok": True,
+                "pageSpatial": page["page_spatial"],
+            } if page["ok"] else {
+                "pageNumber": page["page_number"],
+                "ok": False,
+                "failure": page["failure"],
+            })
+            for page in envelope["pages"]
+        ],
+    }
+
+
 def run_comparisons(out: Path) -> dict:
     comparator = (Path(__file__).resolve().parents[2]
                   / "scripts/evaluation/compare-modal-runs.mjs")
@@ -173,6 +198,10 @@ def main() -> None:
                           ContentType="application/pdf")
 
         permission_probe_key = f"permission-probes/{attempt_id}.bin"
+        result_probe_key = f"permission-probes/{attempt_id}.json"
+        client.put_object(Bucket=results_bucket, Key=result_probe_key,
+                          Body=b"{}", ContentType="application/json")
+        created_keys.append(result_probe_key)
         require_access_denied(
             "input read-only token PUT to input bucket",
             lambda: input_worker.put_object(
@@ -181,6 +210,16 @@ def main() -> None:
         require_access_denied(
             "results token GET from input bucket",
             lambda: results_worker.get_object(Bucket=input_bucket, Key=input_key),
+        )
+        require_access_denied(
+            "input token GET from results bucket",
+            lambda: input_worker.get_object(
+                Bucket=results_bucket, Key=result_probe_key),
+        )
+        require_access_denied(
+            "input token PUT to results bucket",
+            lambda: input_worker.put_object(
+                Bucket=results_bucket, Key=result_probe_key, Body=b"probe"),
         )
         try:
             require_access_denied(
@@ -222,12 +261,21 @@ def main() -> None:
             if hashlib.sha256(stored).hexdigest() != pointer["result_digest"]:
                 raise RuntimeError(f"stored result digest mismatch for {key}")
             envelope = json.loads(stored)
+            expected_fields = {
+                "schema_version", "job_id", "attempt_id", "execution_id",
+                "input_sha256", "page_count", "pages",
+            }
+            if set(envelope) != expected_fields:
+                raise RuntimeError(
+                    f"public result fields differ for {key}: {sorted(envelope)}")
             identity = (envelope["job_id"], envelope["attempt_id"],
                         envelope["execution_id"], envelope["input_sha256"])
             expected = (job_id, attempt_id, pointer["execution_id"], digest)
             if identity != expected:
                 raise RuntimeError(f"stored result identity mismatch for {key}")
-            object_results.append(envelope["parse_result"])
+            if envelope["page_count"] != expected_pages:
+                raise RuntimeError(f"public result page count mismatch for {key}")
+            object_results.append(public_to_comparator(envelope))
 
         if pointer_a["result_key"] == pointer_b["result_key"]:
             raise RuntimeError("two executions reused one result key")
@@ -238,18 +286,19 @@ def main() -> None:
         if not {pointer_a["result_key"], pointer_b["result_key"]}.issubset(listed):
             raise RuntimeError("result prefix LIST did not recover both executions")
 
-        mismatch_failed = False
-        try:
-            remote.parse_object.remote({
-                **object_payload,
-                "attempt_id": bad_attempt_id,
-                "result_prefix": bad_prefix,
-                "expected_sha256": "0" * 64,
-            })
-        except Exception:
-            mismatch_failed = True
+        mismatch = remote.parse_object.remote({
+            **object_payload,
+            "attempt_id": bad_attempt_id,
+            "result_prefix": bad_prefix,
+            "expected_sha256": "0" * 64,
+        })
+        mismatch_failed = (
+            mismatch.get("status") == "failed"
+            and mismatch.get("failure_code") == "input_digest_mismatch"
+            and "result_uri" not in mismatch
+        )
         if not mismatch_failed:
-            raise RuntimeError("digest mismatch unexpectedly succeeded")
+            raise RuntimeError("digest mismatch did not return the typed failure")
         bad_objects = client.list_objects_v2(
             Bucket=results_bucket, Prefix=f"{bad_prefix}/")
         if bad_objects.get("Contents"):
@@ -275,6 +324,8 @@ def main() -> None:
                 "input_put_input": "AccessDenied",
                 "results_get_input": "AccessDenied",
                 "results_put_input": "AccessDenied",
+                "input_get_results": "AccessDenied",
+                "input_put_results": "AccessDenied",
             },
             "comparisons": comparisons,
             "r2_objects_retained": args.keep_r2,

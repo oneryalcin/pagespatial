@@ -1,6 +1,7 @@
 import {
   FunctionTimeoutError, ModalClient, RemoteError,
 } from 'modal';
+import { withDeadline } from './deadline.mjs';
 
 /**
  * @typedef (
@@ -16,6 +17,7 @@ const message = (error) => `${error?.constructor?.name ?? 'Error'}: ${error?.mes
 /** Modal is the queue. This adapter exposes only the two operations M1 uses. */
 export function createModalCalls({
   client = new ModalClient(), appName, clsName = 'ParseContainer', methodName = 'parse_object',
+  spawnTimeoutMs = 30_000, inspectTimeoutMs = 10_000,
 }) {
   if (typeof appName !== 'string' || !appName) throw new TypeError('Modal appName is required');
   let methodPromise;
@@ -35,7 +37,11 @@ export function createModalCalls({
   };
   return {
     async spawn(payload) {
-      const call = await (await method()).spawn([payload]);
+      const call = await withDeadline(
+        method().then((value) => value.spawn([payload])),
+        spawnTimeoutMs,
+        'Modal spawn',
+      );
       if (typeof call?.functionCallId !== 'string' || !call.functionCallId) {
         throw new TypeError('Modal spawn returned no functionCallId');
       }
@@ -44,8 +50,13 @@ export function createModalCalls({
     /** @returns {Promise<CallOutcome>} */
     async inspect(callId) {
       try {
-        const call = await client.functionCalls.fromId(callId);
-        return { kind: 'completed', output: await call.get({ timeoutMs: 0 }) };
+        const output = await withDeadline(
+          client.functionCalls.fromId(callId)
+            .then((call) => call.get({ timeoutMs: 0 })),
+          inspectTimeoutMs,
+          'Modal call inspection',
+        );
+        return { kind: 'completed', output };
       } catch (error) {
         if (error instanceof FunctionTimeoutError) return { kind: 'pending' };
         if (error instanceof RemoteError) return { kind: 'failed', error: message(error) };

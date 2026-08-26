@@ -549,7 +549,12 @@ from diagnostic text. Deadline and upload sweeps set their known code directly;
 all unknown worker/provider failures become `processing_failed`. No code path
 classifies a raw exception message.
 
-Minimum codes:
+Minimum codes are split into two wire-level families. Request errors appear in
+`ErrorResponse` with an HTTP status. Terminal processing outcomes appear in
+`JobView.error` on a successful `200` status response. A code can appear in
+both families when the request both fails and terminalizes the job.
+
+Request error codes:
 
 ```text
 authentication_required
@@ -562,12 +567,6 @@ upload_incomplete
 upload_expired
 input_too_large
 invalid_upload
-input_digest_mismatch
-invalid_pdf
-page_limit_exceeded
-processing_deadline_exceeded
-dispatch_failed
-processing_failed
 result_not_ready
 job_failed
 result_expired

@@ -25,21 +25,29 @@ export async function sweepJobDeadlines(
                 WHEN state = 'uploading' THEN 'upload window expired'
                 WHEN queued_at IS NULL THEN 'queued job has no queued_at deadline anchor'
                 ELSE 'processing deadline exceeded'
-              END AS reason
+              END AS reason,
+              CASE
+                WHEN state = 'uploading' THEN 'upload_expired'
+                ELSE 'processing_deadline_exceeded'
+              END AS failure_code
          FROM jobs
         WHERE (state = 'uploading' AND upload_expires_at <= $1::timestamptz)
            OR (state IN ('queued','dispatched')
                AND (queued_at IS NULL OR queued_at <= $2::timestamptz))
      ), failed_attempts AS (
        UPDATE job_attempts a
-          SET state = 'failed', error = expired.reason, completed_at = $1::timestamptz
+          SET state = 'failed', error = expired.reason,
+              failure_code = expired.failure_code,
+              completed_at = $1::timestamptz
          FROM expired
         WHERE a.job_id = expired.id
           AND a.state IN ${OPEN_ATTEMPT_STATES}
        RETURNING a.id
      ), failed_jobs AS (
        UPDATE jobs j
-          SET state = 'failed', error = expired.reason, completed_at = $1::timestamptz
+          SET state = 'failed', error = expired.reason,
+              failure_code = expired.failure_code,
+              completed_at = $1::timestamptz
          FROM expired
         WHERE j.id = expired.id
           AND j.state IN ('uploading','queued','dispatched')
@@ -58,6 +66,19 @@ export async function settleExhaustedJobs(db, { now = new Date() } = {}) {
   const { rowCount } = await db.query(
     `UPDATE jobs j
         SET state = 'failed',
+            failure_code = COALESCE((
+              SELECT a.failure_code
+                FROM job_attempts a
+               WHERE a.job_id = j.id AND a.state = 'failed'
+               ORDER BY CASE a.failure_code
+                 WHEN 'input_digest_mismatch' THEN 1
+                 WHEN 'page_limit_exceeded' THEN 2
+                 WHEN 'invalid_pdf' THEN 3
+                 WHEN 'dispatch_failed' THEN 4
+                 ELSE 5
+               END, a.completed_at, a.id
+               LIMIT 1
+            ), 'processing_failed'),
             error = COALESCE(j.error, 'all attempts failed'),
             completed_at = $1::timestamptz
       WHERE j.state IN ('queued','dispatched')
@@ -84,4 +105,3 @@ export async function deferAttempt(db, { attemptId, now = new Date(), delayMs = 
     [attemptId, new Date(current.getTime() + delayMs).toISOString()],
   );
 }
-
