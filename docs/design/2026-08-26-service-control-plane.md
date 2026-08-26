@@ -361,6 +361,13 @@ SHA-256 against `expected_sha256`, parses, mints
 `{result_prefix}/{execution_id}.json`, writes it, and returns the URI,
 digest, page count, and timing through `FunctionCall.get()`.
 
+The stored object is the closed public projection defined by the M2 contract,
+not the worker's internal diagnostic envelope. It retains the PageSpatial
+record and opaque fencing identity but excludes Modal ids, resource/timing
+telemetry, revisions, input keys, RSS, and raw exception text. The worker
+validates that projection before its single PUT; the VPS does not proxy or
+transform result bytes.
+
 The control plane then presigns **only client-facing URLs** — browser
 upload and result download. Presigned URLs and worker credentials stop
 being two overlapping answers to the same question.
@@ -380,9 +387,9 @@ digest verification, memory profile, result publication, and duplicate-write
 behaviour. But if `parse_object` is a thin transport wrapper around an
 unchanged parsing core, a **focused** qualification suffices:
 
-1. records identical to `parse_document` after removing volatile fields
-   (`nativeObservations[].font` is volatile identity — see the Modal
-   qualification's spec amendment);
+1. projected successful `page_spatial` values identical to `parse_document`
+   after removing volatile fields (`nativeObservations[].font` is volatile
+   identity — see the Modal qualification's spec amendment);
 2. input digest verified after download;
 3. result digest recorded;
 4. large input and large result exercised;
@@ -397,9 +404,10 @@ the input bucket. Unexpected success is a failed qualification.
 
 Every expected-success qualification call must assert `status=completed`, no
 top-level failure, and the expected page count before comparison. A returned
-Modal value is transport success, not parser success. Failed parse envelopes
-may be stored for diagnosis, but the reconciler routes them to `failAttempt`;
-only `status=completed` may reach `acceptAttempt`.
+Modal value is transport success, not parser success. A failed parse publishes
+no public object; its safe terminal mapping is stored in Postgres and internal
+details remain operator-only. Only `status=completed` may reach
+`acceptAttempt`.
 
 **Repeat the full 12/12 only if** the parsing engine, warm-container
 lifecycle, process management, or retry semantics change. They do not here.
@@ -462,10 +470,11 @@ runaway call.
 
 ## Tenant isolation
 
-Every job read is filtered by `user_id`, enforced structurally: one accessor
-takes `user_id`, and no code path fetches a job by id alone. Cross-tenant
-reads return **404, not 403** — 403 confirms the id exists and turns the
-endpoint into an enumeration oracle.
+Every public job read is filtered by `user_id`, enforced structurally: the
+public accessor takes both `user_id` and job id. Internal reconciliation may
+fetch an attempt by id because it has no user request or public response.
+Cross-tenant public reads return **404, not 403** — 403 confirms the id exists
+and turns the endpoint into an enumeration oracle.
 
 *Acceptance:* a test asserting user B receives 404 on every one of user A's
 routes.
@@ -697,8 +706,8 @@ continues to own architecture; the M2 contract must not reopen it.
 to completion. User B gets 404 on all of user A's routes. A replayed
 `Idempotency-Key` returns the original job rather than parsing twice, while
 a replay with a different body gets 422. **A request to the API hostname
-carrying a forged `Cf-Access-Authenticated-User-Email` header gets 401 on
-every dashboard route.**
+carrying a forged `Cf-Access-Authenticated-User-Email` header gets 404 on
+every dashboard route; an unknown Host gets 421.**
 
 Implement M2 as one vertical path before adding the dashboard:
 

@@ -1,6 +1,6 @@
 # Contract: M2 public intake, identity, and admission
 
-**Status:** proposed for one cold review; implementation has not started  
+**Status:** revised after cold review; implementation has not started
 **Parent design:** `docs/design/2026-08-26-service-control-plane.md`  
 **Issues:** #76 and #87  
 **Baseline:** M1 job plane through PR #109 (`c54e813`)
@@ -42,7 +42,10 @@ domain.
 
 Route families are bound to an exact configured hostname. Dashboard routes
 exist only on `app.<domain>`; API routes exist only on `api.<domain>`. Reject
-an unknown `Host` with `421 Misdirected Request`.
+an unknown `Host` with `421 Misdirected Request`. A valid hostname with a route
+from the other family returns `404`; in particular, `/keys` on
+`api.<domain>` is not an authentication challenge and cannot reach dashboard
+code.
 
 ## Invariants
 
@@ -50,8 +53,9 @@ an unknown `Host` with `421 Misdirected Request`.
 2. A job is not dispatchable until finalize observes the input object and its
    size is within 90 MiB.
 3. The worker, not finalize, is the SHA-256 authority.
-4. Every job lookup is scoped by the authenticated `user_id`; a foreign id is
-   indistinguishable from a missing id.
+4. Every public job lookup is scoped by the authenticated `user_id`; a foreign
+   id is indistinguishable from a missing id. Internal reconciliation may look
+   up an attempt by id because it has no user request or public response.
 5. One idempotency key creates at most one job for one user.
 6. A returned object or Modal value is not success until its status, identity,
    schema, digest, and size are validated.
@@ -110,7 +114,35 @@ M2 includes only the UI needed to bootstrap machine access:
 - `POST /keys/:id/revoke` — idempotently revoke an owned key.
 
 These routes require the verified Access JWT and exact Origin on mutations.
-The jobs, usage, and account pages remain M3.
+The jobs, usage, and account pages remain M3. A user may have at most ten
+active keys; creation above that limit returns `429 api_key_limit`.
+
+These are server-rendered form routes, not a second JSON API. Their wire
+contract is deliberately small:
+
+```text
+GET  /keys
+  -> 200 text/html; charset=utf-8
+
+POST /keys
+  Content-Type: application/x-www-form-urlencoded
+  body: name=<1..64 UTF-8 characters>
+  -> 201 text/html; charset=utf-8 showing the secret once
+
+POST /keys/:id/revoke
+  Content-Type: application/x-www-form-urlencoded
+  body: empty
+  -> 303 Location: /keys
+
+name = trimmed UTF-8 string, 1..64 characters
+```
+
+Unknown form fields are rejected. Form bodies are capped at 4 KiB. Every page
+carries `Cache-Control: no-store`, `Content-Security-Policy: default-src
+'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'`, and
+HTML-escapes stored values. The plaintext secret appears only in the creation
+response. Revoke returns `404` for a foreign id and is idempotent for an
+already-revoked owned key.
 
 ## Public data containers
 
@@ -137,6 +169,13 @@ JobView = {
   error: { code: string, message: string } | null
 }
 
+JobResponse = { job: JobView }
+
+SubmitResponse = {
+  job: JobView,
+  upload: UploadGrant | null
+}
+
 UploadGrant = {
   method: "PUT",
   url: string,
@@ -151,17 +190,32 @@ ErrorResponse = {
     request_id: UUID
   }
 }
+
+ResultGrantResponse = {
+  result: {
+    schema_version: 1,
+    download_url: string,
+    expires_at: RFC3339,
+    content_type: "application/json"
+  }
+}
 ```
 
 All API responses include `X-Request-Id`. Unknown request fields are rejected.
 Unknown response fields must be ignored by clients.
 
+Every unsuccessful `/v1` response uses `ErrorResponse`; it never returns a
+bare string, HTML, provider body, or stack. Dashboard form errors are escaped
+HTML and follow the status codes specified above.
+
 `processing_deadline_at` is derived as `queued_at + 24 hours`; it is not a
 new column. `outcome_uncertain` is also derived, not a database state. It is
-true when an attempt is `dispatch_unknown`, or when an attempt remains
-`dispatching` beyond the reconciler's ten-minute uncertainty wait. This
-distinguishes “the authoritative outcome is unknown” from a claim that a
-container is running.
+true only while the job is `queued` or `dispatched` and either an open attempt
+is `dispatch_unknown` or an open `dispatching` attempt is older than the
+reconciler's ten-minute uncertainty wait. It is always false for terminal
+jobs, including when a losing original attempt remains open after another
+attempt wins. This distinguishes “the authoritative outcome is unknown” from
+a claim that a container is running.
 
 ## API contract
 
@@ -195,17 +249,22 @@ The client computes SHA-256 before submission. M2 does not hide that cost:
 CLI clients read the file once to hash and once to upload. A future browser
 uploader may use a streaming hash implementation if measurement justifies it.
 
-New job response: `201 Created` with `JobView` and `UploadGrant`. The input key
-is `inputs/{job_id}.pdf`; it is not returned separately.
+New job response: `201 Created` with `SubmitResponse`. The input key is
+`inputs/{job_id}.pdf`; it is not returned separately.
 
 Replay rules:
 
-- same user, key, and digest: `200` with the original job;
+- same user, key, and digest: `200 SubmitResponse` with the original job;
 - if the original is still `uploading` and before `upload_expires_at`, include
   a newly signed PUT whose expiry does not exceed that original deadline;
 - if the original is terminal, return that terminal job;
 - same user and key with a different digest: `422 idempotency_mismatch`;
 - never create a replacement job for a reused key.
+
+If presigning fails after the uploading row commits, return
+`503 service_unavailable`. A replay of the same idempotency key regenerates the
+grant while the original upload window remains open; it does not create a
+second job.
 
 ### Direct R2 upload
 
@@ -220,7 +279,8 @@ release prerequisite yet.
 
 ### `POST /v1/jobs/:id/finalize`
 
-Request body is empty. Finalize reads the object with the control-plane input
+The request body is the empty JSON object `{}`; any field is rejected.
+Finalize reads the object with the control-plane input
 credential and checks:
 
 - the owned job exists and is `uploading`;
@@ -234,8 +294,9 @@ transaction records `input_bytes`, `queued_at`, and `state='queued'`.
 
 Responses:
 
-- `202` — newly queued, or already queued/dispatched;
-- `200` — already terminal; return the terminal job without resurrection;
+- `202 JobResponse` — newly queued, or already queued/dispatched;
+- `200 JobResponse` — already terminal; return the terminal job without
+  resurrection;
 - `409 upload_incomplete` — object not yet visible; retry within the window;
 - `410 upload_expired` — upload deadline passed;
 - `413 input_too_large` — object exceeds 90 MiB and the job becomes `failed`;
@@ -253,7 +314,7 @@ correctness cannot depend on that call. A process crash can occur after
 
 Therefore the API process runs a bounded queued-job sweep:
 
-1. select at most 32 `queued` jobs with no initial attempt, oldest first;
+1. select at most eight `queued` jobs with no initial attempt, oldest first;
 2. call the existing `dispatchJob()` for each;
 3. rely on the database's one-initial-attempt constraint to resolve replica
    races;
@@ -268,8 +329,8 @@ execution and autoscaling.
 
 ### `GET /v1/jobs/:id`
 
-Returns `200 JobView`. It never claims `running` because Modal `.spawn()` only
-proves enqueue. It provides no ETA.
+Returns `200 JobResponse`. It never claims `running` because Modal `.spawn()`
+only proves enqueue. It provides no ETA.
 
 For terminal failure, expose a stable public error code and safe message.
 Attempt rows and raw Modal/R2 exception strings remain operator data.
@@ -279,15 +340,10 @@ Attempt rows and raw Modal/R2 exception strings remain operator data.
 Only a tenant-owned `succeeded` job with an accepted result and
 `now < retention_expires_at` can receive a URL.
 
-Response `200`:
+Response `200 ResultGrantResponse`:
 
 ```json
-{
-  "schema_version": 1,
-  "download_url": "https://...",
-  "expires_at": "RFC3339",
-  "content_type": "application/json"
-}
+{"result":{"schema_version":1,"download_url":"https://...","expires_at":"RFC3339","content_type":"application/json"}}
 ```
 
 The GET URL lasts five minutes or until `retention_expires_at`, whichever is
@@ -300,33 +356,58 @@ a foreign id uses `404`.
 
 ## Public result format
 
-M2 deliberately returns the existing validated envelope directly from R2:
+The current worker envelope is an internal diagnostic record. It includes
+Modal call/input identifiers, image and adapter revisions, resource and timing
+details, and raw exception messages on failed pages. It is not a public API.
+
+Before its single R2 PUT, `parse_object` constructs and validates this closed
+public projection:
 
 ```text
-ResultEnvelopeV1 = {
+PublicResultEnvelopeV1 = {
   schema_version: 1,
   job_id: UUID,
   attempt_id: UUID,
   execution_id: lowercase-hex-32,
-  input_key: string,
   input_sha256: lowercase-hex-64,
-  parse_result: PageSpatialParseResult
+  page_count: integer,
+  pages: PublicPageResult[]
+}
+
+PublicPageResult =
+  | {
+      page_number: positive integer,
+      ok: true,
+      page_spatial: PageSpatialRecord
+    }
+  | {
+      page_number: positive integer,
+      ok: false,
+      failure: {
+        code: "page_failed",
+        message: "Page could not be parsed."
+      }
+    }
 }
 ```
 
-This is a public, versioned provenance envelope, not an accidental leak.
+`attempt_id` and `execution_id` are PageSpatial's opaque fencing provenance;
+they are retained so the reconciler can bind bytes to the immutable R2 key.
+They are not Modal function or input identifiers. The projection excludes the
+operational timing, RSS measurements, exception classes, stack traces, and raw
+exception messages.
 
-- `schema_version`, `job_id`, `input_sha256`, and `parse_result` are stable v1
-  fields.
-- `attempt_id`, `execution_id`, and `input_key` are opaque provenance. They
-  reveal retry identity and a private naming convention, but grant no bucket
-  access.
-- Clients must ignore unknown top-level fields.
-- The presigned URL grants access only to this object.
+The worker validates this projection before upload. The reconciler validates
+the same exact schema, key identity, job/attempt/execution identity, digest,
+and size before acceptance. A failed parse returns no pointer and uploads no
+public object. Failed pages inside an otherwise completed document use only
+the stable safe failure above.
 
-Returning only `parse_result` would require proxying up to 128 MiB through the
-VPS or publishing and retaining a second transformed object. Hiding harmless
-opaque identifiers does not justify either path.
+This remains one object and one presigned download. There is no VPS result
+proxy and no second transformed object. M2.1 must compare the successful
+`page_spatial` values against `parse_document` with the existing stable
+comparator and derived control tolerance; transport success alone is not
+qualification.
 
 ## Admission control
 
@@ -351,22 +432,29 @@ floor(86,400 seconds × 0.599 pages/s × 0.50 / 200 pages/job)
 Round down to 100. At the all-maximum-pages extreme, the qualified rate drains
 100 jobs in about 9.3 hours, leaving roughly 14.7 hours for cold start,
 retries, shared-host variance, and recovery. This is an overload fuse, not a
-throughput promise. Deployment startup refuses a configured cap above the
-derived bound for its qualified `max_containers` setting unless a new measured
-rate updates the bound.
+throughput promise. M2 hard-codes 100 as the maximum. It is not raised from a
+larger `max_containers` value because fleet linearity has not been measured.
+Changing it requires a new measured sustained rate and a contract update.
 
 Admission is one short Postgres transaction on one checked-out `pg.PoolClient`:
 
 ```text
-BEGIN
-SET LOCAL statement_timeout = '5s'
-SELECT pg_advisory_xact_lock(<fixed admission lock id>)
-recheck idempotency
-count global active jobs
-count this user's active jobs
-insert uploading job or choose 429
-COMMIT
-release PoolClient
+client = await pool.connect() with a 2-second checkout deadline
+try:
+  BEGIN
+  SET LOCAL statement_timeout = '5s'
+  SELECT pg_advisory_xact_lock(<fixed admission lock id>)
+  recheck idempotency
+  count global active jobs
+  count this user's active jobs
+  insert uploading job or choose 429
+  COMMIT
+catch error:
+  try ROLLBACK
+  if rollback fails: release client as destroyed
+  rethrow the original error
+finally:
+  release the client normally only if rollback/commit left it usable
 ```
 
 One fixed transaction-scoped lock is enough because it serializes the only
@@ -378,9 +466,12 @@ session-scoped `pg_advisory_lock`, and do not issue `BEGIN` through
 The idempotency check occurs before admission rejection. A replay returns its
 existing job even when the service is currently full.
 
-M2 adds a partial `(user_id)` index for active jobs. The existing state-only
-partial index supports the global count; the new index keeps the per-user
-count bounded without scanning that user's history.
+The current `jobs_active` index covers only `queued` and `dispatched`, so it is
+not sufficient. M2 adds both a global and per-user partial index whose
+predicate is exactly `state IN ('uploading','queued','dispatched')`. The
+admission counts use that same predicate. A native-Postgres failure-injection
+test throws after acquiring the lock, then proves a second admission through
+the same pool does not hang and observes no uncommitted row.
 
 ## R2 credentials
 
@@ -418,6 +509,12 @@ upload_incomplete
 upload_expired
 input_too_large
 invalid_upload
+input_digest_mismatch
+invalid_pdf
+page_limit_exceeded
+processing_deadline_exceeded
+dispatch_failed
+processing_failed
 result_not_ready
 job_failed
 result_expired
@@ -426,6 +523,24 @@ service_unavailable
 
 Unexpected dependency failures return `503 service_unavailable`, never a
 permanent job transition unless the existing lifecycle logic proves one.
+
+Terminal `JobView.error` is a closed projection. It never returns the stored
+internal error string:
+
+| proven internal condition | public code | public message |
+|---|---|---|
+| uploaded bytes disagree with declared digest | `input_digest_mismatch` | `Uploaded PDF did not match the declared SHA-256.` |
+| input exceeds 90 MiB | `input_too_large` | `PDF exceeds the 90 MiB limit.` |
+| zero-byte, wrong-type, malformed, or unreadable PDF | `invalid_pdf` | `Input is not a supported PDF.` |
+| document exceeds 200 pages | `page_limit_exceeded` | `PDF exceeds the 200-page limit.` |
+| 24-hour processing deadline expires | `processing_deadline_exceeded` | `Document did not finish before its processing deadline.` |
+| all dispatch attempts definitively fail | `dispatch_failed` | `Document could not be started.` |
+| any other terminal internal failure | `processing_failed` | `Document processing failed.` |
+
+Transient Postgres, R2, or Modal faults are request-level
+`service_unavailable` or remain retryable internal state; their provider text
+never becomes `JobView.error`. Safe mapping is tested with unknown exception
+text to prove the generic fallback.
 
 ## Runtime and health
 
@@ -437,6 +552,31 @@ One Node process owns:
 - the existing reconciler interval, each pass using one checked-out client;
 - graceful shutdown that stops accepting HTTP, stops timers, waits for the
   current bounded pass, then closes the pool.
+
+“Bounded” means an enforced logical deadline, not an optimistic SDK timeout:
+
+| operation | initial deadline | timeout result |
+|---|---:|---|
+| pool checkout | 2 s | request/pass fails retryably |
+| SQL statement | 5 s | transaction rolls back |
+| one R2 HEAD/LIST/GET | 10 s | retryable; never proves absence |
+| Modal method lookup or spawn | 30 s | spawn becomes `dispatch_unknown`; lookup retries |
+| Modal call inspection | 10 s | retryable/unavailable |
+| one attempt reconciliation | 30 s | deferred to the next pass |
+| one whole background pass | 45 s | stop starting items; release lock/client |
+| graceful shutdown | 60 s | close clients and exit |
+
+The queued dispatcher and reconciler each process at most eight rows per pass,
+not 32, so one pass has useful work within the 45-second bound. R2 calls use an
+`AbortSignal`. Where the Modal JS SDK cannot cancel an in-flight operation, a
+deadline stops awaiting its result; any later resolution is ignored by that
+pass. A timed-out spawn is ambiguous and therefore takes the existing
+`dispatch_unknown` path, never a definitive failure.
+
+Never-resolving fake R2 and Modal dependencies are acceptance tests: the pass
+must return by its deadline, release its checked-out client and advisory lock,
+and reconcile a healthy row on the next pass. Shutdown has the same bounded
+test. These values are safety limits, not latency SLOs.
 
 `GET /health` is unauthenticated and returns no identifiers. Readiness requires
 Postgres and both R2 roles to be reachable. Modal reachability is reported as
@@ -463,21 +603,29 @@ not prevent clients from reading existing job status or result URLs.
    queued sweep creates exactly one initial attempt and the job completes.
 10. Kill after attempt creation; the existing M1 uncertainty path recovers it.
 11. A worker digest mismatch fails visibly and publishes no result.
-12. `outcome_uncertain` appears only from the derived attempt condition and
-    carries the 24-hour deadline.
+12. `outcome_uncertain` appears only on non-terminal jobs from the derived
+    attempt condition, carries the 24-hour deadline, and is false after another
+    attempt wins even if a losing original remains open.
 13. Every job and key route gives user B 404 for user A's identifier.
 14. Revoked keys, suspended users, malformed keys, query-string keys, and
     missing keys fail authentication.
-15. A forged Access email header on `api.<domain>` cannot reach dashboard or
-    key-management routes.
+15. A forged Access email header on `api.<domain>` receives 404 on dashboard
+    and key-management routes; an unknown Host receives 421.
 16. Access JWT validation checks signature, issuer, audience, expiry, and
     invited canonical email. JWKS rotation is exercised with two keys.
 17. Dashboard mutations reject absent or foreign Origin.
 18. Result URLs name only the accepted object, expire within five minutes,
     stop at retention expiry, and return the byte-identical validated public
-    envelope.
+    projection. Mutation tests prove Modal ids, revisions, timing, resources,
+    raw exception text, and input keys cannot enter it.
 19. Public errors and logs contain no presigned query string, key secret,
     bucket credential, or internal exception.
+20. Every route's literal success and error container matches this contract;
+    extra request fields are rejected.
+21. A failure after the admission lock rolls back and leaves the pooled
+    connection reusable; this is exercised on native Postgres.
+22. Never-resolving Modal and R2 fakes cannot hold a pass, advisory lock, or
+    checked-out connection past the declared deadlines.
 
 ### Live M2 gate
 
