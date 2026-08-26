@@ -35,7 +35,11 @@ def config() -> dict[str, str]:
 
 
 def write_json(path: Path, value) -> None:
-    path.write_text(json.dumps(value, indent=1) + "\n", encoding="utf-8")
+    # The established Modal comparator accepts compact JSON or JSONL. Keep
+    # each capture as one complete JSON value rather than ambiguous pretty
+    # JSON that its line-oriented fallback would misread.
+    path.write_text(json.dumps(value, separators=(",", ":")) + "\n",
+                    encoding="utf-8")
 
 
 def main() -> None:
