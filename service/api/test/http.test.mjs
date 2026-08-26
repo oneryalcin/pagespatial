@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import { test, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
-import { issueApiKey } from '../src/api-keys.mjs';
+import { authenticateApiKey, issueApiKey } from '../src/api-keys.mjs';
 import { createApiHandler } from '../src/http.mjs';
 import { migrate } from '../src/migrate.mjs';
 
@@ -13,6 +13,9 @@ let userId;
 let server;
 let base;
 let apiKey;
+let authFailure;
+let logs;
+let logThrows;
 
 before(async () => { db = await PGlite.create(); });
 
@@ -21,6 +24,9 @@ test('HTTP handler refuses to start without its canonical host', () => {
 });
 
 beforeEach(async () => {
+  authFailure = null;
+  logs = [];
+  logThrows = false;
   await db.exec('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   await migrate(db);
   userId = (await db.query(
@@ -49,6 +55,11 @@ beforeEach(async () => {
     appHost: 'app.test',
     appOrigin: 'https://app.test',
     authenticateAccess: async () => ({ userId, email: 'http@example.test' }),
+    authenticate(authorization) {
+      if (authFailure) throw authFailure;
+      return authenticateApiKey(db, authorization);
+    },
+    log: { error(...args) { if (logThrows) throw new Error('logger failed'); logs.push(args); } },
     createRequestId: () => '11111111-1111-4111-8111-111111111111',
   });
   server = createServer(handler);
@@ -121,4 +132,59 @@ test('HTTP rejects extra fields with the one error envelope', async () => {
       request_id: '11111111-1111-4111-8111-111111111111',
     },
   });
+});
+
+test('HTTP admission failure includes Retry-After', async () => {
+  for (let index = 0; index < 5; index += 1) {
+    const response = await fetch(`${base}/v1/jobs`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        'content-type': 'application/json',
+        'idempotency-key': `admission-${index}`,
+      },
+      body: JSON.stringify({ input_sha256: SHA }),
+    });
+    assert.equal(response.status, 201);
+  }
+  const rejected = await fetch(`${base}/v1/jobs`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      'content-type': 'application/json',
+      'idempotency-key': 'admission-rejected',
+    },
+    body: JSON.stringify({ input_sha256: SHA }),
+  });
+  assert.equal(rejected.status, 429);
+  assert.equal(rejected.headers.get('retry-after'), '60');
+  assert.equal((await rejected.json()).error.code, 'admission_limit');
+});
+
+test('HTTP logs unexpected failure without leaking provider text', async () => {
+  authFailure = new Error('https://r2.invalid/object?X-Amz-Signature=secret');
+  const response = await fetch(`${base}/v1/jobs/00000000-0000-4000-8000-000000000000`, {
+    headers: { authorization: `Bearer ${apiKey}` },
+  });
+  assert.equal(response.status, 503);
+  assert.deepEqual((await response.json()).error, {
+    code: 'service_unavailable',
+    message: 'Service is temporarily unavailable.',
+    request_id: '11111111-1111-4111-8111-111111111111',
+  });
+  const serialized = JSON.stringify(logs);
+  assert.match(serialized, /api_request_failed/u);
+  assert.doesNotMatch(serialized, /Signature|secret|r2\.invalid/u);
+});
+
+test('HTTP failure response survives a poisonous error and broken logger', async () => {
+  authFailure = Object.defineProperty({}, 'cause', {
+    get() { throw new Error('poisoned error'); },
+  });
+  logThrows = true;
+  const response = await fetch(`${base}/v1/jobs/00000000-0000-4000-8000-000000000000`, {
+    headers: { authorization: `Bearer ${apiKey}` },
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error.code, 'service_unavailable');
 });

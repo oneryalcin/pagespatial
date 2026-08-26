@@ -731,8 +731,9 @@ Do not call M2 complete from component tests alone.
    idempotency, Access JWT verification, minimal key page.
 3. **M2.3 overload:** exact admission transaction, 429, derived uncertainty,
    safe public errors and logs.
-4. **M2.4 live deployment:** domain, Tunnel, Access policy, managed Postgres,
-   R2 lifecycle rules, and the live gate.
+4. **M2.4 live deployment:** a dedicated control-plane image/artifact (separate
+   from the qualified parse-worker Dockerfile), domain, Tunnel, Access policy,
+   managed Postgres, R2 lifecycle rules, and the live gate.
 
 M3 starts only after this path is live. M3 adds presentation, not another job
 lifecycle.

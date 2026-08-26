@@ -1,7 +1,24 @@
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from 'jose';
 import { ApiError } from './api-errors.mjs';
 
 const denied = () => new ApiError(403, 'forbidden', 'Access denied.');
+const unavailable = (cause) => new ApiError(
+  503, 'service_unavailable', 'Service is temporarily unavailable.', { cause },
+);
+
+const credentialErrors = [
+  joseErrors.JOSEAlgNotAllowed,
+  joseErrors.JOSENotSupported,
+  joseErrors.JWKSMultipleMatchingKeys,
+  joseErrors.JWKSNoMatchingKey,
+  joseErrors.JWSInvalid,
+  joseErrors.JWSSignatureVerificationFailed,
+  joseErrors.JWTClaimValidationFailed,
+  joseErrors.JWTExpired,
+  joseErrors.JWTInvalid,
+];
+
+const isCredentialError = (error) => credentialErrors.some((Type) => error instanceof Type);
 
 export function createAccessAuthenticator({ db, issuer, audience, jwks }) {
   if (!db?.query) throw new TypeError('Access authentication requires a database');
@@ -23,7 +40,8 @@ export function createAccessAuthenticator({ db, issuer, audience, jwks }) {
       ({ payload } = await jwtVerify(jwt, keySet, {
         issuer, audience, algorithms: ['RS256'], clockTolerance: 30,
       }));
-    } catch {
+    } catch (error) {
+      if (!isCredentialError(error)) throw unavailable(error);
       throw denied();
     }
     if (payload.type !== 'app' || typeof payload.email !== 'string') throw denied();

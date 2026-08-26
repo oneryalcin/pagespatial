@@ -5,6 +5,8 @@ const TOKEN = /^ps_live_([A-Za-z0-9_-]{43})$/u;
 const PREFIX_LENGTH = 'ps_live_'.length + 8;
 const AUTH_HEADERS = Object.freeze({ 'www-authenticate': 'Bearer' });
 
+export class InvalidApiKeyNameError extends TypeError {}
+
 export function apiKeyDigest(secret) {
   return createHash('sha256').update(secret, 'utf8').digest('hex');
 }
@@ -18,7 +20,7 @@ export async function issueApiKey(db, { userId, name }) {
   const trimmed = typeof name === 'string' ? name.trim() : '';
   const characters = [...trimmed].length;
   if (characters < 1 || characters > 64) {
-    throw new TypeError('API key name must contain 1 to 64 characters');
+    throw new InvalidApiKeyNameError('API key name must contain 1 to 64 characters');
   }
   const material = generateApiKey();
   const { rows } = await db.query(

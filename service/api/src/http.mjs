@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { ApiError, invalidRequest } from './api-errors.mjs';
 import { authenticateApiKey } from './api-keys.mjs';
 import { createDashboardHandler } from './dashboard.mjs';
+import { logFailure } from './safe-log.mjs';
 import {
   createOrReplayJob, finalizeJob, jobView, ownedJob, resultGrant,
 } from './jobs.mjs';
@@ -60,18 +61,18 @@ export function createApiHandler({
   db, pool, inputStore, resultStore, inputBucket = inputStore?.bucket,
   unitPriceMicros = 1000, apiHost, appHost, appOrigin, authenticateAccess,
   authenticate = (authorization) => authenticateApiKey(db, authorization),
-  createRequestId = randomUUID,
+  createRequestId = randomUUID, log = console,
 }) {
   if (typeof apiHost !== 'string' || !apiHost) throw new TypeError('apiHost is required');
   if (typeof appHost !== 'string' || !appHost || appHost === apiHost) {
     throw new TypeError('a distinct appHost is required');
   }
-  const dashboard = createDashboardHandler({ db, appOrigin, authenticateAccess });
+  const dashboard = createDashboardHandler({ db, appOrigin, authenticateAccess, log });
   return async function apiHandler(req, res) {
     const requestId = createRequestId();
     try {
       const host = req.headers.host?.split(':', 1)[0];
-      if (host === appHost) return dashboard(req, res);
+      if (host === appHost) return dashboard(req, res, requestId);
       if (host !== apiHost) {
         throw new ApiError(421, 'invalid_request', 'Request was sent to the wrong host.');
       }
@@ -131,7 +132,11 @@ export function createApiHandler({
     } catch (error) {
       const failure = error instanceof ApiError
         ? error : new ApiError(503, 'service_unavailable', 'Service is temporarily unavailable.');
-      if (!(error instanceof ApiError)) console.error({ requestId, error });
+      if (failure.status >= 500) {
+        logFailure(log, 'api_request_failed', {
+          requestId, error,
+        });
+      }
       return sendJson(res, failure.status, {
         error: { code: failure.code, message: failure.message, request_id: requestId },
       }, requestId, failure.headers);
