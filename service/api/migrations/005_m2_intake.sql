@@ -22,7 +22,19 @@ ALTER TABLE jobs
     'processing_deadline_exceeded', 'dispatch_failed', 'processing_failed'
   )),
   ADD CONSTRAINT jobs_failed_has_code
-  CHECK ((state = 'failed') = (failure_code IS NOT NULL));
+  CHECK ((state = 'failed') = (failure_code IS NOT NULL)),
+  ADD CONSTRAINT jobs_succeeded_has_accepted_result
+  CHECK (
+    state <> 'succeeded'
+    OR (
+      accepted_attempt_id IS NOT NULL
+      AND result_uri IS NOT NULL
+      AND result_digest ~ '^[0-9a-f]{64}$'
+      AND pages_actual IS NOT NULL
+      AND completed_at IS NOT NULL
+      AND retention_expires_at IS NOT NULL
+    )
+  );
 
 ALTER TABLE job_attempts
   ADD CONSTRAINT job_attempts_failure_code_known

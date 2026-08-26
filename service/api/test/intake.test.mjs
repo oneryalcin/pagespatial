@@ -1,6 +1,7 @@
 import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
+import { acceptAttempt } from '../src/accept.mjs';
 import { authenticateApiKey, issueApiKey } from '../src/api-keys.mjs';
 import { migrate } from '../src/migrate.mjs';
 import {
@@ -172,14 +173,20 @@ test('invalid upload becomes a typed terminal job without exposing detail', asyn
 
 test('result grant signs only the accepted object before retention expiry', async () => {
   const created = await submit();
-  await db.query(
-    `UPDATE jobs SET state = 'succeeded', pages_actual = 1,
-                     result_uri = $2, result_digest = $3,
-                     retention_expires_at = now() + interval '2 days',
-                     completed_at = now()
-      WHERE id = $1`,
-    [created.row.id, 'r2://results/results/j/a/e.json', 'b'.repeat(64)],
-  );
+  await db.query("UPDATE jobs SET state = 'queued', queued_at = now() WHERE id = $1", [created.row.id]);
+  const attemptId = (await db.query(
+    'INSERT INTO job_attempts (job_id) VALUES ($1) RETURNING id', [created.row.id],
+  )).rows[0].id;
+  const accepted = await acceptAttempt(db, {
+    jobId: created.row.id,
+    attemptId,
+    status: 'completed',
+    resultUri: `r2://results/results/${created.row.id}/${attemptId}/e.json`,
+    resultDigest: 'b'.repeat(64),
+    pages: 1,
+    resultCreatedAt: new Date(),
+  });
+  assert.deepEqual(accepted, { recorded: true, won: true });
   const seen = [];
   const grant = await resultGrant({
     db, userId, jobId: created.row.id,
@@ -189,7 +196,7 @@ test('result grant signs only the accepted object before retention expiry', asyn
     },
   });
   assert.equal(grant.download_url, 'signed');
-  assert.equal(seen[0].key, 'results/j/a/e.json');
+  assert.equal(seen[0].key, `results/${created.row.id}/${attemptId}/e.json`);
 });
 
 test('database rejects failed rows without a machine-readable code', async () => {
@@ -197,5 +204,19 @@ test('database rejects failed rows without a machine-readable code', async () =>
   await assert.rejects(
     db.query("UPDATE jobs SET state = 'failed' WHERE id = $1", [created.row.id]),
     /jobs_failed_has_code/u,
+  );
+});
+
+test('database rejects succeeded jobs without an accepted result', async () => {
+  const created = await submit();
+  await assert.rejects(
+    db.query(
+      `UPDATE jobs SET state = 'succeeded', pages_actual = 1,
+                       result_uri = $2, result_digest = $3,
+                       retention_expires_at = now() + interval '2 days', completed_at = now()
+        WHERE id = $1`,
+      [created.row.id, 'r2://results/forged.json', 'b'.repeat(64)],
+    ),
+    /jobs_succeeded_has_accepted_result/u,
   );
 });

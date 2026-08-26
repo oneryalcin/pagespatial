@@ -3,6 +3,7 @@ import { once } from 'node:events';
 import { test, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
+import { issueApiKey } from '../src/api-keys.mjs';
 import { createApiHandler } from '../src/http.mjs';
 import { migrate } from '../src/migrate.mjs';
 
@@ -11,6 +12,7 @@ let db;
 let userId;
 let server;
 let base;
+let apiKey;
 
 before(async () => { db = await PGlite.create(); });
 
@@ -20,6 +22,7 @@ beforeEach(async () => {
   userId = (await db.query(
     "INSERT INTO users (email, status) VALUES ('http@example.test','active') RETURNING id",
   )).rows[0].id;
+  apiKey = (await issueApiKey(db, { userId, name: 'http test' })).secret;
   const pool = {
     async connect() { return { query: (...args) => db.query(...args), release() {} }; },
   };
@@ -38,7 +41,6 @@ beforeEach(async () => {
       async head() { return { bytes: 589, contentType: 'application/pdf' }; },
     },
     resultStore: { bucket: 'results' },
-    authenticate: async () => ({ userId }),
     createRequestId: () => '11111111-1111-4111-8111-111111111111',
   });
   server = createServer(handler);
@@ -56,7 +58,7 @@ test('HTTP vertical slice submits, replays, finalizes, and reports status', asyn
   const submit = () => fetch(`${base}/v1/jobs`, {
     method: 'POST',
     headers: {
-      authorization: 'Bearer test',
+      authorization: `Bearer ${apiKey}`,
       'content-type': 'application/json',
       'idempotency-key': 'http-1',
     },
@@ -74,14 +76,14 @@ test('HTTP vertical slice submits, replays, finalizes, and reports status', asyn
 
   const finalized = await fetch(`${base}/v1/jobs/${firstBody.job.id}/finalize`, {
     method: 'POST',
-    headers: { authorization: 'Bearer test', 'content-type': 'application/json' },
+    headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
     body: '{}',
   });
   assert.equal(finalized.status, 202);
   assert.equal((await finalized.json()).job.state, 'queued');
 
   const status = await fetch(`${base}/v1/jobs/${firstBody.job.id}`, {
-    headers: { authorization: 'Bearer test' },
+    headers: { authorization: `Bearer ${apiKey}` },
   });
   assert.equal(status.status, 200);
   assert.equal((await status.json()).job.state, 'queued');
@@ -91,7 +93,7 @@ test('HTTP rejects extra fields with the one error envelope', async () => {
   const response = await fetch(`${base}/v1/jobs`, {
     method: 'POST',
     headers: {
-      authorization: 'Bearer test',
+      authorization: `Bearer ${apiKey}`,
       'content-type': 'application/json',
       'idempotency-key': 'http-2',
     },

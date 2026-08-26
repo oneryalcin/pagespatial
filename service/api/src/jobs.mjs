@@ -182,6 +182,9 @@ export async function resultGrant({ db, resultStore, userId, jobId, now = new Da
   const row = await ownedJob(db, { userId, jobId });
   if (row.state === 'failed') throw new ApiError(409, 'job_failed', 'Job failed.');
   if (row.state !== 'succeeded') throw new ApiError(409, 'result_not_ready', 'Result is not ready.');
+  if (!row.accepted_attempt_id || !row.result_uri || !row.result_digest) {
+    throw new ApiError(503, 'service_unavailable', 'Result is temporarily unavailable.');
+  }
   if (!row.retention_expires_at || new Date(row.retention_expires_at) <= now) {
     throw new ApiError(410, 'result_expired', 'Result has expired.');
   }
