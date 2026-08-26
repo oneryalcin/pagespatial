@@ -101,10 +101,13 @@ FunctionCallService.fromId(id): Promise<FunctionCall>
 FunctionCall.get(params?) / .cancel(params?)
 ```
 
-`parse_document` is a `@modal.method()` on a Cls, so this chain is the one
-that matters: `fromName → instance() → method() → spawn() → functionCallId
-→ persist → fromId() → get()`. `cancel()` gives user-facing job
-cancellation nearly free.
+`parse_document` is a `@modal.method()` on a Cls (`ParseContainer`), so this
+chain is the one that matters: `fromName → instance() → method() → spawn()
+→ functionCallId → persist → fromId() → get()`.
+
+Note `cls`, `functions`, and `functionCalls` are **`ModalClient` instance
+properties**; the package exports no client singleton, so `new
+ModalClient()` is required.
 
 **`modal@0.9.0` is pre-1.0.** Accept the churn risk knowingly, and pin the
 version. `scripts/service/modal-spawn-smoke.mjs` (M0 below) proves
@@ -126,10 +129,15 @@ jobs(id, user_id, idempotency_key, state, input_uri, input_digest,
      accepted_attempt_id, result_uri, result_digest, error,
      created_at, queued_at, completed_at, expires_at)
 job_attempts(id, job_id, modal_call_id, state, result_uri, result_digest,
-             pages, started_at, completed_at, error)
+             pages, dispatched_at, completed_at, error)
 ```
 
-`jobs.state`: `uploading | queued | running | succeeded | failed | cancelled`.
+`jobs.state`: `uploading | queued | dispatched | succeeded | failed`.
+
+**`dispatched`, not `running`.** `.spawn()` only enqueues; the call may sit
+in Modal's queue with nothing executing. Claiming `running` would assert
+something the control plane cannot observe. There is no `cancelled` state —
+see [Why cancellation is not in v1](#why-cancellation-is-not-in-v1).
 `(user_id, idempotency_key)` unique where not null.
 
 **No `usage_events` table.** Usage is 1:1 with jobs, so a second table is
@@ -156,13 +164,25 @@ POST /v1/jobs        → job row: uploading, random immutable object key,
                        presigned PUT returned
 client PUTs bytes    → directly to R2
 POST /v1/jobs/:id/finalize
-                     → HEAD the object: exists, size within cap,
-                       digest matches the client-supplied value
+                     → HEAD the object: EXISTENCE and SIZE only
                      → transaction: state=queued
 ```
 
-The worker **re-verifies the digest after download**. Abandoned `uploading`
-rows are swept on their `expires_at`.
+**Finalize cannot verify the content digest, and must not claim to.**
+Ordinary presigned R2/S3 PUT URLs are signed with `UNSIGNED-PAYLOAD`, so
+the service never witnesses the bytes; `HEAD` returns existence, size, and
+stored metadata, and an `ETag` that is only an MD5 for single-part uploads.
+None of that is an independently computed SHA-256 over content the service
+has read.
+
+**The digest gate is the worker**: it downloads, computes SHA-256, and
+compares against the client's claimed value before parsing. A mismatch
+fails the job. (`validate_input` already enforces exactly this contract
+today via `expected_sha256`.) Specifying a signed R2 checksum upload
+contract instead is possible, but it must then be specified and tested —
+not implied by an unqualified "HEAD verifies the digest".
+
+Abandoned `uploading` rows are swept on their `expires_at`.
 
 ### Dispatch, and its one honest seam
 
@@ -178,13 +198,23 @@ The answer is not leases. It is immutable attempts plus honest semantics:
 job ──► attempt row created with immutable attempt_id
           └── modal .spawn()
                 └── modal_call_id persisted when available
+                     └── (crash here) attempt stays dispatch_unknown
 ```
+
+**Every `.spawn()` gets a NEW attempt id. An attempt id is never reused.**
+This is not a detail — reusing an attempt for a re-dispatch would point two
+Modal calls at the same result key and destroy the exact property the
+immutable-key scheme exists to provide. An attempt whose call id never
+landed goes to `dispatch_unknown` and stays there; after a bounded wait the
+reconciler mints a *different* attempt and dispatches that one. The
+uncertain call may still be running, and that is accepted.
 
 **Dispatch is at-least-once. Stated as a property, not a footnote:**
 
 - duplicate computation is possible;
-- every attempt writes to its own immutable key,
-  `results/{job_id}/{attempt_id}.json`;
+- every **execution** writes to a key it mints itself,
+  `results/{job_id}/{attempt_id}/{execution_id}.json`, and returns that URI
+  through `FunctionCall.get()`;
 - exactly one attempt is installed as `jobs.accepted_attempt_id` in a
   transaction, and installation is the only thing that makes a result
   authoritative;
@@ -192,17 +222,29 @@ job ──► attempt row created with immutable attempt_id
   physically cannot write to another attempt's key;
 - cost accounting records actual completed attempts where observable.
 
-Immutable per-attempt keys are load-bearing. With a single shared
-`result_uri`, a zombie holding a valid presigned PUT overwrites a good
-result — the database fence would reject its *completion* while its *bytes*
-had already landed.
+**A unique key is not automatically an immutable one.** The Cls is
+deployed with `retries=1` (`modal_app.py:421`), so a single FunctionCall
+can execute twice — and both executions would receive the *same*
+`result_put_url` if the control plane minted it. A per-attempt key is
+therefore not enough.
+
+The execution mints its own key and reports it back. Abandoned execution
+objects are harmless and retention removes them. The alternative — a signed
+conditional `PUT` with `If-None-Match: *` plus a defined
+already-exists behaviour — is workable but strictly more machinery for the
+same guarantee.
+
+This matters because with a single shared `result_uri`, a zombie holding a
+valid presigned PUT overwrites a good result: the database fence rejects
+its *completion* while its *bytes* have already landed.
 
 ### Reconciler
 
 One background loop in the api process, advisory-locked so replicas do not
 double-run:
 
-- attempts with no `modal_call_id` → re-dispatch (safe: at-least-once);
+- attempts stuck in `dispatch_unknown` past a bounded wait → mint a **new**
+  attempt and dispatch that (never re-spawn the same attempt id);
 - attempts with a call ID → `fromId(id).get({timeoutMs: 0})`, install
   terminal results, record failures;
 - `uploading` and expired rows → sweep;
@@ -270,6 +312,19 @@ then constant-time compare.
 of generated entropy, not a human-chosen password, so a slow hash defends
 nothing — and a deliberately slow hash on every API request is a
 self-inflicted denial-of-service vector.
+
+## Why cancellation is not in v1
+
+An earlier draft claimed `FunctionCall.cancel()` made user-facing
+cancellation "nearly free". **It does not.** `cancel()` is a primitive; the
+product feature additionally needs a race-safe terminal database
+transition, refusal of results that arrive after it, handling of attempts
+whose call id was lost, cleanup of already-uploaded execution objects, and
+defined billing semantics for partial work.
+
+No user requirement needs it. `cancelled` is removed from the state
+machine; `cancel()` stays available as an **operator tool** for stopping a
+runaway call.
 
 ## Tenant isolation
 
@@ -363,10 +418,21 @@ Schema and migrations, R2 wiring, presigned upload + finalize, `parse_object`
 and its focused qualification, dispatch, attempts, reconciler.
 
 *Acceptance:* a job inserted by raw SQL is dispatched, parsed, its result
-lands at its attempt key, and the row reaches `succeeded` with
-`pages_actual` and `accepted_attempt_id` set. Killing the api mid-dispatch
-leaves no orphan: the reconciler either recovers the call or re-dispatches.
-A second attempt cannot alter the accepted result.
+lands at its own execution key, and the row reaches `succeeded` with
+`pages_actual` and `accepted_attempt_id` set.
+
+Killing the api mid-dispatch must satisfy the guarantee the system can
+actually make — **not** "leaves no orphan", which is false: a crash after
+Modal accepts but before it returns the id creates a call nothing can
+recover. The guarantee is:
+
+> Unknown work may continue and duplicate computation, but it cannot
+> corrupt or replace the authoritative result.
+
+Test it: kill the api mid-dispatch, let the reconciler mint a second
+attempt, then allow the original call to complete. The job must hold
+exactly one `accepted_attempt_id`, and the losing execution's bytes must
+still sit untouched at their own key.
 
 ### M2 — identity
 
@@ -409,3 +475,18 @@ config rate does not alter any already-written job row.
 - "MinIO is a one-variable swap" **overstated** S3 compatibility: CORS,
   checksum, signing, and conditional-write behaviour would each need
   verification.
+- A per-**attempt** result key was described as immutable. It is not:
+  `retries=1` means one FunctionCall can execute twice against the same
+  URL. The key must be minted per **execution**.
+- Re-dispatching a `dispatch_unknown` attempt under its own id was
+  specified, which would have pointed two calls at one key — defeating the
+  immutability property this design depends on.
+- "Killing the api mid-dispatch leaves no orphan" was **false**; the
+  guarantee is that unknown work cannot corrupt the authoritative result.
+- Finalize was said to verify the client's digest. Presigned PUTs are
+  signed `UNSIGNED-PAYLOAD`, so **the service never sees the bytes**; the
+  worker is the digest gate.
+- `FunctionCall.cancel()` was called "nearly free" user-facing
+  cancellation. It is a primitive, not the feature.
+- `running` was **not observable** after `.spawn()` — a call may be queued
+  with nothing executing. The state is `dispatched`.
