@@ -127,7 +127,8 @@ api_keys(id, user_id, prefix, hash, name, created_at, last_used_at, revoked_at)
 jobs(id, user_id, idempotency_key, state, input_uri, input_digest,
      input_bytes, pages_actual, unit_price_micros, estimated_cost_micros,
      accepted_attempt_id, result_uri, result_digest, error,
-     created_at, queued_at, completed_at, expires_at)
+     created_at, queued_at, completed_at,
+     upload_expires_at, retention_expires_at)
 job_attempts(id, job_id, modal_call_id, state, result_uri, result_digest,
              pages, dispatched_at, completed_at, error)
 ```
@@ -138,7 +139,17 @@ job_attempts(id, job_id, modal_call_id, state, result_uri, result_digest,
 in Modal's queue with nothing executing. Claiming `running` would assert
 something the control plane cannot observe. There is no `cancelled` state —
 see [Why cancellation is not in v1](#why-cancellation-is-not-in-v1).
-`(user_id, idempotency_key)` unique where not null.
+`job_attempts.state`: `dispatching | dispatch_unknown | dispatched |
+succeeded | failed`.
+
+`(user_id, idempotency_key)` unique where not null. A replay carrying a
+**different body** is a client bug, not a retry: return **422**, never the
+original job.
+
+`jobs` carries **two** deadline columns, not one overloaded `expires_at`:
+`upload_expires_at` (while `uploading`) and `retention_expires_at` (once
+terminal). One column with two meanings invites sweeper bugs that delete
+live jobs.
 
 **No `usage_events` table.** Usage is 1:1 with jobs, so a second table is
 redundant until refunds or adjustments exist. **No `pricing` table** — the
@@ -160,7 +171,11 @@ A presigned PUT happens out-of-band, so a job must not be queued before its
 object is verified to exist.
 
 ```text
-POST /v1/jobs        → job row: uploading, random immutable object key,
+POST /v1/jobs        → job row: uploading, random UNIQUE object key
+                       (unique, not immutable — a presigned PUT can be
+                       replayed until it expires; the worker's digest
+                       check is what protects integrity),
+                       client-supplied input_digest REQUIRED,
                        presigned PUT returned
 client PUTs bytes    → directly to R2
 POST /v1/jobs/:id/finalize
@@ -182,7 +197,18 @@ today via `expected_sha256`.) Specifying a signed R2 checksum upload
 contract instead is possible, but it must then be specified and tested —
 not implied by an unqualified "HEAD verifies the digest".
 
-Abandoned `uploading` rows are swept on their `expires_at`.
+**A maximum upload size is stated and enforced at finalize.** The
+qualified engine caps input at 90 MiB (`MAX_INPUT_BYTES`), so that is the
+cap; nothing otherwise stops a multi-gigabyte PUT that a worker then pulls
+into a 24 GiB container alongside other work. Finalize rejects anything
+larger and marks the job failed.
+
+The per-user concurrency cap needs a named enforcement point: a
+count-of-active-jobs check at submit races under concurrent submissions.
+Take a per-user advisory lock, or accept documented slight overage — but
+say which.
+
+Abandoned `uploading` rows are swept on their `upload_expires_at`.
 
 ### Dispatch, and its one honest seam
 
@@ -218,12 +244,15 @@ uncertain call may still be running, and that is accepted.
 - exactly one attempt is installed as `jobs.accepted_attempt_id` in a
   transaction, and installation is the only thing that makes a result
   authoritative;
-- **a stale attempt can never overwrite the accepted result**, because it
-  physically cannot write to another attempt's key;
+- **a stale attempt does not overwrite the accepted result**, because each
+  execution writes only to a key it minted itself. Note this is a
+  by-construction guarantee, not a capability one: the worker holds bucket
+  credentials and *could* technically write elsewhere. It is first-party
+  code, which makes that acceptable — but the weaker claim is the true one;
 - cost accounting records actual completed attempts where observable.
 
 **A unique key is not automatically an immutable one.** The Cls is
-deployed with `retries=1` (`modal_app.py:421`), so a single FunctionCall
+deployed with `retries=1` (`modal_app.py:420`), so a single FunctionCall
 can execute twice — and both executions would receive the *same*
 `result_put_url` if the control plane minted it. A per-attempt key is
 therefore not enough.
@@ -250,6 +279,26 @@ double-run:
 - `uploading` and expired rows → sweep;
 - retention expiry.
 
+**Modal outputs expire 7 days after completion**, after which `get()`
+returns an expired response. Two consequences:
+
+1. The reconciler must observe completions inside that window. At this
+   scale it trivially does, but a multi-day outage is then a real recovery
+   event, not a nuisance.
+2. **`modal@0.9.0` exports no `OutputExpiredError`** — the Python SDK has
+   one, the JS SDK does not (verified against the shipped type
+   definitions). So the reconciler *cannot* reliably distinguish expired
+   from failed by error class. This promotes the design's own backstop from
+   incidental to primary: because keys are
+   `results/{job_id}/{attempt_id}/{execution_id}.json`, **a result whose
+   Modal output expired is still recoverable by R2 prefix LIST.** Recover
+   from storage, not from the call.
+
+M0 must therefore record which error classes actually arrive from
+`get({timeoutMs: 0})` — pending, expired, and function-failed must be
+distinguishable before the reconciler's terminal-state logic can be
+written, and a pre-1.0 SDK is exactly where that taxonomy churns.
+
 ---
 
 ## `parse_object`: pointer mode
@@ -258,13 +307,31 @@ Today's `parse_document(payload: dict) -> dict` takes PDF bytes and returns
 the complete record (`deploy/modal/modal_app.py:568`). Pointer mode:
 
 ```python
-parse_object(job_id, attempt_id, input_get_url, result_put_url) -> dict  # compact metadata only
+parse_object(job_id, attempt_id, expected_sha256, input_key, result_prefix) -> dict
 ```
 
-It downloads from R2, invokes the same parsing core, uploads to the
-attempt's immutable key, and returns only metadata. This dissolves the
-qualified 64 MiB serialized-result cap, since the record no longer crosses
-the method boundary.
+**No presigned URLs cross the worker boundary.** An earlier draft passed
+`input_get_url` and `result_put_url`, which was self-contradictory: a
+presigned PUT is bound to one fixed key, so an execution handed one cannot
+mint its own — the very thing `retries=1` forces it to do. And a presigned
+GET has a fixed expiry, while `.spawn()` can sit queued behind a capped
+`max_containers` for hours before executing twice; the input URL would have
+had to outlive queue wait plus both executions or fail with download errors
+that look like transport bugs.
+
+Both problems dissolve with one mechanism instead of two. The worker holds
+**least-privilege R2 credentials via a Modal secret** — read on the inputs
+bucket, write on the results bucket. It downloads `input_key`, verifies
+SHA-256 against `expected_sha256`, parses, mints
+`{result_prefix}/{execution_id}.json`, writes it, and returns the URI,
+digest, page count, and timing through `FunctionCall.get()`.
+
+The control plane then presigns **only client-facing URLs** — browser
+upload and result download. Presigned URLs and worker credentials stop
+being two overlapping answers to the same question.
+
+This also dissolves the qualified 64 MiB serialized-result cap, since the
+record no longer crosses the method boundary.
 
 ### Focused transport qualification
 
@@ -308,6 +375,22 @@ Access-protected; the key is the boundary. Store SHA-256 plus an 8-char
 clear prefix for display; show plaintext exactly once; look up by prefix,
 then constant-time compare.
 
+**Both hostnames terminate at the same Node process, so Access identity
+must come from the verified JWT — never a header.** If the app trusted
+`Cf-Access-Authenticated-User-Email`, any request to the *unprotected* API
+hostname could forge a dashboard identity and reach another user's key
+creation and revocation. The app verifies the `Cf-Access-Jwt-Assertion`
+signature against Cloudflare's public keys **and** the Access AUD tag, and
+every dashboard route requires it.
+
+**Access does not delete CSRF.** An earlier draft listed CSRF among the
+costs of the rejected magic-link flow, implying Access removed it. It does
+not: the dashboard is cookie-authenticated (`CF_Authorization`), so
+state-changing routes stay exposed unless that cookie's `SameSite`
+provably blocks cross-site POSTs — an unverified vendor cookie attribute is
+not a security argument. Dashboard mutations check the `Origin` header.
+That is about five lines.
+
 **SHA-256 is correct here and bcrypt would be a bug.** The key is 256 bits
 of generated entropy, not a human-chosen password, so a slow hash defends
 nothing — and a deliberately slow hash on every API request is a
@@ -350,8 +433,12 @@ billed. All are boot/idle-inclusive; none is a measured warm-fleet
 marginal. So $0.001/page is **1.7×–3.3× measured parse compute**, before
 Postgres, storage, and the VPS. Quote the range, never a single multiple.
 
-Cost is recorded at completion with `pages_actual`; page count is unknown
-until the PDF opens.
+**Stamp the rate at job creation; multiply at completion.**
+`unit_price_micros` is written when the job row is created, because that is
+the rate in force when the user submitted. `estimated_cost_micros` is
+written at completion as `unit_price_micros × pages_actual`, because page
+count is unknown until the PDF opens. Saying only "resolved at write time"
+left which write ambiguous.
 
 ## Dashboard
 
@@ -407,9 +494,20 @@ since the last backup.** State the target explicitly.
 call ID → **restart the Node process** → `functionCalls.fromId()` → get the
 result.
 
-*Acceptance:* a result recovered by a process that did not spawn the call.
-This validates deployment, auth, serialization, and recovery — not the API
-surface, which is already verified above. Note the qualification apps were
+*Acceptance:* a **verified-good** result recovered by a process that did not
+spawn the call. `_result()` returns `status: "failed"` without raising
+(`modal_app.py:736`), so "an object came back" is not success — assert
+`status === "completed"`, matching `request_id` and `document_sha256`,
+`page_count === 1`, `pages_ok === 1`, and no `failure`.
+
+Also record the **error taxonomy**: which classes arrive from
+`get({timeoutMs: 0})` for pending vs expired vs function-failed. The
+reconciler cannot be written without this, and JS has no
+`OutputExpiredError`.
+
+This validates deployment, auth, `Uint8Array → Python bytes`
+serialization, and cross-restart recovery — not the API surface, which is
+already settled by type inspection. Note the qualification apps were
 stopped; this needs a deployed app.
 
 ### M1 — job plane
@@ -442,7 +540,10 @@ issue/revoke, key auth on `/v1/jobs`. Public surface: presigned intake,
 
 *Acceptance:* an invited user logs in, creates a key, submits a PDF, polls
 to completion. User B gets 404 on all of user A's routes. A replayed
-`Idempotency-Key` returns the original job rather than parsing twice.
+`Idempotency-Key` returns the original job rather than parsing twice, while
+a replay with a different body gets 422. **A request to the API hostname
+carrying a forged `Cf-Access-Authenticated-User-Email` header gets 401 on
+every dashboard route.**
 
 ### M3 — dashboard
 
@@ -451,6 +552,10 @@ The four pages, plus cost stamping at completion.
 *Acceptance:* a completed job appears with pages, duration, and estimated
 cost; month-to-date equals the sum over that user's jobs; changing the
 config rate does not alter any already-written job row.
+
+**Plus a tested restore.** The durability section calls an untested backup
+decoration; without this line, v1 ships decorated. Restore the database
+from a backup into a scratch instance and serve the dashboard from it.
 
 ## Open questions for the owner
 
@@ -490,3 +595,15 @@ config rate does not alter any already-written job row.
   cancellation. It is a primitive, not the feature.
 - `running` was **not observable** after `.spawn()` — a call may be queued
   with nothing executing. The state is `dispatched`.
+- `parse_object(job_id, attempt_id, input_get_url, result_put_url)`
+  **contradicted this document's own key scheme**: a presigned PUT is bound
+  to one key, so an execution handed one cannot mint its own. Presigned
+  URLs no longer cross the worker boundary at all.
+- "A stale attempt **physically cannot** write to another attempt's key"
+  was too strong once the worker holds bucket credentials. It is a
+  by-construction guarantee.
+- Adopting Cloudflare Access was said to remove CSRF. It does not — the
+  dashboard remains cookie-authenticated.
+- The input object key was called **immutable**; it is unique. A presigned
+  PUT can be replayed until expiry.
+- `retries=1` is at `modal_app.py:420`, not 421.

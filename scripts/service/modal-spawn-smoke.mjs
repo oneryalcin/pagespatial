@@ -90,11 +90,11 @@ if (phase === 'spawn') {
 
   writeFileSync(statePath, JSON.stringify({
     functionCallId: call.functionCallId,
-    app: APP, cls: CLS, method: METHOD, sha256,
-    spawnedByPid: process.pid,
+    app: APP, cls: CLS, method: METHOD,
+    sha256, requestId: payload.request_id,
   }, null, 2));
 
-  console.log(`spawned  callId=${call.functionCallId}  pid=${process.pid}  sha=${sha256.slice(0, 12)}`);
+  console.log(`spawned  callId=${call.functionCallId}  sha=${sha256.slice(0, 12)}`);
   console.log(`now run (fresh process):  node ${process.argv[1]} recover ${statePath}`);
   process.exit(0);
 }
@@ -107,25 +107,49 @@ if (phase === 'recover') {
   } catch {
     fail(`could not read ${statePath}. Run the spawn phase first.`);
   }
-  if (state.spawnedByPid === process.pid) {
-    fail('same pid as the spawning process — that would prove nothing about recovery.');
-  }
-
   const call = await client.functionCalls.fromId(state.functionCallId);
   const deadline = Date.now() + Number(process.env.MODAL_SMOKE_TIMEOUT_MS ?? 900_000);
 
   for (;;) {
     try {
       const result = await call.get({ timeoutMs: 0 });
-      console.log(`\nrecovered  callId=${state.functionCallId}  pid=${process.pid} (spawned by ${state.spawnedByPid})`);
-      console.log(`result keys: ${Object.keys(result ?? {}).join(', ') || '(non-object result)'}`);
-      console.log('PASS: a process that did not spawn the call retrieved its result.');
+      console.log(`\nrecovered  callId=${state.functionCallId}`);
+
+      // A RETURNED OBJECT IS NOT SUCCESS. _result() sets
+      // status="failed" if failure else "completed" (modal_app.py:736)
+      // and returns normally either way — asserting only "an object came
+      // back" would print PASS for a parse that failed.
+      const checks = [
+        ['status is completed', result?.status === 'completed'],
+        ['request_id matches', result?.request_id === state.requestId],
+        ['document_sha256 matches', result?.document_sha256 === state.sha256],
+        ['page_count is 1', result?.page_count === 1],
+        ['pages_ok is 1', result?.pages_ok === 1],
+        ['pages_failed is 0', result?.pages_failed === 0],
+        ['exactly one page returned', Array.isArray(result?.pages) && result.pages.length === 1],
+        ['no failure recorded', !result?.failure],
+      ];
+      let ok = true;
+      for (const [label, passed] of checks) {
+        console.log(`  ${passed ? 'ok  ' : 'FAIL'}  ${label}`);
+        if (!passed) ok = false;
+      }
+      if (!ok) {
+        console.error(`\nfailure detail: ${JSON.stringify(result?.failure ?? null)}`);
+        fail('the call returned, but the parse did not succeed.');
+      }
+      console.log(`\ntiming: ${JSON.stringify(result?.timing ?? {})}`);
+      console.log('PASS: a process that did not spawn the call retrieved a verified-good result.');
       process.exit(0);
     } catch (error) {
       // ONLY a timeout means "still running". Auth, lookup, application
       // and serialization failures must surface immediately — masking them
       // as "still running" hides a typo'd app name for fifteen minutes.
       if (!(error instanceof FunctionTimeoutError)) {
+        // Taxonomy probe: modal@0.9.0 exports NO OutputExpiredError (the
+        // Python SDK has one). The reconciler must tell pending from
+        // expired from function-failed, so record what class actually
+        // arrives rather than guessing.
         fail(`${error?.constructor?.name ?? 'Error'}: ${error?.message ?? error}`);
       }
       if (Date.now() > deadline) fail(`timed out waiting for ${state.functionCallId}`);
