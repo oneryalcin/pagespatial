@@ -3,295 +3,409 @@
 **Status:** design, awaiting implementation · **Date:** 2026-08-26
 **Scope:** one workstream, three shippable milestones
 **Issues:** owns the account/dashboard layer of #76; subsumes #87 items 1–4;
-implements the queue half of #105
+**does not** implement #105 — see [Why not #105](#why-not-105-yet)
 **Audience:** the engineer picking this up — read
 [principles](../principles.md) and [workstreams](../workstreams.md) first.
 
-## Why now, and what changed
+## Why now
 
-The parse engine is qualified. `deploy/modal/` passed its 12/12
-qualification and CPU/OpenVINO is the adopted default. What does not exist
-is a way for anyone outside the owner's Modal workspace to use it: today a
-caller must have workspace credentials and call `.spawn()` directly.
+The parse engine is qualified — `deploy/modal/` passed 12/12 and
+CPU/OpenVINO is the adopted default. What does not exist is a way for
+anyone outside the owner's Modal workspace to use it: a caller today needs
+workspace credentials and calls `.spawn()` directly.
 
-This document specifies the smallest layer that turns a qualified engine
-into a service a named user can actually call: an account, an API key, a
-job ledger that survives a restart, and a dashboard that shows what was
-run and what it cost.
+This specifies the smallest layer that turns a qualified engine into a
+service a named user can call: an account, an API key, a job ledger that
+survives restart, and a dashboard showing what ran and what it cost.
 
 **The engine is not in scope.** Nothing here changes parsing, OCR, the
-record schema, or the merge. This is the front door.
+record schema, or the merge.
+
+## Why not #105 yet
+
+An earlier draft of this document built #105's provider-neutral
+architecture: a Postgres queue, pull-based workers, a lease/heartbeat
+protocol, and a public worker-control API. **It was rejected in review, and
+correctly.**
+
+The fatal defect: a pull-based worker at `min_containers=0` cannot poll for
+work, because no container is running to poll. Nothing starts it. The only
+fix is for the API to tell Modal to start something — and once you are
+dispatching, the lease protocol on top is a second queue layered over
+Modal's already-qualified one.
+
+The deeper error was importing an abstraction ahead of its second
+implementation. #105 is written for a future with AWS Spot workers; the
+board itself records Spot as "only a measured cost candidate." **Pull-based
+workers stay parked in #105 until a second compute provider is genuinely
+earned.** Modal is the queue and the autoscaler.
+
+(For the record: the pull design is not *impossible* — a permanently warm
+or cron-scheduled poller would run it. It forfeits scale-to-zero, which is
+the property that made Modal the right choice.)
 
 ## Out of scope, deliberately
 
 SSO/SAML, organisations and teams, payment collection, webhooks,
-SSE/WebSocket progress, the Flex tier, Kubernetes, and any client-side
-framework. Each is recorded here so it is not rediscovered as an
-oversight. Self-serve signup is out: **v1 is invite-only** (owner
-decision, 2026-08-26), which removes email verification, bot defence, and
-free-tier abuse quotas from the critical path.
+progressive/SSE page streaming, the Flex tier, Kubernetes, Redis, SQS, an
+ORM, a pricing table, provider abstraction, and any client-side framework.
+Self-serve signup is out: **v1 is invite-only** (owner decision,
+2026-08-26), which removes email verification, bot defence, and free-tier
+abuse quotas from the critical path.
 
-Enrichment stays **off** for external callers. It spends real money per
-page against the owner's Gemini key, and there is no per-caller spend cap
-yet. Turning it on is gated on the cost model below becoming real.
+Enrichment stays **off** for external callers — it spends real money per
+page against the owner's Gemini key and there is no per-caller spend cap.
 
 ---
 
 ## Architecture
 
-Three processes. The existing `service/` is demoted from "the service" to
-"the worker's engine" — it keeps its HTTP shape, but only a worker ever
-talks to it, over loopback inside the worker container.
-
-| process | runs where | owns | state |
-|---|---|---|---|
-| **api** | VPS | dashboard, auth, job intake, worker-control | stateless |
-| **worker** | Modal CPU | lease loop + existing parse pipeline | ephemeral |
-| **sweeper** | cron inside api, advisory-locked | lease reclaim, retention | stateless |
-
 ```text
-                     ┌──────────── VPS (Docker Compose) ────────────┐
-   browser ─────────►│  caddy (auto-TLS)                            │
-   API client ──────►│    ├── api  (Node)                           │
-                     │    └── postgres  (named volume)              │
-                     └───────────────┬──────────────────────────────┘
-                                     │ authenticated HTTPS
-                                     │ (worker bearer token)
-                     ┌───────────────┴──────────────┐
-                     │  Modal CPU workers           │
-                     │  lease → parse → PUT result  │
-                     └───────────────┬──────────────┘
-                                     │ presigned S3 URLs
-                              ┌──────┴──────┐
-                              │  R2 bucket  │  PDFs in, results out
-                              └─────────────┘
+                    Internet
+                       │
+        Cloudflare Access (dashboard) / Tunnel (API)
+                       │  outbound-only origin connection
+        ┌──────────────┴────────────── VPS ──────────────┐
+        │   api (Node, server-rendered HTML)             │
+        │     └── postgres (named volume)                │
+        └──────┬──────────────────────┬──────────────────┘
+               │                      │
+               │ modal.cls.fromName   │ presigned S3
+               │   .spawn()           │
+        ┌──────┴────────┐      ┌──────┴──────┐
+        │ Modal CPU     │─────►│  R2 bucket  │
+        │ parse_object  │      └─────────────┘
+        └───────────────┘
 ```
 
-### Why the workers are not on the VPS
+**Workers never call back to the VPS.** Results go to R2; the API polls
+`FunctionCall.get({timeoutMs: 0})`. Combined with Cloudflare Tunnel's
+outbound-only origin connection, **the box exposes no inbound public
+ports at all.**
 
-A worker pair needs ~2.7 GB (cgroup-measured, M1 container; 10.9 GB for
-four). The control-plane box runs Postgres, api, and Caddy in 4 GB and has
-nothing left. Modal also scales to zero, and at ~$440/M pages it stays
-cheaper than a dedicated worker VPS below roughly 110k pages/month.
+The existing `service/` is demoted from "the service" to the worker's
+engine — unchanged, reachable only on loopback inside the worker container.
+The new public API simply has no `pdfPath` route; no special build is
+needed to remove one.
 
-**This is a deployment choice, not an architecture choice.** A worker is
-anything holding a valid worker token that can call `POST /internal/lease`.
-Adding a worker VPS later — for volume economics, or to hide Modal's
-70–88 s cold start behind one always-warm worker — means running the same
-drainer container elsewhere and pointing it at the same URL. No schema,
-API, or dashboard change.
+### Verified: the JS SDK supports this
 
-### Why object storage is not on the VPS
+Confirmed against the shipped `modal@0.9.0` type definitions (not the main
+branch — this is what `npm install` gives you):
 
-R2 rather than MinIO on the same box. Self-hosting the control plane is
-cheap; self-hosting *durable* object storage means owning replication and
-the disk holding customer PDFs — on the machine that is exposed to the
-public internet. R2 has no egress fees, which matters because Modal
-workers download every input.
+```
+ClsInstance.method(name: string): Function_            index.d.ts:6658
+Function_.spawn(args?, kwargs?): Promise<FunctionCall>
+FunctionCall.functionCallId: string                    readonly
+FunctionCallService.fromId(id): Promise<FunctionCall>
+FunctionCall.get(params?) / .cancel(params?)
+```
 
-Write against the S3 API, configured by endpoint URL. MinIO then remains a
-one-variable swap if the posture ever changes.
+`parse_document` is a `@modal.method()` on a Cls, so this chain is the one
+that matters: `fromName → instance() → method() → spawn() → functionCallId
+→ persist → fromId() → get()`. `cancel()` gives user-facing job
+cancellation nearly free.
+
+**`modal@0.9.0` is pre-1.0.** Accept the churn risk knowingly, and pin the
+version. `scripts/service/modal-spawn-smoke.mjs` (M0 below) proves
+deployment, auth, serialization, and cross-restart recovery — the API
+surface itself is already settled.
 
 ---
 
 ## Data model
 
-Five tables. `pg` with hand-written SQL; no ORM. Migrations are numbered
-`.sql` files applied by a ~30-line runner — the schema is small enough that
-a migration framework costs more than it returns.
+Four tables. `pg` with hand-written SQL, numbered `.sql` migrations, ~30
+line runner.
 
 ```sql
 users(id, email unique, status, created_at)
 api_keys(id, user_id, prefix, hash, name, created_at, last_used_at, revoked_at)
 jobs(id, user_id, idempotency_key, state, input_uri, input_digest,
-     pages_estimated, pages_actual, priority, available_at,
-     lease_token, lease_until, worker_id, attempts, error,
-     result_uri, result_digest, created_at, completed_at, expires_at)
-usage_events(id, job_id, user_id, pages, unit_price_micros,
-             total_micros, tier, occurred_at)
-login_tokens(hash, email, expires_at, used_at)
+     input_bytes, pages_actual, unit_price_micros, estimated_cost_micros,
+     accepted_attempt_id, result_uri, result_digest, error,
+     created_at, queued_at, completed_at, expires_at)
+job_attempts(id, job_id, modal_call_id, state, result_uri, result_digest,
+             pages, started_at, completed_at, error)
 ```
 
-`state` is `queued | leased | succeeded | failed | cancelled`.
-`(user_id, idempotency_key)` is unique where the key is not null.
+`jobs.state`: `uploading | queued | running | succeeded | failed | cancelled`.
+`(user_id, idempotency_key)` unique where not null.
 
-## Queue contract
+**No `usage_events` table.** Usage is 1:1 with jobs, so a second table is
+redundant until refunds or adjustments exist. **No `pricing` table** — the
+rate is a config constant.
 
-Postgres is the queue. The entire lease is one statement:
+What survives from the earlier draft is the property that actually mattered:
+**the rate is resolved at write time and stamped onto the row**
+(`unit_price_micros` on `jobs`). If the rate lived only in config and the
+dashboard multiplied at render time, changing the price would silently
+rewrite every historical figure. Money is integer micros; never floats.
 
-```sql
-UPDATE jobs SET state='leased', lease_token=gen_random_uuid(),
-  lease_until=now()+interval '10 min', worker_id=$1, attempts=attempts+1
-WHERE id = (SELECT id FROM jobs WHERE state='queued' AND available_at<=now()
-            ORDER BY priority DESC, created_at LIMIT 1 FOR UPDATE SKIP LOCKED)
-RETURNING *;
+---
+
+## Job lifecycle
+
+### Upload finalization
+
+A presigned PUT happens out-of-band, so a job must not be queued before its
+object is verified to exist.
+
+```text
+POST /v1/jobs        → job row: uploading, random immutable object key,
+                       presigned PUT returned
+client PUTs bytes    → directly to R2
+POST /v1/jobs/:id/finalize
+                     → HEAD the object: exists, size within cap,
+                       digest matches the client-supplied value
+                     → transaction: state=queued
 ```
 
-The worker receives the job plus a presigned GET for the input and a
-presigned PUT for the result. It parses, uploads, then calls
-`POST /internal/jobs/:id/complete` with its `lease_token`.
+The worker **re-verifies the digest after download**. Abandoned `uploading`
+rows are swept on their `expires_at`.
 
-**The lease token is the idempotency mechanism.** A worker that stalls
-past `lease_until` has its job reclaimed by the sweeper and re-queued with
-a fresh token; when the zombie eventually reports, its stale token is
-rejected and its result discarded. Without this, a slow worker and its
-replacement both write results and the last writer wins silently.
+### Dispatch, and its one honest seam
 
-Terminal failure after N attempts records `error` and stops. No retry
-storm, no dead-letter queue — a failed job is a row with a reason.
+**The API cannot atomically commit Postgres state and spawn a Modal call.**
+A crash after Modal accepts but before `modal_call_id` reaches Postgres
+leaves an attempt with no call ID. This is a dual-write, and there is no
+way to remove it short of the worker-control protocol this design
+deliberately rejects.
+
+The answer is not leases. It is immutable attempts plus honest semantics:
+
+```text
+job ──► attempt row created with immutable attempt_id
+          └── modal .spawn()
+                └── modal_call_id persisted when available
+```
+
+**Dispatch is at-least-once. Stated as a property, not a footnote:**
+
+- duplicate computation is possible;
+- every attempt writes to its own immutable key,
+  `results/{job_id}/{attempt_id}.json`;
+- exactly one attempt is installed as `jobs.accepted_attempt_id` in a
+  transaction, and installation is the only thing that makes a result
+  authoritative;
+- **a stale attempt can never overwrite the accepted result**, because it
+  physically cannot write to another attempt's key;
+- cost accounting records actual completed attempts where observable.
+
+Immutable per-attempt keys are load-bearing. With a single shared
+`result_uri`, a zombie holding a valid presigned PUT overwrites a good
+result — the database fence would reject its *completion* while its *bytes*
+had already landed.
+
+### Reconciler
+
+One background loop in the api process, advisory-locked so replicas do not
+double-run:
+
+- attempts with no `modal_call_id` → re-dispatch (safe: at-least-once);
+- attempts with a call ID → `fromId(id).get({timeoutMs: 0})`, install
+  terminal results, record failures;
+- `uploading` and expired rows → sweep;
+- retention expiry.
+
+---
+
+## `parse_object`: pointer mode
+
+Today's `parse_document(payload: dict) -> dict` takes PDF bytes and returns
+the complete record (`deploy/modal/modal_app.py:568`). Pointer mode:
+
+```python
+parse_object(job_id, attempt_id, input_get_url, result_put_url) -> dict  # compact metadata only
+```
+
+It downloads from R2, invokes the same parsing core, uploads to the
+attempt's immutable key, and returns only metadata. This dissolves the
+qualified 64 MiB serialized-result cap, since the record no longer crosses
+the method boundary.
+
+### Focused transport qualification
+
+Pointer mode is not a free swap — it changes transport failure behaviour,
+digest verification, memory profile, result publication, and duplicate-write
+behaviour. But if `parse_object` is a thin transport wrapper around an
+unchanged parsing core, a **focused** qualification suffices:
+
+1. records identical to `parse_document` after removing volatile fields
+   (`nativeObservations[].font` is volatile identity — see the Modal
+   qualification's spec amendment);
+2. input digest verified after download;
+3. result digest recorded;
+4. large input and large result exercised;
+5. download/upload failures visible and bounded;
+6. Modal retry behaviour exercised;
+7. no meaningful parsing-throughput regression.
+
+**Repeat the full 12/12 only if** the parsing engine, warm-container
+lifecycle, process management, or retry semantics change. They do not here.
+
+---
 
 ## Authentication
 
-Three distinct credentials. They must not share a code path.
+**Dashboard: Cloudflare Access**, one-time PIN against the invited email
+list, additional identity providers later. This deletes `login_tokens`,
+custom sessions, the email provider, and most future SSO migration work.
 
-**Users (dashboard): magic link.** No passwords. A password flow needs an
-email sender for reset anyway, so magic link needs strictly *less* code and
-stores no credential that can leak. `login_tokens` holds a hash, single
-use, short expiry. Session is a signed httpOnly cookie. SSO later attaches
-to the same `users` row as an additional identity provider.
+The earlier draft called a custom magic-link flow "well-trodden." That was
+wrong, and the concrete reason is worth recording so it is not re-argued:
+**email scanners prefetch links and consume single-use tokens before the
+user clicks.** Add revocable server-side sessions, CSRF on key
+creation/revocation, session rotation, and login throttling, and it is
+clearly more code than adopting Access. The app still keeps a `users` row
+mapped from the verified Access identity.
 
-**API callers: `ps_live_<32 bytes base62>`.** Store SHA-256 of the key plus
-an 8-character clear prefix for display. Show the plaintext exactly once,
-at creation. Look up by prefix, then constant-time compare the hash.
+**API callers: application-owned keys**, `ps_live_<32 bytes base62>`.
+Machines cannot answer an OTP challenge, so the API hostname is *not*
+Access-protected; the key is the boundary. Store SHA-256 plus an 8-char
+clear prefix for display; show plaintext exactly once; look up by prefix,
+then constant-time compare.
 
-**SHA-256 here is correct, and bcrypt would be a bug.** The key is 256 bits
-of generated entropy, not a human-chosen password, so there is nothing for
-a slow hash to defend. A deliberately slow hash on every API request is a
+**SHA-256 is correct here and bcrypt would be a bug.** The key is 256 bits
+of generated entropy, not a human-chosen password, so a slow hash defends
+nothing — and a deliberately slow hash on every API request is a
 self-inflicted denial-of-service vector.
-
-**Workers: a rotatable bearer token**, separate from user keys, scoped to
-`/internal/*` only. Modal egress IPs are not stable, so there is no IP
-allowlist to fall back on — the token is the only boundary, and it gets
-its own rate limit and its own rotation procedure.
 
 ## Tenant isolation
 
-Every read of a job or result is filtered by `user_id`. This is enforced
-structurally: a single accessor takes `user_id` and there is no code path
-that fetches a job by id alone. A cross-tenant fetch returns **404, not
-403** — 403 confirms the id exists and turns the endpoint into an
-enumeration oracle.
+Every job read is filtered by `user_id`, enforced structurally: one accessor
+takes `user_id`, and no code path fetches a job by id alone. Cross-tenant
+reads return **404, not 403** — 403 confirms the id exists and turns the
+endpoint into an enumeration oracle.
 
-Acceptance is a test that asserts user B receives 404 for every one of user
-A's job, page, result, and SVG routes.
+*Acceptance:* a test asserting user B receives 404 on every one of user A's
+routes.
 
-**`pdfPath` mode is compiled out of the public build**, not env-gated. It
-is an arbitrary server-file read and a file-existence oracle (#76). An env
-flag is one misconfiguration away from being on.
+## Cost display
 
-## Cost and usage
+The placeholder is **$0.001/page**, and it is labelled **estimated usage
+cost**, never "billing" — there is no payment, credit, or reservation
+system, and submission reserves nothing.
 
-There is no cost model yet. The placeholder is **$0.001/page** — but the
-placeholder discipline matters more than the number.
+**The placeholder is honest about what it is.** The qualification publishes
+three per-page costs, and which one you compare against changes the answer:
+**$572/M** gauntlet-inclusive ($0.000572/terminal page, all failure arms),
+**~$440/M** across steady arms, **~$300/M** single-container 100-call
+billed. All are boot/idle-inclusive; none is a measured warm-fleet
+marginal. So $0.001/page is **1.7×–3.3× measured parse compute**, before
+Postgres, storage, and the VPS. Quote the range, never a single multiple.
 
-**Resolve the price at write time and stamp it onto the row.** A `pricing`
-table carries the rate with an effective-from date; `usage_events` stores
-the resolved `unit_price_micros` alongside the total. If the rate instead
-lived in code and the dashboard multiplied at render time, then the day the
-price changes, every historical figure silently changes with it. This is
-the same era-discipline the evaluation baselines already use, and it is far
-cheaper to establish now than to retrofit.
-
-Money is integer micros (millionths of a dollar). Never floats.
-
-**The placeholder is honest about what it is.** The qualification
-(`2026-08-23-modal-qualification`) publishes three per-page costs, and which
-one you compare against changes the answer: **$572/M** gauntlet-inclusive
-($0.000572/terminal page, all failure arms included), **~$440/M** across the
-steady arms, **~$300/M** for the single-container 100-call billed arm. All
-three are boot/idle-inclusive and none is a measured warm-fleet marginal
-cost.
-
-So $0.001/page is **1.7×–3.3× measured parse compute**, before Postgres,
-storage, and the always-on VPS. That is a plausible order of magnitude,
-**not a price**, and the dashboard must label it as such until real unit
-economics land. Quote the range, never a single multiple.
-
-**Billing happens at completion, not submission.** Page count is unknown
-until the PDF opens. Submit reserves against a cap; completion writes the
-usage event with `pages_actual`.
+Cost is recorded at completion with `pages_actual`; page count is unknown
+until the PDF opens.
 
 ## Dashboard
 
 Server-rendered HTML from the api process. No SPA, no bundler, no build
-step — it is four pages, and a client-side framework would add a
-compilation stage to CI for no user-visible gain.
+step — four pages do not justify adding a compilation stage to CI.
 
-1. **Jobs** — timeline, newest first: state, pages, duration, cost, filter
-   by state and date range.
-2. **Usage** — per-day pages and spend, month-to-date total, with the
-   placeholder-pricing caveat rendered on the page, not buried in docs.
-3. **API keys** — create (plaintext shown once), name, prefix, last used,
-   revoke.
+1. **Jobs** — timeline, newest first: state, pages, duration, estimated
+   cost; filter by state and date.
+2. **Usage** — per-day pages and estimated spend, month-to-date, with the
+   placeholder caveat rendered on the page, not buried in docs.
+3. **API keys** — create (plaintext once), name, prefix, last used, revoke.
 4. **Account** — email, invite status, sign out.
 
-## Trust boundary and operational obligations
+### No progressive page endpoints in v1
 
-The VPS is the single point of failure for the control plane. If it is
-down, workers cannot lease and **jobs stall — they are not lost**, provided
-the Postgres volume survives. This is accepted for v1 and stated here so it
-is a known property rather than a discovery.
+`GET /v1/jobs/:id` returns status and summary; a completed job gets one
+short-lived result-download URL. No page cursor, page route, or SVG route.
 
-Consequently:
+The precise reason: one `result_uri` does not make page endpoints
+*impossible* — the API could load and slice the completed JSON. What is
+impossible is **progressive availability during parsing**, because the
+Modal call publishes only at document completion. `reconstructSvg()` (#51)
+and per-page routes exist in `service/` and stay deliberately unexposed
+until a consumer needs them.
 
-- **Backups are the primary operational obligation.** The job ledger and
-  usage events are the only state here that cannot be rebuilt from
-  elsewhere. `pg_dump` to R2 on a cron, and a **tested restore** — an
-  untested backup is decoration.
-- Uploaded PDFs never touch VPS disk (presigned direct-to-storage), which
-  keeps customer documents off the internet-facing box.
-- Secrets live in a `.env` on the box and in Modal secrets on the worker
-  side; neither is committed.
-- Structured request logs with job id and user id. `/health` covers
-  Postgres reachability and R2 reachability, not just process liveness.
+## Durability
+
+The VPS is a single point of failure. If it is down, **submitted jobs stall
+and in-flight Modal calls still complete** — their results land in R2 and
+are reconciled on restart.
+
+"Jobs are not lost" would be too strong: **VPS disk loss loses everything
+since the last backup.** State the target explicitly.
+
+- **RPO ≤ 24h, RTO ≤ 4h** for v1 — nightly `pg_dump` to R2 with a **tested
+  restore**. An untested backup is decoration.
+- Backups use **separate credentials** from the application's R2 access, so
+  an application-level compromise cannot delete them, with their own
+  retention.
+- Uploaded PDFs never touch VPS disk.
+- Secrets in `.env` on the box and Modal secrets worker-side; neither
+  committed.
+- Structured logs carrying job id and user id. `/health` covers Postgres
+  and R2 reachability, not just process liveness.
 
 ---
 
 ## Milestones
 
-Ordered by risk, not by visibility. A is the part that can go wrong; B and
-C are well-trodden and are meaningless without it.
+### M0 — spawn smoke test *(prerequisite, hours)*
+
+`scripts/service/modal-spawn-smoke.mjs`: `Cls.method().spawn()` → persist
+call ID → **restart the Node process** → `functionCalls.fromId()` → get the
+result.
+
+*Acceptance:* a result recovered by a process that did not spawn the call.
+This validates deployment, auth, serialization, and recovery — not the API
+surface, which is already verified above. Note the qualification apps were
+stopped; this needs a deployed app.
 
 ### M1 — job plane
 
-Postgres schema and migrations, R2 wiring, presigned upload/download,
-job lifecycle, worker-control API, sweeper, and a Modal drainer wrapping
-the existing pipeline.
+Schema and migrations, R2 wiring, presigned upload + finalize, `parse_object`
+and its focused qualification, dispatch, attempts, reconciler.
 
-*Acceptance:* a job submitted with a raw SQL insert is leased by a Modal
-worker, parsed, its result lands in R2, and the row reaches `succeeded`
-with `pages_actual` set. Killing the worker mid-parse causes reclaim and a
-successful retry. A stale `lease_token` completion is rejected.
+*Acceptance:* a job inserted by raw SQL is dispatched, parsed, its result
+lands at its attempt key, and the row reaches `succeeded` with
+`pages_actual` and `accepted_attempt_id` set. Killing the api mid-dispatch
+leaves no orphan: the reconciler either recovers the call or re-dispatches.
+A second attempt cannot alter the accepted result.
 
 ### M2 — identity
 
-Invite creation, magic-link login, sessions, API key issue/revoke, and key
-auth on `/v1/jobs`. Public `/v1` surface hardened: streaming intake removed
-in favour of presigned URLs, `Idempotency-Key`, 429 + `Retry-After`,
-`includePages=false` and `afterPage=N` (#87 items 1–4, 6).
+Cloudflare Access + Tunnel, invite list, `users` mapping, API key
+issue/revoke, key auth on `/v1/jobs`. Public surface: presigned intake,
+`Idempotency-Key`, 429 + `Retry-After` (#87 items 1–4).
 
-*Acceptance:* an invited user logs in, creates a key, submits a PDF through
-the public API, and polls it to completion. User B receives 404 on every
-one of user A's routes. A replayed `Idempotency-Key` returns the original
-job rather than parsing twice.
+*Acceptance:* an invited user logs in, creates a key, submits a PDF, polls
+to completion. User B gets 404 on all of user A's routes. A replayed
+`Idempotency-Key` returns the original job rather than parsing twice.
 
 ### M3 — dashboard
 
-The four pages above, plus the `pricing` table and usage-event write on
-completion.
+The four pages, plus cost stamping at completion.
 
-*Acceptance:* a completed job appears on the timeline with pages, duration,
-and cost; the usage page's month-to-date total equals the sum of
-`usage_events.total_micros` for that user; changing the pricing row does not
-alter any already-written event.
+*Acceptance:* a completed job appears with pages, duration, and estimated
+cost; month-to-date equals the sum over that user's jobs; changing the
+config rate does not alter any already-written job row.
 
 ## Open questions for the owner
 
-1. **Retention default.** How long do result objects and uploaded PDFs live
-   before the sweeper expires them? 30 days is the assumed default until
-   told otherwise.
-2. **Per-user concurrency cap.** A single cap (e.g. 5 concurrent jobs) is
-   assumed; the alternative is per-tier, which implies tiers exist, which
-   implies #105's Standard/Flex split lands first.
-3. **Domain and email sender.** Both are external dependencies with lead
-   time; naming them early avoids blocking M2.
+1. **Retention default** for result objects and uploaded PDFs. 30 days
+   assumed.
+2. **Per-user concurrency cap.** A flat 5 is assumed; per-tier implies tiers
+   exist, which implies #105's Standard/Flex lands first.
+3. **Domain** — needed for Cloudflare Access and Tunnel, external lead time,
+   blocks M2.
+
+## Corrections to earlier claims in this document's history
+
+- The **pull-worker/lease architecture is withdrawn**; it could not start a
+  scale-to-zero worker.
+- "The lease token is the idempotency mechanism" was **wrong** — it is a
+  fencing token, and it never protected result *objects*, only database
+  completions.
+- The VPS break-even was quoted as "~110k pages/month." That is an
+  **unmeasured extrapolation**; against the three published costs it spans
+  **~84k–160k**, and quoting a midpoint violates the house rule that every
+  number states what it measures.
+- "MinIO is a one-variable swap" **overstated** S3 compatibility: CORS,
+  checksum, signing, and conditional-write behaviour would each need
+  verification.
