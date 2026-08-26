@@ -95,17 +95,34 @@ CREATE TABLE job_attempts (
   result_uri     text,
   result_digest  text,
   pages          integer,
-  dispatched_at  timestamptz NOT NULL DEFAULT now(),
+
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  -- NOT defaulted: the row is born 'dispatching' and dispatch may never be
+  -- confirmed. This is set only when a call id actually lands, so
+  -- "dispatched_at IS NULL AND state = 'dispatch_unknown'" is exactly the
+  -- crash-window population.
+  dispatched_at  timestamptz,
   completed_at   timestamptz,
   error          text
 );
+
+-- One Modal call must never belong to two attempt rows.
+CREATE UNIQUE INDEX job_attempts_call ON job_attempts(modal_call_id)
+  WHERE modal_call_id IS NOT NULL;
+
+-- Enables the composite foreign key below.
+ALTER TABLE job_attempts ADD CONSTRAINT job_attempts_id_job UNIQUE (id, job_id);
 
 CREATE INDEX job_attempts_job ON job_attempts(job_id);
 CREATE INDEX job_attempts_open ON job_attempts(state)
   WHERE state IN ('dispatching','dispatch_unknown','dispatched');
 
+-- COMPOSITE, not a plain reference. A single-column FK proves only that
+-- the attempt exists -- it would happily install job A's attempt as job B's
+-- accepted result, crossing a tenant boundary on an id mix-up. Referencing
+-- (id, job_id) makes that unrepresentable rather than merely discouraged.
 ALTER TABLE jobs ADD CONSTRAINT jobs_accepted_attempt
-  FOREIGN KEY (accepted_attempt_id) REFERENCES job_attempts(id);
+  FOREIGN KEY (accepted_attempt_id, id) REFERENCES job_attempts(id, job_id);
 
 -- The accepted result is installed by ONE conditional update:
 --
@@ -122,7 +139,15 @@ ALTER TABLE jobs ADD CONSTRAINT jobs_accepted_attempt
 --      results are valid and either may win, so nothing may "verify by
 --      re-parsing" against result_digest -- that check would fail
 --      legitimately.
---   2. A late attempt CAN flip a job from 'failed' to 'succeeded' after
---      the user has already seen 'failed'. That is the better outcome and
---      is chosen on purpose; the alternative (AND state <> 'failed')
---      would leave a good result orphaned in storage.
+--   2. A terminal job STAYS terminal. An earlier draft let a late attempt
+--      flip 'failed' back to 'succeeded'; that was rejected in review and
+--      the rejection was right. Clients stop polling terminal jobs and may
+--      already have resubmitted or reported the failure onward, so silently
+--      changing a terminal answer makes the API untrustworthy.
+--
+--      The real defect that behaviour was compensating for is fixed at its
+--      source: a job may not be failed while any attempt is still
+--      outstanding, and 'dispatch_unknown' COUNTS as outstanding because
+--      Modal may still be running it. A late execution is still recorded
+--      truthfully as attempt='succeeded' with its own result_uri; it simply
+--      does not resurrect the job.
