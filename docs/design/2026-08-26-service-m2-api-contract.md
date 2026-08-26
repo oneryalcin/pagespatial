@@ -85,6 +85,12 @@ identity unambiguous. The first valid login changes `invited` to `active`;
 `active` remains valid and `suspended` is rejected. A valid Access identity
 without a matching row receives `403`.
 
+M2 has no invitation admin UI. The owner invites the first and later users by
+adding the canonical email to the Cloudflare Access allow policy and inserting
+one `users(status='invited')` row with the migration-supplied operator command.
+Removing either grant denies login. This manual two-step is acceptable for the
+invite-only release and is exercised before the live gate.
+
 State-changing dashboard requests require an exact
 `Origin: https://app.<domain>` match. Cloudflare Access does not remove CSRF.
 
@@ -114,8 +120,8 @@ M2 includes only the UI needed to bootstrap machine access:
 - `POST /keys/:id/revoke` — idempotently revoke an owned key.
 
 These routes require the verified Access JWT and exact Origin on mutations.
-The jobs, usage, and account pages remain M3. A user may have at most ten
-active keys; creation above that limit returns `429 api_key_limit`.
+The jobs, usage, and account pages remain M3. M2 does not invent a per-user key
+quota before observed misuse or a product tier requires one.
 
 These are server-rendered form routes, not a second JSON API. Their wire
 contract is deliberately small:
@@ -165,7 +171,6 @@ JobView = {
   completed_at: RFC3339 | null,
   processing_deadline_at: RFC3339 | null,
   retention_expires_at: RFC3339 | null,
-  outcome_uncertain: boolean,
   error: { code: string, message: string } | null
 }
 
@@ -209,13 +214,9 @@ bare string, HTML, provider body, or stack. Dashboard form errors are escaped
 HTML and follow the status codes specified above.
 
 `processing_deadline_at` is derived as `queued_at + 24 hours`; it is not a
-new column. `outcome_uncertain` is also derived, not a database state. It is
-true only while the job is `queued` or `dispatched` and either an open attempt
-is `dispatch_unknown` or an open `dispatching` attempt is older than the
-reconciler's ten-minute uncertainty wait. It is always false for terminal
-jobs, including when a losing original attempt remains open after another
-attempt wins. This distinguishes “the authoritative outcome is unknown” from
-a claim that a container is running.
+new column. Dispatch uncertainty stays operator telemetry. A client cannot act
+on it differently from any other non-terminal job: it polls until terminal or
+deadline. Do not expose reconciler attempt states as permanent public API.
 
 ## API contract
 
@@ -251,6 +252,11 @@ uploader may use a streaming hash implementation if measurement justifies it.
 
 New job response: `201 Created` with `SubmitResponse`. The input key is
 `inputs/{job_id}.pdf`; it is not returned separately.
+
+The upload/finalize window is exactly one hour from job creation:
+`upload_expires_at = created_at + interval '1 hour'`. The presigned PUT expires
+no later than that timestamp. The existing database constraint remains the
+authority for the upper bound.
 
 Replay rules:
 
@@ -378,7 +384,7 @@ PublicPageResult =
   | {
       page_number: positive integer,
       ok: true,
-      page_spatial: PageSpatialRecord
+      page_spatial: PageSpatial
     }
   | {
       page_number: positive integer,
@@ -390,6 +396,19 @@ PublicPageResult =
     }
 }
 ```
+
+`PageSpatial` is the canonical exported type and runtime schema in
+`src/types.ts`; M2 does not duplicate it. The envelope and both page variants
+reject additional fields. `page_count` is 1..200 and equals `pages.length`;
+pages are ordered, contiguous, and numbered 1 through `page_count`; and a
+successful entry's `page_spatial.pageNumber` equals its `page_number`. The
+published PageSpatial schema validates every nested successful record.
+
+M2 deliberately has one safe failed-page code. The current parser has no
+proven typed, user-actionable taxonomy for render, OCR, decoding, and worker
+failures. Inventing one from exception strings would be false precision.
+Additional codes require typed failure sources plus a client action that
+differs from “inspect the page or retry the document.”
 
 `attempt_id` and `execution_id` are PageSpatial's opaque fencing provenance;
 they are retained so the reconciler can bind bytes to the immutable R2 key.
@@ -408,6 +427,23 @@ proxy and no second transformed object. M2.1 must compare the successful
 `page_spatial` values against `parse_document` with the existing stable
 comparator and derived control tolerance; transport success alone is not
 qualification.
+
+This intentionally couples the public result schema to the Modal worker: a
+format change requires a worker deploy, and old schema-versioned objects can
+coexist for at most their two-day retention window. M2.1 changes both
+`deploy/modal/modal_app.py` and `service/api/src/result-contract.mjs`, then adds
+a dated supersession note to
+`docs/trials/2026-08-26-service-m1-object-qualification.md`. The M1 transport
+and parser evidence remains valid; its stored-envelope shape does not qualify
+the M2 public projection.
+
+The public object is not the operator log. `FunctionCall.get()` continues to
+return a small validated pointer plus page count, digest, timing, and typed
+failure code. Required accounting fields are stamped in Postgres; structured
+operational details go to service logs. M2 makes no promise of a durable
+per-job success-timing archive. Raw failure detail may remain in the private
+ledger/logs, but it is never used to derive a public code and never enters the
+public object.
 
 ## Admission control
 
@@ -496,6 +532,23 @@ real user is invited.
 Public error codes are stable strings. Messages contain no SQL, Modal, R2,
 bucket, attempt, execution, stack, or credential details.
 
+M2 adds nullable `failure_code` columns to both `jobs` and `job_attempts` with
+a closed database `CHECK` vocabulary:
+
+```text
+upload_expired | invalid_upload | input_digest_mismatch | input_too_large |
+invalid_pdf | page_limit_exceeded | processing_deadline_exceeded |
+dispatch_failed | processing_failed
+```
+
+The migration backfills existing failed rows as `processing_failed`, then
+requires every failed job to have a code and every non-failed job to have none.
+An attempt failure records its code and private diagnostic text atomically.
+Crash-repair settlement derives the job code from the typed attempt code, not
+from diagnostic text. Deadline and upload sweeps set their known code directly;
+all unknown worker/provider failures become `processing_failed`. No code path
+classifies a raw exception message.
+
 Minimum codes:
 
 ```text
@@ -524,11 +577,38 @@ service_unavailable
 Unexpected dependency failures return `503 service_unavailable`, never a
 permanent job transition unless the existing lifecycle logic proves one.
 
+Every `/v1` error uses `ErrorResponse` with this status mapping:
+
+| code | HTTP status |
+|---|---:|
+| `authentication_required` | 401 |
+| `forbidden` | 403 |
+| `not_found` | 404 |
+| `invalid_request` | 400 |
+| `idempotency_mismatch` | 422 |
+| `admission_limit` | 429 plus `Retry-After: 60` |
+| `upload_incomplete` | 409 |
+| `upload_expired` | 410 |
+| `input_too_large` | 413 |
+| `invalid_upload` | 422 |
+| `result_not_ready` | 409 |
+| `job_failed` | 409 |
+| `result_expired` | 410 |
+| `service_unavailable` | 503 |
+
+Malformed JSON, wrong content type, an extra JSON field, and an out-of-range
+header or field all use `400 invalid_request`. Dashboard form validation uses
+escaped `400 text/html`; Origin/CSRF rejection uses escaped `403 text/html`;
+a foreign key id uses escaped `404 text/html`. These pages expose no provider
+or database text.
+
 Terminal `JobView.error` is a closed projection. It never returns the stored
 internal error string:
 
 | proven internal condition | public code | public message |
 |---|---|---|
+| upload window expires before finalize | `upload_expired` | `Upload was not finalized before its deadline.` |
+| finalized upload is empty or has the wrong media type | `invalid_upload` | `Uploaded object is not a valid PDF upload.` |
 | uploaded bytes disagree with declared digest | `input_digest_mismatch` | `Uploaded PDF did not match the declared SHA-256.` |
 | input exceeds 90 MiB | `input_too_large` | `PDF exceeds the 90 MiB limit.` |
 | zero-byte, wrong-type, malformed, or unreadable PDF | `invalid_pdf` | `Input is not a supported PDF.` |
@@ -579,9 +659,11 @@ and reconcile a healthy row on the next pass. Shutdown has the same bounded
 test. These values are safety limits, not latency SLOs.
 
 `GET /health` is unauthenticated and returns no identifiers. Readiness requires
-Postgres and both R2 roles to be reachable. Modal reachability is reported as
-a separate degraded field because a transient Modal control-plane failure must
-not prevent clients from reading existing job status or result URLs.
+Postgres because every useful request needs the ledger. R2 input, R2 result,
+and Modal reachability are separate degraded fields: a transient dependency
+failure must not remove replicas that can still serve job status. Routes that
+need a degraded dependency return `503 service_unavailable`; status reads
+continue.
 
 ## Acceptance matrix
 
@@ -603,9 +685,8 @@ not prevent clients from reading existing job status or result URLs.
    queued sweep creates exactly one initial attempt and the job completes.
 10. Kill after attempt creation; the existing M1 uncertainty path recovers it.
 11. A worker digest mismatch fails visibly and publishes no result.
-12. `outcome_uncertain` appears only on non-terminal jobs from the derived
-    attempt condition, carries the 24-hour deadline, and is false after another
-    attempt wins even if a losing original remains open.
+12. Dispatch uncertainty remains operator-only; public status exposes only
+    state and the 24-hour processing deadline.
 13. Every job and key route gives user B 404 for user A's identifier.
 14. Revoked keys, suspended users, malformed keys, query-string keys, and
     missing keys fail authentication.

@@ -128,11 +128,11 @@ users(id, email unique, status, created_at)
 api_keys(id, user_id, prefix, hash, name, created_at, last_used_at, revoked_at)
 jobs(id, user_id, idempotency_key, state, input_uri, input_digest,
      input_bytes, pages_actual, unit_price_micros, estimated_cost_micros,
-     accepted_attempt_id, result_uri, result_digest, error,
+     accepted_attempt_id, result_uri, result_digest, failure_code, error,
      created_at, queued_at, completed_at,
      upload_expires_at, retention_expires_at)
 job_attempts(id, job_id, modal_call_id, state, result_uri, result_digest,
-             pages, dispatched_at, completed_at, error)
+             pages, dispatched_at, completed_at, failure_code, error)
 ```
 
 `jobs.state`: `uploading | queued | dispatched | succeeded | failed`.
@@ -143,6 +143,11 @@ something the control plane cannot observe. There is no `cancelled` state —
 see [Why cancellation is not in v1](#why-cancellation-is-not-in-v1).
 `job_attempts.state`: `dispatching | dispatch_unknown | dispatched |
 succeeded | failed`.
+
+`failure_code` is the closed, machine-readable public-safe cause added by M2;
+`error` remains private operator detail. State transitions write both
+atomically and never infer a code by parsing exception text. The exact
+vocabulary is owned by the M2 API contract.
 
 `(user_id, idempotency_key)` unique where not null. A replay carrying a
 **different body** is a client bug, not a retry: return **422**, never the
@@ -720,10 +725,10 @@ Implement M2 as one vertical path before adding the dashboard:
 5. `GET /v1/jobs/:id/result` returns a short-lived URL only for the accepted
    object and only before `retention_expires_at`.
 
-Do not add an `outcome_uncertain` database state. For a `dispatched` job with
-an open `dispatch_unknown` attempt, the status API derives
-`outcome_uncertain: true` and returns the job deadline. This tells the truth
-without expanding the adjudication state machine.
+Do not add or publicly expose an `outcome_uncertain` state. Dispatch uncertainty
+is operator telemetry derived with the reconciler's exported
+`DISPATCH_UNKNOWN_WAIT_MS`. Clients have no distinct action: they poll any
+non-terminal job until `processing_deadline_at` or a terminal state.
 
 ### M3 — dashboard
 
