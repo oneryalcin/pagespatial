@@ -186,6 +186,13 @@ POST /v1/jobs/:id/finalize
                      → transaction: state=queued
 ```
 
+The upload/finalize window is at most **one hour** from job creation:
+`upload_expires_at <= created_at + interval '1 hour'`, the presigned PUT does
+not outlive that deadline, and finalize refuses an expired row. Even if the
+input object was created immediately after submission, a job failed 24 hours
+after `queued_at` therefore has at least 23 hours before the input object's
+two-day R2 lifecycle deadline.
+
 **Finalize cannot verify the content digest, and must not claim to.**
 Ordinary presigned R2/S3 PUT URLs are signed with `UNSIGNED-PAYLOAD`, so
 the service never witnesses the bytes; `HEAD` returns existence, size, and
@@ -280,8 +287,10 @@ double-run:
 - attempts with a call ID → `fromId(id).get({timeoutMs: 0})`, install
   terminal results, record failures;
 - `uploading` rows past `upload_expires_at` → fail;
-- non-terminal jobs still unresolved 24 hours after `queued_at` → fail; late
-  executions may finish but the existing terminal fence refuses them;
+- non-terminal jobs still unresolved 24 hours after `queued_at` → fail. The
+  one-hour upload-window bound derives at least 23 hours of input-lifecycle
+  cushion; late executions may finish but the existing terminal fence refuses
+  them;
 - terminal jobs past `retention_expires_at` → stop serving result URLs and
   make their non-accounting metadata eligible for later pruning.
 
@@ -290,6 +299,10 @@ input and result buckets must each carry a two-day R2 lifecycle rule. This keeps
 object deletion outside the application state machine and also removes
 abandoned uploads and losing execution objects. Physical deletion can lag the
 lifecycle deadline; API access still ends at `retention_expires_at`.
+For an accepted result, set `retention_expires_at` from the immutable R2
+object's server-reported `LastModified + 2 days`, obtained while validating
+that object for acceptance. Do not derive it from reconciliation time: a late
+reconciler would otherwise issue URLs after R2's own lifecycle clock elapsed.
 
 **Modal outputs expire 7 days after completion**, after which `get()`
 returns an expired response. Two consequences:
@@ -682,11 +695,11 @@ the backup cron; it does not remove the need to test recovery.
 
 1. **R2 lifecycle default: 2 days** (owner decision, 2026-08-26). Input
    objects expire two days after upload; result objects expire two days after
-   creation. The API stops serving a result at `retention_expires_at`, set to
-   two days after terminal completion. A job unresolved 24 hours after
-   `queued_at` fails, leaving a full-day cushion before its input can expire.
-   This is an age-based storage policy, not exact per-job deletion by the
-   reconciler.
+   creation. The API stops serving a result at `retention_expires_at`, set from
+   the accepted immutable object's R2 `LastModified + 2 days`. The upload
+   window is at most one hour; a job unresolved 24 hours after `queued_at`
+   therefore fails at least 23 hours before the earliest input expiry. This is
+   an age-based storage policy, not per-job deletion by the reconciler.
 2. **Per-user concurrency cap.** A flat 5 is assumed; per-tier implies tiers
    exist, which implies #105's Standard/Flex lands first.
 3. **Domain** — needed for Cloudflare Access and Tunnel, external lead time,

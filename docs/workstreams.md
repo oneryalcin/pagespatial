@@ -64,8 +64,11 @@ Onboarding order: [principles](principles.md) →
   including the database-to-Modal crash seam and R2 recovery validation.
   Dedicated input and result buckets will use **two-day R2 lifecycle rules**:
   inputs age from upload and results age from creation. Jobs unresolved for
-  24 hours after queueing fail before their input can expire; the reconciler
-  does not normally delete objects individually (owner decision, 2026-08-26).
+  24 hours after queueing fail; the upload window is capped at one hour, which
+  derives at least 23 hours before the earliest input expiry. Accepted-result
+  access expires from R2 `LastModified + 2 days`, not reconciliation time. The
+  reconciler does not normally delete objects individually (owner decision,
+  2026-08-26).
 - **Still not public-service ready**: no submission/finalize API, dispatcher,
   reconciler, API-key authentication, tenant-facing routes, or dashboard
   exists. M2 absorbs #87's admission, idempotency, and `429` requirements;
