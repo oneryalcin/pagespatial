@@ -520,8 +520,54 @@ reconciler cannot be written without this, and JS has no
 
 This validates deployment, auth, `Uint8Array → Python bytes`
 serialization, and cross-restart recovery — not the API surface, which is
-already settled by type inspection. Note the qualification apps were
-stopped; this needs a deployed app.
+already settled by type inspection.
+
+### M0 RESULT: PASS (2026-08-26)
+
+Run on the `desia` workspace as `pagespatial-m0-smoke`
+(`PAGESPATIAL_MAX_CONTAINERS=1`, adapter rev `2010a55`). All eight
+assertions passed on `fc-01M0XQPE868D0DV5X5ECZ0RB0T`.
+
+**`Uint8Array` → Python `bytes` works, byte-exact.** This was the real
+unknown. `validate_input` requires `isinstance(pdf_bytes, (bytes,
+bytearray))` *and* recomputes SHA-256 server-side; both passed, so the JS
+SDK delivers the payload without corruption. No base64 wrapper is needed.
+
+**Cross-restart recovery works.** `functionCalls.fromId()` in a process
+that never held the original `FunctionCall` object retrieved the result.
+
+**Error taxonomy — 2 of 3 resolved** (second probe, deliberate
+`expected_sha256` mismatch):
+
+| outcome | JS error class |
+|---|---|
+| pending | `FunctionTimeoutError` |
+| function-failed | `RemoteError`, message carrying the Python repr |
+| output expired | **UNKNOWN** — needs a 7-day-old call |
+
+The gap is consequential. Since `modal@0.9.0` has no `OutputExpiredError`,
+if expiry also surfaces as `RemoteError` then the reconciler **cannot**
+distinguish "expired" from "failed" by class, and would mark recoverable
+work permanently failed. **This makes the R2 prefix LIST backstop
+mandatory, not optional** — recover from storage, not from the call. Treat
+that as settled; do not spend a week re-deriving it.
+
+**Timing, n=1, stated as such:**
+
+```
+service_ready_ms : 98108   (cold boot)
+parse_ms         :  2393   (589-byte 1-page PDF)
+total_method_ms  :  2395   (EXCLUDES boot)
+```
+
+The 98.1 s cold boot is **above the 70–88 s range** recorded in the M1
+linux verification. One observation, on a first call against a
+freshly-built image in a different workspace, so it may carry
+first-pull overhead — it does **not** refute the documented range, but the
+control plane should budget cold start at ~100 s rather than 88 s, and a
+real distribution is owed before any latency promise is made to a user.
+
+The app was stopped after the run (0 tasks).
 
 ### M1 — job plane
 
