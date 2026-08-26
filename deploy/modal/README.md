@@ -26,7 +26,8 @@ modal deploy deploy/modal/modal_app.py
 # app with a generated non-corpus PDF; asserts warm reuse on call 2:
 modal run deploy/modal/modal_app.py::acceptance
 
-# pointer-mode R2 qualification (after creating pagespatial-r2-dev)
+# pointer-mode R2 qualification (after creating the two worker secrets and
+# setting the local R2_CONTROL_* qualification credentials)
 uv run --with modal==1.5.3 --with boto3==1.43.74 --with python-dotenv \
   python scripts/service/qualify-modal-object.py \
   --pdf .evaluation/m1-subset-pdfs/world_bank_P170734_document_34222345.pdf
@@ -49,10 +50,25 @@ validator as `parse_document`, invokes the same parse core, and stores one
 identity-bound JSON envelope per execution. The method returns a small pointer;
 the complete parse result does not cross Modal's result boundary.
 
-The class expects a Modal secret named `pagespatial-r2-dev` by default with
-`R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`.
-Override the name at deploy time with `PAGESPATIAL_R2_SECRET_NAME`. Never commit
-these values.
+The class expects two Modal secrets:
+
+- `pagespatial-r2-input-dev`: `R2_INPUT_ENDPOINT`, `R2_INPUT_BUCKET`,
+  `R2_INPUT_ACCESS_KEY_ID`, `R2_INPUT_SECRET_ACCESS_KEY`. Its permanent R2
+  token is Object Read only and scoped only to the private input bucket.
+- `pagespatial-r2-results-dev`: `R2_RESULTS_ENDPOINT`, `R2_RESULTS_BUCKET`,
+  `R2_RESULTS_ACCESS_KEY_ID`, `R2_RESULTS_SECRET_ACCESS_KEY`. Its permanent R2
+  token is Object Read & Write and scoped only to a distinct results bucket.
+
+Cloudflare R2 has no permanent write-only object permission. Separate buckets
+therefore provide the enforceable boundary: the worker cannot modify customer
+inputs, while its result credential cannot reach the input bucket. Override
+the secret names with `PAGESPATIAL_R2_INPUT_SECRET_NAME` and
+`PAGESPATIAL_R2_RESULTS_SECRET_NAME`. Never commit credential values.
+
+The qualification harness uses a separate local control credential scoped to
+both development buckets. Its `.env` names are `R2_CONTROL_ENDPOINT`,
+`R2_CONTROL_ACCESS_KEY_ID`, `R2_CONTROL_SECRET_ACCESS_KEY`, `R2_INPUT_BUCKET`,
+and `R2_RESULTS_BUCKET`. This credential is never attached to the worker.
 
 Each qualification trial arm gets its own app tag (§10), e.g.:
 
@@ -109,7 +125,8 @@ visible `ResultTooLarge` failure — never truncated pages.
 |---|---|
 | Function input | 90 MiB, non-empty |
 | pages per document | 200 (`SERVICE_MAX_PAGES_PER_JOB`, refused 400 by the service) |
-| serialized result | 64 MiB (visible `ResultTooLarge`) |
+| direct-method serialized result | 64 MiB (visible `ResultTooLarge`) |
+| R2 object result | 128 MiB (visible `ObjectResultTooLarge`, nothing uploaded) |
 | input concurrency per container | 1 |
 | created Node jobs per warm lifetime | 100, then the container stops fetching inputs |
 | `cpu` / `memory` | 4.0 physical cores / 24,576 MiB |

@@ -150,7 +150,9 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
         self.node = _dummy_node()
         self.instance = self._make_instance()
         self.r2 = _FakeR2()
-        self.instance._r2 = lambda: (self.r2, "pagespatial-dev")
+        self.instance._r2 = lambda: modal_app.R2Store(
+            self.r2, "pagespatial-inputs-dev",
+            self.r2, "pagespatial-results-dev")
 
     def tearDown(self):
         modal_app.SERVICE_PORT = self.saved_port
@@ -250,10 +252,10 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(envelope["parse_result"]["status"], "completed")
         self.assertEqual(pointer["result_uri"],
-                         f"r2://pagespatial-dev/{pointer['result_key']}")
+                         f"r2://pagespatial-results-dev/{pointer['result_key']}")
 
     def test_parse_object_matches_parse_document_on_stable_fields(self):
-        direct, _ = self._call(_payload(request_id=JOB_ID))
+        direct, _ = self._call(_payload(request_id=ATTEMPT_ID))
         pointer, _ = self._call_object(_object_payload())
         stored = json.loads(self.r2.objects[pointer["result_key"]])["parse_result"]
 
@@ -262,6 +264,16 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
             ("document_sha256", "page_count", "status", "pages", "pages_ok", "pages_failed", "failure")
         }
         self.assertEqual(stable(stored), stable(direct))
+        self.assertEqual(stored["request_id"], ATTEMPT_ID)
+
+    def test_parse_object_preserves_a_failed_result_for_reconciliation(self):
+        self.fake.script["submit_status"] = 400
+        self.fake.script["submit_body"] = {"error": "Document has 900 pages; max 200"}
+        pointer, _ = self._call_object(_object_payload())
+        stored = json.loads(self.r2.objects[pointer["result_key"]])["parse_result"]
+        self.assertEqual(pointer["status"], "failed")
+        self.assertEqual(stored["status"], "failed")
+        self.assertEqual(stored["failure"]["class"], "ServiceRefused400")
 
     def test_parse_object_verifies_downloaded_bytes_before_node_work(self):
         with self.assertRaises(modal_app.InputRejected):
@@ -286,6 +298,16 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
         stored = json.loads(self.r2.objects[pointer["result_key"]])["parse_result"]
         self.assertEqual(stored["status"], "completed")
         self.assertGreater(pointer["result_bytes"], 64)
+
+    def test_parse_object_refuses_an_oversized_object_result_before_upload(self):
+        saved = modal_app.MAX_OBJECT_RESULT_BYTES
+        modal_app.MAX_OBJECT_RESULT_BYTES = 64
+        try:
+            with self.assertRaises(modal_app.ObjectResultTooLarge):
+                self.instance.parse_object(_object_payload())
+        finally:
+            modal_app.MAX_OBJECT_RESULT_BYTES = saved
+        self.assertEqual(set(self.r2.objects), {INPUT_KEY})
 
     def test_two_executions_use_two_immutable_result_keys(self):
         one, _ = self._call_object(_object_payload())

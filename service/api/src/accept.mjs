@@ -22,7 +22,7 @@
 //      attempt update by id alone would let a mismatched pair install job
 //      A's result onto job B -- across a tenant boundary. The composite
 //      foreign key on (accepted_attempt_id, id) makes that unrepresentable
-//      in the schema too; this is the belt to that's braces.
+//      in the schema too; this is the belt to the query's braces.
 //
 //   3. IDEMPOTENT. `completed_at IS NULL` guards every completion. One
 //      Modal call may execute more than once (retries=1), and each
@@ -33,8 +33,9 @@
 
 /**
  * Install `attempt` as the authoritative result for its job, if and only if
- * the attempt belongs to that job, has not already completed, and no
- * attempt has been installed yet.
+ * the attempt belongs to that job, has not already completed, the parser
+ * reported `completed`, and the upload reached the dispatch lifecycle.
+ * Exactly one eligible attempt may be installed as the job result.
  *
  * @returns {{recorded: boolean, won: boolean}}
  *   `recorded` false means the attempt did not belong to this job, or had
@@ -43,14 +44,27 @@
  *   error: its result object stays at its own execution key and is removed
  *   later by retention.
  */
-export async function acceptAttempt(db, { jobId, attemptId, resultUri, resultDigest, pages }) {
+export async function acceptAttempt(
+  db,
+  { jobId, attemptId, status, resultUri, resultDigest, pages },
+) {
+  if (status !== 'completed') {
+    throw new TypeError('status must equal completed before an attempt can be accepted');
+  }
   const { rows } = await db.query(
     `WITH owned AS (
-       UPDATE job_attempts
+       UPDATE job_attempts a
           SET state = 'succeeded', result_uri = $3, result_digest = $4,
               pages = $5::integer, completed_at = now()
-        WHERE id = $2 AND job_id = $1 AND completed_at IS NULL
-       RETURNING id, job_id
+         FROM jobs source_job
+        WHERE a.id = $2 AND a.job_id = $1 AND a.completed_at IS NULL
+          AND source_job.id = a.job_id
+          -- Record a late execution truthfully after another attempt won or
+          -- the job failed, but never complete work for an upload that was
+          -- not finalized into the dispatch lifecycle.
+          AND source_job.state IN ('queued', 'dispatched', 'succeeded', 'failed')
+          AND $6::text = 'completed'
+       RETURNING a.id, a.job_id
      ),
      won AS (
        UPDATE jobs j
@@ -71,12 +85,12 @@ export async function acceptAttempt(db, { jobId, attemptId, resultUri, resultDig
           -- A terminal job stays terminal. See the migration's note: a
           -- late success must not resurrect a job a client has already
           -- seen fail and may have resubmitted or reported onward.
-          AND j.state <> 'failed'
+          AND j.state IN ('queued', 'dispatched')
        RETURNING j.id
      )
      SELECT (SELECT count(*) FROM owned) AS recorded,
             (SELECT count(*) FROM won)   AS won`,
-    [jobId, attemptId, resultUri, resultDigest, pages],
+    [jobId, attemptId, resultUri, resultDigest, pages, status],
   );
 
   return { recorded: Number(rows[0].recorded) === 1, won: Number(rows[0].won) === 1 };
@@ -155,10 +169,14 @@ export async function settleExhaustedJob(db, { jobId, error }) {
  * Record that a spawn reached Modal and its call id landed.
  */
 export async function markDispatched(db, { jobId, attemptId, modalCallId }) {
+  if (typeof modalCallId !== 'string' || modalCallId.trim() === '') {
+    throw new TypeError('modalCallId must be a non-empty string');
+  }
   const { rowCount } = await db.query(
     `UPDATE job_attempts
         SET state = 'dispatched', modal_call_id = $3, dispatched_at = now()
-      WHERE id = $2 AND job_id = $1 AND state = 'dispatching'`,
+      WHERE id = $2 AND job_id = $1 AND state = 'dispatching'
+        AND $3::text IS NOT NULL AND btrim($3::text) <> ''`,
     [jobId, attemptId, modalCallId],
   );
   return rowCount === 1;

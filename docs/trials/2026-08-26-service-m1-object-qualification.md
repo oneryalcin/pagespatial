@@ -10,6 +10,16 @@ immutable result key.
 This decision applies only to the R2 -> Modal -> R2 transport. It does not
 qualify the API dispatcher, reconciler, tenant authentication, or public API.
 
+### Post-review scope note
+
+This trial fixes revision `3b45b30c722c`: one read/write credential and one
+bucket, with no pointer-specific result cap. A subsequent M1 hardening change
+splits input and result buckets/credentials, adds a 128 MiB R2 result bound,
+uses attempt identity for inner traces, and makes the harness assert successful
+status before comparison. The parity measurements below remain evidence for
+the unchanged parse core, but the new credential topology must receive a fresh
+R2 smoke before service deployment.
+
 ## Fixed implementation
 
 - Git revision: `3b45b30c722c` (`M1: add R2 pointer parse transport`)

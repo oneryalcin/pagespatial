@@ -14,6 +14,7 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -175,18 +176,66 @@ class ValidateObjectInputTest(unittest.TestCase):
 
     def test_r2_config_requires_https_and_all_four_values(self):
         good = {
-            "R2_ENDPOINT": "https://example.r2.cloudflarestorage.com/",
-            "R2_BUCKET": "pagespatial-dev",
-            "R2_ACCESS_KEY_ID": "id",
-            "R2_SECRET_ACCESS_KEY": "secret",
+            "R2_INPUT_ENDPOINT": "https://example.r2.cloudflarestorage.com/",
+            "R2_INPUT_BUCKET": "pagespatial-inputs-dev",
+            "R2_INPUT_ACCESS_KEY_ID": "input-id",
+            "R2_INPUT_SECRET_ACCESS_KEY": "input-secret",
+            "R2_RESULTS_ENDPOINT": "https://example.r2.cloudflarestorage.com/",
+            "R2_RESULTS_BUCKET": "pagespatial-results-dev",
+            "R2_RESULTS_ACCESS_KEY_ID": "result-id",
+            "R2_RESULTS_SECRET_ACCESS_KEY": "result-secret",
         }
         config = modal_app.load_r2_config(good)
-        self.assertEqual(config.endpoint, "https://example.r2.cloudflarestorage.com")
+        self.assertEqual(config.input.bucket, "pagespatial-inputs-dev")
+        self.assertEqual(config.results.bucket, "pagespatial-results-dev")
         with self.assertRaises(RuntimeError):
-            modal_app.load_r2_config({**good, "R2_ENDPOINT": "http://example.test"})
+            modal_app.load_r2_config({**good, "R2_INPUT_ENDPOINT": "http://example.test"})
         with self.assertRaises(RuntimeError):
             modal_app.load_r2_config({key: value for key, value in good.items()
-                                      if key != "R2_SECRET_ACCESS_KEY"})
+                                      if key != "R2_RESULTS_SECRET_ACCESS_KEY"})
+
+    def test_r2_config_requires_distinct_buckets_and_credentials(self):
+        good = {
+            "R2_INPUT_ENDPOINT": "https://example.r2.cloudflarestorage.com",
+            "R2_INPUT_BUCKET": "inputs",
+            "R2_INPUT_ACCESS_KEY_ID": "input-id",
+            "R2_INPUT_SECRET_ACCESS_KEY": "input-secret",
+            "R2_RESULTS_ENDPOINT": "https://example.r2.cloudflarestorage.com",
+            "R2_RESULTS_BUCKET": "results",
+            "R2_RESULTS_ACCESS_KEY_ID": "result-id",
+            "R2_RESULTS_SECRET_ACCESS_KEY": "result-secret",
+        }
+        with self.assertRaises(RuntimeError):
+            modal_app.load_r2_config({**good, "R2_RESULTS_BUCKET": "inputs"})
+        with self.assertRaises(RuntimeError):
+            modal_app.load_r2_config({**good,
+                                      "R2_RESULTS_ACCESS_KEY_ID": "input-id"})
+
+    def test_r2_clients_are_split_and_cached_per_warm_container(self):
+        env = {
+            "R2_INPUT_ENDPOINT": "https://example.r2.cloudflarestorage.com",
+            "R2_INPUT_BUCKET": "inputs",
+            "R2_INPUT_ACCESS_KEY_ID": "input-id",
+            "R2_INPUT_SECRET_ACCESS_KEY": "input-secret",
+            "R2_RESULTS_ENDPOINT": "https://example.r2.cloudflarestorage.com",
+            "R2_RESULTS_BUCKET": "results",
+            "R2_RESULTS_ACCESS_KEY_ID": "result-id",
+            "R2_RESULTS_SECRET_ACCESS_KEY": "result-secret",
+        }
+        calls = []
+        boto3 = types.ModuleType("boto3")
+        boto3.client = lambda *args, **kwargs: calls.append((args, kwargs)) or object()
+        instance = modal_app.ParseContainer.__new__(modal_app.ParseContainer)
+        with mock.patch.dict(sys.modules, {"boto3": boto3}), mock.patch.dict(
+                modal_app.os.environ, env, clear=True):
+            first = instance._r2()
+            second = instance._r2()
+        self.assertIs(first, second)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(first.input_bucket, "inputs")
+        self.assertEqual(first.results_bucket, "results")
+        self.assertEqual(calls[0][1]["aws_access_key_id"], "input-id")
+        self.assertEqual(calls[1][1]["aws_access_key_id"], "result-id")
 
 
 class JobBudgetTest(unittest.TestCase):

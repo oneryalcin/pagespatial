@@ -16,8 +16,12 @@ import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { migrate } from '../src/migrate.mjs';
 import {
-  acceptAttempt, failAttempt, markDispatched, markDispatchUnknown, settleExhaustedJob,
+  acceptAttempt as acceptAttemptRaw,
+  failAttempt, markDispatched, markDispatchUnknown, settleExhaustedJob,
 } from '../src/accept.mjs';
+
+const acceptAttempt = (database, input) =>
+  acceptAttemptRaw(database, { status: 'completed', ...input });
 
 let db;
 let userId;
@@ -58,6 +62,55 @@ const newAttempt = async (jobId, state = 'dispatching') => {
 
 const job = async (id) => (await db.query('SELECT * FROM jobs WHERE id = $1', [id])).rows[0];
 const attempt = async (id) => (await db.query('SELECT * FROM job_attempts WHERE id = $1', [id])).rows[0];
+
+test('markDispatched rejects a missing or blank Modal call id', async () => {
+  const jobId = await newJob();
+  const attemptId = await newAttempt(jobId);
+  for (const modalCallId of [null, undefined, '', '   ']) {
+    await assert.rejects(
+      markDispatched(db, { jobId, attemptId, modalCallId }),
+      /modalCallId must be a non-empty string/,
+    );
+  }
+  assert.equal((await attempt(attemptId)).state, 'dispatching');
+});
+
+test('the schema forbids dispatched state without a Modal call id', async () => {
+  const jobId = await newJob();
+  const attemptId = await newAttempt(jobId);
+  await assert.rejects(
+    db.query(`UPDATE job_attempts SET state = 'dispatched' WHERE id = $1`, [attemptId]),
+    /job_attempts_dispatched_has_call_id/,
+  );
+});
+
+test('acceptAttempt rejects a failed parser result before any write', async () => {
+  const jobId = await newJob();
+  const attemptId = await newAttempt(jobId);
+  await markDispatchUnknown(db, { jobId, attemptId });
+  await assert.rejects(
+    acceptAttemptRaw(db, {
+      jobId, attemptId, status: 'failed', resultUri: 'r2://failed',
+      resultDigest: 'a'.repeat(64), pages: 0,
+    }),
+    /status must equal completed/,
+  );
+  assert.equal((await attempt(attemptId)).state, 'dispatch_unknown');
+  assert.equal((await job(jobId)).state, 'queued');
+});
+
+test('acceptAttempt cannot complete an upload that was never finalized', async () => {
+  const jobId = await newJob(userId, 'uploading');
+  const attemptId = await newAttempt(jobId);
+  await markDispatchUnknown(db, { jobId, attemptId });
+  const result = await acceptAttempt(db, {
+    jobId, attemptId, resultUri: 'r2://result',
+    resultDigest: 'a'.repeat(64), pages: 1,
+  });
+  assert.deepEqual(result, { recorded: false, won: false });
+  assert.equal((await attempt(attemptId)).state, 'dispatch_unknown');
+  assert.equal((await job(jobId)).state, 'uploading');
+});
 
 // ---------------------------------------------------------------------------
 // The crash-window ordering:
@@ -253,7 +306,10 @@ test('a job is not failed while a dispatch_unknown attempt may still be running'
 test('a job is not failed while another attempt is outstanding', async () => {
   const jobId = await newJob();
   const a = await newAttempt(jobId);
-  await newAttempt(jobId, 'dispatched');
+  const outstanding = await newAttempt(jobId);
+  await markDispatched(db, {
+    jobId, attemptId: outstanding, modalCallId: 'fc-outstanding',
+  });
 
   const result = await failAttempt(db, { jobId, attemptId: a, error: 'boom' });
 

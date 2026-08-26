@@ -25,7 +25,10 @@ import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import pg from 'pg';
 import { migrate } from '../src/migrate.mjs';
-import { acceptAttempt, failAttempt } from '../src/accept.mjs';
+import { acceptAttempt as acceptAttemptRaw, failAttempt } from '../src/accept.mjs';
+
+const acceptAttempt = (database, input) =>
+  acceptAttemptRaw(database, { status: 'completed', ...input });
 
 const URL = process.env.PAGESPATIAL_TEST_DATABASE_URL;
 
@@ -65,8 +68,9 @@ describe('native Postgres', {
       [u[0].id, 'a'.repeat(64)],
     );
     const mk = async () => (await a.query(
-      `INSERT INTO job_attempts (job_id, state) VALUES ($1,'dispatched') RETURNING id`,
-      [j[0].id],
+      `INSERT INTO job_attempts (job_id, state, modal_call_id, dispatched_at)
+       VALUES ($1, 'dispatched', $2, now()) RETURNING id`,
+      [j[0].id, `fc-${randomUUID()}`],
     )).rows[0].id;
     return { jobId: j[0].id, one: await mk(), two: await mk() };
   };
@@ -84,6 +88,30 @@ describe('native Postgres', {
   test('re-running the migration is a no-op', async () => {
     const result = await migrate(a);
     assert.deepEqual(result, { applied: [], pending: [] });
+  });
+
+  test('two fresh replicas serialize migration startup', async () => {
+    const left = new pg.Client({ connectionString: URL });
+    const right = new pg.Client({ connectionString: URL });
+    const raceSchema = `pagespatial_migrate_${randomUUID().replaceAll('-', '')}`;
+    const quoted = `"${raceSchema}"`;
+    await left.connect();
+    await right.connect();
+    try {
+      await left.query(`CREATE SCHEMA ${quoted}`);
+      await left.query(`SET search_path TO ${quoted}`);
+      await right.query(`SET search_path TO ${quoted}`);
+      const [one, two] = await Promise.all([migrate(left), migrate(right)]);
+      assert.equal(one.applied.length + two.applied.length, 2,
+        'the two migration files must be applied exactly once in total');
+      assert.deepEqual(
+        [one.pending.length, two.pending.length], [0, 0],
+      );
+    } finally {
+      await right.end();
+      await left.query(`DROP SCHEMA IF EXISTS ${quoted} CASCADE`);
+      await left.end();
+    }
   });
 
   test('exactly one of two racing installs wins', async () => {

@@ -52,6 +52,7 @@ import modal
 MAX_INPUT_BYTES = 90 * 1024 * 1024        # below Modal's 100 MB gRPC cap (§7.1)
 MAX_PAGES_PER_JOB = 200                    # enforced service-side (SERVICE_MAX_PAGES_PER_JOB)
 MAX_RESULT_BYTES = 64 * 1024 * 1024        # serialized output cap — visible ResultTooLarge, never truncation
+MAX_OBJECT_RESULT_BYTES = 128 * 1024 * 1024 # explicit R2 publication cap, separate from Modal gRPC
 MAX_NODE_JOBS_PER_LIFETIME = 100           # created loopback job IDs per warm Node lifetime (§7.3)
 SCHEMA_VERSION = "0.6.0"
 OBJECT_RESULT_SCHEMA_VERSION = 1
@@ -80,7 +81,8 @@ RESOURCES = {
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 DEFAULT_APP_NAME = "pagespatial-parse-m1-dev"
-DEFAULT_R2_SECRET_NAME = "pagespatial-r2-dev"
+DEFAULT_R2_INPUT_SECRET_NAME = "pagespatial-r2-input-dev"
+DEFAULT_R2_RESULTS_SECRET_NAME = "pagespatial-r2-results-dev"
 
 
 _DEV_APP_RE = re.compile(r"pagespatial-parse(-m\d+|-arm\d+)?-(dev|test)")
@@ -192,6 +194,10 @@ class InputRejected(ValueError):
     """Invalid caller input (§7.1) — rejected before any Node work."""
 
 
+class ObjectResultTooLarge(RuntimeError):
+    """Canonical R2 result exceeds the object-publication bound."""
+
+
 class ParseObjectInput(TypedDict):
     job_id: str
     attempt_id: str
@@ -222,24 +228,55 @@ class ParseObjectOutput(TypedDict):
 
 
 @dataclass(frozen=True)
-class R2Config:
+class S3Location:
     endpoint: str
     bucket: str
     access_key_id: str
     secret_access_key: str
 
 
+@dataclass(frozen=True)
+class R2Config:
+    input: S3Location
+    results: S3Location
+
+
+@dataclass(frozen=True)
+class R2Store:
+    input_client: object
+    input_bucket: str
+    results_client: object
+    results_bucket: str
+
+
 def load_r2_config(environ=None) -> R2Config:
     env = os.environ if environ is None else environ
-    names = ("R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY")
+    names = (
+        "R2_INPUT_ENDPOINT", "R2_INPUT_BUCKET",
+        "R2_INPUT_ACCESS_KEY_ID", "R2_INPUT_SECRET_ACCESS_KEY",
+        "R2_RESULTS_ENDPOINT", "R2_RESULTS_BUCKET",
+        "R2_RESULTS_ACCESS_KEY_ID", "R2_RESULTS_SECRET_ACCESS_KEY",
+    )
     missing = [name for name in names if not isinstance(env.get(name), str) or not env[name]]
     if missing:
         raise RuntimeError(f"missing R2 configuration: {', '.join(missing)}")
-    endpoint = env["R2_ENDPOINT"].rstrip("/")
-    if not endpoint.startswith("https://"):
-        raise RuntimeError("R2_ENDPOINT must use https")
-    return R2Config(endpoint, env["R2_BUCKET"],
-                    env["R2_ACCESS_KEY_ID"], env["R2_SECRET_ACCESS_KEY"])
+
+    def location(prefix: str) -> S3Location:
+        endpoint = env[f"R2_{prefix}_ENDPOINT"].rstrip("/")
+        if not endpoint.startswith("https://"):
+            raise RuntimeError(f"R2_{prefix}_ENDPOINT must use https")
+        return S3Location(
+            endpoint, env[f"R2_{prefix}_BUCKET"],
+            env[f"R2_{prefix}_ACCESS_KEY_ID"],
+            env[f"R2_{prefix}_SECRET_ACCESS_KEY"])
+
+    input_location = location("INPUT")
+    results_location = location("RESULTS")
+    if input_location.bucket == results_location.bucket:
+        raise RuntimeError("R2 input and results buckets must be distinct")
+    if input_location.access_key_id == results_location.access_key_id:
+        raise RuntimeError("R2 input and results credentials must be distinct")
+    return R2Config(input=input_location, results=results_location)
 
 
 def _canonical_uuid(name: str, value) -> str:
@@ -517,8 +554,12 @@ def _minimal_pdf(page_count: int) -> bytes:
 
 @app.cls(
     image=image,
-    secrets=[modal.Secret.from_name(
-        os.environ.get("PAGESPATIAL_R2_SECRET_NAME", DEFAULT_R2_SECRET_NAME))],
+    secrets=[
+        modal.Secret.from_name(os.environ.get(
+            "PAGESPATIAL_R2_INPUT_SECRET_NAME", DEFAULT_R2_INPUT_SECRET_NAME)),
+        modal.Secret.from_name(os.environ.get(
+            "PAGESPATIAL_R2_RESULTS_SECRET_NAME", DEFAULT_R2_RESULTS_SECRET_NAME)),
+    ],
     cpu=CPU_CORES,              # physical cores — matches the measured trial topology
     memory=MEMORY_MIB,          # MiB
     timeout=METHOD_TIMEOUT_S,
@@ -685,14 +726,22 @@ class ParseContainer:
             service_ready_ms=service_ready_ms, enforce_result_limit=True)
 
     def _r2(self):
+        cached = getattr(self, "_r2_store", None)
+        if cached is not None:
+            return cached
         config = load_r2_config()
         import boto3
-        client = boto3.client(
-            "s3", endpoint_url=config.endpoint, region_name="auto",
-            aws_access_key_id=config.access_key_id,
-            aws_secret_access_key=config.secret_access_key,
-        )
-        return client, config.bucket
+
+        def client(location: S3Location):
+            return boto3.client(
+                "s3", endpoint_url=location.endpoint, region_name="auto",
+                aws_access_key_id=location.access_key_id,
+                aws_secret_access_key=location.secret_access_key)
+
+        self._r2_store = R2Store(
+            client(config.input), config.input.bucket,
+            client(config.results), config.results.bucket)
+        return self._r2_store
 
     @staticmethod
     def _download_object(client, bucket: str, key: str) -> bytes:
@@ -715,14 +764,15 @@ class ParseContainer:
     def parse_object(self, payload: dict) -> ParseObjectOutput:
         object_t0, container_cold, service_ready_ms = self._begin_method()
         request = validate_object_input(payload)
-        client, bucket = self._r2()
+        store = self._r2()
 
         download_t0 = time.monotonic()
-        pdf_bytes = self._download_object(client, bucket, request["input_key"])
+        pdf_bytes = self._download_object(
+            store.input_client, store.input_bucket, request["input_key"])
         download_ms = int((time.monotonic() - download_t0) * 1000)
 
         parse_payload = {
-            "request_id": request["job_id"],
+            "request_id": request["attempt_id"],
             "pdf_bytes": pdf_bytes,
             "expected_sha256": request["expected_sha256"],
             "schema_version": SCHEMA_VERSION,
@@ -747,11 +797,15 @@ class ParseContainer:
         result_bytes = json.dumps(
             envelope, sort_keys=True, separators=(",", ":"),
             ensure_ascii=False).encode("utf-8")
+        if len(result_bytes) > MAX_OBJECT_RESULT_BYTES:
+            raise ObjectResultTooLarge(
+                f"serialized object result {len(result_bytes)} bytes exceeds "
+                f"{MAX_OBJECT_RESULT_BYTES}")
         result_digest = hashlib.sha256(result_bytes).hexdigest()
 
         upload_t0 = time.monotonic()
-        client.put_object(
-            Bucket=bucket, Key=result_key, Body=result_bytes,
+        store.results_client.put_object(
+            Bucket=store.results_bucket, Key=result_key, Body=result_bytes,
             ContentType="application/json")
         upload_ms = int((time.monotonic() - upload_t0) * 1000)
 
@@ -760,7 +814,7 @@ class ParseContainer:
             "attempt_id": request["attempt_id"],
             "execution_id": execution_id,
             "document_sha256": request["expected_sha256"],
-            "result_uri": f"r2://{bucket}/{result_key}",
+            "result_uri": f"r2://{store.results_bucket}/{result_key}",
             "result_key": result_key,
             "result_digest": result_digest,
             "result_bytes": len(result_bytes),

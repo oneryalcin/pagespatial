@@ -16,6 +16,7 @@ import { dirname, join } from 'node:path';
 import pg from 'pg';
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
+const MIGRATION_LOCK_ID = 731945821;
 
 const LEDGER = `
   CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -38,7 +39,7 @@ export function migrationFiles(dir = MIGRATIONS) {
  * Apply pending migrations. `db` is anything with .query() — a pg client or
  * a PGlite instance — so the runner itself is testable without a server.
  */
-export async function migrate(db, { dryRun = false, log = () => {} } = {}) {
+async function migrateLocked(db, { dryRun = false, log = () => {} } = {}) {
   // A migration file holds many statements. `query()` uses the extended
   // protocol, which accepts exactly one -- node-postgres happens to fall
   // back to simple-query for a parameterless string, PGlite does not. Rather
@@ -91,6 +92,17 @@ export async function migrate(db, { dryRun = false, log = () => {} } = {}) {
     done.push(m.name);
   }
   return { applied: done, pending: [] };
+}
+
+/** Serialize the complete read/check/apply sequence across API replicas.
+ * The lock is session-scoped, so every exit path must release it. */
+export async function migrate(db, options = {}) {
+  await db.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_ID]);
+  try {
+    return await migrateLocked(db, options);
+  } finally {
+    await db.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_ID]);
+  }
 }
 
 // --- CLI ---------------------------------------------------------------
