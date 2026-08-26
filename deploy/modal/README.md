@@ -68,7 +68,10 @@ the secret names with `PAGESPATIAL_R2_INPUT_SECRET_NAME` and
 The qualification harness uses a separate local control credential scoped to
 both development buckets. Its `.env` names are `R2_CONTROL_ENDPOINT`,
 `R2_CONTROL_ACCESS_KEY_ID`, `R2_CONTROL_SECRET_ACCESS_KEY`, `R2_INPUT_BUCKET`,
-and `R2_RESULTS_BUCKET`. This credential is never attached to the worker.
+and `R2_RESULTS_BUCKET`, plus the input/results worker access-key pairs named
+above. This credential is never attached to the worker. Qualification proves
+the positive read/write path and also requires `AccessDenied` when the input
+token writes to inputs or the results token reads/writes inputs.
 
 Each qualification trial arm gets its own app tag (§10), e.g.:
 

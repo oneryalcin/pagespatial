@@ -22,6 +22,7 @@ from pathlib import Path
 
 import boto3
 import modal
+from botocore.exceptions import ClientError
 from dotenv import dotenv_values
 
 
@@ -30,6 +31,8 @@ def config() -> dict[str, str]:
     names = (
         "R2_CONTROL_ENDPOINT", "R2_CONTROL_ACCESS_KEY_ID",
         "R2_CONTROL_SECRET_ACCESS_KEY", "R2_INPUT_BUCKET", "R2_RESULTS_BUCKET",
+        "R2_INPUT_ACCESS_KEY_ID", "R2_INPUT_SECRET_ACCESS_KEY",
+        "R2_RESULTS_ACCESS_KEY_ID", "R2_RESULTS_SECRET_ACCESS_KEY",
     )
     missing = [name for name in names if not values.get(name)]
     if missing:
@@ -51,6 +54,17 @@ def require_completed(label: str, result: dict, expected_pages: int) -> None:
     if result.get("page_count") != expected_pages:
         raise RuntimeError(
             f"{label} returned {result.get('page_count')} pages; expected {expected_pages}")
+
+
+def require_access_denied(label: str, operation) -> None:
+    try:
+        operation()
+    except ClientError as error:
+        code = error.response.get("Error", {}).get("Code")
+        if code == "AccessDenied":
+            return
+        raise RuntimeError(f"{label} failed with {code}, not AccessDenied") from error
+    raise RuntimeError(f"{label} unexpectedly succeeded")
 
 
 def main() -> None:
@@ -84,6 +98,16 @@ def main() -> None:
         raise SystemExit("R2_INPUT_BUCKET and R2_RESULTS_BUCKET must be distinct")
     created_keys = [input_key]
 
+    def worker_client(prefix: str):
+        return boto3.client(
+            "s3", endpoint_url=env["R2_CONTROL_ENDPOINT"].rstrip("/"), region_name="auto",
+            aws_access_key_id=env[f"R2_{prefix}_ACCESS_KEY_ID"],
+            aws_secret_access_key=env[f"R2_{prefix}_SECRET_ACCESS_KEY"],
+        )
+
+    input_worker = worker_client("INPUT")
+    results_worker = worker_client("RESULTS")
+
     parse_cls = modal.Cls.from_name(args.app, "ParseContainer")
     remote = parse_cls()
     direct_payload = {
@@ -104,6 +128,27 @@ def main() -> None:
     try:
         client.put_object(Bucket=input_bucket, Key=input_key, Body=pdf,
                           ContentType="application/pdf")
+
+        permission_probe_key = f"permission-probes/{attempt_id}.bin"
+        require_access_denied(
+            "input read-only token PUT to input bucket",
+            lambda: input_worker.put_object(
+                Bucket=input_bucket, Key=permission_probe_key, Body=b"probe"),
+        )
+        require_access_denied(
+            "results token GET from input bucket",
+            lambda: results_worker.get_object(Bucket=input_bucket, Key=input_key),
+        )
+        try:
+            require_access_denied(
+                "results token PUT to input bucket",
+                lambda: results_worker.put_object(
+                    Bucket=input_bucket, Key=permission_probe_key, Body=b"probe"),
+            )
+        finally:
+            # If a mis-scoped token unexpectedly wrote the probe, the control
+            # credential removes it before the qualification fails.
+            client.delete_object(Bucket=input_bucket, Key=permission_probe_key)
 
         direct_a = remote.parse_document.remote(direct_payload)
         direct_b = remote.parse_document.remote(direct_payload)

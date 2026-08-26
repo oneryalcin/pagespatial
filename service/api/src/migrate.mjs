@@ -97,6 +97,9 @@ async function migrateLocked(db, { dryRun = false, log = () => {} } = {}) {
 /** Serialize the complete read/check/apply sequence across API replicas.
  * The lock is session-scoped, so every exit path must release it. */
 export async function migrate(db, options = {}) {
+  if (db instanceof pg.Pool) {
+    throw new TypeError('migrate requires one checked-out pg.Client, not pg.Pool');
+  }
   await db.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_ID]);
   try {
     return await migrateLocked(db, options);

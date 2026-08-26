@@ -1,7 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
+import pg from 'pg';
 import { migrate } from '../src/migrate.mjs';
+
+test('migration refuses a pool because its advisory lock is session-scoped', async () => {
+  const pool = new pg.Pool({ connectionString: 'postgres://unused.invalid/database' });
+  try {
+    await assert.rejects(
+      migrate(pool),
+      /requires one checked-out pg.Client, not pg.Pool/,
+    );
+    assert.equal(pool.totalCount, 0, 'the guard must fire before checking out a connection');
+  } finally {
+    await pool.end();
+  }
+});
 
 test('migration lock covers the complete run and releases after failure', async () => {
   const db = await PGlite.create();

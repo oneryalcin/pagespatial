@@ -359,6 +359,11 @@ unchanged parsing core, a **focused** qualification suffices:
 6. Modal retry behaviour exercised;
 7. no meaningful parsing-throughput regression.
 
+The live qualification also proves the credential boundary, not merely the
+presence of configuration: the input credential must be denied a PUT to the
+input bucket, and the results credential must be denied both GET and PUT on
+the input bucket. Unexpected success is a failed qualification.
+
 Every expected-success qualification call must assert `status=completed`, no
 top-level failure, and the expected page count before comparison. A returned
 Modal value is transport success, not parser success. Failed parse envelopes
