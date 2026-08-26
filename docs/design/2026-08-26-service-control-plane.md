@@ -243,11 +243,11 @@ Modal calls at the same result key and destroy the exact property the
 immutable-key scheme exists to provide. An attempt whose call id never
 landed goes to `dispatch_unknown` and stays there; after a bounded wait the
 reconciler mints a *different* attempt and dispatches that one. The
-uncertain call may still be running. Once a successful R2 consultation finds
-no result and the replacement exists, the original becomes terminal `failed`
-with a superseded reason. A replacement is never itself replaced: if its
-dispatch is also unknown and R2 has no valid result, the job fails instead of
-growing an unbounded chain.
+uncertain call may still be running, so the original stays harvestable. It can
+still win if the replacement fails, or complete truthfully as a losing attempt
+if the replacement won first. The 24-hour job deadline bounds that uncertainty.
+A replacement is never itself replaced: if its dispatch is also unknown, both
+attempts remain bounded by the same job deadline instead of growing a chain.
 
 **Dispatch is at-least-once. Stated as a property, not a footnote:**
 
@@ -287,9 +287,9 @@ One background loop in the api process, advisory-locked so replicas do not
 double-run:
 
 - attempts stuck in `dispatch_unknown` past a bounded wait → mint a **new**
-  attempt and dispatch that (never re-spawn the same attempt id), then close
-  the original as terminal `failed` with a superseded reason; at most one
-  replacement is allowed;
+  attempt and dispatch that (never re-spawn the same attempt id); keep the
+  original harvestable until it produces a result or the 24-hour job deadline;
+  at most one replacement is allowed;
 - attempts with a call ID → `fromId(id).get({timeoutMs: 0})`, install
   terminal results, record failures;
 - `uploading` rows past `upload_expires_at` → fail;

@@ -136,8 +136,8 @@ export async function reconcileAttempt({
 
   // A dispatching/unknown call may already have produced bytes even though
   // its call id never landed. Check those bytes before creating replacement
-  // work. One replacement closes the original; a replacement is never itself
-  // replaced.
+  // work. Keep the original harvestable because it may be the only successful
+  // paid execution; a replacement is never itself replaced.
   const recovered = await recoverFromR2(resultStore, expected);
   if (recovered.result) {
     const accepted = await acceptStored(db, row, recovered.result);
@@ -159,24 +159,14 @@ export async function reconcileAttempt({
     return { kind: 'failed', ...failed, error: detail };
   }
   if (!replacement.created) {
-    const detail = `dispatch outcome unknown; replaced by ${replacement.attempt.id}`;
-    const failed = await failAttempt(db, {
-      jobId: row.job_id, attemptId: row.attempt_id, error: detail,
-    });
-    return {
-      kind: 'superseded', attemptId: replacement.attempt.id, ...failed,
-    };
+    return { kind: 'replacement_exists', attemptId: replacement.attempt.id };
   }
   const dispatched = await dispatchExistingAttempt({
     db, modalCalls, inputBucket, attemptId: replacement.attempt.id,
   });
-  const detail = `dispatch outcome unknown; replaced by ${replacement.attempt.id}`;
-  const failed = await failAttempt(db, {
-    jobId: row.job_id, attemptId: row.attempt_id, error: detail,
-  });
   return {
     kind: 'replacement_dispatched', attemptId: replacement.attempt.id,
-    dispatched, superseded: failed.recorded,
+    dispatched,
   };
 }
 

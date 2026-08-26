@@ -233,8 +233,8 @@ test('an unknown attempt creates and dispatches at most one replacement', async 
   const first = await reconcileAttempt(options);
   const second = await reconcileAttempt(options);
   assert.equal(first.kind, 'replacement_dispatched');
-  assert.equal(first.superseded, true);
-  assert.equal(second.kind, 'terminal');
+  assert.equal(second.kind, 'replacement_exists');
+  assert.equal((await row('job_attempts', a.id)).state, 'dispatch_unknown');
   assert.equal(calls.spawned.length, 1);
 });
 
@@ -264,7 +264,7 @@ test('an uncertain replacement cannot grow a third attempt', async () => {
     Number((await db.query('SELECT count(*) FROM job_attempts WHERE job_id = $1', [j.id])).rows[0].count),
     2,
   );
-  assert.equal((await row('jobs', j.id)).state, 'failed');
+  assert.equal((await row('jobs', j.id)).state, 'dispatched');
 });
 
 test('a queued job can have only one independent initial attempt', async () => {
@@ -283,7 +283,7 @@ test('a queued job can have only one independent initial attempt', async () => {
   );
 });
 
-test('crash-window replacement wins and a superseded original cannot displace it', async () => {
+test('crash-window replacement wins and the original late result cannot displace it', async () => {
   const j = await job();
   const original = await attempt(j.id, 'dispatch_unknown');
   const store = fakeStore();
@@ -310,13 +310,45 @@ test('crash-window replacement wins and a superseded original cannot displace it
     db, modalCalls: calls, resultStore: store, inputBucket: INPUT_BUCKET,
     attemptId: original.id, unknownWaitMs: 0,
   });
-  assert.deepEqual(lost, { kind: 'terminal', state: 'failed' });
+  assert.equal(lost.won, false);
 
   const final = await row('jobs', j.id);
   assert.equal(final.accepted_attempt_id, replacementId);
-  assert.equal((await row('job_attempts', original.id)).state, 'failed');
+  assert.equal((await row('job_attempts', original.id)).state, 'succeeded');
   assert.equal((await row('job_attempts', replacement.id)).state, 'succeeded');
   assert.deepEqual([...store.objects.keys()].sort(), [late.key, winner.key].sort());
+});
+
+test('a paid original result can rescue the job after its replacement fails', async () => {
+  const j = await job();
+  const original = await attempt(j.id, 'dispatch_unknown');
+  const store = fakeStore();
+  const calls = modal();
+
+  const created = await reconcileAttempt({
+    db, modalCalls: calls, resultStore: store, inputBucket: INPUT_BUCKET,
+    attemptId: original.id, unknownWaitMs: 0,
+  });
+  const replacement = await row('job_attempts', created.attemptId);
+  calls.inspect = async (callId) => callId === replacement.modal_call_id
+    ? { kind: 'failed', error: 'RemoteError: replacement OOM' }
+    : { kind: 'pending' };
+  const replacementFailure = await reconcileAttempt({
+    db, modalCalls: calls, resultStore: store, inputBucket: INPUT_BUCKET,
+    attemptId: replacement.id,
+  });
+  assert.equal(replacementFailure.kind, 'failed');
+  assert.equal((await row('jobs', j.id)).state, 'dispatched');
+
+  const paidResult = objectFor(j, original.id, 'f'.repeat(32));
+  store.objects.set(paidResult.key, paidResult);
+  const rescued = await reconcileAttempt({
+    db, modalCalls: calls, resultStore: store, inputBucket: INPUT_BUCKET,
+    attemptId: original.id, unknownWaitMs: 0,
+  });
+  assert.equal(rescued.kind, 'recovered');
+  assert.equal(rescued.won, true);
+  assert.equal((await row('jobs', j.id)).state, 'succeeded');
 });
 
 test('one malformed attempt fails permanently without blocking a healthy sibling', async () => {
