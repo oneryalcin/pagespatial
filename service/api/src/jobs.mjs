@@ -193,13 +193,21 @@ export async function finalizeJob({ db, inputStore, userId, jobId, now = new Dat
     });
   }
   const { rows } = await db.query(
-    `UPDATE jobs SET state = 'queued', input_bytes = $3, queued_at = $4
+    `WITH database_clock AS (SELECT clock_timestamp() AS value)
+     UPDATE jobs SET state = 'queued', input_bytes = $3,
+                     queued_at = database_clock.value
+       FROM database_clock
       WHERE id = $1 AND user_id = $2 AND state = 'uploading'
-        AND upload_expires_at > $4
+        AND upload_expires_at > database_clock.value
       RETURNING *`,
-    [jobId, userId, object.bytes, now.toISOString()],
+    [jobId, userId, object.bytes],
   );
   row = rows[0] ?? await ownedJob(db, { userId, jobId });
+  if (row.state === 'uploading') {
+    return failUploadOrReturnCurrent(db, {
+      userId, jobId, code: 'upload_expired', detail: 'upload window expired',
+    });
+  }
   return finalized(row);
 }
 

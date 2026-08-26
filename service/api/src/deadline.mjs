@@ -14,14 +14,20 @@ export function withDeadline(promise, timeoutMs, label) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-export async function sendWithDeadline(client, command, timeoutMs, label) {
+export async function withAbortableDeadline(operation, timeoutMs, label) {
   const controller = new AbortController();
   try {
     return await withDeadline(
-      client.send(command, { abortSignal: controller.signal }), timeoutMs, label,
+      Promise.resolve().then(() => operation(controller.signal)), timeoutMs, label,
     );
   } catch (error) {
     if (error instanceof DeadlineExceededError) controller.abort(error);
     throw error;
   }
+}
+
+export function sendWithDeadline(client, command, timeoutMs, label) {
+  return withAbortableDeadline(
+    (abortSignal) => client.send(command, { abortSignal }), timeoutMs, label,
+  );
 }

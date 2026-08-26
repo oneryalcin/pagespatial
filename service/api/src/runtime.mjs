@@ -19,6 +19,17 @@ const required = (env, name) => {
   return value;
 };
 
+export function validateR2Isolation({
+  inputBucket, resultsBucket, inputAccessKeyId, resultsAccessKeyId,
+}) {
+  if (inputBucket === resultsBucket) {
+    throw new TypeError('R2 input and results buckets must be distinct');
+  }
+  if (inputAccessKeyId === resultsAccessKeyId) {
+    throw new TypeError('R2 input and results credentials must be distinct');
+  }
+}
+
 function loop(task, intervalMs, onError) {
   let stopped = false;
   let active = Promise.resolve();
@@ -59,6 +70,18 @@ async function reconcilerPass({ pool, modalCalls, resultStore, inputBucket }) {
 }
 
 export async function startRuntime({ env = process.env, log = console } = {}) {
+  const inputEndpoint = required(env, 'R2_INPUT_ENDPOINT');
+  const inputAccessKeyId = required(env, 'R2_API_INPUT_ACCESS_KEY_ID');
+  const inputSecretAccessKey = required(env, 'R2_API_INPUT_SECRET_ACCESS_KEY');
+  const resultsEndpoint = required(env, 'R2_RESULTS_ENDPOINT');
+  const resultsAccessKeyId = required(env, 'R2_API_RESULTS_ACCESS_KEY_ID');
+  const resultsSecretAccessKey = required(env, 'R2_API_RESULTS_SECRET_ACCESS_KEY');
+  const inputBucket = required(env, 'R2_INPUT_BUCKET');
+  const resultsBucket = required(env, 'R2_RESULTS_BUCKET');
+  validateR2Isolation({
+    inputBucket, resultsBucket, inputAccessKeyId, resultsAccessKeyId,
+  });
+
   const pool = new pg.Pool({
     connectionString: required(env, 'DATABASE_URL'),
     max: Number(env.PAGESPATIAL_DB_POOL_SIZE ?? 10),
@@ -73,17 +96,15 @@ export async function startRuntime({ env = process.env, log = console } = {}) {
   }
 
   const inputClient = s3ClientFromConfig({
-    endpoint: required(env, 'R2_INPUT_ENDPOINT'),
-    accessKeyId: required(env, 'R2_API_INPUT_ACCESS_KEY_ID'),
-    secretAccessKey: required(env, 'R2_API_INPUT_SECRET_ACCESS_KEY'),
+    endpoint: inputEndpoint,
+    accessKeyId: inputAccessKeyId,
+    secretAccessKey: inputSecretAccessKey,
   });
   const resultClient = s3ClientFromConfig({
-    endpoint: required(env, 'R2_RESULTS_ENDPOINT'),
-    accessKeyId: required(env, 'R2_API_RESULTS_ACCESS_KEY_ID'),
-    secretAccessKey: required(env, 'R2_API_RESULTS_SECRET_ACCESS_KEY'),
+    endpoint: resultsEndpoint,
+    accessKeyId: resultsAccessKeyId,
+    secretAccessKey: resultsSecretAccessKey,
   });
-  const inputBucket = required(env, 'R2_INPUT_BUCKET');
-  const resultsBucket = required(env, 'R2_RESULTS_BUCKET');
   const inputStore = createInputObjectStore({ client: inputClient, bucket: inputBucket });
   const resultStore = createR2ResultStore({ client: resultClient, bucket: resultsBucket });
   const resultDownloads = createResultDownloadStore({

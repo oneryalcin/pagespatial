@@ -2,7 +2,9 @@ import {
   GetObjectCommand, ListObjectsV2Command, S3Client,
 } from '@aws-sdk/client-s3';
 import { InvalidResultError, RESULT_LIMIT_BYTES } from './result-contract.mjs';
-import { sendWithDeadline } from './deadline.mjs';
+import {
+  DeadlineExceededError, sendWithDeadline, withAbortableDeadline,
+} from './deadline.mjs';
 
 const MAX_ATTEMPT_OBJECTS = 16;
 
@@ -64,19 +66,27 @@ export function createR2ResultStore({ client, bucket, operationTimeoutMs = 10_00
       return found.sort((a, b) => a.key.localeCompare(b.key));
     },
     async readResult({ key }) {
-      let response;
+      let body;
       try {
-        response = await sendWithDeadline(
-          client, new GetObjectCommand({ Bucket: bucket, Key: key }),
-          operationTimeoutMs, 'R2 result get',
+        return await withAbortableDeadline(
+          async (abortSignal) => {
+            const response = await client.send(
+              new GetObjectCommand({ Bucket: bucket, Key: key }), { abortSignal },
+            );
+            body = response.Body;
+            return {
+              bytes: await readBounded(body, response.ContentLength),
+              lastModified: response.LastModified,
+            };
+          },
+          operationTimeoutMs,
+          'R2 result read',
         );
       } catch (error) {
-        throw new ResultStoreUnavailableError('R2 result object could not be fetched', { cause: error });
+        if (error instanceof InvalidResultError) throw error;
+        if (error instanceof DeadlineExceededError) body?.destroy?.(error);
+        throw new ResultStoreUnavailableError('R2 result object could not be read', { cause: error });
       }
-      return {
-        bytes: await readBounded(response.Body, response.ContentLength),
-        lastModified: response.LastModified,
-      };
     },
   };
 }

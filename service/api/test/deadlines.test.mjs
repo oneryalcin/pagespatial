@@ -43,3 +43,31 @@ test('R2 result listing has a real deadline when the SDK ignores abort', async (
     (error) => error instanceof ResultStoreUnavailableError
       && /R2 result list exceeded 10 ms/u.test(error.cause?.message));
 });
+
+test('R2 result reading cancels a body that stalls after GetObject returns', async () => {
+  let destroyed = false;
+  const body = {
+    [Symbol.asyncIterator]() {
+      return { next: never };
+    },
+    destroy() { destroyed = true; },
+  };
+  const store = createR2ResultStore({
+    client: {
+      async send() {
+        return { Body: body, ContentLength: 3, LastModified: new Date() };
+      },
+    },
+    bucket: 'results',
+    operationTimeoutMs: 10,
+  });
+  const guard = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('test guard: body read did not stop')), 100);
+  });
+  await assert.rejects(
+    Promise.race([store.readResult({ key: 'results/j/a/x.json' }), guard]),
+    (error) => error instanceof ResultStoreUnavailableError
+      && /R2 result read exceeded 10 ms/u.test(error.cause?.message),
+  );
+  assert.equal(destroyed, true);
+});

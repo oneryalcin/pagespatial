@@ -169,6 +169,31 @@ test('finalize reports the state won by a concurrent finalizer', async () => {
   assert.equal(result.row.state, 'queued');
 });
 
+test('finalize cannot queue after the upload deadline passes during R2 HEAD', async () => {
+  const created = await submit({ idempotencyKey: 'finalize-expiry-crossing' });
+  const expiring = (await db.query(
+    `UPDATE jobs SET upload_expires_at = clock_timestamp() + interval '150 milliseconds'
+      WHERE id = $1 RETURNING *`,
+    [created.row.id],
+  )).rows[0];
+  await assert.rejects(
+    finalizeJob({
+      db,
+      userId,
+      jobId: created.row.id,
+      now: new Date(new Date(expiring.upload_expires_at).getTime() - 100),
+      inputStore: {
+        async head() {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          return { bytes: 589, contentType: 'application/pdf' };
+        },
+      },
+    }),
+    (error) => error.status === 410 && error.code === 'upload_expired',
+  );
+  assert.equal((await ownedJob(db, { userId, jobId: created.row.id })).state, 'failed');
+});
+
 test('queued sweep closes the finalize crash window with one initial attempt', async () => {
   const created = await submit();
   await finalizeJob({
