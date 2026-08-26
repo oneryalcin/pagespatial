@@ -66,9 +66,11 @@ page against the owner's Gemini key and there is no per-caller spend cap.
         Cloudflare Access (dashboard) / Tunnel (API)
                        │  outbound-only origin connection
         ┌──────────────┴────────────── VPS ──────────────┐
-        │   api (Node, server-rendered HTML)             │
-        │     └── postgres (named volume)                │
+        │   api (Node, server-rendered HTML) — STATELESS  │
         └──────┬──────────────────────┬──────────────────┘
+               │                      │
+        managed Postgres              │
+        (vendor PITR)                 │
                │                      │
                │ modal.cls.fromName   │ presigned S3
                │   .spawn()           │
@@ -466,23 +468,34 @@ until a consumer needs them.
 
 ## Durability
 
-The VPS is a single point of failure. If it is down, **submitted jobs stall
-and in-flight Modal calls still complete** — their results land in R2 and
-are reconciled on restart.
+**The VPS holds no state.** Postgres is managed (owner decision,
+2026-08-26); the ledger lives with a vendor that provides point-in-time
+recovery, and R2 holds every document and result.
 
-"Jobs are not lost" would be too strong: **VPS disk loss loses everything
-since the last backup.** State the target explicitly.
+An earlier draft ran Postgres on the box in Compose. Its weakest line was
+"VPS disk loss loses everything since the last backup, RPO ≤ 24h" — and
+the fix for that was a nightly `pg_dump`, a separate-credential setup, and
+a restore-testing obligation, all of which are ongoing work that does not
+advance the product. Managed Postgres deletes all three and converts VPS
+disk loss into **re-provision from the `.env` backup**. RPO drops from
+≤24h to the vendor's PITR window.
 
-- **RPO ≤ 24h, RTO ≤ 4h** for v1 — nightly `pg_dump` to R2 with a **tested
-  restore**. An untested backup is decoration.
-- Backups use **separate credentials** from the application's R2 access, so
-  an application-level compromise cannot delete them, with their own
-  retention.
+The VPS remains a single point of *availability*: if it is down,
+submissions fail and **in-flight Modal calls still complete** — results
+land in R2 and are reconciled on restart.
+
+- **RPO: vendor PITR window. RTO ≤ 1h**, bounded by re-provisioning a
+  stateless box.
+- The one irreplaceable secret is now the `.env` (database URL, R2 keys,
+  Modal token, Access AUD). Back it up **outside** the VPS; without it a
+  rebuild cannot reach its own data.
 - Uploaded PDFs never touch VPS disk.
-- Secrets in `.env` on the box and Modal secrets worker-side; neither
-  committed.
+- Modal secrets hold the worker's R2 credentials; nothing committed.
 - Structured logs carrying job id and user id. `/health` covers Postgres
   and R2 reachability, not just process liveness.
+
+Compose on the box is now just `api` — and with Cloudflare Tunnel, not
+even Caddy.
 
 ---
 
@@ -553,9 +566,10 @@ The four pages, plus cost stamping at completion.
 cost; month-to-date equals the sum over that user's jobs; changing the
 config rate does not alter any already-written job row.
 
-**Plus a tested restore.** The durability section calls an untested backup
-decoration; without this line, v1 ships decorated. Restore the database
-from a backup into a scratch instance and serve the dashboard from it.
+**Plus one recovery drill.** With managed Postgres there is no `pg_dump` to
+test, but the claim "the VPS is disposable" is still untested until someone
+proves it: re-provision the api container from the `.env` alone and serve
+the dashboard against the live database.
 
 ## Open questions for the owner
 
@@ -607,3 +621,7 @@ from a backup into a scratch instance and serve the dashboard from it.
 - The input object key was called **immutable**; it is unique. A presigned
   PUT can be replayed until expiry.
 - `retries=1` is at `modal_app.py:420`, not 421.
+- Postgres was specified **self-hosted on the VPS**, which forced a
+  `pg_dump` cron, separate backup credentials, a restore-testing
+  obligation, and RPO ≤ 24h. Managed Postgres deletes all four (owner
+  decision, 2026-08-26) and makes the box stateless.
