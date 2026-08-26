@@ -98,7 +98,7 @@ export async function startRuntime({ env = process.env, log = console } = {}) {
     inputStore,
     resultStore: resultDownloads,
     inputBucket,
-    apiHost: env.PAGESPATIAL_API_HOST || null,
+    apiHost: required(env, 'PAGESPATIAL_API_HOST'),
     unitPriceMicros: Number(env.PAGESPATIAL_UNIT_PRICE_MICROS ?? 1000),
   });
   const server = createServer((req, res) => {

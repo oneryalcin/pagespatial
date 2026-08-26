@@ -1,3 +1,5 @@
+import { PROCESSING_DEADLINE_MS } from './job-constants.mjs';
+
 const OPEN_ATTEMPT_STATES = "('dispatching','dispatch_unknown','dispatched')";
 
 const validDate = (value, label) => {
@@ -11,13 +13,10 @@ const validDate = (value, label) => {
  * deadline. Attempts and their job become terminal in one SQL statement.
  */
 export async function sweepJobDeadlines(
-  db, { now = new Date(), jobTimeoutMs = 24 * 60 * 60 * 1000 } = {},
+  db, { now = new Date() } = {},
 ) {
   const current = validDate(now, 'now');
-  if (!Number.isSafeInteger(jobTimeoutMs) || jobTimeoutMs < 1) {
-    throw new TypeError('jobTimeoutMs must be a positive integer');
-  }
-  const cutoff = new Date(current.getTime() - jobTimeoutMs);
+  const cutoff = new Date(current.getTime() - PROCESSING_DEADLINE_MS);
   const { rows } = await db.query(
     `WITH expired AS MATERIALIZED (
        SELECT id,

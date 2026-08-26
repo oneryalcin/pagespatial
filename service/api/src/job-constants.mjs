@@ -1,0 +1,1 @@
+export const PROCESSING_DEADLINE_MS = 24 * 60 * 60 * 1000;

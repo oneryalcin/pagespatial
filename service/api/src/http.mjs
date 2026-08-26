@@ -57,14 +57,15 @@ function jobId(parts) {
 
 export function createApiHandler({
   db, pool, inputStore, resultStore, inputBucket = inputStore?.bucket,
-  unitPriceMicros = 1000, apiHost = null,
+  unitPriceMicros = 1000, apiHost,
   authenticate = (authorization) => authenticateApiKey(db, authorization),
   createRequestId = randomUUID,
 }) {
+  if (typeof apiHost !== 'string' || !apiHost) throw new TypeError('apiHost is required');
   return async function apiHandler(req, res) {
     const requestId = createRequestId();
     try {
-      if (apiHost && req.headers.host !== apiHost) {
+      if (req.headers.host?.split(':', 1)[0] !== apiHost) {
         throw new ApiError(421, 'invalid_request', 'Request was sent to the wrong host.');
       }
       const url = new URL(req.url, 'http://api.invalid');

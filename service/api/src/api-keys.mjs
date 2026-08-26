@@ -3,6 +3,7 @@ import { ApiError } from './api-errors.mjs';
 
 const TOKEN = /^ps_live_([A-Za-z0-9_-]{43})$/u;
 const PREFIX_LENGTH = 'ps_live_'.length + 8;
+const AUTH_HEADERS = Object.freeze({ 'www-authenticate': 'Bearer' });
 
 export function apiKeyDigest(secret) {
   return createHash('sha256').update(secret, 'utf8').digest('hex');
@@ -21,24 +22,28 @@ export async function issueApiKey(db, { userId, name }) {
   const { rows } = await db.query(
     `INSERT INTO api_keys (user_id, prefix, hash, name)
      SELECT id, $2, $3, $4 FROM users
-      WHERE id = $1 AND status IN ('invited','active')
+      WHERE id = $1 AND status = 'active'
      RETURNING id, prefix, name, created_at`,
     [userId, material.prefix, material.hash, name.trim()],
   );
-  if (!rows[0]) throw new TypeError('active or invited user does not exist');
+  if (!rows[0]) throw new TypeError('active user does not exist');
   return { key: rows[0], secret: material.secret };
 }
 
 function bearer(header) {
   if (typeof header !== 'string') return null;
-  const match = /^Bearer ([^ ]+)$/u.exec(header);
+  const match = /^Bearer ([^ ]+)$/iu.exec(header);
   return match?.[1] ?? null;
 }
 
 export async function authenticateApiKey(db, authorization) {
   const secret = bearer(authorization);
   const token = secret && TOKEN.exec(secret);
-  if (!token) throw new ApiError(401, 'authentication_required', 'A valid API key is required.');
+  if (!token) {
+    throw new ApiError(401, 'authentication_required', 'A valid API key is required.', {
+      headers: AUTH_HEADERS,
+    });
+  }
   const prefix = secret.slice(0, PREFIX_LENGTH);
   const { rows } = await db.query(
     `SELECT k.id AS key_id, k.hash, u.id AS user_id
@@ -51,7 +56,9 @@ export async function authenticateApiKey(db, authorization) {
   const expected = row?.hash && /^[0-9a-f]{64}$/u.test(row.hash)
     ? Buffer.from(row.hash, 'hex') : Buffer.alloc(32);
   if (!row || !timingSafeEqual(actual, expected)) {
-    throw new ApiError(401, 'authentication_required', 'A valid API key is required.');
+    throw new ApiError(401, 'authentication_required', 'A valid API key is required.', {
+      headers: AUTH_HEADERS,
+    });
   }
   await db.query('UPDATE api_keys SET last_used_at = now() WHERE id = $1', [row.key_id]);
   return { userId: row.user_id, keyId: row.key_id };

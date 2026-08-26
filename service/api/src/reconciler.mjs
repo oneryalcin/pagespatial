@@ -208,9 +208,7 @@ export async function reconcileOnce(options) {
   try {
     const now = options.now ?? new Date();
     const maintenance = {
-      deadlines: await sweepJobDeadlines(options.db, {
-        now, jobTimeoutMs: options.jobTimeoutMs,
-      }),
+      deadlines: await sweepJobDeadlines(options.db, { now }),
       settledBefore: await settleExhaustedJobs(options.db, { now }),
     };
     const ids = await listOpenAttempts(options.db, {

@@ -44,9 +44,23 @@ test('API keys are stored hashed and authenticate an active user', async () => {
     await authenticateApiKey(db, `Bearer ${issued.secret}`),
     { userId, keyId: issued.key.id },
   );
+  assert.deepEqual(
+    await authenticateApiKey(db, `bearer ${issued.secret}`),
+    { userId, keyId: issued.key.id },
+  );
   await assert.rejects(
     authenticateApiKey(db, `Bearer ${issued.secret.slice(0, -1)}x`),
     (error) => error.status === 401 && error.code === 'authentication_required',
+  );
+});
+
+test('API keys can be issued only to active users', async () => {
+  const invited = (await db.query(
+    "INSERT INTO users (email, status) VALUES ('invited@example.test','invited') RETURNING id",
+  )).rows[0];
+  await assert.rejects(
+    issueApiKey(db, { userId: invited.id, name: 'inert key' }),
+    /active user does not exist/u,
   );
 });
 
@@ -126,6 +140,33 @@ test('finalize verifies object metadata and queues idempotently', async () => {
   assert.equal(first.row.state, 'queued');
   assert.equal(replay.row.state, 'queued');
   assert.equal(Number(first.row.input_bytes), 589);
+});
+
+test('finalize reports the state won by a concurrent finalizer', async () => {
+  const created = await submit({ idempotencyKey: 'finalize-race' });
+  let injected = false;
+  const racingDb = {
+    async query(sql, values) {
+      const result = await db.query(sql, values);
+      if (!injected && sql.includes('SELECT * FROM jobs WHERE id = $1 AND user_id = $2')) {
+        injected = true;
+        await db.query(
+          "UPDATE jobs SET state = 'queued', queued_at = now() WHERE id = $1",
+          [created.row.id],
+        );
+      }
+      return result;
+    },
+  };
+  const result = await finalizeJob({
+    db: racingDb,
+    userId,
+    jobId: created.row.id,
+    now: new Date(created.row.upload_expires_at),
+    inputStore: { async head() { throw new Error('expired path must not inspect storage'); } },
+  });
+  assert.equal(result.status, 202);
+  assert.equal(result.row.state, 'queued');
 });
 
 test('queued sweep closes the finalize crash window with one initial attempt', async () => {

@@ -1,4 +1,5 @@
 import { ApiError } from './api-errors.mjs';
+import { PROCESSING_DEADLINE_MS } from './job-constants.mjs';
 
 const SHA256 = /^[0-9a-f]{64}$/u;
 const IDEMPOTENCY_KEY = /^[\x21-\x7e]{1,128}$/u;
@@ -7,6 +8,12 @@ const ADMISSION_LOCK_ID = 731945823;
 const MAX_ACTIVE_GLOBAL = 100;
 const MAX_ACTIVE_USER = 5;
 const MAX_INPUT_BYTES = 90 * 1024 * 1024;
+
+const terminalStatuses = Object.freeze({
+  upload_expired: 410,
+  input_too_large: 413,
+  invalid_upload: 422,
+});
 
 const terminalMessages = Object.freeze({
   upload_expired: 'Upload was not finalized before its deadline.',
@@ -38,7 +45,7 @@ export function jobView(row) {
     queued_at: date(row.queued_at),
     completed_at: date(row.completed_at),
     processing_deadline_at: row.queued_at
-      ? new Date(new Date(row.queued_at).getTime() + 24 * 60 * 60 * 1000).toISOString()
+      ? new Date(new Date(row.queued_at).getTime() + PROCESSING_DEADLINE_MS).toISOString()
       : null,
     retention_expires_at: date(row.retention_expires_at),
     error: code ? { code, message: terminalMessages[code] } : null,
@@ -143,29 +150,47 @@ async function failUpload(db, { userId, jobId, code, detail }) {
   return rows[0] ?? ownedJob(db, { userId, jobId });
 }
 
+function finalized(row) {
+  return { status: ['succeeded', 'failed'].includes(row.state) ? 200 : 202, row };
+}
+
+function throwTerminalUpload(row) {
+  if (row.state !== 'failed') return;
+  const code = terminalMessages[row.failure_code] ? row.failure_code : 'invalid_upload';
+  throw new ApiError(terminalStatuses[code] ?? 422, code, terminalMessages[code]);
+}
+
+async function failUploadOrReturnCurrent(db, values) {
+  const row = await failUpload(db, values);
+  throwTerminalUpload(row);
+  return finalized(row);
+}
+
 export async function finalizeJob({ db, inputStore, userId, jobId, now = new Date() }) {
   let row = await ownedJob(db, { userId, jobId });
   if (['succeeded', 'failed'].includes(row.state)) return { status: 200, row };
   if (['queued', 'dispatched'].includes(row.state)) return { status: 202, row };
   if (new Date(row.upload_expires_at) <= now) {
-    row = await failUpload(db, {
+    return failUploadOrReturnCurrent(db, {
       userId, jobId, code: 'upload_expired', detail: 'upload window expired',
     });
-    throw new ApiError(410, 'upload_expired', terminalMessages.upload_expired);
   }
   const object = await inputStore.head({ jobId });
   if (!object) throw new ApiError(409, 'upload_incomplete', 'Uploaded PDF is not available yet.');
   if (!Number.isSafeInteger(object.bytes) || object.bytes < 1) {
-    await failUpload(db, { userId, jobId, code: 'invalid_upload', detail: 'input object is empty' });
-    throw new ApiError(422, 'invalid_upload', terminalMessages.invalid_upload);
+    return failUploadOrReturnCurrent(db, {
+      userId, jobId, code: 'invalid_upload', detail: 'input object is empty',
+    });
   }
   if (object.bytes > MAX_INPUT_BYTES) {
-    await failUpload(db, { userId, jobId, code: 'input_too_large', detail: 'input object exceeds 90 MiB' });
-    throw new ApiError(413, 'input_too_large', terminalMessages.input_too_large);
+    return failUploadOrReturnCurrent(db, {
+      userId, jobId, code: 'input_too_large', detail: 'input object exceeds 90 MiB',
+    });
   }
   if (object.contentType !== 'application/pdf') {
-    await failUpload(db, { userId, jobId, code: 'invalid_upload', detail: 'input content type is not application/pdf' });
-    throw new ApiError(422, 'invalid_upload', terminalMessages.invalid_upload);
+    return failUploadOrReturnCurrent(db, {
+      userId, jobId, code: 'invalid_upload', detail: 'input content type is not application/pdf',
+    });
   }
   const { rows } = await db.query(
     `UPDATE jobs SET state = 'queued', input_bytes = $3, queued_at = $4
@@ -175,7 +200,7 @@ export async function finalizeJob({ db, inputStore, userId, jobId, now = new Dat
     [jobId, userId, object.bytes, now.toISOString()],
   );
   row = rows[0] ?? await ownedJob(db, { userId, jobId });
-  return { status: ['succeeded', 'failed'].includes(row.state) ? 200 : 202, row };
+  return finalized(row);
 }
 
 export async function resultGrant({ db, resultStore, userId, jobId, now = new Date() }) {

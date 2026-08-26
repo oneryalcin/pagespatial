@@ -16,6 +16,10 @@ let apiKey;
 
 before(async () => { db = await PGlite.create(); });
 
+test('HTTP handler refuses to start without its canonical host', () => {
+  assert.throws(() => createApiHandler({}), /apiHost is required/u);
+});
+
 beforeEach(async () => {
   await db.exec('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   await migrate(db);
@@ -41,12 +45,19 @@ beforeEach(async () => {
       async head() { return { bytes: 589, contentType: 'application/pdf' }; },
     },
     resultStore: { bucket: 'results' },
+    apiHost: '127.0.0.1',
     createRequestId: () => '11111111-1111-4111-8111-111111111111',
   });
   server = createServer(handler);
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   base = `http://127.0.0.1:${server.address().port}`;
+});
+
+test('HTTP authentication failures advertise Bearer authentication', async () => {
+  const response = await fetch(`${base}/v1/jobs/00000000-0000-4000-8000-000000000000`);
+  assert.equal(response.status, 401);
+  assert.equal(response.headers.get('www-authenticate'), 'Bearer');
 });
 
 afterEach(async () => {
