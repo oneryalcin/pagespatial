@@ -6,7 +6,7 @@ import {
   deferAttempt, settleExhaustedJobs, sweepJobDeadlines,
 } from './lifecycle.mjs';
 import {
-  InvalidResultError, validateModalPointer, validateStoredResult,
+  InvalidResultError, validateModalFailure, validateModalPointer, validateStoredResult,
 } from './result-contract.mjs';
 
 const DEFAULT_UNKNOWN_WAIT_MS = 10 * 60 * 1000;
@@ -91,6 +91,30 @@ export async function reconcileAttempt({
     const outcome = await modalCalls.inspect(row.modal_call_id);
     if (outcome.kind === 'pending') return outcome;
     if (outcome.kind === 'completed') {
+      if (outcome.output?.status === 'failed') {
+        let returnedFailure;
+        try {
+          returnedFailure = validateModalFailure(outcome.output, expected);
+        } catch (error) {
+          if (!(error instanceof InvalidResultError)) throw error;
+          returnedFailure = {
+            failure_code: 'processing_failed',
+            failure_detail: `invalid Modal failure value: ${error.message}`,
+          };
+        }
+        const recovered = await recoverFromR2(resultStore, expected);
+        if (recovered.result) {
+          const accepted = await acceptStored(db, row, recovered.result);
+          return { kind: 'recovered', ...accepted };
+        }
+        const failed = await failAttempt(db, {
+          jobId: row.job_id,
+          attemptId: row.attempt_id,
+          failureCode: returnedFailure.failure_code,
+          error: returnedFailure.failure_detail,
+        });
+        return { kind: 'failed', ...failed, error: returnedFailure.failure_detail };
+      }
       try {
         const pointer = validateModalPointer(outcome.output, expected);
         const result = await readAndValidate(
@@ -154,7 +178,8 @@ export async function reconcileAttempt({
   if (!replacement) {
     const detail = 'dispatch outcome unknown and replacement limit exhausted';
     const failed = await failAttempt(db, {
-      jobId: row.job_id, attemptId: row.attempt_id, error: detail,
+      jobId: row.job_id, attemptId: row.attempt_id,
+      failureCode: 'dispatch_failed', error: detail,
     });
     return { kind: 'failed', ...failed, error: detail };
   }
@@ -183,9 +208,7 @@ export async function reconcileOnce(options) {
   try {
     const now = options.now ?? new Date();
     const maintenance = {
-      deadlines: await sweepJobDeadlines(options.db, {
-        now, jobTimeoutMs: options.jobTimeoutMs,
-      }),
+      deadlines: await sweepJobDeadlines(options.db, { now }),
       settledBefore: await settleExhaustedJobs(options.db, { now }),
     };
     const ids = await listOpenAttempts(options.db, {

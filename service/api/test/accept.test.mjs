@@ -60,8 +60,10 @@ const newAttempt = async (jobId, state = 'dispatching') => {
     [jobId],
   )).rows[0]?.id ?? null;
   const { rows } = await db.query(
-    `INSERT INTO job_attempts (job_id, state, replaces_attempt_id)
-     VALUES ($1, $2, $3) RETURNING id`,
+    `INSERT INTO job_attempts (job_id, state, replaces_attempt_id, failure_code)
+     VALUES ($1, $2, $3,
+             CASE WHEN $2::text = 'failed' THEN 'processing_failed' ELSE NULL END)
+     RETURNING id`,
     [jobId, state, prior],
   );
   return rows[0].id;

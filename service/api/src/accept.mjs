@@ -31,6 +31,8 @@
 //      overwrite the attempt row while the job still pointed at the first
 //      result, leaving the two records describing different objects.
 
+import { assertFailureCode } from './failure-codes.mjs';
+
 /**
  * Install `attempt` as the authoritative result for its job, if and only if
  * the attempt belongs to that job, has not already completed, the parser
@@ -111,21 +113,25 @@ export async function acceptAttempt(
  *
  * @returns {{recorded: boolean, jobFailed: boolean}}
  */
-export async function failAttempt(db, { jobId, attemptId, error }) {
+export async function failAttempt(
+  db, { jobId, attemptId, error, failureCode = 'processing_failed' },
+) {
+  assertFailureCode(failureCode);
   const { rows } = await db.query(
     `WITH owned AS (
        SELECT id FROM job_attempts WHERE id = $2 AND job_id = $1
      ),
      recorded AS (
        UPDATE job_attempts a
-          SET state = 'failed', error = $3, completed_at = now()
+          SET state = 'failed', error = $3, failure_code = $4,
+              completed_at = now()
          FROM owned
         WHERE a.id = owned.id AND a.completed_at IS NULL
        RETURNING a.id
      )
      SELECT EXISTS (SELECT 1 FROM owned)    AS owned,
             EXISTS (SELECT 1 FROM recorded) AS recorded`,
-    [jobId, attemptId, error],
+    [jobId, attemptId, error, failureCode],
   );
 
   // A mismatched id pair must not even trigger derived-state settlement on
@@ -135,7 +141,7 @@ export async function failAttempt(db, { jobId, attemptId, error }) {
 
   // Always settle, including after a duplicate report. A previous process
   // may have recorded this attempt and died before deriving the job state.
-  const jobFailed = await settleExhaustedJob(db, { jobId, error });
+  const jobFailed = await settleExhaustedJob(db, { jobId, error, failureCode });
   return { recorded: rows[0].recorded, jobFailed };
 }
 
@@ -151,10 +157,14 @@ export async function failAttempt(db, { jobId, attemptId, error }) {
 // reasons, the job keeps whichever error belonged to the caller that won the
 // settle. The job-level `error` is a summary, not a transcript -- per-attempt
 // errors stay on their own rows.
-export async function settleExhaustedJob(db, { jobId, error }) {
+export async function settleExhaustedJob(
+  db, { jobId, error, failureCode = 'processing_failed' },
+) {
+  assertFailureCode(failureCode);
   const { rowCount } = await db.query(
     `UPDATE jobs j
-        SET state = 'failed', error = $2, completed_at = now()
+        SET state = 'failed', error = $2, failure_code = $3,
+            completed_at = now()
       WHERE j.id = $1
         AND j.state IN ('queued','dispatched')
         AND j.accepted_attempt_id IS NULL
@@ -169,7 +179,7 @@ export async function settleExhaustedJob(db, { jobId, error }) {
               SELECT 1 FROM job_attempts a
                WHERE a.job_id = j.id AND a.state <> 'failed'
             )`,
-    [jobId, error],
+    [jobId, error, failureCode],
   );
   return rowCount === 1;
 }

@@ -128,11 +128,11 @@ users(id, email unique, status, created_at)
 api_keys(id, user_id, prefix, hash, name, created_at, last_used_at, revoked_at)
 jobs(id, user_id, idempotency_key, state, input_uri, input_digest,
      input_bytes, pages_actual, unit_price_micros, estimated_cost_micros,
-     accepted_attempt_id, result_uri, result_digest, error,
+     accepted_attempt_id, result_uri, result_digest, failure_code, error,
      created_at, queued_at, completed_at,
      upload_expires_at, retention_expires_at)
 job_attempts(id, job_id, modal_call_id, state, result_uri, result_digest,
-             pages, dispatched_at, completed_at, error)
+             pages, dispatched_at, completed_at, failure_code, error)
 ```
 
 `jobs.state`: `uploading | queued | dispatched | succeeded | failed`.
@@ -143,6 +143,11 @@ something the control plane cannot observe. There is no `cancelled` state —
 see [Why cancellation is not in v1](#why-cancellation-is-not-in-v1).
 `job_attempts.state`: `dispatching | dispatch_unknown | dispatched |
 succeeded | failed`.
+
+`failure_code` is the closed, machine-readable public-safe cause added by M2;
+`error` remains private operator detail. State transitions write both
+atomically and never infer a code by parsing exception text. The exact
+vocabulary is owned by the M2 API contract.
 
 `(user_id, idempotency_key)` unique where not null. A replay carrying a
 **different body** is a client bug, not a retry: return **422**, never the
@@ -361,6 +366,13 @@ SHA-256 against `expected_sha256`, parses, mints
 `{result_prefix}/{execution_id}.json`, writes it, and returns the URI,
 digest, page count, and timing through `FunctionCall.get()`.
 
+The stored object is the closed public projection defined by the M2 contract,
+not the worker's internal diagnostic envelope. It retains the PageSpatial
+record and opaque fencing identity but excludes Modal ids, resource/timing
+telemetry, revisions, input keys, RSS, and raw exception text. The worker
+validates that projection before its single PUT; the VPS does not proxy or
+transform result bytes.
+
 The control plane then presigns **only client-facing URLs** — browser
 upload and result download. Presigned URLs and worker credentials stop
 being two overlapping answers to the same question.
@@ -380,9 +392,9 @@ digest verification, memory profile, result publication, and duplicate-write
 behaviour. But if `parse_object` is a thin transport wrapper around an
 unchanged parsing core, a **focused** qualification suffices:
 
-1. records identical to `parse_document` after removing volatile fields
-   (`nativeObservations[].font` is volatile identity — see the Modal
-   qualification's spec amendment);
+1. projected successful `page_spatial` values identical to `parse_document`
+   after removing volatile fields (`nativeObservations[].font` is volatile
+   identity — see the Modal qualification's spec amendment);
 2. input digest verified after download;
 3. result digest recorded;
 4. large input and large result exercised;
@@ -397,9 +409,10 @@ the input bucket. Unexpected success is a failed qualification.
 
 Every expected-success qualification call must assert `status=completed`, no
 top-level failure, and the expected page count before comparison. A returned
-Modal value is transport success, not parser success. Failed parse envelopes
-may be stored for diagnosis, but the reconciler routes them to `failAttempt`;
-only `status=completed` may reach `acceptAttempt`.
+Modal value is transport success, not parser success. A failed parse publishes
+no public object; its safe terminal mapping is stored in Postgres and internal
+details remain operator-only. Only `status=completed` may reach
+`acceptAttempt`.
 
 **Repeat the full 12/12 only if** the parsing engine, warm-container
 lifecycle, process management, or retry semantics change. They do not here.
@@ -462,10 +475,11 @@ runaway call.
 
 ## Tenant isolation
 
-Every job read is filtered by `user_id`, enforced structurally: one accessor
-takes `user_id`, and no code path fetches a job by id alone. Cross-tenant
-reads return **404, not 403** — 403 confirms the id exists and turns the
-endpoint into an enumeration oracle.
+Every public job read is filtered by `user_id`, enforced structurally: the
+public accessor takes both `user_id` and job id. Internal reconciliation may
+fetch an attempt by id because it has no user request or public response.
+Cross-tenant public reads return **404, not 403** — 403 confirms the id exists
+and turns the endpoint into an enumeration oracle.
 
 *Acceptance:* a test asserting user B receives 404 on every one of user A's
 routes.
@@ -689,12 +703,16 @@ Cloudflare Access + Tunnel, invite list, `users` mapping, API key
 issue/revoke, key auth on `/v1/jobs`. Public surface: presigned intake,
 `Idempotency-Key`, 429 + `Retry-After` (#87 items 1–4).
 
+The exact HTTP, authentication, admission, and acceptance contract lives in
+`docs/design/2026-08-26-service-m2-api-contract.md`. This parent document
+continues to own architecture; the M2 contract must not reopen it.
+
 *Acceptance:* an invited user logs in, creates a key, submits a PDF, polls
 to completion. User B gets 404 on all of user A's routes. A replayed
 `Idempotency-Key` returns the original job rather than parsing twice, while
 a replay with a different body gets 422. **A request to the API hostname
-carrying a forged `Cf-Access-Authenticated-User-Email` header gets 401 on
-every dashboard route.**
+carrying a forged `Cf-Access-Authenticated-User-Email` header gets 404 on
+every dashboard route; an unknown Host gets 421.**
 
 Implement M2 as one vertical path before adding the dashboard:
 
@@ -707,10 +725,10 @@ Implement M2 as one vertical path before adding the dashboard:
 5. `GET /v1/jobs/:id/result` returns a short-lived URL only for the accepted
    object and only before `retention_expires_at`.
 
-Do not add an `outcome_uncertain` database state. For a `dispatched` job with
-an open `dispatch_unknown` attempt, the status API derives
-`outcome_uncertain: true` and returns the job deadline. This tells the truth
-without expanding the adjudication state machine.
+Do not add or publicly expose an `outcome_uncertain` state. Dispatch uncertainty
+is operator telemetry derived with the reconciler's exported
+`DISPATCH_UNKNOWN_WAIT_MS`. Clients have no distinct action: they poll any
+non-terminal job until `processing_deadline_at` or a terminal state.
 
 ### M3 — dashboard
 

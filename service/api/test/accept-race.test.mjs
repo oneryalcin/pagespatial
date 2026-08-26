@@ -24,7 +24,7 @@ import { randomUUID } from 'node:crypto';
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import pg from 'pg';
-import { migrate } from '../src/migrate.mjs';
+import { migrate, migrationFiles } from '../src/migrate.mjs';
 import { acceptAttempt as acceptAttemptRaw, failAttempt } from '../src/accept.mjs';
 import { reconcileOnce } from '../src/reconciler.mjs';
 
@@ -107,8 +107,8 @@ describe('native Postgres', {
       await left.query(`SET search_path TO ${quoted}`);
       await right.query(`SET search_path TO ${quoted}`);
       const [one, two] = await Promise.all([migrate(left), migrate(right)]);
-      assert.equal(one.applied.length + two.applied.length, 4,
-        'the four migration files must be applied exactly once in total');
+      assert.equal(one.applied.length + two.applied.length, migrationFiles().length,
+        'every migration file must be applied exactly once in total');
       assert.deepEqual(
         [one.pending.length, two.pending.length], [0, 0],
       );

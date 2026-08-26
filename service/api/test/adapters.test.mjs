@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import { FunctionTimeoutError, RemoteError } from 'modal';
 import { dispatchExistingAttempt } from '../src/dispatcher.mjs';
 import { createModalCalls } from '../src/modal-calls.mjs';
+import { InvalidResultError, RESULT_LIMIT_BYTES } from '../src/result-contract.mjs';
 import {
   createR2ResultStore, ResultStoreUnavailableError, r2ClientFromConfig,
 } from '../src/r2-results.mjs';
+import { validateR2Isolation } from '../src/runtime.mjs';
 
 test('Modal adapter hydrates the method once and returns a persisted call id', async () => {
   let classLookups = 0;
@@ -129,6 +131,22 @@ test('R2 configuration refuses plaintext endpoints', () => {
   );
 });
 
+test('API runtime refuses collapsed R2 bucket or credential boundaries', () => {
+  const separated = {
+    inputBucket: 'inputs', resultsBucket: 'results',
+    inputAccessKeyId: 'input-key', resultsAccessKeyId: 'results-key',
+  };
+  assert.doesNotThrow(() => validateR2Isolation(separated));
+  assert.throws(
+    () => validateR2Isolation({ ...separated, resultsBucket: 'inputs' }),
+    /buckets must be distinct/u,
+  );
+  assert.throws(
+    () => validateR2Isolation({ ...separated, resultsAccessKeyId: 'input-key' }),
+    /credentials must be distinct/u,
+  );
+});
+
 test('R2 adapter types transport TypeErrors as unavailable, not invalid bytes', async () => {
   const store = createR2ResultStore({
     bucket: 'results',
@@ -141,5 +159,23 @@ test('R2 adapter types transport TypeErrors as unavailable, not invalid bytes', 
   await assert.rejects(
     store.readResult({ key: 'results/j/a/x.json' }),
     ResultStoreUnavailableError,
+  );
+});
+
+test('R2 read deadlines preserve a permanently invalid result classification', async () => {
+  const store = createR2ResultStore({
+    bucket: 'results',
+    client: {
+      async send() {
+        return {
+          ContentLength: RESULT_LIMIT_BYTES + 1,
+          Body: (async function* body() {})(),
+        };
+      },
+    },
+  });
+  await assert.rejects(
+    store.readResult({ key: 'results/j/a/x.json' }),
+    InvalidResultError,
   );
 });

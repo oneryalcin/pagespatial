@@ -42,7 +42,7 @@ import urllib.request
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 import modal
 
@@ -194,6 +194,10 @@ class InputRejected(ValueError):
     """Invalid caller input (§7.1) — rejected before any Node work."""
 
 
+class InputDigestMismatch(InputRejected):
+    """Downloaded input bytes do not match the control-plane digest."""
+
+
 class ObjectResultTooLarge(RuntimeError):
     """Canonical R2 result exceeds the object-publication bound."""
 
@@ -213,7 +217,7 @@ class ParseObjectTiming(TypedDict):
     total_method_ms: int
 
 
-class ParseObjectOutput(TypedDict):
+class ParseObjectSuccess(TypedDict):
     job_id: str
     attempt_id: str
     execution_id: str
@@ -223,8 +227,28 @@ class ParseObjectOutput(TypedDict):
     result_digest: str
     result_bytes: int
     page_count: int
-    status: str
+    status: Literal["completed"]
     timing: ParseObjectTiming
+
+
+class ParseObjectFailure(TypedDict):
+    job_id: str
+    attempt_id: str
+    document_sha256: str
+    status: Literal["failed"]
+    failure_code: str
+    failure_detail: str
+    timing: ParseObjectTiming
+
+
+ParseObjectOutput = ParseObjectSuccess | ParseObjectFailure
+
+
+PUBLIC_FAILURE_CODES = frozenset({
+    "upload_expired", "invalid_upload", "input_digest_mismatch",
+    "input_too_large", "invalid_pdf", "page_limit_exceeded",
+    "processing_deadline_exceeded", "dispatch_failed", "processing_failed",
+})
 
 
 @dataclass(frozen=True)
@@ -352,8 +376,75 @@ def validate_input(payload) -> bytes:
         raise InputRejected("expected_sha256 must be 64 lowercase hex chars")
     actual = hashlib.sha256(bytes(pdf_bytes)).hexdigest()
     if actual != expected:
-        raise InputRejected("sha256 mismatch between expected_sha256 and pdf_bytes")
+        raise InputDigestMismatch(
+            "sha256 mismatch between expected_sha256 and pdf_bytes")
     return bytes(pdf_bytes)
+
+
+def _failure_code(value) -> str:
+    return value if value in PUBLIC_FAILURE_CODES else "processing_failed"
+
+
+def public_result_envelope(request: ParseObjectInput, execution_id: str,
+                           parse_result: dict) -> dict:
+    """Project the internal parser result to the closed public object.
+
+    Operational timing, Modal identifiers, revisions, resource data and raw
+    page exceptions never cross this boundary.
+    """
+    if parse_result.get("status") != "completed" or parse_result.get("failure") is not None:
+        raise InputRejected("only a completed parse can be published")
+    page_count = parse_result.get("page_count")
+    pages = parse_result.get("pages")
+    if (not isinstance(page_count, int) or isinstance(page_count, bool)
+            or not 1 <= page_count <= MAX_PAGES_PER_JOB
+            or not isinstance(pages, list) or len(pages) != page_count):
+        raise InputRejected("completed parse has an invalid page collection")
+    projected = []
+    for index, page in enumerate(pages, 1):
+        if not isinstance(page, dict) or page.get("pageNumber") != index:
+            raise InputRejected("completed parse pages are not contiguous")
+        if page.get("ok") is True:
+            spatial = page.get("pageSpatial")
+            if not isinstance(spatial, dict) or spatial.get("pageNumber") != index:
+                raise InputRejected("completed parse page identity is invalid")
+            projected.append({
+                "page_number": index, "ok": True, "page_spatial": spatial,
+            })
+        elif page.get("ok") is False:
+            projected.append({
+                "page_number": index,
+                "ok": False,
+                "failure": {
+                    "code": "page_failed",
+                    "message": "Page could not be parsed.",
+                },
+            })
+        else:
+            raise InputRejected("completed parse page has no boolean outcome")
+    return {
+        "schema_version": OBJECT_RESULT_SCHEMA_VERSION,
+        "job_id": request["job_id"],
+        "attempt_id": request["attempt_id"],
+        "execution_id": execution_id,
+        "input_sha256": request["expected_sha256"],
+        "page_count": page_count,
+        "pages": projected,
+    }
+
+
+def parse_object_failure(request: ParseObjectInput, failure_code: str,
+                         detail: str,
+                         timing: ParseObjectTiming) -> ParseObjectFailure:
+    return {
+        "job_id": request["job_id"],
+        "attempt_id": request["attempt_id"],
+        "document_sha256": request["expected_sha256"],
+        "status": "failed",
+        "failure_code": _failure_code(failure_code),
+        "failure_detail": str(detail)[:500],
+        "timing": timing,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -779,21 +870,33 @@ class ParseContainer:
             "enrichment": "off",
         }
         parse_t0 = time.monotonic()
-        parse_result = self._parse_document(
-            parse_payload, method_t0=parse_t0, container_cold=container_cold,
-            service_ready_ms=service_ready_ms, enforce_result_limit=False)
+        try:
+            parse_result = self._parse_document(
+                parse_payload, method_t0=parse_t0, container_cold=container_cold,
+                service_ready_ms=service_ready_ms, enforce_result_limit=False)
+        except InputDigestMismatch as error:
+            return parse_object_failure(
+                request, "input_digest_mismatch", str(error), {
+                    "download_ms": download_ms,
+                    "parse_method_ms": int((time.monotonic() - parse_t0) * 1000),
+                    "upload_ms": 0,
+                    "total_method_ms": int((time.monotonic() - object_t0) * 1000),
+                })
+
+        if parse_result.get("status") != "completed":
+            failure = parse_result.get("failure") or {}
+            return parse_object_failure(
+                request, failure.get("code"), failure.get("message", "parse failed"), {
+                    "download_ms": download_ms,
+                    "parse_method_ms": parse_result.get("timing", {}).get(
+                        "total_method_ms", int((time.monotonic() - parse_t0) * 1000)),
+                    "upload_ms": 0,
+                    "total_method_ms": int((time.monotonic() - object_t0) * 1000),
+                })
 
         execution_id = uuid.uuid4().hex
         result_key = f"{request['result_prefix']}/{execution_id}.json"
-        envelope = {
-            "schema_version": OBJECT_RESULT_SCHEMA_VERSION,
-            "job_id": request["job_id"],
-            "attempt_id": request["attempt_id"],
-            "execution_id": execution_id,
-            "input_key": request["input_key"],
-            "input_sha256": request["expected_sha256"],
-            "parse_result": parse_result,
-        }
+        envelope = public_result_envelope(request, execution_id, parse_result)
         result_bytes = json.dumps(
             envelope, sort_keys=True, separators=(",", ":"),
             ensure_ascii=False).encode("utf-8")
@@ -818,8 +921,8 @@ class ParseContainer:
             "result_key": result_key,
             "result_digest": result_digest,
             "result_bytes": len(result_bytes),
-            "page_count": parse_result["page_count"],
-            "status": parse_result["status"],
+            "page_count": envelope["page_count"],
+            "status": "completed",
             "timing": {
                 "download_ms": download_ms,
                 "parse_method_ms": parse_result["timing"]["total_method_ms"],
@@ -924,7 +1027,8 @@ class ParseContainer:
                 return self._result(request_id, sha256, container_cold,
                                     service_ready_ms, method_t0,
                                     page_count=0, pages=[],
-                                    failure={"class": f"ServiceRefused{status}",
+                                    failure={"code": body.get("code", "processing_failed"),
+                                             "class": f"ServiceRefused{status}",
                                              "message": str(body.get("error", ""))[:500]},
                                     parse_ms=0)
             if body["sha256"] != sha256:

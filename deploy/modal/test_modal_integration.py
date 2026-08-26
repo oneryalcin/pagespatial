@@ -91,7 +91,9 @@ class _FakeService:
             "submit_body": {"jobId": "job-1", "sha256": SHA, "pageCount": 2},
             "job_responses": [
                 {"status": "completed",
-                 "pages": [{"pageNumber": 1, "ok": True}, {"pageNumber": 2, "ok": False}]},
+                 "pages": [{"pageNumber": 1, "ok": True,
+                            "pageSpatial": {"pageNumber": 1}},
+                           {"pageNumber": 2, "ok": False}]},
             ],
             "health_status": 200,
         }
@@ -250,34 +252,41 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
             {"job_id": JOB_ID, "attempt_id": ATTEMPT_ID,
              "execution_id": pointer["execution_id"], "input_sha256": SHA},
         )
-        self.assertEqual(envelope["parse_result"]["status"], "completed")
+        self.assertEqual(set(envelope), {
+            "schema_version", "job_id", "attempt_id", "execution_id",
+            "input_sha256", "page_count", "pages",
+        })
+        self.assertEqual(envelope["page_count"], 2)
+        self.assertEqual(envelope["pages"][0]["page_spatial"]["pageNumber"], 1)
+        self.assertEqual(envelope["pages"][1], {
+            "page_number": 2, "ok": False,
+            "failure": {"code": "page_failed", "message": "Page could not be parsed."},
+        })
         self.assertEqual(pointer["result_uri"],
                          f"r2://pagespatial-results-dev/{pointer['result_key']}")
 
     def test_parse_object_matches_parse_document_on_stable_fields(self):
         direct, _ = self._call(_payload(request_id=ATTEMPT_ID))
         pointer, _ = self._call_object(_object_payload())
-        stored = json.loads(self.r2.objects[pointer["result_key"]])["parse_result"]
+        stored = json.loads(self.r2.objects[pointer["result_key"]])
+        self.assertEqual(stored["input_sha256"], direct["document_sha256"])
+        self.assertEqual(stored["page_count"], direct["page_count"])
+        self.assertEqual(
+            stored["pages"][0]["page_spatial"], direct["pages"][0]["pageSpatial"])
 
-        stable = lambda result: {
-            key: result[key] for key in
-            ("document_sha256", "page_count", "status", "pages", "pages_ok", "pages_failed", "failure")
-        }
-        self.assertEqual(stable(stored), stable(direct))
-        self.assertEqual(stored["request_id"], ATTEMPT_ID)
-
-    def test_parse_object_preserves_a_failed_result_for_reconciliation(self):
+    def test_parse_object_returns_a_typed_failure_without_a_public_object(self):
         self.fake.script["submit_status"] = 400
-        self.fake.script["submit_body"] = {"error": "Document has 900 pages; max 200"}
-        pointer, _ = self._call_object(_object_payload())
-        stored = json.loads(self.r2.objects[pointer["result_key"]])["parse_result"]
-        self.assertEqual(pointer["status"], "failed")
-        self.assertEqual(stored["status"], "failed")
-        self.assertEqual(stored["failure"]["class"], "ServiceRefused400")
+        self.fake.script["submit_body"] = {
+            "code": "page_limit_exceeded", "error": "Document has 900 pages; max 200"}
+        failure, _ = self._call_object(_object_payload())
+        self.assertEqual(failure["status"], "failed")
+        self.assertEqual(failure["failure_code"], "page_limit_exceeded")
+        self.assertEqual(set(self.r2.objects), {INPUT_KEY})
 
     def test_parse_object_verifies_downloaded_bytes_before_node_work(self):
-        with self.assertRaises(modal_app.InputRejected):
-            self.instance.parse_object(_object_payload(expected_sha256="a" * 64))
+        failure = self.instance.parse_object(
+            _object_payload(expected_sha256="a" * 64))
+        self.assertEqual(failure["failure_code"], "input_digest_mismatch")
         self.assertEqual(self.fake.posts, 0)
         self.assertEqual(set(self.r2.objects), {INPUT_KEY})
 
@@ -295,8 +304,8 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
             pointer, _ = self._call_object(_object_payload())
         finally:
             modal_app.MAX_RESULT_BYTES = saved
-        stored = json.loads(self.r2.objects[pointer["result_key"]])["parse_result"]
-        self.assertEqual(stored["status"], "completed")
+        stored = json.loads(self.r2.objects[pointer["result_key"]])
+        self.assertEqual(stored["page_count"], 2)
         self.assertGreater(pointer["result_bytes"], 64)
 
     def test_parse_object_refuses_an_oversized_object_result_before_upload(self):
@@ -320,10 +329,12 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
 
     def test_service_refusal_is_a_terminal_failed_result_not_an_exception(self):
         self.fake.script["submit_status"] = 400
-        self.fake.script["submit_body"] = {"error": "Document has 900 pages; max 200"}
+        self.fake.script["submit_body"] = {
+            "code": "page_limit_exceeded", "error": "Document has 900 pages; max 200"}
         result, events = self._call(_payload())
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["failure"]["class"], "ServiceRefused400")
+        self.assertEqual(result["failure"]["code"], "page_limit_exceeded")
         self.assertIn("900 pages", result["failure"]["message"])
         self.assertEqual(result["pages"], [])
         self.assertEqual(self.instance.budget.created, 0)  # no job ID -> no budget burn
