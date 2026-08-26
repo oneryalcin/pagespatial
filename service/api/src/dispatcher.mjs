@@ -43,8 +43,25 @@ export async function dispatchExistingAttempt({ db, modalCalls, inputBucket, att
     await failAttempt(db, { jobId: row.job_id, attemptId: row.attempt_id, error: detail });
     return { kind: 'invalid_dispatch_input', attemptId: row.attempt_id, error: detail };
   }
+  let callId;
   try {
-    const { callId } = await modalCalls.spawn(payload);
+    ({ callId } = await modalCalls.spawn(payload));
+  } catch (error) {
+    // Once spawn is invoked, an error does not prove Modal rejected the call.
+    // Preserve uncertainty; the reconciler checks R2 before replacing it.
+    try {
+      await markDispatchUnknown(db, { jobId: row.job_id, attemptId: row.attempt_id });
+    } catch {
+      // Preserve the spawn error. A row left in dispatching is also recovered
+      // by the same bounded uncertainty path.
+    }
+    return {
+      kind: 'dispatch_unknown', attemptId: row.attempt_id,
+      error: `${error?.constructor?.name ?? 'Error'}: ${error?.message ?? error}`,
+    };
+  }
+
+  try {
     const recorded = await markDispatched(db, {
       jobId: row.job_id, attemptId: row.attempt_id, modalCallId: callId,
     });
@@ -52,13 +69,14 @@ export async function dispatchExistingAttempt({ db, modalCalls, inputBucket, att
       ? { kind: 'dispatched', attemptId: row.attempt_id, callId }
       : { kind: 'call_id_not_recorded', attemptId: row.attempt_id, callId };
   } catch (error) {
-    // Once spawn is invoked, an error does not prove Modal rejected the call.
-    // Preserve uncertainty; the reconciler checks R2 before replacing it.
-    await markDispatchUnknown(db, { jobId: row.job_id, attemptId: row.attempt_id });
-    return {
-      kind: 'dispatch_unknown', attemptId: row.attempt_id,
-      error: `${error?.constructor?.name ?? 'Error'}: ${error?.message ?? error}`,
-    };
+    // Spawn definitely succeeded. Do not misreport a database persistence
+    // failure as a Modal failure or hide it behind a second database call.
+    const persistenceError = new Error(
+      `Modal call ${callId} spawned but its call id was not persisted`,
+      { cause: error },
+    );
+    persistenceError.modalCallId = callId;
+    throw persistenceError;
   }
 }
 

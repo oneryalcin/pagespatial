@@ -20,9 +20,17 @@ export function createModalCalls({
   if (typeof appName !== 'string' || !appName) throw new TypeError('Modal appName is required');
   let methodPromise;
   const method = () => {
-    methodPromise ??= client.cls.fromName(appName, clsName)
-      .then((cls) => cls.instance({}))
-      .then((instance) => instance.method(methodName));
+    if (!methodPromise) {
+      const lookup = client.cls.fromName(appName, clsName)
+        .then((cls) => cls.instance({}))
+        .then((instance) => instance.method(methodName));
+      const cached = lookup.catch((error) => {
+        // Cache a usable handle, never a transient control-plane failure.
+        if (methodPromise === cached) methodPromise = undefined;
+        throw error;
+      });
+      methodPromise = cached;
+    }
     return methodPromise;
   };
   return {

@@ -13,7 +13,12 @@ export async function createAttempt(db, { jobId, replacesAttemptId = null }) {
         AND j.accepted_attempt_id IS NULL
         AND (
           ($2::uuid IS NULL AND prior.id IS NULL)
-          OR ($2::uuid IS NOT NULL AND prior.state = 'dispatch_unknown')
+          OR ($2::uuid IS NOT NULL
+              AND prior.state = 'dispatch_unknown'
+              -- One uncertain dispatch may get one replacement. A second
+              -- uncertain dispatch reaches a terminal failure instead of
+              -- growing an unbounded replacement chain.
+              AND prior.replaces_attempt_id IS NULL)
         )
         AND NOT EXISTS (
           SELECT 1 FROM job_attempts replacement
@@ -61,17 +66,20 @@ export async function getAttempt(db, attemptId) {
   return rows[0] ?? null;
 }
 
-export async function listOpenAttempts(db, { limit = 32 } = {}) {
+export async function listOpenAttempts(db, { limit = 32, now = new Date() } = {}) {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 256) {
     throw new TypeError('reconcile limit must be an integer from 1 to 256');
   }
+  const current = now instanceof Date ? now : new Date(now);
+  if (Number.isNaN(current.getTime())) throw new TypeError('reconcile now must be a valid date');
   const { rows } = await db.query(
     `SELECT a.id
-       FROM job_attempts a
+      FROM job_attempts a
       WHERE a.state IN ('dispatching','dispatch_unknown','dispatched')
-      ORDER BY a.created_at, a.id
+        AND a.reconcile_after <= $2::timestamptz
+      ORDER BY a.reconcile_after, a.id
       LIMIT $1`,
-    [limit],
+    [limit, current.toISOString()],
   );
   return rows.map((row) => row.id);
 }

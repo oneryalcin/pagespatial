@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { createValidDocument, fixtureIdentity } from '../../../test/fixture.mjs';
 import { migrate } from '../src/migrate.mjs';
-import { reconcileAttempt } from '../src/reconciler.mjs';
+import { reconcileAttempt, reconcileOnce } from '../src/reconciler.mjs';
 
 const INPUT_BUCKET = 'inputs';
 const RESULTS_BUCKET = 'results';
@@ -186,6 +186,42 @@ test('an unavailable Modal result with no R2 object remains retryable', async ()
   assert.equal((await row('job_attempts', a.id)).state, 'dispatched');
 });
 
+test('an R2 read failure is retryable and never becomes a permanent attempt failure', async () => {
+  const j = await job();
+  const a = await attempt(j.id);
+  const object = objectFor(j, a.id);
+  const store = fakeStore(new Map([[object.key, object]]));
+  store.readResult = async () => { throw new TypeError('fetch failed'); };
+  const calls = modal(new Map([[a.modal_call_id, { kind: 'failed', error: 'RemoteError' }]]));
+  await assert.rejects(
+    reconcileAttempt({
+      db, modalCalls: calls, resultStore: store,
+      inputBucket: INPUT_BUCKET, attemptId: a.id,
+    }),
+    /fetch failed/,
+  );
+  assert.equal((await row('job_attempts', a.id)).state, 'dispatched');
+});
+
+test('a completed Modal pointer plus an R2 transport failure stays retryable', async () => {
+  const j = await job();
+  const a = await attempt(j.id);
+  const object = objectFor(j, a.id);
+  const store = fakeStore();
+  store.readResult = async () => { throw new TypeError('fetch failed'); };
+  const calls = modal(new Map([[
+    a.modal_call_id, { kind: 'completed', output: object.pointer },
+  ]]));
+  await assert.rejects(
+    reconcileAttempt({
+      db, modalCalls: calls, resultStore: store,
+      inputBucket: INPUT_BUCKET, attemptId: a.id,
+    }),
+    /fetch failed/,
+  );
+  assert.equal((await row('job_attempts', a.id)).state, 'dispatched');
+});
+
 test('an unknown attempt creates and dispatches at most one replacement', async () => {
   const j = await job();
   const a = await attempt(j.id, 'dispatch_unknown');
@@ -197,8 +233,38 @@ test('an unknown attempt creates and dispatches at most one replacement', async 
   const first = await reconcileAttempt(options);
   const second = await reconcileAttempt(options);
   assert.equal(first.kind, 'replacement_dispatched');
-  assert.equal(second.kind, 'replacement_exists');
+  assert.equal(first.superseded, true);
+  assert.equal(second.kind, 'terminal');
   assert.equal(calls.spawned.length, 1);
+});
+
+test('an uncertain replacement cannot grow a third attempt', async () => {
+  const j = await job();
+  const original = await attempt(j.id, 'dispatch_unknown');
+  const calls = modal();
+  const store = fakeStore();
+  const first = await reconcileAttempt({
+    db, modalCalls: calls, resultStore: store, inputBucket: INPUT_BUCKET,
+    attemptId: original.id, unknownWaitMs: 0,
+  });
+  const replacementId = first.attemptId;
+  await db.query(
+    `UPDATE job_attempts
+        SET state = 'dispatch_unknown', modal_call_id = NULL, dispatched_at = NULL
+      WHERE id = $1`,
+    [replacementId],
+  );
+  const exhausted = await reconcileAttempt({
+    db, modalCalls: calls, resultStore: store, inputBucket: INPUT_BUCKET,
+    attemptId: replacementId, unknownWaitMs: 0,
+  });
+  assert.equal(exhausted.kind, 'failed');
+  assert.match(exhausted.error, /replacement limit exhausted/);
+  assert.equal(
+    Number((await db.query('SELECT count(*) FROM job_attempts WHERE job_id = $1', [j.id])).rows[0].count),
+    2,
+  );
+  assert.equal((await row('jobs', j.id)).state, 'failed');
 });
 
 test('a queued job can have only one independent initial attempt', async () => {
@@ -217,7 +283,7 @@ test('a queued job can have only one independent initial attempt', async () => {
   );
 });
 
-test('crash-window replacement wins and the original late result cannot displace it', async () => {
+test('crash-window replacement wins and a superseded original cannot displace it', async () => {
   const j = await job();
   const original = await attempt(j.id, 'dispatch_unknown');
   const store = fakeStore();
@@ -244,11 +310,133 @@ test('crash-window replacement wins and the original late result cannot displace
     db, modalCalls: calls, resultStore: store, inputBucket: INPUT_BUCKET,
     attemptId: original.id, unknownWaitMs: 0,
   });
-  assert.equal(lost.won, false);
+  assert.deepEqual(lost, { kind: 'terminal', state: 'failed' });
 
   const final = await row('jobs', j.id);
   assert.equal(final.accepted_attempt_id, replacementId);
-  assert.equal((await row('job_attempts', original.id)).state, 'succeeded');
+  assert.equal((await row('job_attempts', original.id)).state, 'failed');
   assert.equal((await row('job_attempts', replacement.id)).state, 'succeeded');
   assert.deepEqual([...store.objects.keys()].sort(), [late.key, winner.key].sort());
+});
+
+test('one malformed attempt fails permanently without blocking a healthy sibling', async () => {
+  const poisonedJob = await job();
+  await db.query('UPDATE jobs SET input_uri = $2 WHERE id = $1', [
+    poisonedJob.id, 'r2://old-bucket/inputs/stale.pdf',
+  ]);
+  const poisoned = await attempt(poisonedJob.id);
+  const healthyJob = await job();
+  const healthy = await attempt(healthyJob.id);
+  const object = objectFor(healthyJob, healthy.id);
+  const store = fakeStore(new Map([[object.key, object]]));
+  const calls = modal(new Map([
+    [healthy.modal_call_id, { kind: 'completed', output: object.pointer }],
+  ]));
+
+  const result = await reconcileOnce({
+    db, modalCalls: calls, resultStore: store, inputBucket: INPUT_BUCKET,
+    now: new Date(Date.now() + 1_000), pollIntervalMs: 1,
+  });
+  assert.equal(result.outcomes.length, 2);
+  assert.equal((await row('job_attempts', poisoned.id)).state, 'failed');
+  assert.equal((await row('jobs', healthyJob.id)).state, 'succeeded');
+});
+
+test('one transient R2 failure does not block another attempt in the same pass', async () => {
+  const firstJob = await job();
+  const first = await attempt(firstJob.id);
+  const firstObject = objectFor(firstJob, first.id, 'd'.repeat(32));
+  const healthyJob = await job();
+  const healthy = await attempt(healthyJob.id);
+  const healthyObject = objectFor(healthyJob, healthy.id, 'e'.repeat(32));
+  const store = fakeStore(new Map([
+    [firstObject.key, firstObject], [healthyObject.key, healthyObject],
+  ]));
+  const read = store.readResult;
+  store.readResult = async ({ key }) => {
+    if (key === firstObject.key) throw new Error('ETIMEDOUT');
+    return read({ key });
+  };
+  const calls = modal(new Map([
+    [first.modal_call_id, { kind: 'failed', error: 'RemoteError' }],
+    [healthy.modal_call_id, { kind: 'completed', output: healthyObject.pointer }],
+  ]));
+
+  const result = await reconcileOnce({
+    db, modalCalls: calls, resultStore: store, inputBucket: INPUT_BUCKET,
+    now: new Date(Date.now() + 1_000), pollIntervalMs: 1,
+  });
+  assert.equal(
+    result.outcomes.find((entry) => entry.attemptId === first.id).outcome.kind,
+    'retryable_error',
+  );
+  assert.equal((await row('job_attempts', first.id)).state, 'dispatched');
+  assert.equal((await row('jobs', healthyJob.id)).state, 'succeeded');
+});
+
+test('deadline sweep terminates abandoned upload, orphan queue, and pending call', async () => {
+  const now = new Date('2026-08-26T12:00:00Z');
+  const uploading = (await db.query(
+    `INSERT INTO jobs (
+       user_id, state, input_uri, input_digest, input_bytes,
+       unit_price_micros, created_at, upload_expires_at
+     ) VALUES ($1, 'uploading', 'r2://inputs/inputs/upload.pdf', $2, 1, 1000,
+               $3, $4) RETURNING id`,
+    [userId, INPUT_DIGEST, '2026-08-26T10:00:00Z', '2026-08-26T11:00:00Z'],
+  )).rows[0];
+  const orphan = await job();
+  await db.query('UPDATE jobs SET queued_at = $2 WHERE id = $1', [
+    orphan.id, '2026-08-25T11:00:00Z',
+  ]);
+  const pendingJob = await job();
+  await db.query('UPDATE jobs SET queued_at = $2 WHERE id = $1', [
+    pendingJob.id, '2026-08-25T11:00:00Z',
+  ]);
+  const pending = await attempt(pendingJob.id);
+
+  const result = await reconcileOnce({
+    db, modalCalls: modal(), resultStore: fakeStore(), inputBucket: INPUT_BUCKET,
+    now,
+  });
+  assert.deepEqual(result.maintenance.deadlines, { jobs: 3, attempts: 1 });
+  for (const id of [uploading.id, orphan.id, pendingJob.id]) {
+    assert.equal((await row('jobs', id)).state, 'failed');
+  }
+  assert.equal((await row('job_attempts', pending.id)).state, 'failed');
+});
+
+test('reconciler repairs a crash between attempt failure and job settlement', async () => {
+  const j = await job();
+  const a = await attempt(j.id, 'failed');
+  await db.query(
+    `UPDATE job_attempts SET completed_at = now(), error = 'recorded before crash' WHERE id = $1`,
+    [a.id],
+  );
+  const result = await reconcileOnce({
+    db, modalCalls: modal(), resultStore: fakeStore(), inputBucket: INPUT_BUCKET,
+    now: new Date(Date.now() + 1_000),
+  });
+  assert.equal(result.maintenance.settledBefore, 1);
+  assert.equal((await row('jobs', j.id)).state, 'failed');
+});
+
+test('due-time rotation prevents a small LIMIT from starving newer attempts', async () => {
+  const attempts = [];
+  for (let i = 0; i < 3; i += 1) {
+    const j = await job();
+    attempts.push(await attempt(j.id));
+  }
+  const now = new Date(Date.now() + 1_000);
+  const options = {
+    db, modalCalls: modal(), resultStore: fakeStore(), inputBucket: INPUT_BUCKET,
+    now, limit: 2, pollIntervalMs: 60_000,
+  };
+  const first = await reconcileOnce(options);
+  const second = await reconcileOnce(options);
+  assert.equal(first.outcomes.length, 2);
+  assert.equal(second.outcomes.length, 1);
+  assert.deepEqual(
+    new Set([...first.outcomes, ...second.outcomes].map((entry) => entry.attemptId)),
+    new Set(attempts.map((entry) => entry.id)),
+  );
 });

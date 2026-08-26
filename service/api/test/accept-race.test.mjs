@@ -107,8 +107,8 @@ describe('native Postgres', {
       await left.query(`SET search_path TO ${quoted}`);
       await right.query(`SET search_path TO ${quoted}`);
       const [one, two] = await Promise.all([migrate(left), migrate(right)]);
-      assert.equal(one.applied.length + two.applied.length, 3,
-        'the three migration files must be applied exactly once in total');
+      assert.equal(one.applied.length + two.applied.length, 4,
+        'the four migration files must be applied exactly once in total');
       assert.deepEqual(
         [one.pending.length, two.pending.length], [0, 0],
       );

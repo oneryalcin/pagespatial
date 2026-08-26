@@ -1,24 +1,33 @@
 import {
   GetObjectCommand, ListObjectsV2Command, S3Client,
 } from '@aws-sdk/client-s3';
-import { RESULT_LIMIT_BYTES } from './result-contract.mjs';
+import { InvalidResultError, RESULT_LIMIT_BYTES } from './result-contract.mjs';
 
 const MAX_ATTEMPT_OBJECTS = 16;
 
+export class ResultStoreUnavailableError extends Error {}
+
 async function readBounded(body, declaredLength) {
   if (Number.isFinite(declaredLength) && declaredLength > RESULT_LIMIT_BYTES) {
-    throw new RangeError('R2 result exceeds the publication bound');
+    throw new InvalidResultError('R2 result exceeds the publication bound');
   }
   if (!body || typeof body[Symbol.asyncIterator] !== 'function') {
-    throw new TypeError('R2 GetObject returned no readable body');
+    throw new ResultStoreUnavailableError('R2 GetObject returned no readable body');
   }
   const chunks = [];
   let total = 0;
-  for await (const chunk of body) {
-    const bytes = Buffer.from(chunk);
-    total += bytes.byteLength;
-    if (total > RESULT_LIMIT_BYTES) throw new RangeError('R2 result exceeds the publication bound');
-    chunks.push(bytes);
+  try {
+    for await (const chunk of body) {
+      const bytes = Buffer.from(chunk);
+      total += bytes.byteLength;
+      if (total > RESULT_LIMIT_BYTES) {
+        throw new InvalidResultError('R2 result exceeds the publication bound');
+      }
+      chunks.push(bytes);
+    }
+  } catch (error) {
+    if (error instanceof InvalidResultError) throw error;
+    throw new ResultStoreUnavailableError('R2 result body could not be read', { cause: error });
   }
   return new Uint8Array(Buffer.concat(chunks, total));
 }
@@ -34,14 +43,19 @@ export function createR2ResultStore({ client, bucket }) {
       const found = [];
       let continuationToken;
       do {
-        const response = await client.send(new ListObjectsV2Command({
-          Bucket: bucket, Prefix: prefix, ContinuationToken: continuationToken,
-          MaxKeys: MAX_ATTEMPT_OBJECTS + 1,
-        }));
+        let response;
+        try {
+          response = await client.send(new ListObjectsV2Command({
+            Bucket: bucket, Prefix: prefix, ContinuationToken: continuationToken,
+            MaxKeys: MAX_ATTEMPT_OBJECTS + 1,
+          }));
+        } catch (error) {
+          throw new ResultStoreUnavailableError('R2 result prefix could not be listed', { cause: error });
+        }
         for (const item of response.Contents ?? []) {
           if (typeof item.Key === 'string') found.push({ key: item.Key, lastModified: item.LastModified });
           if (found.length > MAX_ATTEMPT_OBJECTS) {
-            throw new RangeError('attempt result prefix contains too many objects');
+            throw new InvalidResultError('attempt result prefix contains too many objects');
           }
         }
         continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
@@ -49,7 +63,12 @@ export function createR2ResultStore({ client, bucket }) {
       return found.sort((a, b) => a.key.localeCompare(b.key));
     },
     async readResult({ key }) {
-      const response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      let response;
+      try {
+        response = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      } catch (error) {
+        throw new ResultStoreUnavailableError('R2 result object could not be fetched', { cause: error });
+      }
       return {
         bytes: await readBounded(response.Body, response.ContentLength),
         lastModified: response.LastModified,

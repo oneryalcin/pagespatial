@@ -2,7 +2,12 @@ import { acceptAttempt, failAttempt, markDispatchUnknown } from './accept.mjs';
 import pg from 'pg';
 import { getAttempt, getOrCreateReplacement, listOpenAttempts } from './attempts.mjs';
 import { dispatchExistingAttempt } from './dispatcher.mjs';
-import { validateModalPointer, validateStoredResult } from './result-contract.mjs';
+import {
+  deferAttempt, settleExhaustedJobs, sweepJobDeadlines,
+} from './lifecycle.mjs';
+import {
+  InvalidResultError, validateModalPointer, validateStoredResult,
+} from './result-contract.mjs';
 
 const DEFAULT_UNKNOWN_WAIT_MS = 10 * 60 * 1000;
 const RECONCILER_LOCK_ID = 731945822;
@@ -49,6 +54,9 @@ async function recoverFromR2(resultStore, expected) {
     try {
       return { result: await readAndValidate(resultStore, candidate, expected), rejected };
     } catch (error) {
+      // Invalid bytes are a rejected candidate. Failure to LIST or GET is a
+      // failed storage consultation and must remain retryable.
+      if (!(error instanceof InvalidResultError)) throw error;
       rejected.push(`${candidate.key}: ${error.message}`);
     }
   }
@@ -68,7 +76,16 @@ export async function reconcileAttempt({
   if (!['dispatching', 'dispatch_unknown', 'dispatched'].includes(row.attempt_state)) {
     return { kind: 'terminal', state: row.attempt_state };
   }
-  const expected = identity(row, { inputBucket, resultsBucket: resultStore.bucket });
+  let expected;
+  try {
+    expected = identity(row, { inputBucket, resultsBucket: resultStore.bucket });
+  } catch (error) {
+    const detail = `invalid attempt identity: ${error.message}`;
+    const failed = await failAttempt(db, {
+      jobId: row.job_id, attemptId: row.attempt_id, error: detail,
+    });
+    return { kind: 'failed', ...failed, error: detail };
+  }
 
   if (row.attempt_state === 'dispatched') {
     const outcome = await modalCalls.inspect(row.modal_call_id);
@@ -85,6 +102,7 @@ export async function reconcileAttempt({
         const accepted = await acceptStored(db, row, result);
         return { kind: 'completed', ...accepted };
       } catch (error) {
+        if (!(error instanceof InvalidResultError)) throw error;
         // A returned object is not success. A retry execution may still have
         // published a valid sibling, so check the prefix before failing.
         const recovered = await recoverFromR2(resultStore, expected);
@@ -118,7 +136,8 @@ export async function reconcileAttempt({
 
   // A dispatching/unknown call may already have produced bytes even though
   // its call id never landed. Check those bytes before creating replacement
-  // work, then keep the old attempt open so a later result can be recorded.
+  // work. One replacement closes the original; a replacement is never itself
+  // replaced.
   const recovered = await recoverFromR2(resultStore, expected);
   if (recovered.result) {
     const accepted = await acceptStored(db, row, recovered.result);
@@ -132,14 +151,33 @@ export async function reconcileAttempt({
   const replacement = await getOrCreateReplacement(db, {
     jobId: row.job_id, attemptId: row.attempt_id,
   });
-  if (!replacement) return { kind: 'replacement_not_created' };
+  if (!replacement) {
+    const detail = 'dispatch outcome unknown and replacement limit exhausted';
+    const failed = await failAttempt(db, {
+      jobId: row.job_id, attemptId: row.attempt_id, error: detail,
+    });
+    return { kind: 'failed', ...failed, error: detail };
+  }
   if (!replacement.created) {
-    return { kind: 'replacement_exists', attemptId: replacement.attempt.id };
+    const detail = `dispatch outcome unknown; replaced by ${replacement.attempt.id}`;
+    const failed = await failAttempt(db, {
+      jobId: row.job_id, attemptId: row.attempt_id, error: detail,
+    });
+    return {
+      kind: 'superseded', attemptId: replacement.attempt.id, ...failed,
+    };
   }
   const dispatched = await dispatchExistingAttempt({
     db, modalCalls, inputBucket, attemptId: replacement.attempt.id,
   });
-  return { kind: 'replacement_dispatched', attemptId: replacement.attempt.id, dispatched };
+  const detail = `dispatch outcome unknown; replaced by ${replacement.attempt.id}`;
+  const failed = await failAttempt(db, {
+    jobId: row.job_id, attemptId: row.attempt_id, error: detail,
+  });
+  return {
+    kind: 'replacement_dispatched', attemptId: replacement.attempt.id,
+    dispatched, superseded: failed.recorded,
+  };
 }
 
 /** One bounded pass; the process scheduler decides when to call it again. */
@@ -151,19 +189,56 @@ export async function reconcileOnce(options) {
     'SELECT pg_try_advisory_lock($1) AS acquired', [RECONCILER_LOCK_ID],
   );
   if (!rows[0].acquired) return { acquired: false, outcomes: [] };
+  let primaryError;
   try {
-    const ids = await listOpenAttempts(options.db, { limit: options.limit ?? 32 });
+    const now = options.now ?? new Date();
+    const maintenance = {
+      deadlines: await sweepJobDeadlines(options.db, {
+        now, jobTimeoutMs: options.jobTimeoutMs,
+      }),
+      settledBefore: await settleExhaustedJobs(options.db, { now }),
+    };
+    const ids = await listOpenAttempts(options.db, {
+      limit: options.limit ?? 32, now,
+    });
     const outcomes = [];
     for (const attemptId of ids) {
-      outcomes.push({ attemptId, outcome: await reconcileAttempt({ ...options, attemptId }) });
+      const entry = { attemptId };
+      try {
+        entry.outcome = await reconcileAttempt({ ...options, now, attemptId });
+      } catch (error) {
+        // Unexpected and transient dependency failures are visible but never
+        // stop unrelated jobs from making progress in this pass.
+        entry.outcome = {
+          kind: 'retryable_error',
+          error: `${error?.constructor?.name ?? 'Error'}: ${error?.message ?? error}`,
+        };
+      } finally {
+        try {
+          await deferAttempt(options.db, {
+            attemptId, now, delayMs: options.pollIntervalMs ?? 60_000,
+          });
+        } catch (error) {
+          entry.deferError = `${error?.constructor?.name ?? 'Error'}: ${error?.message ?? error}`;
+        }
+      }
+      outcomes.push(entry);
     }
-    return { acquired: true, outcomes };
+    maintenance.settledAfter = await settleExhaustedJobs(options.db, { now });
+    return { acquired: true, outcomes, maintenance };
+  } catch (error) {
+    primaryError = error;
+    throw error;
   } finally {
-    const released = await options.db.query(
-      'SELECT pg_advisory_unlock($1) AS released', [RECONCILER_LOCK_ID],
-    );
-    if (!released.rows[0].released) {
-      throw new Error('reconciler advisory lock was not held by this database session');
+    try {
+      const released = await options.db.query(
+        'SELECT pg_advisory_unlock($1) AS released', [RECONCILER_LOCK_ID],
+      );
+      if (!released.rows[0].released && !primaryError) {
+        throw new Error('reconciler advisory lock was not held by this database session');
+      }
+    } catch (unlockError) {
+      if (!primaryError) throw unlockError;
     }
   }
 }

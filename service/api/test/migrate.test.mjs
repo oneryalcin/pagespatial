@@ -55,3 +55,19 @@ test('migration lock covers the complete run and releases after failure', async 
     await db.close();
   }
 });
+
+test('reconciler preserves its primary failure when advisory unlock also fails', async () => {
+  let query = 0;
+  const db = {
+    async query() {
+      query += 1;
+      if (query === 1) return { rows: [{ acquired: true }] };
+      if (query === 2) throw new Error('primary database failure');
+      throw new Error('secondary unlock failure');
+    },
+  };
+  await assert.rejects(
+    reconcileOnce({ db }),
+    /primary database failure/,
+  );
+});

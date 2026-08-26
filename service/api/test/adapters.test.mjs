@@ -1,8 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FunctionTimeoutError, RemoteError } from 'modal';
+import { dispatchExistingAttempt } from '../src/dispatcher.mjs';
 import { createModalCalls } from '../src/modal-calls.mjs';
-import { createR2ResultStore, r2ClientFromConfig } from '../src/r2-results.mjs';
+import {
+  createR2ResultStore, ResultStoreUnavailableError, r2ClientFromConfig,
+} from '../src/r2-results.mjs';
 
 test('Modal adapter hydrates the method once and returns a persisted call id', async () => {
   let classLookups = 0;
@@ -20,6 +23,48 @@ test('Modal adapter hydrates the method once and returns a persisted call id', a
   assert.deepEqual(await calls.spawn({ n: 1 }), { callId: 'fc-1' });
   assert.deepEqual(await calls.spawn({ n: 2 }), { callId: 'fc-2' });
   assert.equal(classLookups, 1);
+});
+
+test('Modal adapter retries a rejected method lookup instead of caching the failure', async () => {
+  let lookups = 0;
+  const method = { spawn: async () => ({ functionCallId: 'fc-recovered' }) };
+  const client = {
+    cls: {
+      fromName: async () => {
+        lookups += 1;
+        if (lookups === 1) throw new Error('transient lookup failure');
+        return { instance: async () => ({ method: () => method }) };
+      },
+    },
+    functionCalls: {},
+  };
+  const calls = createModalCalls({ client, appName: 'app' });
+  await assert.rejects(calls.spawn({}), /transient lookup failure/);
+  assert.deepEqual(await calls.spawn({}), { callId: 'fc-recovered' });
+  assert.equal(lookups, 2);
+});
+
+test('dispatcher does not relabel a call-id persistence failure as a spawn failure', async () => {
+  let queries = 0;
+  const db = {
+    async query() {
+      queries += 1;
+      if (queries === 1) return { rows: [{
+        attempt_id: 'a', job_id: 'j', state: 'dispatching',
+        input_uri: 'r2://inputs/inputs/j.pdf', input_digest: 'a'.repeat(64),
+      }] };
+      throw new Error('database write failed');
+    },
+  };
+  await assert.rejects(
+    dispatchExistingAttempt({
+      db, inputBucket: 'inputs', attemptId: 'a',
+      modalCalls: { spawn: async () => ({ callId: 'fc-landed' }) },
+    }),
+    (error) => error.modalCallId === 'fc-landed'
+      && /spawned but its call id was not persisted/.test(error.message),
+  );
+  assert.equal(queries, 2, 'must not hide the persistence error behind markDispatchUnknown');
 });
 
 test('Modal adapter exposes pending, failed, unavailable, and completed distinctly', async () => {
@@ -81,5 +126,20 @@ test('R2 configuration refuses plaintext endpoints', () => {
       endpoint: 'http://example.test', accessKeyId: 'id', secretAccessKey: 'secret',
     }),
     /must use https/,
+  );
+});
+
+test('R2 adapter types transport TypeErrors as unavailable, not invalid bytes', async () => {
+  const store = createR2ResultStore({
+    bucket: 'results',
+    client: { send: async () => { throw new TypeError('fetch failed'); } },
+  });
+  await assert.rejects(
+    store.listAttemptResults({ jobId: 'j', attemptId: 'a' }),
+    ResultStoreUnavailableError,
+  );
+  await assert.rejects(
+    store.readResult({ key: 'results/j/a/x.json' }),
+    ResultStoreUnavailableError,
   );
 });
