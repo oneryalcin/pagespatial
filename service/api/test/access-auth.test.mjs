@@ -107,6 +107,7 @@ test('Access reports JWKS provider failures as unavailable, not forbidden', asyn
   for (const cause of [
     new errors.JWKSTimeout(),
     new errors.JOSEError('Expected 200 OK from JWKS'),
+    new errors.JWKSMultipleMatchingKeys(),
     new TypeError('fetch failed'),
   ]) {
     const authenticate = createAccessAuthenticator({
@@ -133,6 +134,7 @@ test('Access treats an unknown signing key as invalid credentials', async () => 
   });
   await assert.rejects(
     authenticate(await token()),
-    (error) => error.status === 403 && error.code === 'forbidden',
+    (error) => error.status === 403 && error.code === 'forbidden'
+      && error.cause instanceof errors.JWKSNoMatchingKey,
   );
 });

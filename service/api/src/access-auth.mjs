@@ -1,7 +1,9 @@
 import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from 'jose';
 import { ApiError } from './api-errors.mjs';
 
-const denied = () => new ApiError(403, 'forbidden', 'Access denied.');
+const denied = (cause) => new ApiError(
+  403, 'forbidden', 'Access denied.', cause ? { cause } : undefined,
+);
 const unavailable = (cause) => new ApiError(
   503, 'service_unavailable', 'Service is temporarily unavailable.', { cause },
 );
@@ -9,7 +11,10 @@ const unavailable = (cause) => new ApiError(
 const credentialErrors = [
   joseErrors.JOSEAlgNotAllowed,
   joseErrors.JOSENotSupported,
-  joseErrors.JWKSMultipleMatchingKeys,
+  // Multiple matching keys are a provider-side ambiguity and intentionally
+  // fall through to 503 instead of blaming the caller.
+  // An unknown kid is also attacker-controlled. Keep it at 403, but preserve
+  // the safe JOSE code in cause so a stale-key burst remains observable.
   joseErrors.JWKSNoMatchingKey,
   joseErrors.JWSInvalid,
   joseErrors.JWSSignatureVerificationFailed,
@@ -42,7 +47,7 @@ export function createAccessAuthenticator({ db, issuer, audience, jwks }) {
       }));
     } catch (error) {
       if (!isCredentialError(error)) throw unavailable(error);
-      throw denied();
+      throw denied(error);
     }
     if (payload.type !== 'app' || typeof payload.email !== 'string') throw denied();
     const email = payload.email.trim().toLowerCase();

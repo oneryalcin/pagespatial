@@ -1,7 +1,8 @@
 import { TextDecoder } from 'node:util';
 import { ApiError } from './api-errors.mjs';
 import {
-  InvalidApiKeyNameError, issueApiKey, listApiKeys, revokeApiKey,
+  InactiveApiKeyOwnerError, InvalidApiKeyNameError,
+  issueApiKey, listApiKeys, revokeApiKey,
 } from './api-keys.mjs';
 import { logFailure } from './safe-log.mjs';
 
@@ -74,6 +75,13 @@ function keysPage(keys) {
 
 const createdPage = (secret) => `<section><h1>API key created</h1><p>Copy it now. It will not be shown again.</p><code>${escapeHtml(secret)}</code><p><a href="/keys">Return to keys</a></p></section>`;
 
+function dashboardOperation(method, path) {
+  if (method === 'GET' && path === '/keys') return 'keys_list';
+  if (method === 'POST' && path === '/keys') return 'keys_create';
+  if (method === 'POST' && /^\/keys\/[^/]+\/revoke$/u.test(path)) return 'keys_revoke';
+  return 'dashboard_unknown';
+}
+
 export function createDashboardHandler({ db, appOrigin, authenticateAccess, log = console }) {
   if (!db?.query) throw new TypeError('dashboard requires a database');
   if (typeof appOrigin !== 'string' || !appOrigin.startsWith('https://')) {
@@ -84,18 +92,22 @@ export function createDashboardHandler({ db, appOrigin, authenticateAccess, log 
   }
 
   return async function dashboard(req, res, requestId) {
+    let operation = 'dashboard_unknown';
+    let rejectionLogged = false;
     try {
-      const identity = await authenticateAccess(req.headers['cf-access-jwt-assertion']);
       const path = new URL(req.url, appOrigin).pathname;
+      operation = dashboardOperation(req.method, path);
+      const identity = await authenticateAccess(req.headers['cf-access-jwt-assertion']);
       if (req.method === 'GET' && path === '/keys') {
         return sendHtml(res, 200, keysPage(await listApiKeys(db, identity)));
       }
       if (req.method === 'POST') {
         if (req.headers.origin !== appOrigin) {
           logFailure(log, 'dashboard_csrf_rejected', {
-            requestId,
+            requestId, method: req.method, operation,
             reason: req.headers.origin == null ? 'missing_origin' : 'foreign_origin',
           });
+          rejectionLogged = true;
           throw new ApiError(403, 'forbidden', 'Access denied.');
         }
         if (path === '/keys') {
@@ -106,6 +118,9 @@ export function createDashboardHandler({ db, appOrigin, authenticateAccess, log 
           } catch (error) {
             if (error instanceof InvalidApiKeyNameError) {
               throw new ApiError(400, 'invalid_request', 'Key name must contain 1 to 64 characters.');
+            }
+            if (error instanceof InactiveApiKeyOwnerError) {
+              throw new ApiError(403, 'forbidden', 'Access denied.', { cause: error });
             }
             throw error;
           }
@@ -125,9 +140,14 @@ export function createDashboardHandler({ db, appOrigin, authenticateAccess, log 
     } catch (error) {
       const failure = error instanceof ApiError
         ? error : new ApiError(503, 'service_unavailable', 'Service is temporarily unavailable.');
+      if (failure.status === 403 && !rejectionLogged) {
+        logFailure(log, 'dashboard_request_rejected', {
+          requestId, method: req.method, operation, reason: failure.code, error,
+        });
+      }
       if (failure.status >= 500) {
         logFailure(log, 'dashboard_request_failed', {
-          requestId, error,
+          requestId, method: req.method, operation, error,
         });
       }
       return sendHtml(res, failure.status, `<h1>${escapeHtml(failure.message)}</h1>`);

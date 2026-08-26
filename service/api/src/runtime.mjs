@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import pg from 'pg';
 import { createAccessAuthenticator } from './access-auth.mjs';
@@ -123,6 +124,7 @@ export async function startRuntime({ env = process.env, log = console } = {}) {
   const authenticateAccess = createAccessAuthenticator({
     db: pool, issuer: accessIssuer, audience: accessAudience,
   });
+  const createRequestId = randomUUID;
   const handler = createApiHandler({
     db: pool,
     pool,
@@ -133,12 +135,16 @@ export async function startRuntime({ env = process.env, log = console } = {}) {
     appHost,
     appOrigin: `https://${appHost}`,
     authenticateAccess,
+    createRequestId,
     log,
     unitPriceMicros: Number(env.PAGESPATIAL_UNIT_PRICE_MICROS ?? 1000),
   });
   const server = createServer((req, res) => {
-    handler(req, res).catch((error) => {
-      logFailure(log, 'http_handler_unhandled', { error });
+    const requestId = createRequestId();
+    handler(req, res, requestId).catch((error) => {
+      logFailure(log, 'http_handler_unhandled', {
+        requestId, method: req.method, operation: 'http_handler', error,
+      });
       res.destroy();
     });
   });

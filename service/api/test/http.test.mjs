@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { test, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { inspect } from 'node:util';
 import { PGlite } from '@electric-sql/pglite';
 import { authenticateApiKey, issueApiKey } from '../src/api-keys.mjs';
 import { createApiHandler } from '../src/http.mjs';
@@ -72,6 +73,10 @@ test('HTTP authentication failures advertise Bearer authentication', async () =>
   const response = await fetch(`${base}/v1/jobs/00000000-0000-4000-8000-000000000000`);
   assert.equal(response.status, 401);
   assert.equal(response.headers.get('www-authenticate'), 'Bearer');
+  const rendered = inspect(logs, { depth: 10 });
+  assert.match(rendered, /authentication_required/u);
+  assert.match(rendered, /job_status/u);
+  assert.match(rendered, /GET/u);
 });
 
 afterEach(async () => {
@@ -159,6 +164,7 @@ test('HTTP admission failure includes Retry-After', async () => {
   assert.equal(rejected.status, 429);
   assert.equal(rejected.headers.get('retry-after'), '60');
   assert.equal((await rejected.json()).error.code, 'admission_limit');
+  assert.match(inspect(logs, { depth: 10 }), /admission_limit/u);
 });
 
 test('HTTP logs unexpected failure without leaking provider text', async () => {
@@ -172,7 +178,7 @@ test('HTTP logs unexpected failure without leaking provider text', async () => {
     message: 'Service is temporarily unavailable.',
     request_id: '11111111-1111-4111-8111-111111111111',
   });
-  const serialized = JSON.stringify(logs);
+  const serialized = inspect(logs, { depth: 10 });
   assert.match(serialized, /api_request_failed/u);
   assert.doesNotMatch(serialized, /Signature|secret|r2\.invalid/u);
 });
