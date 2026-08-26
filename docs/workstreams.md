@@ -12,7 +12,7 @@ Onboarding order: [principles](principles.md) →
 
 ## State snapshot (update the date when you touch this)
 
-*As of 2026-08-26.*
+*As of 2026-08-26, evening.*
 
 - **main**: through PR #104 (`b96e891`). CI is green. Current record
   versions remain schema 0.6.0 and enrichment-0.2.0.
@@ -42,12 +42,25 @@ Onboarding order: [principles](principles.md) →
   first. AWS Spot is only a measured cost candidate. Flex provisions no
   workers without queued demand. No SQS, Kubernetes, custom multi-cloud
   scheduler, or GPU tier is justified for v1.
-- **Not public-service ready**: #76 owns auth, tenancy, quotas, storage and
-  retention; #87 owns streaming upload, admission, idempotency and
-  incremental polling; #105 owns the durable queue and demand-driven worker
-  control; #83 owns runtime dependency slimming. The existing HTTP service
-  is for a trusted caller and local disk is not a horizontally shared job
-  store.
+- **Control plane DESIGNED, M0 verified (PR #107, 2026-08-26)**:
+  `docs/design/2026-08-26-service-control-plane.md`. Modal is the queue and
+  autoscaler — **the #105 pull-worker architecture is withdrawn**, because a
+  worker at `min_containers=0` cannot poll for work and, once the API must
+  dispatch to start anything, a lease protocol is a second queue over
+  Modal's qualified one. Managed Postgres ledger (stateless VPS), R2, four
+  tables, per-**execution** immutable result keys, Cloudflare Access +
+  Tunnel. Dispatch is at-least-once, stated as a property. **M0 PASS**
+  (`desia`, app stopped at 0 tasks): a JS `Uint8Array` reaches Python as
+  `bytes` byte-exact, `fromId()` recovers across restart, and the error
+  taxonomy is pending=`FunctionTimeoutError` / failed=`RemoteError` /
+  expired=UNKNOWN — `modal@0.9.0` has **no `OutputExpiredError`**, so the
+  reconciler must consult R2 before calling any Modal terminal error
+  permanent. Survived three adversarial passes; fourteen retractions are in
+  the doc's corrections section.
+- **Still not public-service ready**: #87 owns admission and incremental
+  polling; #76 retains quotas, spend caps, and API versioning; #83 owns
+  runtime dependency slimming. The existing HTTP service remains
+  trusted-caller only.
 - **Retrieval thesis measured (issue #36 CLOSED)**: pre-registered
   outcome "flat everywhere" — trust metadata does NOT pay in ranking,
   not even the corroboration links (five-way ablation, n=101 queries,
@@ -337,8 +350,9 @@ current scorer; decides instrument-fix vs detector-project).
 | Recovery tile budget (cost bound) | #13 | open — small, well-specified; good first task | — | src/browser/region-recovery.ts, tuning | nothing |
 | Batch API + residue-crop rungs | #20 | **shipped** (PR #23) | session | — | — |
 | Internal Modal parse deployment | #22 | **adopted within qualified bounds**: CPU/OpenVINO warm `Cls`, parse-only, no public ingress. Production service work is split into #76/#87/#105. | — | deploy/modal, service | public product contract |
-| Standard/Flex service execution | #105 | **designed, not implemented**: PostgreSQL job/lease queue, object storage, authenticated worker-control API, demand-driven Modal CPU first; AWS Spot only after a measured cost win. | — | service API, job store, worker adapters | #76 and #87 product decisions |
-| Public/commercial API | #76 | **open, tracked-not-scheduled**: auth, tenant isolation, quotas, retention, public API contract. | — | gateway, storage, service contract | real consumer requirements |
+| Service control plane (accounts, keys, dashboard) | #76 | **designed, M0 verified — PR #107**: Modal-native dispatch, managed Postgres ledger, R2, four tables, execution-minted result keys, Cloudflare Access + Tunnel. M0 PASS on `desia`. Next: M1 job plane. | — | new api process, deploy/modal, service | owner answers: retention, concurrency cap, domain |
+| Standard/Flex pull-worker execution | #105 | **PARKED — pull architecture withdrawn (PR #107)**: a worker at `min_containers=0` cannot poll for work, so a Postgres lease queue would be a second queue over Modal's qualified one. Unpark only when a second compute provider (AWS Spot) is genuinely earned. | — | — | a measured second-provider win |
+| Commercial hardening (quotas, tenancy, retention) | #76 | **partly absorbed by PR #107** (auth, tenant isolation, API keys, retention columns). Still open: per-tenant quotas, spend caps, public API versioning + deprecation policy. | — | service contract | a real consumer |
 | HTTP admission and idempotency | #87 | **open**: stream uploads, reject overload before buffering, `429`, idempotency key, queue metrics, incremental polling. | — | service HTTP API | service-tier limits |
 | Service dependency slimming | #83 | **open, bounded**: express real runtime dependencies and stop copying the full dev toolchain into the image. | — | package manifests, Dockerfile | nothing |
 | GPU bottleneck follow-up | #97 | **parked**: instrumentation and B1/B4/B8 treatments did not earn a GPU deployment change. Resume only for a new measured hypothesis. | — | evaluation only | concrete throughput/cost trigger |
