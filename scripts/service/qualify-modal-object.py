@@ -17,6 +17,7 @@ import argparse
 import hashlib
 import json
 import os
+import subprocess
 import uuid
 from pathlib import Path
 
@@ -67,6 +68,48 @@ def require_access_denied(label: str, operation) -> None:
     raise RuntimeError(f"{label} unexpectedly succeeded")
 
 
+def run_comparisons(out: Path) -> dict:
+    comparator = (Path(__file__).resolve().parents[2]
+                  / "scripts/evaluation/compare-modal-runs.mjs")
+
+    def compare(left: str, right: str, output: str, tolerance=None) -> dict:
+        command = [
+            "node", str(comparator),
+            "--left", str(out / left), "--right", str(out / right),
+            "--out", str(out / output),
+        ]
+        if tolerance is not None:
+            command += [
+                "--tolerance-tokens", str(tolerance["criticalTokens"]),
+                "--tolerance-lines", str(tolerance["rawLines"]),
+            ]
+        subprocess.run(command, check=True, capture_output=True, text=True)
+        return json.loads((out / output).read_text(encoding="utf-8"))
+
+    control = compare(
+        "direct-a.json", "direct-b.json", "control-comparison.json")
+    if (control["pairs_compared"] != 1 or control["skipped"]
+            or control["sha_mismatches"]
+            or not control["deterministic_exact_everywhere"]
+            or not control["ocr_derived_exact_whenever_score_exact"]):
+        raise RuntimeError("direct-control comparator invariants failed")
+    tolerance = {
+        "criticalTokens": control["totals"]["criticalTokens"],
+        "rawLines": control["totals"]["rawLines"],
+    }
+    direct_pointer = compare(
+        "direct-a.json", "object-a.json", "direct-vs-object.json", tolerance)
+    pointer_repeat = compare(
+        "object-a.json", "object-b.json", "object-repeat.json", tolerance)
+    return {
+        "null_tolerance": tolerance,
+        "critical_tokens_compared": control["totals"]["ocrTokensLeft"],
+        "raw_lines_compared": control["totals"]["rawLinesTotal"],
+        "direct_vs_object": direct_pointer["verdict"],
+        "object_repeat": pointer_repeat["verdict"],
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--pdf", required=True, type=Path)
@@ -83,7 +126,7 @@ def main() -> None:
     input_key = f"inputs/{job_id}.pdf"
     result_prefix = f"results/{job_id}/{attempt_id}"
     bad_prefix = f"results/{job_id}/{bad_attempt_id}"
-    out = args.out or Path(".evaluation/service-m1-object") / job_id
+    out = (args.out or Path(".evaluation/service-m1-object") / job_id).resolve()
     out.mkdir(parents=True, exist_ok=False)
 
     env = config()
@@ -216,6 +259,7 @@ def main() -> None:
         write_json(out / "direct-b.json", direct_b)
         write_json(out / "object-a.json", object_results[0])
         write_json(out / "object-b.json", object_results[1])
+        comparisons = run_comparisons(out)
         write_json(out / "metadata.json", {
             "app": args.app,
             "pdf": str(args.pdf),
@@ -227,6 +271,12 @@ def main() -> None:
             "pointer_b": pointer_b,
             "digest_mismatch_failed": mismatch_failed,
             "r2_list_recovered_both": True,
+            "credential_boundary": {
+                "input_put_input": "AccessDenied",
+                "results_get_input": "AccessDenied",
+                "results_put_input": "AccessDenied",
+            },
+            "comparisons": comparisons,
             "r2_objects_retained": args.keep_r2,
         })
         print(out)

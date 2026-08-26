@@ -16,9 +16,9 @@ This trial fixes revision `3b45b30c722c`: one read/write credential and one
 bucket, with no pointer-specific result cap. A subsequent M1 hardening change
 splits input and result buckets/credentials, adds a 128 MiB R2 result bound,
 uses attempt identity for inner traces, and makes the harness assert successful
-status before comparison. The parity measurements below remain evidence for
-the unchanged parse core, but the new credential topology must receive a fresh
-R2 smoke before service deployment.
+status before comparison. The original parity measurements below remain
+evidence for the unchanged parse core. The fresh split-topology qualification
+later in this record closes that post-review requirement.
 
 ## Fixed implementation
 
@@ -124,6 +124,57 @@ the 189 MB Paddle wheel at about 32 kB/s and pip hit a read timeout. Retrying
 the identical committed deployment succeeded; the wheel then transferred at
 about 177 MB/s. This was an image-build dependency incident, not a parser or
 R2 failure. No Docker or timeout change was required.
+
+## Fresh split-topology qualification
+
+**PASS on 2026-08-26.** The hardened deployment at Git revision
+`e2f38f88ce5c` used two private Western Europe R2 buckets and two independently
+scoped Modal secrets:
+
+- `pagespatial-dev`: worker credential has Object Read only;
+- `pagespatial-results-dev`: separate worker credential has Object Read &
+  Write.
+
+The local control credential could write both development buckets but was not
+attached to the Modal worker. Credential values are not recorded. `.env` was
+restricted to local mode `0600` before use.
+
+The self-contained run is
+`.evaluation/service-m1-object/df82611d-957a-413c-a94f-1a62f3dce9b6/`.
+It used the same 3-page World Bank input and removed every R2 object it
+created. The harness now invokes the committed three-projection comparator
+itself; transport success without a comparator verdict is no longer PASS.
+
+### Boundary and correctness result
+
+- control PUT to input and results buckets: allowed;
+- input worker GET input: allowed;
+- input worker PUT input: `AccessDenied`;
+- input worker GET/PUT results: `AccessDenied` in an independent ACL probe;
+- results worker GET/PUT results: allowed;
+- results worker GET/PUT input: `AccessDenied`;
+- both pointer calls: `status=completed`, 3 pages;
+- wrong input digest: rejected, with no result object;
+- two executions: distinct immutable keys, both recovered by prefix LIST;
+- pointer digests: matched the exact stored bytes;
+- direct-control null tolerance: 0 critical tokens / 0 raw lines;
+- direct-versus-pointer: PASS at tolerance 0/0;
+- pointer repeat: PASS at tolerance 0/0;
+- comparison coverage: 402 critical OCR tokens and 724 raw OCR lines;
+- deterministic projection, OCR-derived invariant, schema, and document SHA:
+  no differences or failures.
+
+### Fresh timing observation
+
+| execution | R2 download | parse method | R2 upload | total method | stored result |
+|---|---:|---:|---:|---:|---:|
+| pointer A | 1,667 ms | 8,074 ms | 2,009 ms | 12,433 ms | 826,133 B |
+| pointer B | 301 ms | 8,066 ms | 1,898 ms | 10,308 ms | 826,136 B |
+
+The container reported a 92,102 ms cold readiness time. These are one
+qualification lifetime on shared infrastructure, not a latency benchmark and
+not a revision of the prior distribution. The development app was stopped
+after the run.
 
 ## Remaining M1 work
 
