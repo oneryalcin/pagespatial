@@ -176,9 +176,44 @@ qualification lifetime on shared infrastructure, not a latency benchmark and
 not a revision of the prior distribution. The development app was stopped
 after the run.
 
-## Remaining M1 work
+## M2 public-result requalification
 
-The next slice is the dispatcher and reconciler around the already-created
-Postgres job/attempt tables. Its critical cases are the non-atomic database
-commit -> Modal spawn seam, `dispatch_unknown`, storage recovery, and
-first-writer-wins acceptance. This trial does not pre-approve that code.
+**PASS on 2026-08-26 at implementation revision `9141129d89cc`.** This
+supersedes only the stored-result envelope shape qualified above. The transport
+properties remain: immutable per-execution keys, pointer digest verification,
+prefix recovery, and two-bucket credential isolation.
+
+`parse_object` now stores the closed public envelope defined by
+`PublicResultEnvelopeV1`; it no longer stores the internal parser result and
+operator diagnostics together. The live run is
+`.evaluation/service-m1-object/8ddc6804-a6de-4059-91f5-3750c49b86f2/`.
+It used the same 142,510-byte, 3-page World Bank input. The harness removed all
+objects it created and the `pagespatial-parse-m2-dev` app was stopped at zero
+tasks.
+
+Observed gates:
+
+- direct-control null tolerance: 0 critical tokens / 0 raw lines;
+- direct-versus-public-object: PASS at tolerance 0/0;
+- public-object repeat: PASS at tolerance 0/0;
+- comparison coverage: 397 critical OCR tokens and 715 raw OCR lines;
+- both public results: 3 pages and 817,451 bytes;
+- two executions: distinct immutable keys, both recovered by prefix LIST;
+- wrong digest: returned typed `input_digest_mismatch` and published nothing;
+- input credential PUT-input and GET/PUT-results probes: `AccessDenied`;
+- results credential GET/PUT-input probes: `AccessDenied`;
+- public envelopes contained only schema, job/attempt/execution identity,
+  input digest, page count, and public page results; Modal timing, storage keys,
+  revisions, resources, and raw diagnostics were absent.
+
+Method-reported pointer observations were 6,222 ms and 5,006 ms total. The
+first direct call reported 68,068 ms service readiness. These are one
+qualification lifetime on shared infrastructure, not throughput or latency
+benchmarks.
+
+## Historical M1 follow-up
+
+At the time of the first object qualification, the next slice was the
+dispatcher and reconciler around the Postgres job/attempt tables. That work
+later landed and was independently reviewed; this earlier trial did not
+pre-approve it.
