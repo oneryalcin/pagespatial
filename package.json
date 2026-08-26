@@ -1,6 +1,9 @@
 {
   "name": "pagespatial",
   "version": "0.1.0",
+  "workspaces": [
+    "service/api"
+  ],
   "private": true,
   "description": "Source-preserving spatial evidence records for PDF ingestion",
   "type": "module",
@@ -51,7 +54,7 @@
     "test": "npm run build && node --test test/*.test.mjs",
     "test:browser:wasm": "npm run build && node test/browser-smoke/run.mjs wasm",
     "test:browser:webgpu": "npm run build && node test/browser-smoke/run.mjs webgpu",
-    "check": "npm run typecheck && npm test && npm run verify:schema",
+    "check": "npm run typecheck && npm test && npm run test:api && npm run verify:schema",
     "example": "npm run build && node examples/merge-page.mjs",
     "prepare:ocr-assets": "node scripts/prepare-ppocr-assets.mjs",
     "eval:corpus:check": "node scripts/evaluation/generate-corpus-manifest.mjs --check",
@@ -59,7 +62,8 @@
     "eval:corpus:materialize": "node scripts/evaluation/materialize.mjs",
     "eval:ocr-assets": "node scripts/prepare-ppocr-assets.mjs --output .evaluation/ocr-assets",
     "eval:baseline": "npm run build && node scripts/evaluation/run-baseline.mjs",
-    "eval:baseline:summary": "npm run build && node scripts/evaluation/generate-baseline-summary.mjs"
+    "eval:baseline:summary": "npm run build && node scripts/evaluation/generate-baseline-summary.mjs",
+    "test:api": "npm test --workspace=@pagespatial/api"
   },
   "dependencies": {
     "zod": "4.4.3"

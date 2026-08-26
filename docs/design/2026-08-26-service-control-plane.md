@@ -322,8 +322,11 @@ had to outlive queue wait plus both executions or fail with download errors
 that look like transport bugs.
 
 Both problems dissolve with one mechanism instead of two. The worker holds
-**least-privilege R2 credentials via a Modal secret** — read on the inputs
-bucket, write on the results bucket. It downloads `input_key`, verifies
+**two bucket-scoped R2 credentials via Modal secrets**: an Object Read-only
+token for the input bucket and a separate Object Read & Write token for a
+distinct results bucket. Cloudflare R2 offers no permanent write-only object
+permission, so the results token can also read results; it cannot reach or
+modify the input bucket. It downloads `input_key`, verifies
 SHA-256 against `expected_sha256`, parses, mints
 `{result_prefix}/{execution_id}.json`, writes it, and returns the URI,
 digest, page count, and timing through `FunctionCall.get()`.
@@ -332,8 +335,13 @@ The control plane then presigns **only client-facing URLs** — browser
 upload and result download. Presigned URLs and worker credentials stop
 being two overlapping answers to the same question.
 
-This also dissolves the qualified 64 MiB serialized-result cap, since the
-record no longer crosses the method boundary.
+This removes the qualified 64 MiB Modal result-boundary cap. It does not mean
+unbounded output: pointer mode has a separate 128 MiB canonical JSON
+publication cap. An oversized result raises `ObjectResultTooLarge` before PUT
+and publishes no object. The check occurs after serialization; streaming JSON
+would avoid that allocation but is not justified by the two measured document
+densities, which project to 24--53 MiB for 200 pages and leave 2.4x--5.3x
+headroom under the cap. This observed range is not a general size bound.
 
 ### Focused transport qualification
 
@@ -351,6 +359,17 @@ unchanged parsing core, a **focused** qualification suffices:
 5. download/upload failures visible and bounded;
 6. Modal retry behaviour exercised;
 7. no meaningful parsing-throughput regression.
+
+The live qualification also proves the credential boundary, not merely the
+presence of configuration: the input credential must be denied a PUT to the
+input bucket, and the results credential must be denied both GET and PUT on
+the input bucket. Unexpected success is a failed qualification.
+
+Every expected-success qualification call must assert `status=completed`, no
+top-level failure, and the expected page count before comparison. A returned
+Modal value is transport success, not parser success. Failed parse envelopes
+may be stored for diagnosis, but the reconciler routes them to `failAttempt`;
+only `status=completed` may reach `acceptAttempt`.
 
 **Repeat the full 12/12 only if** the parsing engine, warm-container
 lifecycle, process management, or retry semantics change. They do not here.

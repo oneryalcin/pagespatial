@@ -56,6 +56,11 @@ test('adapter config invariants (§7): parse-only, loopback, bounded', () => {
   // Bounds: page cap wired to the service, containers capped in code.
   assert.match(adapter, /"SERVICE_MAX_PAGES_PER_JOB": str\(MAX_PAGES_PER_JOB\)/);
   assert.match(adapter, /MAX_PAGES_PER_JOB = 200\b/);
+  assert.match(adapter, /MAX_OBJECT_RESULT_BYTES = 128 \* 1024 \* 1024/);
+  assert.match(adapter, /R2_INPUT_BUCKET/);
+  assert.match(adapter, /R2_RESULTS_BUCKET/);
+  assert.match(adapter, /input and results buckets must be distinct/);
+  assert.match(adapter, /input and results credentials must be distinct/);
   // max_containers comes from the deploy-time ALLOWLIST (M3 arms 1/4/16)
   // and refuses any unlisted value — never unbounded, never a free integer.
   assert.match(adapter, /max_containers=MAX_CONTAINERS/);

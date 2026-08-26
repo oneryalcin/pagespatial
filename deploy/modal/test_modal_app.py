@@ -14,6 +14,7 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -44,10 +45,18 @@ def _install_modal_stub():
         def env(self, *_args, **_kwargs):
             return self
 
+        def uv_pip_install(self, *_args, **_kwargs):
+            return self
+
     class _Cls:
         @staticmethod
         def from_name(*_args, **_kwargs):
             raise RuntimeError("from_name is not available under the stub")
+
+    class _Secret:
+        @staticmethod
+        def from_name(name):
+            return name
 
     def _decorator(*_args, **_kwargs):
         return lambda f: f
@@ -58,6 +67,7 @@ def _install_modal_stub():
     stub.App = _App
     stub.Image = _Image
     stub.Cls = _Cls
+    stub.Secret = _Secret
     stub.enter = _decorator
     stub.exit = _decorator
     stub.method = _decorator
@@ -129,6 +139,103 @@ class ValidateInputTest(unittest.TestCase):
             modal_app.validate_input(_payload(pdfPath="/etc/passwd"))
         with self.assertRaises(modal_app.InputRejected):
             modal_app.validate_input(_payload(pdf_path="/etc/passwd"))
+
+
+class ValidateObjectInputTest(unittest.TestCase):
+    JOB_ID = "11111111-1111-4111-8111-111111111111"
+    ATTEMPT_ID = "22222222-2222-4222-8222-222222222222"
+
+    def payload(self, **overrides):
+        base = {
+            "job_id": self.JOB_ID,
+            "attempt_id": self.ATTEMPT_ID,
+            "expected_sha256": "a" * 64,
+            "input_key": f"inputs/{self.JOB_ID}.pdf",
+            "result_prefix": f"results/{self.JOB_ID}/{self.ATTEMPT_ID}",
+        }
+        base.update(overrides)
+        return base
+
+    def test_accepts_the_exact_pointer_contract(self):
+        self.assertEqual(modal_app.validate_object_input(self.payload()), self.payload())
+
+    def test_rejects_noncanonical_ids_and_foreign_result_prefixes(self):
+        with self.assertRaises(modal_app.InputRejected):
+            modal_app.validate_object_input(self.payload(
+                job_id="AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"))
+        with self.assertRaises(modal_app.InputRejected):
+            modal_app.validate_object_input(self.payload(result_prefix="results/other/attempt"))
+        with self.assertRaises(modal_app.InputRejected):
+            modal_app.validate_object_input(self.payload(input_key="inputs/other.pdf"))
+
+    def test_rejects_unknown_fields_and_unsafe_keys(self):
+        with self.assertRaises(modal_app.InputRejected):
+            modal_app.validate_object_input(self.payload(extra="not-v1"))
+        with self.assertRaises(modal_app.InputRejected):
+            modal_app.validate_object_input(self.payload(input_key="inputs/../secret"))
+
+    def test_r2_config_requires_https_and_all_four_values(self):
+        good = {
+            "R2_INPUT_ENDPOINT": "https://example.r2.cloudflarestorage.com/",
+            "R2_INPUT_BUCKET": "pagespatial-inputs-dev",
+            "R2_INPUT_ACCESS_KEY_ID": "input-id",
+            "R2_INPUT_SECRET_ACCESS_KEY": "input-secret",
+            "R2_RESULTS_ENDPOINT": "https://example.r2.cloudflarestorage.com/",
+            "R2_RESULTS_BUCKET": "pagespatial-results-dev",
+            "R2_RESULTS_ACCESS_KEY_ID": "result-id",
+            "R2_RESULTS_SECRET_ACCESS_KEY": "result-secret",
+        }
+        config = modal_app.load_r2_config(good)
+        self.assertEqual(config.input.bucket, "pagespatial-inputs-dev")
+        self.assertEqual(config.results.bucket, "pagespatial-results-dev")
+        with self.assertRaises(RuntimeError):
+            modal_app.load_r2_config({**good, "R2_INPUT_ENDPOINT": "http://example.test"})
+        with self.assertRaises(RuntimeError):
+            modal_app.load_r2_config({key: value for key, value in good.items()
+                                      if key != "R2_RESULTS_SECRET_ACCESS_KEY"})
+
+    def test_r2_config_requires_distinct_buckets_and_credentials(self):
+        good = {
+            "R2_INPUT_ENDPOINT": "https://example.r2.cloudflarestorage.com",
+            "R2_INPUT_BUCKET": "inputs",
+            "R2_INPUT_ACCESS_KEY_ID": "input-id",
+            "R2_INPUT_SECRET_ACCESS_KEY": "input-secret",
+            "R2_RESULTS_ENDPOINT": "https://example.r2.cloudflarestorage.com",
+            "R2_RESULTS_BUCKET": "results",
+            "R2_RESULTS_ACCESS_KEY_ID": "result-id",
+            "R2_RESULTS_SECRET_ACCESS_KEY": "result-secret",
+        }
+        with self.assertRaises(RuntimeError):
+            modal_app.load_r2_config({**good, "R2_RESULTS_BUCKET": "inputs"})
+        with self.assertRaises(RuntimeError):
+            modal_app.load_r2_config({**good,
+                                      "R2_RESULTS_ACCESS_KEY_ID": "input-id"})
+
+    def test_r2_clients_are_split_and_cached_per_warm_container(self):
+        env = {
+            "R2_INPUT_ENDPOINT": "https://example.r2.cloudflarestorage.com",
+            "R2_INPUT_BUCKET": "inputs",
+            "R2_INPUT_ACCESS_KEY_ID": "input-id",
+            "R2_INPUT_SECRET_ACCESS_KEY": "input-secret",
+            "R2_RESULTS_ENDPOINT": "https://example.r2.cloudflarestorage.com",
+            "R2_RESULTS_BUCKET": "results",
+            "R2_RESULTS_ACCESS_KEY_ID": "result-id",
+            "R2_RESULTS_SECRET_ACCESS_KEY": "result-secret",
+        }
+        calls = []
+        boto3 = types.ModuleType("boto3")
+        boto3.client = lambda *args, **kwargs: calls.append((args, kwargs)) or object()
+        instance = modal_app.ParseContainer.__new__(modal_app.ParseContainer)
+        with mock.patch.dict(sys.modules, {"boto3": boto3}), mock.patch.dict(
+                modal_app.os.environ, env, clear=True):
+            first = instance._r2()
+            second = instance._r2()
+        self.assertIs(first, second)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(first.input_bucket, "inputs")
+        self.assertEqual(first.results_bucket, "results")
+        self.assertEqual(calls[0][1]["aws_access_key_id"], "input-id")
+        self.assertEqual(calls[1][1]["aws_access_key_id"], "result-id")
 
 
 class JobBudgetTest(unittest.TestCase):

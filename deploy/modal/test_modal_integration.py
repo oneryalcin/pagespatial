@@ -36,6 +36,10 @@ DEV_ENV = {"PAGESPATIAL_ENABLE_TEST_FAILURES": "1",
 
 PDF = b"%PDF-1.4 integration bytes"
 SHA = hashlib.sha256(PDF).hexdigest()
+JOB_ID = "11111111-1111-4111-8111-111111111111"
+ATTEMPT_ID = "22222222-2222-4222-8222-222222222222"
+INPUT_KEY = f"inputs/{JOB_ID}.pdf"
+RESULT_PREFIX = f"results/{JOB_ID}/{ATTEMPT_ID}"
 
 
 def _payload(**overrides):
@@ -48,6 +52,34 @@ def _payload(**overrides):
     }
     base.update(overrides)
     return base
+
+
+def _object_payload(**overrides):
+    base = {
+        "job_id": JOB_ID,
+        "attempt_id": ATTEMPT_ID,
+        "expected_sha256": SHA,
+        "input_key": INPUT_KEY,
+        "result_prefix": RESULT_PREFIX,
+    }
+    base.update(overrides)
+    return base
+
+
+class _FakeR2:
+    def __init__(self):
+        self.objects = {INPUT_KEY: PDF}
+        self.fail_put = False
+
+    def get_object(self, *, Bucket, Key):
+        data = self.objects[Key]
+        return {"ContentLength": len(data), "Body": io.BytesIO(data)}
+
+    def put_object(self, *, Bucket, Key, Body, ContentType):
+        if self.fail_put:
+            raise OSError("injected R2 PUT failure")
+        self.objects[Key] = bytes(Body)
+        return {"ETag": "fake"}
 
 
 class _FakeService:
@@ -117,6 +149,10 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
         (Path(self.tmp.name) / "uploads").mkdir()
         self.node = _dummy_node()
         self.instance = self._make_instance()
+        self.r2 = _FakeR2()
+        self.instance._r2 = lambda: modal_app.R2Store(
+            self.r2, "pagespatial-inputs-dev",
+            self.r2, "pagespatial-results-dev")
 
     def tearDown(self):
         modal_app.SERVICE_PORT = self.saved_port
@@ -154,6 +190,12 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
             with self.assertRaises(exc) as ctx:
                 self.instance.parse_document(payload)
         return ctx.exception, [json.loads(line) for line in out.getvalue().splitlines() if line]
+
+    def _call_object(self, payload):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            result = self.instance.parse_object(payload)
+        return result, [json.loads(line) for line in out.getvalue().splitlines() if line]
 
     # -- happy path: §12 field audit ------------------------------------
 
@@ -193,6 +235,86 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
         self.assertEqual(len(cleanup), 1)
         self.assertTrue(cleanup[0]["cleanup_ok"])
         self.assertFalse(stale.exists())
+
+    # -- pointer transport ------------------------------------------------
+
+    def test_parse_object_stores_an_identity_bound_envelope(self):
+        pointer, _ = self._call_object(_object_payload())
+
+        stored = self.r2.objects[pointer["result_key"]]
+        envelope = json.loads(stored)
+        self.assertEqual(pointer["result_digest"], hashlib.sha256(stored).hexdigest())
+        self.assertEqual(
+            {key: envelope[key] for key in
+             ("job_id", "attempt_id", "execution_id", "input_sha256")},
+            {"job_id": JOB_ID, "attempt_id": ATTEMPT_ID,
+             "execution_id": pointer["execution_id"], "input_sha256": SHA},
+        )
+        self.assertEqual(envelope["parse_result"]["status"], "completed")
+        self.assertEqual(pointer["result_uri"],
+                         f"r2://pagespatial-results-dev/{pointer['result_key']}")
+
+    def test_parse_object_matches_parse_document_on_stable_fields(self):
+        direct, _ = self._call(_payload(request_id=ATTEMPT_ID))
+        pointer, _ = self._call_object(_object_payload())
+        stored = json.loads(self.r2.objects[pointer["result_key"]])["parse_result"]
+
+        stable = lambda result: {
+            key: result[key] for key in
+            ("document_sha256", "page_count", "status", "pages", "pages_ok", "pages_failed", "failure")
+        }
+        self.assertEqual(stable(stored), stable(direct))
+        self.assertEqual(stored["request_id"], ATTEMPT_ID)
+
+    def test_parse_object_preserves_a_failed_result_for_reconciliation(self):
+        self.fake.script["submit_status"] = 400
+        self.fake.script["submit_body"] = {"error": "Document has 900 pages; max 200"}
+        pointer, _ = self._call_object(_object_payload())
+        stored = json.loads(self.r2.objects[pointer["result_key"]])["parse_result"]
+        self.assertEqual(pointer["status"], "failed")
+        self.assertEqual(stored["status"], "failed")
+        self.assertEqual(stored["failure"]["class"], "ServiceRefused400")
+
+    def test_parse_object_verifies_downloaded_bytes_before_node_work(self):
+        with self.assertRaises(modal_app.InputRejected):
+            self.instance.parse_object(_object_payload(expected_sha256="a" * 64))
+        self.assertEqual(self.fake.posts, 0)
+        self.assertEqual(set(self.r2.objects), {INPUT_KEY})
+
+    def test_parse_object_upload_failure_returns_no_pointer(self):
+        self.r2.fail_put = True
+        with self.assertRaisesRegex(OSError, "injected R2 PUT failure"):
+            self.instance.parse_object(_object_payload())
+        self.assertEqual(self.fake.posts, 1)
+        self.assertEqual(set(self.r2.objects), {INPUT_KEY})
+
+    def test_parse_object_bypasses_the_modal_result_size_guard(self):
+        saved = modal_app.MAX_RESULT_BYTES
+        modal_app.MAX_RESULT_BYTES = 64
+        try:
+            pointer, _ = self._call_object(_object_payload())
+        finally:
+            modal_app.MAX_RESULT_BYTES = saved
+        stored = json.loads(self.r2.objects[pointer["result_key"]])["parse_result"]
+        self.assertEqual(stored["status"], "completed")
+        self.assertGreater(pointer["result_bytes"], 64)
+
+    def test_parse_object_refuses_an_oversized_object_result_before_upload(self):
+        saved = modal_app.MAX_OBJECT_RESULT_BYTES
+        modal_app.MAX_OBJECT_RESULT_BYTES = 64
+        try:
+            with self.assertRaises(modal_app.ObjectResultTooLarge):
+                self.instance.parse_object(_object_payload())
+        finally:
+            modal_app.MAX_OBJECT_RESULT_BYTES = saved
+        self.assertEqual(set(self.r2.objects), {INPUT_KEY})
+
+    def test_two_executions_use_two_immutable_result_keys(self):
+        one, _ = self._call_object(_object_payload())
+        two, _ = self._call_object(_object_payload())
+        self.assertNotEqual(one["result_key"], two["result_key"])
+        self.assertIn(one["result_key"], self.r2.objects)
+        self.assertIn(two["result_key"], self.r2.objects)
 
     # -- visible refusals and bounded failures --------------------------
 
