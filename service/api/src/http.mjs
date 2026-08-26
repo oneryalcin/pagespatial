@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { ApiError, invalidRequest } from './api-errors.mjs';
 import { authenticateApiKey } from './api-keys.mjs';
+import { createDashboardHandler } from './dashboard.mjs';
 import {
   createOrReplayJob, finalizeJob, jobView, ownedJob, resultGrant,
 } from './jobs.mjs';
@@ -57,15 +58,21 @@ function jobId(parts) {
 
 export function createApiHandler({
   db, pool, inputStore, resultStore, inputBucket = inputStore?.bucket,
-  unitPriceMicros = 1000, apiHost,
+  unitPriceMicros = 1000, apiHost, appHost, appOrigin, authenticateAccess,
   authenticate = (authorization) => authenticateApiKey(db, authorization),
   createRequestId = randomUUID,
 }) {
   if (typeof apiHost !== 'string' || !apiHost) throw new TypeError('apiHost is required');
+  if (typeof appHost !== 'string' || !appHost || appHost === apiHost) {
+    throw new TypeError('a distinct appHost is required');
+  }
+  const dashboard = createDashboardHandler({ db, appOrigin, authenticateAccess });
   return async function apiHandler(req, res) {
     const requestId = createRequestId();
     try {
-      if (req.headers.host?.split(':', 1)[0] !== apiHost) {
+      const host = req.headers.host?.split(':', 1)[0];
+      if (host === appHost) return dashboard(req, res);
+      if (host !== apiHost) {
         throw new ApiError(421, 'invalid_request', 'Request was sent to the wrong host.');
       }
       const url = new URL(req.url, 'http://api.invalid');

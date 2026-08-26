@@ -46,6 +46,9 @@ beforeEach(async () => {
     },
     resultStore: { bucket: 'results' },
     apiHost: '127.0.0.1',
+    appHost: 'app.test',
+    appOrigin: 'https://app.test',
+    authenticateAccess: async () => ({ userId, email: 'http@example.test' }),
     createRequestId: () => '11111111-1111-4111-8111-111111111111',
   });
   server = createServer(handler);

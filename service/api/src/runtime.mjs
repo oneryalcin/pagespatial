@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import pg from 'pg';
+import { createAccessAuthenticator } from './access-auth.mjs';
 import { createApiHandler } from './http.mjs';
 import { withDeadline, DeadlineExceededError } from './deadline.mjs';
 import { dispatchQueuedOnce } from './queued-dispatcher.mjs';
@@ -78,6 +79,11 @@ export async function startRuntime({ env = process.env, log = console } = {}) {
   const resultsSecretAccessKey = required(env, 'R2_API_RESULTS_SECRET_ACCESS_KEY');
   const inputBucket = required(env, 'R2_INPUT_BUCKET');
   const resultsBucket = required(env, 'R2_RESULTS_BUCKET');
+  const apiHost = required(env, 'PAGESPATIAL_API_HOST');
+  const appHost = required(env, 'PAGESPATIAL_APP_HOST');
+  const accessIssuer = required(env, 'CLOUDFLARE_ACCESS_ISSUER');
+  const accessAudience = required(env, 'CLOUDFLARE_ACCESS_AUDIENCE');
+  if (apiHost === appHost) throw new TypeError('API and dashboard hosts must be distinct');
   validateR2Isolation({
     inputBucket, resultsBucket, inputAccessKeyId, resultsAccessKeyId,
   });
@@ -113,13 +119,19 @@ export async function startRuntime({ env = process.env, log = console } = {}) {
   const modalCalls = createModalCalls({
     appName: required(env, 'PAGESPATIAL_MODAL_APP_NAME'),
   });
+  const authenticateAccess = createAccessAuthenticator({
+    db: pool, issuer: accessIssuer, audience: accessAudience,
+  });
   const handler = createApiHandler({
     db: pool,
     pool,
     inputStore,
     resultStore: resultDownloads,
     inputBucket,
-    apiHost: required(env, 'PAGESPATIAL_API_HOST'),
+    apiHost,
+    appHost,
+    appOrigin: `https://${appHost}`,
+    authenticateAccess,
     unitPriceMicros: Number(env.PAGESPATIAL_UNIT_PRICE_MICROS ?? 1000),
   });
   const server = createServer((req, res) => {

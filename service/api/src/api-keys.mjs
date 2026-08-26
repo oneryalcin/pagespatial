@@ -15,7 +15,9 @@ export function generateApiKey() {
 }
 
 export async function issueApiKey(db, { userId, name }) {
-  if (typeof name !== 'string' || name.trim().length < 1 || name.trim().length > 64) {
+  const trimmed = typeof name === 'string' ? name.trim() : '';
+  const characters = [...trimmed].length;
+  if (characters < 1 || characters > 64) {
     throw new TypeError('API key name must contain 1 to 64 characters');
   }
   const material = generateApiKey();
@@ -24,10 +26,30 @@ export async function issueApiKey(db, { userId, name }) {
      SELECT id, $2, $3, $4 FROM users
       WHERE id = $1 AND status = 'active'
      RETURNING id, prefix, name, created_at`,
-    [userId, material.prefix, material.hash, name.trim()],
+    [userId, material.prefix, material.hash, trimmed],
   );
   if (!rows[0]) throw new TypeError('active user does not exist');
   return { key: rows[0], secret: material.secret };
+}
+
+export async function listApiKeys(db, { userId }) {
+  const { rows } = await db.query(
+    `SELECT id, prefix, name, created_at, last_used_at, revoked_at
+       FROM api_keys
+      WHERE user_id = $1
+      ORDER BY created_at DESC, id DESC`,
+    [userId],
+  );
+  return rows;
+}
+
+export async function revokeApiKey(db, { userId, keyId }) {
+  const { rowCount } = await db.query(
+    `UPDATE api_keys SET revoked_at = COALESCE(revoked_at, now())
+      WHERE id = $1 AND user_id = $2`,
+    [keyId, userId],
+  );
+  return rowCount === 1;
 }
 
 function bearer(header) {
