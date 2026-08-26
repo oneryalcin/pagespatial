@@ -46,10 +46,16 @@
  */
 export async function acceptAttempt(
   db,
-  { jobId, attemptId, status, resultUri, resultDigest, pages },
+  { jobId, attemptId, status, resultUri, resultDigest, pages, resultCreatedAt },
 ) {
   if (status !== 'completed') {
     throw new TypeError('status must equal completed before an attempt can be accepted');
+  }
+  const createdAt = resultCreatedAt instanceof Date
+    ? resultCreatedAt
+    : new Date(resultCreatedAt);
+  if (Number.isNaN(createdAt.getTime())) {
+    throw new TypeError('resultCreatedAt must be a valid R2 LastModified timestamp');
   }
   const { rows } = await db.query(
     `WITH owned AS (
@@ -78,7 +84,10 @@ export async function acceptAttempt(
               estimated_cost_micros = j.unit_price_micros * $5::bigint,
               state                 = 'succeeded',
               error                 = NULL,
-              completed_at          = now()
+              completed_at          = now(),
+              -- Anchor API access to R2's lifecycle clock, not to when a
+              -- delayed reconciler happened to observe the completion.
+              retention_expires_at  = $7::timestamptz + interval '2 days'
          FROM owned
         WHERE j.id = owned.job_id
           AND j.accepted_attempt_id IS NULL
@@ -90,7 +99,7 @@ export async function acceptAttempt(
      )
      SELECT (SELECT count(*) FROM owned) AS recorded,
             (SELECT count(*) FROM won)   AS won`,
-    [jobId, attemptId, resultUri, resultDigest, pages, status],
+    [jobId, attemptId, resultUri, resultDigest, pages, status, createdAt.toISOString()],
   );
 
   return { recorded: Number(rows[0].recorded) === 1, won: Number(rows[0].won) === 1 };
@@ -172,14 +181,25 @@ export async function markDispatched(db, { jobId, attemptId, modalCallId }) {
   if (typeof modalCallId !== 'string' || modalCallId.trim() === '') {
     throw new TypeError('modalCallId must be a non-empty string');
   }
-  const { rowCount } = await db.query(
-    `UPDATE job_attempts
-        SET state = 'dispatched', modal_call_id = $3, dispatched_at = now()
-      WHERE id = $2 AND job_id = $1 AND state = 'dispatching'
-        AND $3::text IS NOT NULL AND btrim($3::text) <> ''`,
+  const { rows } = await db.query(
+    `WITH marked AS (
+       UPDATE job_attempts
+          SET state = 'dispatched', modal_call_id = $3, dispatched_at = now()
+        WHERE id = $2 AND job_id = $1
+          AND state IN ('dispatching','dispatch_unknown')
+          AND completed_at IS NULL
+          AND $3::text IS NOT NULL AND btrim($3::text) <> ''
+       RETURNING job_id
+     ), job_state AS (
+       UPDATE jobs j SET state = 'dispatched'
+         FROM marked
+        WHERE j.id = marked.job_id AND j.state = 'queued'
+       RETURNING j.id
+     )
+     SELECT EXISTS (SELECT 1 FROM marked) AS recorded`,
     [jobId, attemptId, modalCallId],
   );
-  return rowCount === 1;
+  return rows[0].recorded;
 }
 
 /**

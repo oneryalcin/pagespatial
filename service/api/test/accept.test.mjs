@@ -21,7 +21,9 @@ import {
 } from '../src/accept.mjs';
 
 const acceptAttempt = (database, input) =>
-  acceptAttemptRaw(database, { status: 'completed', ...input });
+  acceptAttemptRaw(database, {
+    status: 'completed', resultCreatedAt: new Date('2026-08-26T12:00:00Z'), ...input,
+  });
 
 let db;
 let userId;
@@ -53,9 +55,14 @@ const newJob = async (owner = userId, state = 'queued') => {
 };
 
 const newAttempt = async (jobId, state = 'dispatching') => {
+  const prior = (await db.query(
+    'SELECT id FROM job_attempts WHERE job_id = $1 ORDER BY created_at, id LIMIT 1',
+    [jobId],
+  )).rows[0]?.id ?? null;
   const { rows } = await db.query(
-    `INSERT INTO job_attempts (job_id, state) VALUES ($1, $2) RETURNING id`,
-    [jobId, state],
+    `INSERT INTO job_attempts (job_id, state, replaces_attempt_id)
+     VALUES ($1, $2, $3) RETURNING id`,
+    [jobId, state, prior],
   );
   return rows[0].id;
 };
@@ -81,6 +88,25 @@ test('the schema forbids dispatched state without a Modal call id', async () => 
   await assert.rejects(
     db.query(`UPDATE job_attempts SET state = 'dispatched' WHERE id = $1`, [attemptId]),
     /job_attempts_dispatched_has_call_id/,
+  );
+});
+
+test('the schema enforces the one-hour upload window on both sides', async () => {
+  await assert.rejects(
+    db.query(
+      `INSERT INTO jobs (user_id, input_uri, input_digest, unit_price_micros, upload_expires_at)
+       VALUES ($1, 'r2://inputs/late.pdf', $2, 1000, now() + interval '61 minutes')`,
+      [userId, 'a'.repeat(64)],
+    ),
+    /jobs_upload_window_bounded/,
+  );
+  await assert.rejects(
+    db.query(
+      `INSERT INTO jobs (user_id, input_uri, input_digest, unit_price_micros, upload_expires_at)
+       VALUES ($1, 'r2://inputs/past.pdf', $2, 1000, now())`,
+      [userId, 'a'.repeat(64)],
+    ),
+    /jobs_upload_window_bounded/,
   );
 });
 
@@ -150,6 +176,32 @@ test('every job-level result field still comes from the winner', async () => {
       pages: j.pages_actual, cost: Number(j.estimated_cost_micros) },
     { accepted: b, uri: 'r2://b', digest: 'b'.repeat(64),
       pages: 9, cost: 9000 }, // 1000 * 9 -- never A's 42
+  );
+});
+
+test('acceptance anchors result access to R2 LastModified, not observation time', async () => {
+  const jobId = await newJob();
+  const a = await newAttempt(jobId);
+  const created = new Date('2026-08-20T03:04:05Z');
+
+  await acceptAttempt(db, {
+    jobId, attemptId: a, resultUri: 'r2://result',
+    resultDigest: 'b'.repeat(64), pages: 1, resultCreatedAt: created,
+  });
+
+  const j = await job(jobId);
+  assert.equal(new Date(j.retention_expires_at).toISOString(), '2026-08-22T03:04:05.000Z');
+});
+
+test('acceptance refuses an invalid R2 LastModified timestamp', async () => {
+  const jobId = await newJob();
+  const a = await newAttempt(jobId);
+  await assert.rejects(
+    acceptAttemptRaw(db, {
+      jobId, attemptId: a, status: 'completed', resultUri: 'r2://result',
+      resultDigest: 'b'.repeat(64), pages: 1, resultCreatedAt: 'not-a-date',
+    }),
+    /resultCreatedAt must be a valid R2 LastModified timestamp/,
   );
 });
 
@@ -387,6 +439,14 @@ test('markDispatched records the call id and the time together', async () => {
   assert.equal(row.modal_call_id === 'fc-01ABC' && row.dispatched_at !== null, true);
 });
 
+test('markDispatched advances the job and attempt in one statement', async () => {
+  const jobId = await newJob();
+  const attemptId = await newAttempt(jobId);
+  await markDispatched(db, { jobId, attemptId, modalCallId: 'fc-job-state' });
+  assert.equal((await job(jobId)).state, 'dispatched');
+  assert.equal((await attempt(attemptId)).state, 'dispatched');
+});
+
 test('one Modal call id cannot belong to two attempts', async () => {
   const jobId = await newJob();
   const a = await newAttempt(jobId);
@@ -407,7 +467,7 @@ test('a job cannot be created without a 64-hex input digest', async () => {
   await assert.rejects(
     db.query(
       `INSERT INTO jobs (user_id, state, input_uri, input_digest, unit_price_micros, upload_expires_at)
-       VALUES ($1,'uploading','r2://x','not-a-digest',1000, now())`, [userId]),
+       VALUES ($1,'uploading','r2://x','not-a-digest',1000, now() + interval '1 hour')`, [userId]),
     /input_digest/,
   );
 });
@@ -417,7 +477,7 @@ test('an over-cap upload is rejected by the database, not just the API', async (
     db.query(
       `INSERT INTO jobs (user_id, state, input_uri, input_digest, input_bytes,
                          unit_price_micros, upload_expires_at)
-       VALUES ($1,'uploading','r2://x',$2, 94371841, 1000, now())`, [userId, 'a'.repeat(64)]),
+       VALUES ($1,'uploading','r2://x',$2, 94371841, 1000, now() + interval '1 hour')`, [userId, 'a'.repeat(64)]),
     /input_bytes/, '90 MiB is the qualified MAX_INPUT_BYTES',
   );
 });
@@ -426,7 +486,7 @@ test('one idempotency key cannot create two jobs for a user', async () => {
   const insert = () => db.query(
     `INSERT INTO jobs (user_id, idempotency_key, state, input_uri, input_digest,
                        unit_price_micros, upload_expires_at)
-     VALUES ($1,'key-1','uploading','r2://x',$2,1000, now())`, [userId, 'a'.repeat(64)]);
+     VALUES ($1,'key-1','uploading','r2://x',$2,1000, now() + interval '1 hour')`, [userId, 'a'.repeat(64)]);
   await insert();
   await assert.rejects(insert(), /jobs_idempotency/);
 });
@@ -436,7 +496,7 @@ test('two users may reuse the same idempotency key', async () => {
   const insert = (uid) => db.query(
     `INSERT INTO jobs (user_id, idempotency_key, state, input_uri, input_digest,
                        unit_price_micros, upload_expires_at)
-     VALUES ($1,'shared-key','uploading','r2://x',$2,1000, now())`, [uid, 'a'.repeat(64)]);
+     VALUES ($1,'shared-key','uploading','r2://x',$2,1000, now() + interval '1 hour')`, [uid, 'a'.repeat(64)]);
   await insert(userId);
   await insert(other); // must not collide: the index is (user_id, key)
 });
