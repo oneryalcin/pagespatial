@@ -484,8 +484,11 @@ The VPS remains a single point of *availability*: if it is down,
 submissions fail and **in-flight Modal calls still complete** — results
 land in R2 and are reconciled on restart.
 
-- **RPO: vendor PITR window. RTO ≤ 1h**, bounded by re-provisioning a
-  stateless box.
+- **PITR retention ≥ 7 days** (how far back recovery can reach) —
+  a distinct thing from RPO, which an earlier draft conflated with it.
+- **RPO: bounded by the selected vendor's WAL/backup guarantee**, stated
+  explicitly once a vendor is chosen — not assumed to be zero.
+- **RTO ≤ 1h**, bounded by re-provisioning a stateless box.
 - The one irreplaceable secret is now the `.env` (database URL, R2 keys,
   Modal token, Access AUD). Back it up **outside** the VPS; without it a
   rebuild cannot reach its own data.
@@ -516,7 +519,9 @@ spawn the call. `_result()` returns `status: "failed"` without raising
 Also record the **error taxonomy**: which classes arrive from
 `get({timeoutMs: 0})` for pending vs expired vs function-failed. The
 reconciler cannot be written without this, and JS has no
-`OutputExpiredError`.
+`OutputExpiredError`. The taxonomy becomes an **M1 contract test**, not a
+separate workstream — nothing else would catch a `0.9.x` bump silently
+changing these classes.
 
 This validates deployment, auth, `Uint8Array → Python bytes`
 serialization, and cross-restart recovery — not the API surface, which is
@@ -548,9 +553,25 @@ that never held the original `FunctionCall` object retrieved the result.
 The gap is consequential. Since `modal@0.9.0` has no `OutputExpiredError`,
 if expiry also surfaces as `RemoteError` then the reconciler **cannot**
 distinguish "expired" from "failed" by class, and would mark recoverable
-work permanently failed. **This makes the R2 prefix LIST backstop
-mandatory, not optional** — recover from storage, not from the call. Treat
-that as settled; do not spend a week re-deriving it.
+work permanently failed. **This makes storage recovery mandatory, not
+optional** — and the reconciler must consult R2 *before* classifying any
+Modal terminal error as permanent failure, which renders the unresolved
+expiry class harmless. Treat that as settled; do not spend a week
+re-deriving it.
+
+**LIST alone proves nothing.** A prefix listing discovers *candidates*; it
+is not evidence that a valid result exists. Before a storage-recovered
+object may be installed as `accepted_attempt_id`, the reconciler must GET
+it and verify: digest matches, schema validates, `job_id` / `attempt_id` /
+`execution_id` and the input digest all match the row, and the record is
+terminal-successful. If `retries=1` left two valid objects under one
+attempt prefix, pick deterministically (lowest `execution_id`) so the
+choice is reproducible rather than listing-order dependent.
+
+In normal operation this path is never taken — the reconciler polls
+minutely, so expiry only bites after a **>7-day reconciler outage**. It is
+a disaster-recovery route, which is precisely why storage, not the call,
+must be the source of truth there.
 
 **Timing, n=1, stated as such:**
 
@@ -560,12 +581,18 @@ parse_ms         :  2393   (589-byte 1-page PDF)
 total_method_ms  :  2395   (EXCLUDES boot)
 ```
 
-The 98.1 s cold boot is **above the 70–88 s range** recorded in the M1
-linux verification. One observation, on a first call against a
-freshly-built image in a different workspace, so it may carry
-first-pull overhead — it does **not** refute the documented range, but the
-control plane should budget cold start at ~100 s rather than 88 s, and a
-real distribution is owed before any latency promise is made to a user.
+The 98.1 s cold boot is **not anomalous**, and an earlier draft of this
+section wrongly implied it was. It was compared against the linux
+verification's 70–88 s while the Modal qualification already records
+**101.6 s** (arm 2) and **98.6 s** (arm 7). Against the full repository
+record:
+
+> Observed cold readiness spans roughly **70–102 s** across existing
+> trials. Budget ~100 s for batch operation. No interactive latency
+> promise exists.
+
+No cold-start-distribution issue is filed: real service telemetry will
+produce a more useful distribution than another synthetic run.
 
 The app was stopped after the run (0 tasks).
 
@@ -612,10 +639,15 @@ The four pages, plus cost stamping at completion.
 cost; month-to-date equals the sum over that user's jobs; changing the
 config rate does not alter any already-written job row.
 
-**Plus one recovery drill.** With managed Postgres there is no `pg_dump` to
-test, but the claim "the VPS is disposable" is still untested until someone
-proves it: re-provision the api container from the `.env` alone and serve
-the dashboard against the live database.
+**Plus two drills, which test different things.** Managed Postgres removes
+the backup cron; it does not remove the need to test recovery.
+
+1. *Stateless-deploy drill:* re-provision the api container from the
+   `.env` alone and serve the dashboard against the live database. This
+   tests that the VPS is disposable.
+2. *Database restore drill:* perform one actual point-in-time restore
+   before public release. The first drill does not test this, and an
+   untested restore is decoration whoever holds the backup.
 
 ## Open questions for the owner
 
@@ -667,6 +699,11 @@ the dashboard against the live database.
 - The input object key was called **immutable**; it is unique. A presigned
   PUT can be replayed until expiry.
 - `retries=1` is at `modal_app.py:420`, not 421.
+- The M0 cold boot was called **"above the documented range"**. It is not:
+  the Modal qualification already records 101.6 s and 98.6 s. The record
+  spans ~70–102 s.
+- "RPO: vendor PITR window" **conflated** PITR retention (how far back
+  recovery reaches) with RPO (how much recent data is lost).
 - Postgres was specified **self-hosted on the VPS**, which forced a
   `pg_dump` cron, separate backup credentials, a restore-testing
   obligation, and RPO ≤ 24h. Managed Postgres deletes all four (owner
