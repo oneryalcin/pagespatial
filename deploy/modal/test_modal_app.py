@@ -44,10 +44,18 @@ def _install_modal_stub():
         def env(self, *_args, **_kwargs):
             return self
 
+        def uv_pip_install(self, *_args, **_kwargs):
+            return self
+
     class _Cls:
         @staticmethod
         def from_name(*_args, **_kwargs):
             raise RuntimeError("from_name is not available under the stub")
+
+    class _Secret:
+        @staticmethod
+        def from_name(name):
+            return name
 
     def _decorator(*_args, **_kwargs):
         return lambda f: f
@@ -58,6 +66,7 @@ def _install_modal_stub():
     stub.App = _App
     stub.Image = _Image
     stub.Cls = _Cls
+    stub.Secret = _Secret
     stub.enter = _decorator
     stub.exit = _decorator
     stub.method = _decorator
@@ -129,6 +138,55 @@ class ValidateInputTest(unittest.TestCase):
             modal_app.validate_input(_payload(pdfPath="/etc/passwd"))
         with self.assertRaises(modal_app.InputRejected):
             modal_app.validate_input(_payload(pdf_path="/etc/passwd"))
+
+
+class ValidateObjectInputTest(unittest.TestCase):
+    JOB_ID = "11111111-1111-4111-8111-111111111111"
+    ATTEMPT_ID = "22222222-2222-4222-8222-222222222222"
+
+    def payload(self, **overrides):
+        base = {
+            "job_id": self.JOB_ID,
+            "attempt_id": self.ATTEMPT_ID,
+            "expected_sha256": "a" * 64,
+            "input_key": f"inputs/{self.JOB_ID}.pdf",
+            "result_prefix": f"results/{self.JOB_ID}/{self.ATTEMPT_ID}",
+        }
+        base.update(overrides)
+        return base
+
+    def test_accepts_the_exact_pointer_contract(self):
+        self.assertEqual(modal_app.validate_object_input(self.payload()), self.payload())
+
+    def test_rejects_noncanonical_ids_and_foreign_result_prefixes(self):
+        with self.assertRaises(modal_app.InputRejected):
+            modal_app.validate_object_input(self.payload(
+                job_id="AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"))
+        with self.assertRaises(modal_app.InputRejected):
+            modal_app.validate_object_input(self.payload(result_prefix="results/other/attempt"))
+        with self.assertRaises(modal_app.InputRejected):
+            modal_app.validate_object_input(self.payload(input_key="inputs/other.pdf"))
+
+    def test_rejects_unknown_fields_and_unsafe_keys(self):
+        with self.assertRaises(modal_app.InputRejected):
+            modal_app.validate_object_input(self.payload(extra="not-v1"))
+        with self.assertRaises(modal_app.InputRejected):
+            modal_app.validate_object_input(self.payload(input_key="inputs/../secret"))
+
+    def test_r2_config_requires_https_and_all_four_values(self):
+        good = {
+            "R2_ENDPOINT": "https://example.r2.cloudflarestorage.com/",
+            "R2_BUCKET": "pagespatial-dev",
+            "R2_ACCESS_KEY_ID": "id",
+            "R2_SECRET_ACCESS_KEY": "secret",
+        }
+        config = modal_app.load_r2_config(good)
+        self.assertEqual(config.endpoint, "https://example.r2.cloudflarestorage.com")
+        with self.assertRaises(RuntimeError):
+            modal_app.load_r2_config({**good, "R2_ENDPOINT": "http://example.test"})
+        with self.assertRaises(RuntimeError):
+            modal_app.load_r2_config({key: value for key, value in good.items()
+                                      if key != "R2_SECRET_ACCESS_KEY"})
 
 
 class JobBudgetTest(unittest.TestCase):

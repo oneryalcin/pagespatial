@@ -39,7 +39,10 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import uuid
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TypedDict
 
 import modal
 
@@ -51,6 +54,7 @@ MAX_PAGES_PER_JOB = 200                    # enforced service-side (SERVICE_MAX_
 MAX_RESULT_BYTES = 64 * 1024 * 1024        # serialized output cap — visible ResultTooLarge, never truncation
 MAX_NODE_JOBS_PER_LIFETIME = 100           # created loopback job IDs per warm Node lifetime (§7.3)
 SCHEMA_VERSION = "0.6.0"
+OBJECT_RESULT_SCHEMA_VERSION = 1
 SERVICE_PORT = 8571                        # private: Node binds 127.0.0.1 only
 STARTUP_TIMEOUT_S = 1200                   # explicit (§7.3): > measured cold readiness (~70-88 s engine
                                            # init x 4 workers, sequential warm-up) with generous margin
@@ -76,6 +80,7 @@ RESOURCES = {
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 DEFAULT_APP_NAME = "pagespatial-parse-m1-dev"
+DEFAULT_R2_SECRET_NAME = "pagespatial-r2-dev"
 
 
 _DEV_APP_RE = re.compile(r"pagespatial-parse(-m\d+|-arm\d+)?-(dev|test)")
@@ -158,7 +163,7 @@ image = modal.Image.from_dockerfile(
     REPO_ROOT / "Dockerfile",
     context_dir=REPO_ROOT,
     add_python="3.11",
-)
+).uv_pip_install("boto3==1.43.74")
 if modal.is_local():
     # Test-only failure injection (§14.2) is enabled ONLY here, at deploy
     # time, by an operator explicitly setting the env var — the production
@@ -185,6 +190,105 @@ if modal.is_local():
 
 class InputRejected(ValueError):
     """Invalid caller input (§7.1) — rejected before any Node work."""
+
+
+class ParseObjectInput(TypedDict):
+    job_id: str
+    attempt_id: str
+    expected_sha256: str
+    input_key: str
+    result_prefix: str
+
+
+class ParseObjectTiming(TypedDict):
+    download_ms: int
+    parse_method_ms: int
+    upload_ms: int
+    total_method_ms: int
+
+
+class ParseObjectOutput(TypedDict):
+    job_id: str
+    attempt_id: str
+    execution_id: str
+    document_sha256: str
+    result_uri: str
+    result_key: str
+    result_digest: str
+    result_bytes: int
+    page_count: int
+    status: str
+    timing: ParseObjectTiming
+
+
+@dataclass(frozen=True)
+class R2Config:
+    endpoint: str
+    bucket: str
+    access_key_id: str
+    secret_access_key: str
+
+
+def load_r2_config(environ=None) -> R2Config:
+    env = os.environ if environ is None else environ
+    names = ("R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY")
+    missing = [name for name in names if not isinstance(env.get(name), str) or not env[name]]
+    if missing:
+        raise RuntimeError(f"missing R2 configuration: {', '.join(missing)}")
+    endpoint = env["R2_ENDPOINT"].rstrip("/")
+    if not endpoint.startswith("https://"):
+        raise RuntimeError("R2_ENDPOINT must use https")
+    return R2Config(endpoint, env["R2_BUCKET"],
+                    env["R2_ACCESS_KEY_ID"], env["R2_SECRET_ACCESS_KEY"])
+
+
+def _canonical_uuid(name: str, value) -> str:
+    if not isinstance(value, str):
+        raise InputRejected(f"{name} must be a canonical UUID")
+    try:
+        parsed = uuid.UUID(value)
+    except (ValueError, AttributeError) as error:
+        raise InputRejected(f"{name} must be a canonical UUID") from error
+    if str(parsed) != value:
+        raise InputRejected(f"{name} must be a canonical lowercase UUID")
+    return value
+
+
+def _object_key(name: str, value) -> str:
+    if not isinstance(value, str) or not value or len(value) > 1024:
+        raise InputRejected(f"{name} must be a non-empty object key")
+    if value.startswith("/") or "\\" in value or any(
+            part in ("", ".", "..") for part in value.split("/")):
+        raise InputRejected(f"{name} contains an unsafe path segment")
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        raise InputRejected(f"{name} contains a control character")
+    return value
+
+
+def validate_object_input(payload) -> ParseObjectInput:
+    fields = {"job_id", "attempt_id", "expected_sha256", "input_key", "result_prefix"}
+    if not isinstance(payload, dict) or set(payload) != fields:
+        raise InputRejected(f"parse_object input must contain exactly {sorted(fields)}")
+    job_id = _canonical_uuid("job_id", payload["job_id"])
+    attempt_id = _canonical_uuid("attempt_id", payload["attempt_id"])
+    expected = payload["expected_sha256"]
+    if not isinstance(expected, str) or not _SHA256_RE.fullmatch(expected):
+        raise InputRejected("expected_sha256 must be 64 lowercase hex chars")
+    input_key = _object_key("input_key", payload["input_key"])
+    result_prefix = _object_key("result_prefix", payload["result_prefix"])
+    expected_input_key = f"inputs/{job_id}.pdf"
+    if input_key != expected_input_key:
+        raise InputRejected(f"input_key must equal {expected_input_key}")
+    expected_prefix = f"results/{job_id}/{attempt_id}"
+    if result_prefix != expected_prefix:
+        raise InputRejected(f"result_prefix must equal {expected_prefix}")
+    return {
+        "job_id": job_id,
+        "attempt_id": attempt_id,
+        "expected_sha256": expected,
+        "input_key": input_key,
+        "result_prefix": result_prefix,
+    }
 
 
 def validate_input(payload) -> bytes:
@@ -413,6 +517,8 @@ def _minimal_pdf(page_count: int) -> bytes:
 
 @app.cls(
     image=image,
+    secrets=[modal.Secret.from_name(
+        os.environ.get("PAGESPATIAL_R2_SECRET_NAME", DEFAULT_R2_SECRET_NAME))],
     cpu=CPU_CORES,              # physical cores — matches the measured trial topology
     memory=MEMORY_MIB,          # MiB
     timeout=METHOD_TIMEOUT_S,
@@ -564,16 +670,117 @@ class ParseContainer:
         if not injection_allowed():
             raise InputRejected(f"{what} is not available on this deployment")
 
+    def _begin_method(self):
+        method_t0 = time.monotonic()
+        container_cold = self.cold
+        service_ready_ms = self.service_ready_ms if self.cold else 0
+        self.cold = False
+        return method_t0, container_cold, service_ready_ms
+
     @modal.method()
     def parse_document(self, payload: dict) -> dict:
-        method_t0 = time.monotonic()
+        method_t0, container_cold, service_ready_ms = self._begin_method()
+        return self._parse_document(
+            payload, method_t0=method_t0, container_cold=container_cold,
+            service_ready_ms=service_ready_ms, enforce_result_limit=True)
+
+    def _r2(self):
+        config = load_r2_config()
+        import boto3
+        client = boto3.client(
+            "s3", endpoint_url=config.endpoint, region_name="auto",
+            aws_access_key_id=config.access_key_id,
+            aws_secret_access_key=config.secret_access_key,
+        )
+        return client, config.bucket
+
+    @staticmethod
+    def _download_object(client, bucket: str, key: str) -> bytes:
+        response = client.get_object(Bucket=bucket, Key=key)
+        declared = response.get("ContentLength")
+        if isinstance(declared, int) and declared > MAX_INPUT_BYTES:
+            raise InputRejected(f"input object exceeds {MAX_INPUT_BYTES} bytes")
+        body = response["Body"]
+        try:
+            data = body.read(MAX_INPUT_BYTES + 1)
+        finally:
+            close = getattr(body, "close", None)
+            if close:
+                close()
+        if len(data) > MAX_INPUT_BYTES:
+            raise InputRejected(f"input object exceeds {MAX_INPUT_BYTES} bytes")
+        return bytes(data)
+
+    @modal.method()
+    def parse_object(self, payload: dict) -> ParseObjectOutput:
+        object_t0, container_cold, service_ready_ms = self._begin_method()
+        request = validate_object_input(payload)
+        client, bucket = self._r2()
+
+        download_t0 = time.monotonic()
+        pdf_bytes = self._download_object(client, bucket, request["input_key"])
+        download_ms = int((time.monotonic() - download_t0) * 1000)
+
+        parse_payload = {
+            "request_id": request["job_id"],
+            "pdf_bytes": pdf_bytes,
+            "expected_sha256": request["expected_sha256"],
+            "schema_version": SCHEMA_VERSION,
+            "enrichment": "off",
+        }
+        parse_t0 = time.monotonic()
+        parse_result = self._parse_document(
+            parse_payload, method_t0=parse_t0, container_cold=container_cold,
+            service_ready_ms=service_ready_ms, enforce_result_limit=False)
+
+        execution_id = uuid.uuid4().hex
+        result_key = f"{request['result_prefix']}/{execution_id}.json"
+        envelope = {
+            "schema_version": OBJECT_RESULT_SCHEMA_VERSION,
+            "job_id": request["job_id"],
+            "attempt_id": request["attempt_id"],
+            "execution_id": execution_id,
+            "input_key": request["input_key"],
+            "input_sha256": request["expected_sha256"],
+            "parse_result": parse_result,
+        }
+        result_bytes = json.dumps(
+            envelope, sort_keys=True, separators=(",", ":"),
+            ensure_ascii=False).encode("utf-8")
+        result_digest = hashlib.sha256(result_bytes).hexdigest()
+
+        upload_t0 = time.monotonic()
+        client.put_object(
+            Bucket=bucket, Key=result_key, Body=result_bytes,
+            ContentType="application/json")
+        upload_ms = int((time.monotonic() - upload_t0) * 1000)
+
+        return {
+            "job_id": request["job_id"],
+            "attempt_id": request["attempt_id"],
+            "execution_id": execution_id,
+            "document_sha256": request["expected_sha256"],
+            "result_uri": f"r2://{bucket}/{result_key}",
+            "result_key": result_key,
+            "result_digest": result_digest,
+            "result_bytes": len(result_bytes),
+            "page_count": parse_result["page_count"],
+            "status": parse_result["status"],
+            "timing": {
+                "download_ms": download_ms,
+                "parse_method_ms": parse_result["timing"]["total_method_ms"],
+                "upload_ms": upload_ms,
+                "total_method_ms": int((time.monotonic() - object_t0) * 1000),
+            },
+        }
+
+    def _parse_document(self, payload: dict, *, method_t0: float,
+                        container_cold: bool, service_ready_ms: int,
+                        enforce_result_limit: bool) -> dict:
         # Cold/warm attribution is a property of the CONTAINER, not of the
         # input: capture and clear it before validation, or a rejected
         # first call would make the next successful call misreport
         # container_cold=true (cold review PR #89, finding 2 — §8).
-        container_cold = self.cold
-        service_ready_ms = self.service_ready_ms if self.cold else 0
-        self.cold = False
         pdf_bytes = validate_input(payload)  # raises InputRejected before Node work
         injection = validate_injection(payload)  # test-only; double-gated (§14.2)
         request_id = payload["request_id"]
@@ -693,7 +900,7 @@ class ParseContainer:
             # result serialization — close enough for a 64 MiB order-of-
             # magnitude guard, not an exact byte-for-byte bound (PR #89 LOW).
             serialized = len(json.dumps(result).encode())
-            if serialized > MAX_RESULT_BYTES:
+            if enforce_result_limit and serialized > MAX_RESULT_BYTES:
                 # Visible bound (§7.1): never truncate pages.
                 return self._result(request_id, sha256, container_cold,
                                     service_ready_ms, method_t0,

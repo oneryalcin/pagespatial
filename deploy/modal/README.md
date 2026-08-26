@@ -26,6 +26,11 @@ modal deploy deploy/modal/modal_app.py
 # app with a generated non-corpus PDF; asserts warm reuse on call 2:
 modal run deploy/modal/modal_app.py::acceptance
 
+# pointer-mode R2 qualification (after creating pagespatial-r2-dev)
+uv run --with modal==1.5.3 --with boto3==1.43.74 --with python-dotenv \
+  python scripts/service/qualify-modal-object.py \
+  --pdf .evaluation/m1-subset-pdfs/world_bank_P170734_document_34222345.pdf
+
 # Tear down when done (M1 leaves nothing running: min/buffer containers 0):
 modal app stop pagespatial-parse-m1-dev
 
@@ -36,6 +41,18 @@ python3 deploy/modal/test_modal_app.py
 # (failure paths reachable and bounded; no Modal SDK, no Node service):
 python3 deploy/modal/test_modal_integration.py
 ```
+
+`ParseContainer.parse_object` is the service transport: it accepts only the
+fixed `inputs/{job_id}.pdf` and `results/{job_id}/{attempt_id}` key shape,
+downloads from the private R2 bucket, verifies SHA-256 through the same input
+validator as `parse_document`, invokes the same parse core, and stores one
+identity-bound JSON envelope per execution. The method returns a small pointer;
+the complete parse result does not cross Modal's result boundary.
+
+The class expects a Modal secret named `pagespatial-r2-dev` by default with
+`R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`.
+Override the name at deploy time with `PAGESPATIAL_R2_SECRET_NAME`. Never commit
+these values.
 
 Each qualification trial arm gets its own app tag (§10), e.g.:
 
@@ -66,6 +83,20 @@ handle = ParseContainer().parse_document.spawn({
     "enrichment": "off",           # anything else is rejected
 })
 result = handle.get()
+```
+
+The public service uses pointer mode instead of sending PDF bytes through
+Modal. The keys are deliberately boring and identity-bound:
+
+```python
+handle = ParseContainer().parse_object.spawn({
+    "job_id": "canonical-lowercase-uuid",
+    "attempt_id": "canonical-lowercase-uuid",
+    "expected_sha256": "…",
+    "input_key": "inputs/{job_id}.pdf",
+    "result_prefix": "results/{job_id}/{attempt_id}",
+})
+pointer = handle.get()  # small metadata only; full JSON is in private R2
 ```
 
 Output shape, bounds, and failure semantics are §7.1 of the design doc.
