@@ -5,14 +5,18 @@
 // producing two valid results. Exactly one may be installed, and a late
 // ("zombie") attempt must never displace an already-installed one.
 //
-// THREE properties, each enforced by SQL rather than by control flow:
+// THREE properties, each enforced by SQL rather than by optimistic reads:
 //
-//   1. ATOMIC. Each operation is ONE data-modifying statement. An earlier
-//      draft issued two awaits; a crash between them left an attempt
+//   1. ACCEPTANCE IS ATOMIC. Acceptance is ONE data-modifying statement. An
+//      earlier draft issued two awaits; a crash between them left an attempt
 //      marked succeeded while the job had no accepted attempt -- and since
-//      the open-attempt index does not cover 'succeeded', no reconciler
-//      sweep would ever find it. A CTE is atomic by construction and needs
-//      no transaction framework.
+//      the open-attempt index does not cover 'succeeded', no reconciler sweep
+//      would ever find it. A CTE closes that invisible crash window.
+//
+//      Failure is different: an attempt failure is a fact, while job failure
+//      is derived from ALL attempts. They are two idempotent operations. The
+//      caller settles immediately and the reconciler repeats settlement, so
+//      a crash between them is visible and repairable.
 //
 //   2. OWNERSHIP-BOUND. Every write matches BOTH id and job_id. Scoping the
 //      attempt update by id alone would let a mismatched pair install job
@@ -87,43 +91,64 @@ export async function acceptAttempt(db, { jobId, attemptId, resultUri, resultDig
 export async function failAttempt(db, { jobId, attemptId, error }) {
   const { rows } = await db.query(
     `WITH owned AS (
-       UPDATE job_attempts
-          SET state = 'failed', error = $3, completed_at = now()
-        WHERE id = $2 AND job_id = $1 AND completed_at IS NULL
-       RETURNING id, job_id
+       SELECT id FROM job_attempts WHERE id = $2 AND job_id = $1
      ),
-     failed AS (
-       UPDATE jobs j
+     recorded AS (
+       UPDATE job_attempts a
           SET state = 'failed', error = $3, completed_at = now()
          FROM owned
-        WHERE j.id = owned.job_id
-          AND j.accepted_attempt_id IS NULL
-          AND NOT EXISTS (
-                SELECT 1 FROM job_attempts o
-                 WHERE o.job_id = owned.job_id
-                   AND o.id <> owned.id
-                   -- 'dispatch_unknown' COUNTS as outstanding. It is
-                   -- terminal for DISPATCH -- the reconciler never
-                   -- re-spawns that id -- but Modal may still be running
-                   -- the call, and its result may still be sitting in R2.
-                   -- Failing the job here is what forced the earlier
-                   -- (rejected) design to let a late success un-fail it.
-                   -- The reconciler resolves dispatch_unknown to failed
-                   -- once the uncertainty deadline passes AND storage has
-                   -- been checked; only then can the job fail.
-                   AND o.state IN ('dispatching','dispatched','dispatch_unknown')
-              )
-       RETURNING j.id
+        WHERE a.id = owned.id AND a.completed_at IS NULL
+       RETURNING a.id
      )
-     SELECT (SELECT count(*) FROM owned)  AS recorded,
-            (SELECT count(*) FROM failed) AS job_failed`,
+     SELECT EXISTS (SELECT 1 FROM owned)    AS owned,
+            EXISTS (SELECT 1 FROM recorded) AS recorded`,
     [jobId, attemptId, error],
   );
 
-  return {
-    recorded: Number(rows[0].recorded) === 1,
-    jobFailed: Number(rows[0].job_failed) === 1,
-  };
+  // A mismatched id pair must not even trigger derived-state settlement on
+  // the supplied job; otherwise it could stamp a foreign error onto an
+  // independently exhausted job.
+  if (!rows[0].owned) return { recorded: false, jobFailed: false };
+
+  // Always settle, including after a duplicate report. A previous process
+  // may have recorded this attempt and died before deriving the job state.
+  const jobFailed = await settleExhaustedJob(db, { jobId, error });
+  return { recorded: rows[0].recorded, jobFailed };
+}
+
+/**
+ * Fail a job when every one of its attempts is definitively failed.
+ *
+ * This is deliberately independent and idempotent. `failAttempt` invokes it
+ * immediately, and the reconciler invokes it again for dispatched jobs. That
+ * makes a crash after recording an attempt failure recoverable without locks
+ * or a transaction framework.
+ */
+// Known, accepted imprecision: when several attempts failed for different
+// reasons, the job keeps whichever error belonged to the caller that won the
+// settle. The job-level `error` is a summary, not a transcript -- per-attempt
+// errors stay on their own rows.
+export async function settleExhaustedJob(db, { jobId, error }) {
+  const { rowCount } = await db.query(
+    `UPDATE jobs j
+        SET state = 'failed', error = $2, completed_at = now()
+      WHERE j.id = $1
+        AND j.state IN ('queued','dispatched')
+        AND j.accepted_attempt_id IS NULL
+        -- Do not fail an empty job merely because it has no open attempts.
+        AND EXISTS (
+              SELECT 1 FROM job_attempts a WHERE a.job_id = j.id
+            )
+        -- dispatch_unknown remains non-failed until the reconciler's bounded
+        -- wait expires AND R2 has been checked. Only then may it be changed to
+        -- failed and permit this settlement.
+        AND NOT EXISTS (
+              SELECT 1 FROM job_attempts a
+               WHERE a.job_id = j.id AND a.state <> 'failed'
+            )`,
+    [jobId, error],
+  );
+  return rowCount === 1;
 }
 
 /**

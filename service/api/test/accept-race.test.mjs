@@ -10,36 +10,48 @@
 // mechanism. It also proves the migration runner works against a real
 // server -- PGlite's dialect is close but it is not the deployment target.
 //
-// Skipped unless DATABASE_URL points at a scratch database. To run:
+// Skipped unless PAGESPATIAL_TEST_DATABASE_URL points at a scratch database.
+// Even there, the test creates and drops only its own random schema; it never
+// modifies `public`.
+//
+// To run:
 //
 //   docker run --rm -d -p 5433:5432 -e POSTGRES_PASSWORD=x --name pg-m1 postgres:16
-//   DATABASE_URL=postgres://postgres:x@localhost:5433/postgres \
+//   PAGESPATIAL_TEST_DATABASE_URL=postgres://postgres:x@localhost:5433/postgres \
 //     npm test --workspace=@pagespatial/api
 
+import { randomUUID } from 'node:crypto';
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import pg from 'pg';
 import { migrate } from '../src/migrate.mjs';
-import { acceptAttempt } from '../src/accept.mjs';
+import { acceptAttempt, failAttempt } from '../src/accept.mjs';
 
-const URL = process.env.DATABASE_URL;
+const URL = process.env.PAGESPATIAL_TEST_DATABASE_URL;
 
-describe('native Postgres', { skip: URL ? false : 'DATABASE_URL not set' }, () => {
+describe('native Postgres', {
+  skip: URL ? false : 'PAGESPATIAL_TEST_DATABASE_URL not set',
+}, () => {
   let a; // two independent connections, not two calls on one
   let b;
+  const schema = `pagespatial_test_${randomUUID().replaceAll('-', '')}`;
+  const quotedSchema = `"${schema}"`; // generated from hex only
 
   before(async () => {
     a = new pg.Client({ connectionString: URL });
     b = new pg.Client({ connectionString: URL });
     await a.connect();
     await b.connect();
-    await a.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+    await a.query(`CREATE SCHEMA ${quotedSchema}`);
+    await a.query(`SET search_path TO ${quotedSchema}`);
+    await b.query(`SET search_path TO ${quotedSchema}`);
     await migrate(a);
   });
 
   after(async () => {
-    await a?.end();
     await b?.end();
+    if (a) await a.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+    await a?.end();
   });
 
   const fixture = async () => {
@@ -62,8 +74,9 @@ describe('native Postgres', { skip: URL ? false : 'DATABASE_URL not set' }, () =
   test('the migration applies cleanly to a fresh server', async () => {
     const { rows } = await a.query(
       `SELECT count(*)::int AS n FROM pg_tables
-        WHERE schemaname='public'
+        WHERE schemaname = $1
           AND tablename IN ('users','api_keys','jobs','job_attempts','schema_migrations')`,
+      [schema],
     );
     assert.equal(rows[0].n, 5);
   });
@@ -112,5 +125,26 @@ describe('native Postgres', { skip: URL ? false : 'DATABASE_URL not set' }, () =
       { pages: rows[0].pages_actual, cost: Number(rows[0].estimated_cost_micros) },
       { pages: expected, cost: expected * 1000 },
     );
+  });
+
+  test('two concurrent final failures settle the job', async () => {
+    const { jobId, one, two } = await fixture();
+
+    const [r1, r2] = await Promise.all([
+      failAttempt(a, { jobId, attemptId: one, error: 'worker one failed' }),
+      failAttempt(b, { jobId, attemptId: two, error: 'worker two failed' }),
+    ]);
+
+    assert.equal(r1.recorded && r2.recorded, true);
+    assert.equal([r1.jobFailed, r2.jobFailed].filter(Boolean).length, 1,
+      'exactly one settlement changes the job to failed');
+    const { rows } = await a.query(
+      `SELECT j.state,
+              (SELECT count(*)::int FROM job_attempts x
+                WHERE x.job_id = j.id AND x.state = 'failed') AS failed_attempts
+         FROM jobs j WHERE j.id = $1`,
+      [jobId],
+    );
+    assert.deepEqual(rows[0], { state: 'failed', failed_attempts: 2 });
   });
 });

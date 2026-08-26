@@ -7,7 +7,7 @@
 // SERIALIZES queries on one connection. Measured: two concurrent
 // `pg_sleep(1)` calls via Promise.all take 2002 ms, not ~1000 ms. So
 // nothing here demonstrates true concurrency. The genuine two-connection
-// race lives in accept-race.test.mjs and needs DATABASE_URL.
+// race lives in accept-race.test.mjs and needs PAGESPATIAL_TEST_DATABASE_URL.
 //
 // Each test asserts ONE failure reason.
 
@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { migrate } from '../src/migrate.mjs';
 import {
-  acceptAttempt, failAttempt, markDispatched, markDispatchUnknown,
+  acceptAttempt, failAttempt, markDispatched, markDispatchUnknown, settleExhaustedJob,
 } from '../src/accept.mjs';
 
 let db;
@@ -168,6 +168,22 @@ test('an attempt cannot be failed onto a different job', async () => {
   assert.equal(result.jobFailed, false, 'a foreign attempt must not fail another job');
 });
 
+test('a foreign failure cannot settle or stamp an independently exhausted job', async () => {
+  const jobA = await newJob(userId);
+  const jobB = await newJob(await newUser('v3-exhausted@example.test'), 'dispatched');
+  const attemptOfA = await newAttempt(jobA);
+  const attemptOfB = await newAttempt(jobB, 'failed');
+  await db.query(
+    `UPDATE job_attempts SET completed_at = now(), error = 'real B error' WHERE id = $1`,
+    [attemptOfB],
+  );
+
+  await failAttempt(db, { jobId: jobB, attemptId: attemptOfA, error: 'foreign A error' });
+
+  const j = await job(jobB);
+  assert.deepEqual({ state: j.state, error: j.error }, { state: 'dispatched', error: null });
+});
+
 test('the schema itself forbids installing a foreign attempt', async () => {
   const jobA = await newJob(userId);
   const jobB = await newJob(await newUser('v4@example.test'));
@@ -251,6 +267,22 @@ test('a job fails once its last attempt fails', async () => {
   const result = await failAttempt(db, { jobId, attemptId: a, error: 'RemoteError: boom' });
 
   assert.equal(result.jobFailed, true);
+});
+
+test('settlement repairs a crash after the attempt failure was recorded', async () => {
+  const jobId = await newJob(userId, 'dispatched');
+  const a = await newAttempt(jobId, 'failed');
+  await db.query(
+    `UPDATE job_attempts
+        SET completed_at = now(), error = 'worker died'
+      WHERE id = $1`,
+    [a],
+  );
+
+  const repaired = await settleExhaustedJob(db, { jobId, error: 'worker died' });
+
+  assert.equal(repaired, true);
+  assert.equal((await job(jobId)).state, 'failed');
 });
 
 test('a terminal failed job is never resurrected by a late success', async () => {
