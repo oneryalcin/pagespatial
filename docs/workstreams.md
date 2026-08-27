@@ -12,9 +12,9 @@ Onboarding order: [principles](principles.md) →
 
 ## State snapshot (update the date when you touch this)
 
-*As of 2026-08-27, on `service/m2-live-deployment` after the M2.4 live gate.*
+*As of 2026-08-27, after the M3 dashboard deployment (PR #115).*
 
-- **main baseline**: `a7e1f13` before the M2.4 branch. Current record
+- **main baseline**: `c97cb45` after the M3 dashboard merge. Current record
   versions remain schema 0.6.0 and enrichment-0.2.0.
 - **Internal Modal parse is ADOPTED**: the CPU/OpenVINO warm-`Cls` adapter
   passed its 12/12 qualification for controlled internal, parse-only jobs.
@@ -42,8 +42,8 @@ Onboarding order: [principles](principles.md) →
   measurement. Modal-native dispatch is the current implementation. No SQS,
   Kubernetes, custom multi-cloud scheduler, AWS Spot adapter, or GPU tier is
   justified for v1.
-- **Control plane M0, M1, and M2.1–M2.3 shipped; M2.4 live-qualified on its
-  branch (PRs #107–#112, 2026-08-26/27)**:
+- **Control plane M0, M1, and M2 shipped; M3 dashboard live (PRs #107–#115,
+  2026-08-26/27)**:
   `docs/design/2026-08-26-service-control-plane.md`. Modal is the queue and
   autoscaler — **the #105 pull-worker architecture is withdrawn**, because a
   worker at `min_containers=0` cannot poll for work and, once the API must
@@ -74,7 +74,7 @@ Onboarding order: [principles](principles.md) →
   access expires from R2 `LastModified + 2 days`, not reconciliation time. The
   reconciler does not normally delete objects individually (owner decision,
   2026-08-26).
-- **Invite-only public v1 live gate PASS on `service/m2-live-deployment`**:
+- **Invite-only public v1 and M3 dashboard live gates PASS**:
   `api.pagespatial.dev` and Access-protected `app.pagespatial.dev` reach an
   isolated Compose control plane through outbound-only Cloudflare Tunnel;
   no host port is published. The full invited-user path passed through API
@@ -88,7 +88,14 @@ Onboarding order: [principles](principles.md) →
   passed, but there is no schedule yet, so **RPO is currently unbounded** —
   not ≤24h. Build the schedule before inviting a user who would be harmed by
   losing the ledger; move to managed Postgres once usage justifies the cost. The live
-  M2.4 evidence becomes the repository baseline only when this branch merges.
+  M2.4 is merged. M3 adds an Access-protected, server-rendered Ivory Ledger
+  dashboard with tenant-scoped Jobs, job detail and result grants, succeeded-
+  only monthly Usage, API-key management, and an in-product API guide. It adds
+  no JavaScript, browser upload, queue, job lifecycle, or provider abstraction.
+  PR #115 passed 375 core tests, 103 local API tests, 113 PostgreSQL 18 API
+  tests, responsive render checks at 1440/768/390 px, and the live Access,
+  health, and host-separation probes. Evidence:
+  `docs/trials/2026-08-27-service-m3-dashboard.md`.
   Progressive page polling, enrichment spend control, payments, organizations,
   and a second worker provider remain deliberately out of v1.
 - **Retrieval thesis measured (issue #36 CLOSED)**: pre-registered
@@ -380,7 +387,7 @@ current scorer; decides instrument-fix vs detector-project).
 | Recovery tile budget (cost bound) | #13 | open — small, well-specified; good first task | — | src/browser/region-recovery.ts, tuning | nothing |
 | Batch API + residue-crop rungs | #20 | **shipped** (PR #23) | session | — | — |
 | Internal Modal parse deployment | #22 | **adopted within qualified bounds**: CPU/OpenVINO warm `Cls`, parse-only, no public ingress. Production service work is split into #76/#87/#105. | — | deploy/modal, service | public product contract |
-| Service control plane (accounts, keys, dashboard) | #76 | **M1 job plane shipped — PRs #107–#109**: design and spawn recovery verified; four-table Postgres ledger, split-credential R2 pointer transport, dispatch/reconciliation, immutable execution keys, crash-window recovery, and bounded uncertainty proven. Dedicated R2 buckets use two-day age-based lifecycle rules; unresolved jobs fail after 24 hours. M2's focused API contract is `docs/design/2026-08-26-service-m2-api-contract.md`; implement intake/status, then identity/admission, then the live Access/Tunnel gate. M3 dashboard follows. | — | service/api, deploy/modal | domain blocks Access/Tunnel deployment, not local M2 implementation |
+| Service control plane (accounts, keys, dashboard) | #76 | **Invite-only parse-only v1 live; M1–M3 shipped in PRs #107–#115.** Four-table Postgres ledger, split-credential R2 pointer transport, Modal dispatch/reconciliation, bounded uncertainty, public intake/status, Access identity, API keys, exact admission, and the server-rendered customer dashboard are proven. Dedicated R2 buckets use two-day lifecycle rules; unresolved jobs fail after 24 hours. | — | service/api, deploy/control-plane, deploy/modal | real use determines browser upload, evidence viewer, payments, and managed Postgres timing |
 | Standard/Flex pull-worker execution | #105 | **PARKED — pull architecture withdrawn (PR #107)**: a worker at `min_containers=0` cannot poll for work, so a Postgres lease queue would be a second queue over Modal's qualified one. Unpark only when a second compute provider (AWS Spot) is genuinely earned. | — | — | a measured second-provider win |
 | Commercial hardening (quotas, tenancy, retention) | #76 | **partly absorbed by PR #107** (auth, tenant isolation, API keys, retention columns). Still open: per-tenant quotas, spend caps, public API versioning + deprecation policy. | — | service contract | a real consumer |
 | HTTP admission and idempotency | #87 | **partly absorbed by control-plane M2**: presigned intake removes body buffering; add admission limits, `429`, idempotency, and queue metrics at the public API. Progressive page polling remains deliberately out of v1. | — | service/api | service-tier limits |
