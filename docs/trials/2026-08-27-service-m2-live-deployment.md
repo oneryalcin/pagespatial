@@ -103,13 +103,18 @@ five migrations and two jobs. Archive size was 18,584 bytes; SHA-256 was
 `d757d45837b63039081718ba2d7b9387879151c0112ba4814c6f7a3c698cd699`.
 
 This proves the restore procedure once. It does not prove scheduled backups,
-an RPO, an RTO, or VPS failover. Backup automation remains required before the
-service carries valuable production history.
+an RPO, an RTO, or VPS failover. Until a schedule exists, the current RPO is
+unbounded. Backup automation remains required before the service carries
+valuable production history.
 
 ## Final state and limits
 
 - Public health returned `ready`; R2 input, R2 result, and Modal degradation
   flags were all false.
+- The R2 flags came from live provider calls. After the first successful Modal
+  lookup, `degraded.modal: false` means the process retains a previously
+  obtained method handle; it is not a fresh Modal reachability measurement.
+  Spawn and inspection failures remain the authoritative runtime signal.
 - API and PostgreSQL containers were healthy, the Tunnel connector was
   running, and no host ports were published.
 - Temporary users, keys, and jobs were removed. Probe objects were deleted.
