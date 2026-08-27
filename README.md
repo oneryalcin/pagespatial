@@ -14,7 +14,11 @@ The output is a per-page evidence record — every observation with its text, po
 
 PageSpatial does **not** boil your document down to Markdown and call it a day. Markdown is one derived view among several; the evidence underneath is never thrown away, so any downstream decision can be re-examined later.
 
-Status: experimental parser and adapter stack with a private, development-only corpus harness. Not yet production-qualified. The project's standing commitments live in [docs/principles.md](docs/principles.md).
+Status: the parser and adapter stack remains experimental as a library. The
+invite-only, parse-only hosted service has passed its live M2 qualification.
+API-key users can start with the [PageSpatial API guide](docs/api-guide.md).
+The project's standing commitments live in
+[docs/principles.md](docs/principles.md).
 
 ## Core rule
 
