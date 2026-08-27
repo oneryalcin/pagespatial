@@ -1,32 +1,37 @@
+import { readFileSync } from 'node:fs';
 import { TextDecoder } from 'node:util';
 import { ApiError } from './api-errors.mjs';
 import {
   InactiveApiKeyOwnerError, InvalidApiKeyNameError,
   issueApiKey, listApiKeys, revokeApiKey,
 } from './api-keys.mjs';
+import { loadJobsPage, loadUsagePage, parseJobsQuery } from './dashboard-data.mjs';
+import {
+  createdKeyPage, errorPage, guidePage, jobDetailPage, jobsPage,
+  keysPage, revokeKeyPage, usagePage,
+} from './dashboard-views.mjs';
+import { jobView, ownedJob, resultGrant } from './jobs.mjs';
 import { logFailure } from './safe-log.mjs';
 
 const MAX_FORM_BYTES = 4 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
-const CSP = "default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'";
+const CSP = "default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+const DASHBOARD_CSS = readFileSync(new URL('./dashboard.css', import.meta.url));
 
-const escapeHtml = (value) => String(value)
-  .replaceAll('&', '&amp;')
-  .replaceAll('<', '&lt;')
-  .replaceAll('>', '&gt;')
-  .replaceAll('"', '&quot;')
-  .replaceAll("'", '&#39;');
-
-function sendHtml(res, status, content, headers = {}) {
-  const bytes = Buffer.from(`<!doctype html><html lang="en"><meta charset="utf-8"><title>PageSpatial keys</title><main>${content}</main>`);
+function send(res, status, contentType, bytes, requestId, headers = {}) {
   res.writeHead(status, {
-    'content-type': 'text/html; charset=utf-8',
+    'content-type': contentType,
     'content-length': bytes.byteLength,
     'cache-control': 'no-store',
     'content-security-policy': CSP,
+    'x-request-id': requestId,
     ...headers,
   });
   res.end(bytes);
+}
+
+function sendHtml(res, status, content, requestId, headers = {}) {
+  send(res, status, 'text/html; charset=utf-8', Buffer.from(content), requestId, headers);
 }
 
 async function formBody(req, expected) {
@@ -66,23 +71,29 @@ async function formBody(req, expected) {
   return Object.fromEntries(entries);
 }
 
-const date = (value) => value == null ? 'never' : new Date(value).toISOString();
-
-function keysPage(keys) {
-  const rows = keys.map((key) => `<tr><td>${escapeHtml(key.name)}</td><td>${escapeHtml(key.prefix)}</td><td>${date(key.created_at)}</td><td>${date(key.last_used_at)}</td><td>${date(key.revoked_at)}</td><td><form method="post" action="/keys/${key.id}/revoke"><button type="submit">Revoke</button></form></td></tr>`).join('');
-  return `<h1>API keys</h1><form method="post" action="/keys"><label>Name <input name="name" maxlength="64" required></label><button type="submit">Create key</button></form><table><thead><tr><th>Name</th><th>Prefix</th><th>Created</th><th>Last used</th><th>Revoked</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
-}
-
-const createdPage = (secret) => `<section><h1>API key created</h1><p>Copy it now. It will not be shown again.</p><code>${escapeHtml(secret)}</code><p><a href="/keys">Return to keys</a></p></section>`;
-
 function dashboardOperation(method, path) {
+  if (method === 'GET' && path === '/dashboard.css') return 'dashboard_styles';
+  if (method === 'GET' && (path === '/' || path === '/jobs')) return 'jobs_list';
+  if (method === 'GET' && /^\/jobs\/[^/]+\/result$/u.test(path)) return 'job_result';
+  if (method === 'GET' && /^\/jobs\/[^/]+$/u.test(path)) return 'job_detail';
+  if (method === 'GET' && path === '/usage') return 'usage_view';
+  if (method === 'GET' && path === '/guide') return 'api_guide';
   if (method === 'GET' && path === '/keys') return 'keys_list';
   if (method === 'POST' && path === '/keys') return 'keys_create';
+  if (method === 'GET' && /^\/keys\/[^/]+\/revoke$/u.test(path)) return 'keys_revoke_confirm';
   if (method === 'POST' && /^\/keys\/[^/]+\/revoke$/u.test(path)) return 'keys_revoke';
   return 'dashboard_unknown';
 }
 
-export function createDashboardHandler({ db, appOrigin, authenticateAccess, log = console }) {
+function matchUuid(path, pattern) {
+  const match = pattern.exec(path);
+  if (!match || !UUID.test(match[1])) throw new ApiError(404, 'not_found', 'Not found.');
+  return match[1];
+}
+
+export function createDashboardHandler({
+  db, resultStore, appOrigin, authenticateAccess, log = console, now = () => new Date(),
+}) {
   if (!db?.query) throw new TypeError('dashboard requires a database');
   if (typeof appOrigin !== 'string' || !appOrigin.startsWith('https://')) {
     throw new TypeError('dashboard requires an https appOrigin');
@@ -94,13 +105,68 @@ export function createDashboardHandler({ db, appOrigin, authenticateAccess, log 
   return async function dashboard(req, res, requestId) {
     let operation = 'dashboard_unknown';
     let rejectionLogged = false;
+    let identity = null;
     try {
-      const path = new URL(req.url, appOrigin).pathname;
+      const url = new URL(req.url, appOrigin);
+      const path = url.pathname;
       operation = dashboardOperation(req.method, path);
-      const identity = await authenticateAccess(req.headers['cf-access-jwt-assertion']);
-      if (req.method === 'GET' && path === '/keys') {
-        return sendHtml(res, 200, keysPage(await listApiKeys(db, identity)));
+      identity = await authenticateAccess(req.headers['cf-access-jwt-assertion']);
+
+      if (req.method === 'GET' && path === '/dashboard.css') {
+        return send(res, 200, 'text/css; charset=utf-8', DASHBOARD_CSS, requestId);
       }
+      if (req.method === 'GET' && path === '/') {
+        return sendHtml(res, 303, '', requestId, { location: '/jobs' });
+      }
+      if (req.method === 'GET' && path === '/jobs') {
+        let filters;
+        try {
+          filters = parseJobsQuery(url.searchParams);
+        } catch {
+          throw new ApiError(400, 'invalid_request', 'Invalid jobs filter.');
+        }
+        const result = await loadJobsPage(db, {
+          userId: identity.userId, ...filters, now: now(),
+        });
+        if (filters.page > result.pageCount) {
+          throw new ApiError(404, 'not_found', 'Page was not found.');
+        }
+        return sendHtml(res, 200, jobsPage({ identity, filters, result }), requestId);
+      }
+      if (req.method === 'GET' && path === '/usage') {
+        const current = now();
+        const usage = await loadUsagePage(db, { userId: identity.userId, now: current });
+        return sendHtml(res, 200, usagePage({ identity, usage, now: current }), requestId);
+      }
+      if (req.method === 'GET' && path === '/guide') {
+        return sendHtml(res, 200, guidePage({ identity }), requestId);
+      }
+      if (req.method === 'GET' && path === '/keys') {
+        return sendHtml(res, 200, keysPage({
+          identity, keys: await listApiKeys(db, identity),
+        }), requestId);
+      }
+      if (req.method === 'GET' && /^\/jobs\/[^/]+\/result$/u.test(path)) {
+        const jobId = matchUuid(path, /^\/jobs\/([^/]+)\/result$/u);
+        const grant = await resultGrant({
+          db, resultStore, userId: identity.userId, jobId, now: now(),
+        });
+        return sendHtml(res, 303, '', requestId, { location: grant.download_url });
+      }
+      if (req.method === 'GET' && /^\/jobs\/[^/]+$/u.test(path)) {
+        const jobId = matchUuid(path, /^\/jobs\/([^/]+)$/u);
+        const row = await ownedJob(db, { userId: identity.userId, jobId });
+        return sendHtml(res, 200, jobDetailPage({
+          identity, row, view: jobView(row), now: now(),
+        }), requestId);
+      }
+      if (req.method === 'GET' && /^\/keys\/[^/]+\/revoke$/u.test(path)) {
+        const keyId = matchUuid(path, /^\/keys\/([^/]+)\/revoke$/u);
+        const key = (await listApiKeys(db, identity)).find((candidate) => candidate.id === keyId);
+        if (!key || key.revoked_at != null) throw new ApiError(404, 'not_found', 'Not found.');
+        return sendHtml(res, 200, revokeKeyPage({ identity, key }), requestId);
+      }
+
       if (req.method === 'POST') {
         if (req.headers.origin !== appOrigin) {
           logFailure(log, 'dashboard_csrf_rejected', {
@@ -124,16 +190,15 @@ export function createDashboardHandler({ db, appOrigin, authenticateAccess, log 
             }
             throw error;
           }
-          return sendHtml(res, 201, createdPage(issued.secret));
+          return sendHtml(res, 201, createdKeyPage({ identity, secret: issued.secret }), requestId);
         }
-        const match = /^\/keys\/([^/]+)\/revoke$/u.exec(path);
-        if (match) {
+        if (/^\/keys\/[^/]+\/revoke$/u.test(path)) {
+          const keyId = matchUuid(path, /^\/keys\/([^/]+)\/revoke$/u);
           await formBody(req, []);
-          if (!UUID.test(match[1])
-              || !await revokeApiKey(db, { userId: identity.userId, keyId: match[1] })) {
+          if (!await revokeApiKey(db, { userId: identity.userId, keyId })) {
             throw new ApiError(404, 'not_found', 'Not found.');
           }
-          return sendHtml(res, 303, '<p>Redirecting.</p>', { location: '/keys' });
+          return sendHtml(res, 303, '', requestId, { location: '/keys' });
         }
       }
       throw new ApiError(404, 'not_found', 'Not found.');
@@ -150,7 +215,10 @@ export function createDashboardHandler({ db, appOrigin, authenticateAccess, log 
           requestId, method: req.method, operation, error,
         });
       }
-      return sendHtml(res, failure.status, `<h1>${escapeHtml(failure.message)}</h1>`);
+      const content = identity
+        ? errorPage({ identity, statusCode: failure.status, message: failure.message, requestId })
+        : `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Request failed · PageSpatial</title><link rel="stylesheet" href="/dashboard.css"><main class="page-shell"><section class="narrow-page error-page"><h1>${failure.status === 403 ? 'Access denied.' : 'Service is temporarily unavailable.'}</h1><p>Request ID: ${requestId}</p></section></main></html>`;
+      return sendHtml(res, failure.status, content, requestId, failure.headers);
     }
   };
 }
