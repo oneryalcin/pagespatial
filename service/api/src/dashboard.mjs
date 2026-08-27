@@ -15,8 +15,17 @@ import { logFailure } from './safe-log.mjs';
 
 const MAX_FORM_BYTES = 4 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
-const CSP = "default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+const CSP = "default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 const DASHBOARD_CSS = readFileSync(new URL('./dashboard.css', import.meta.url));
+const DASHBOARD_ASSETS = new Map([
+  ['/assets/pagespatial-logo.png', ['image/png', readFileSync(new URL('./assets/pagespatial-logo.png', import.meta.url))]],
+  ['/assets/fonts/instrument-sans-400.ttf', ['font/ttf', readFileSync(new URL('./assets/fonts/instrument-sans-400.ttf', import.meta.url))]],
+  ['/assets/fonts/instrument-sans-500.ttf', ['font/ttf', readFileSync(new URL('./assets/fonts/instrument-sans-500.ttf', import.meta.url))]],
+  ['/assets/fonts/instrument-sans-600.ttf', ['font/ttf', readFileSync(new URL('./assets/fonts/instrument-sans-600.ttf', import.meta.url))]],
+  ['/assets/fonts/newsreader-600.ttf', ['font/ttf', readFileSync(new URL('./assets/fonts/newsreader-600.ttf', import.meta.url))]],
+  ['/assets/fonts/ibm-plex-mono-400.ttf', ['font/ttf', readFileSync(new URL('./assets/fonts/ibm-plex-mono-400.ttf', import.meta.url))]],
+  ['/assets/fonts/ibm-plex-mono-500.ttf', ['font/ttf', readFileSync(new URL('./assets/fonts/ibm-plex-mono-500.ttf', import.meta.url))]],
+]);
 
 function send(res, status, contentType, bytes, requestId, headers = {}) {
   res.writeHead(status, {
@@ -73,6 +82,7 @@ async function formBody(req, expected) {
 
 function dashboardOperation(method, path) {
   if (method === 'GET' && path === '/dashboard.css') return 'dashboard_styles';
+  if (method === 'GET' && DASHBOARD_ASSETS.has(path)) return 'dashboard_asset';
   if (method === 'GET' && (path === '/' || path === '/jobs')) return 'jobs_list';
   if (method === 'GET' && /^\/jobs\/[^/]+\/result$/u.test(path)) return 'job_result';
   if (method === 'GET' && /^\/jobs\/[^/]+$/u.test(path)) return 'job_detail';
@@ -115,10 +125,15 @@ export function createDashboardHandler({
       if (req.method === 'GET' && path === '/dashboard.css') {
         return send(res, 200, 'text/css; charset=utf-8', DASHBOARD_CSS, requestId);
       }
+      if (req.method === 'GET' && DASHBOARD_ASSETS.has(path)) {
+        const [contentType, bytes] = DASHBOARD_ASSETS.get(path);
+        return send(res, 200, contentType, bytes, requestId);
+      }
       if (req.method === 'GET' && path === '/') {
         return sendHtml(res, 303, '', requestId, { location: '/jobs' });
       }
       if (req.method === 'GET' && path === '/jobs') {
+        const current = now();
         let filters;
         try {
           filters = parseJobsQuery(url.searchParams);
@@ -126,12 +141,12 @@ export function createDashboardHandler({
           throw new ApiError(400, 'invalid_request', 'Invalid jobs filter.');
         }
         const result = await loadJobsPage(db, {
-          userId: identity.userId, ...filters, now: now(),
+          userId: identity.userId, ...filters, now: current,
         });
         if (filters.page > result.pageCount) {
           throw new ApiError(404, 'not_found', 'Page was not found.');
         }
-        return sendHtml(res, 200, jobsPage({ identity, filters, result }), requestId);
+        return sendHtml(res, 200, jobsPage({ identity, filters, result, now: current }), requestId);
       }
       if (req.method === 'GET' && path === '/usage') {
         const current = now();
