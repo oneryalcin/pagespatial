@@ -113,7 +113,11 @@ export async function startRuntime({ env = process.env, log = console } = {}) {
     accessKeyId: resultsAccessKeyId,
     secretAccessKey: resultsSecretAccessKey,
   });
-  const inputStore = createInputObjectStore({ client: inputClient, bucket: inputBucket });
+  const inputStore = createInputObjectStore({
+    client: inputClient,
+    bucket: inputBucket,
+    uploadOrigin: new URL(inputEndpoint).origin,
+  });
   const resultStore = createR2ResultStore({ client: resultClient, bucket: resultsBucket });
   const resultDownloads = createResultDownloadStore({
     client: resultClient, bucket: resultsBucket,

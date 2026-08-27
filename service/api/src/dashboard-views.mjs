@@ -91,7 +91,7 @@ export function shell({ title, active, identity, content, description = '' }) {
     </nav>
     <a class="guide-link" href="/guide">API guide</a>
     ${accountMenu(identity)}
-    <details class="mobile-nav"><summary><span class="menu-icon" aria-hidden="true"></span><span class="sr-only">Menu</span></summary><nav aria-label="Mobile primary">${navLink('/jobs', 'Jobs', active)}${navLink('/usage', 'Usage', active)}${navLink('/keys', 'API keys', active)}<a href="/guide">API guide</a><span class="mobile-identity">${escapeHtml(identity.email)} · Parse-only v1</span><a href="/cdn-cgi/access/logout">Sign out</a></nav></details>
+    <details class="mobile-nav"><summary><span class="menu-icon" aria-hidden="true"></span><span class="sr-only">Menu</span></summary><nav aria-label="Mobile primary"><a href="/jobs/new">New job</a>${navLink('/jobs', 'Jobs', active)}${navLink('/usage', 'Usage', active)}${navLink('/keys', 'API keys', active)}<a href="/guide">API guide</a><span class="mobile-identity">${escapeHtml(identity.email)} · Parse-only v1</span><a href="/cdn-cgi/access/logout">Sign out</a></nav></details>
   </header>
   <main id="content" class="page-shell">${content}</main>
 </body>
@@ -160,15 +160,23 @@ export function jobsPage({ identity, filters, result, now = new Date() }) {
   const rows = groupedJobRows(result.rows, now);
   const cards = result.rows.map(jobCard).join('');
   const empty = result.total === 0
-    ? `<section class="empty-state"><h2>${hasFilters ? 'No matching jobs' : 'No jobs yet'}</h2><p>${hasFilters ? 'Change or clear the filters to see other jobs.' : 'Create an API key, then follow the API guide to submit your first PDF.'}</p><div class="button-row">${hasFilters ? '<a class="button button--secondary" href="/jobs">Clear filters</a>' : '<a class="button" href="/keys">Create an API key</a><a class="button button--secondary" href="/guide">Open API guide</a>'}</div></section>`
+    ? `<section class="empty-state"><h2>${hasFilters ? 'No matching jobs' : 'No jobs yet'}</h2><p>${hasFilters ? 'Change or clear the filters to see other jobs.' : 'Submit a PDF here, or use an API key for automated intake.'}</p><div class="button-row">${hasFilters ? '<a class="button button--secondary" href="/jobs">Clear filters</a>' : '<a class="button" href="/jobs/new">Submit a PDF</a><a class="button button--secondary" href="/guide">Open API guide</a>'}</div></section>`
     : `<div class="data-table jobs-table"><table><caption class="sr-only">Document processing jobs</caption><thead><tr><th scope="col">State</th><th scope="col">Submitted (UTC)</th><th scope="col">Job</th><th class="numeric" scope="col">Pages</th><th class="numeric" scope="col">Est. cost</th><th scope="col"><span class="sr-only">Action</span></th></tr></thead><tbody>${rows}</tbody></table></div><div class="stacked-list">${cards}</div>${pagination(filters, result.page, result.pageCount)}`;
   return shell({
     title: 'Jobs', active: '/jobs', identity,
-    description: 'Documents submitted through your PageSpatial API keys.',
-    content: `<header class="page-header"><div><h1>Jobs</h1><p>Documents submitted through your API keys.</p></div><a href="/guide">View API guide</a></header>
+    description: 'Documents submitted through PageSpatial.',
+    content: `<header class="page-header page-header--actions"><div><h1>Jobs</h1><p>Documents submitted through the dashboard or API.</p></div><div class="page-actions"><a class="button" href="/jobs/new">New job</a><a href="/guide">API guide</a></div></header>
       ${summaryStrip(filters.date === '7d' ? 'Last 7 days' : filters.date === '24h' ? 'Last 24 hours' : filters.date === '30d' ? 'Last 30 days' : 'All time', [['documents', summary.documents], ['pages completed', summary.pages], ['estimated cost', formatCost(summary.cost)]])}
       <p class="cost-note">${COST_CAVEAT}</p>
       <form class="filters" method="get" action="/jobs"><label>State<select name="state">${filterOption('all', filters.state, 'All states')}${filterOption('active', filters.state, 'Active')}${filterOption('succeeded', filters.state, 'Succeeded')}${filterOption('failed', filters.state, 'Failed')}</select></label><label>Date range<select name="date">${filterOption('24h', filters.date, 'Last 24 hours')}${filterOption('7d', filters.date, 'Last 7 days')}${filterOption('30d', filters.date, 'Last 30 days')}${filterOption('all', filters.date, 'All time')}</select></label><button type="submit">Apply filters</button>${hasFilters ? '<a href="/jobs">Clear filters</a>' : ''}</form>${empty}`,
+  });
+}
+
+export function newJobPage({ identity }) {
+  return shell({
+    title: 'New job', active: '/jobs', identity,
+    description: 'Submit one PDF to PageSpatial.',
+    content: `<section class="narrow-page upload-page"><nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/jobs">Jobs</a><span aria-hidden="true">/</span><span>New job</span></nav><header class="page-header"><div><h1>Submit a PDF</h1><p>The file goes directly from your browser to private object storage.</p></div></header><form class="upload-form" data-upload-form><label class="file-field" for="pdf-file"><span>PDF document</span><input id="pdf-file" data-upload-file type="file" accept="application/pdf,.pdf" required><small>One PDF · 90 MiB maximum · 200 pages maximum</small></label><div class="upload-actions"><button data-upload-submit type="submit">Upload and parse</button><a class="button button--secondary" href="/jobs">Cancel</a></div><section class="upload-state" aria-labelledby="upload-state-title"><h2 id="upload-state-title" data-upload-status aria-live="polite">Ready to submit.</h2><p data-upload-detail>SHA-256 is calculated in this browser before upload.</p><progress data-upload-progress hidden aria-label="PDF upload progress"></progress></section><noscript><p class="notice notice--warning">Browser upload requires JavaScript. You can still use the <a href="/guide">API guide</a>.</p></noscript></form><aside class="notice"><h2>What happens next</h2><p>After upload, PageSpatial validates the PDF and adds it to the processing queue. The job page shows the known state. It does not show a guessed percentage or ETA.</p><p>Upload within one hour. Inputs and results are retained for up to two days.</p></aside></section><script src="/assets/dashboard-upload.js" defer></script>`,
   });
 }
 

@@ -8,9 +8,12 @@ import {
 import { loadJobsPage, loadUsagePage, parseJobsQuery } from './dashboard-data.mjs';
 import {
   createdKeyPage, errorPage, guidePage, jobDetailPage, jobsPage,
-  keysPage, revokeKeyPage, usagePage,
+  keysPage, newJobPage, revokeKeyPage, usagePage,
 } from './dashboard-views.mjs';
-import { jobView, ownedJob, resultGrant } from './jobs.mjs';
+import {
+  createOrReplayJob, finalizeJob, jobView, ownedJob, resultGrant,
+} from './jobs.mjs';
+import { exactObject, jsonBody } from './request-json.mjs';
 import { logFailure } from './safe-log.mjs';
 
 const MAX_FORM_BYTES = 4 * 1024;
@@ -25,6 +28,7 @@ const DASHBOARD_ASSETS = new Map([
   ['/assets/fonts/newsreader-600.ttf', ['font/ttf', readFileSync(new URL('./assets/fonts/newsreader-600.ttf', import.meta.url))]],
   ['/assets/fonts/ibm-plex-mono-400.ttf', ['font/ttf', readFileSync(new URL('./assets/fonts/ibm-plex-mono-400.ttf', import.meta.url))]],
   ['/assets/fonts/ibm-plex-mono-500.ttf', ['font/ttf', readFileSync(new URL('./assets/fonts/ibm-plex-mono-500.ttf', import.meta.url))]],
+  ['/assets/dashboard-upload.js', ['text/javascript; charset=utf-8', readFileSync(new URL('./dashboard-upload.js', import.meta.url))]],
 ]);
 
 function send(res, status, contentType, bytes, requestId, headers = {}) {
@@ -41,6 +45,13 @@ function send(res, status, contentType, bytes, requestId, headers = {}) {
 
 function sendHtml(res, status, content, requestId, headers = {}) {
   send(res, status, 'text/html; charset=utf-8', Buffer.from(content), requestId, headers);
+}
+
+function sendJson(res, status, body, requestId, headers = {}) {
+  send(
+    res, status, 'application/json; charset=utf-8',
+    Buffer.from(JSON.stringify(body)), requestId, headers,
+  );
 }
 
 async function formBody(req, expected) {
@@ -84,6 +95,9 @@ function dashboardOperation(method, path) {
   if (method === 'GET' && path === '/dashboard.css') return 'dashboard_styles';
   if (method === 'GET' && DASHBOARD_ASSETS.has(path)) return 'dashboard_asset';
   if (method === 'GET' && (path === '/' || path === '/jobs')) return 'jobs_list';
+  if (method === 'GET' && path === '/jobs/new') return 'job_browser_form';
+  if (method === 'POST' && path === '/jobs') return 'job_browser_submit';
+  if (method === 'POST' && /^\/jobs\/[^/]+\/finalize$/u.test(path)) return 'job_browser_finalize';
   if (method === 'GET' && /^\/jobs\/[^/]+\/result$/u.test(path)) return 'job_result';
   if (method === 'GET' && /^\/jobs\/[^/]+$/u.test(path)) return 'job_detail';
   if (method === 'GET' && path === '/usage') return 'usage_view';
@@ -102,7 +116,9 @@ function matchUuid(path, pattern) {
 }
 
 export function createDashboardHandler({
-  db, resultStore, appOrigin, authenticateAccess, log = console, now = () => new Date(),
+  db, pool, inputStore, inputBucket = inputStore?.bucket, resultStore,
+  unitPriceMicros = 1000, appOrigin, inputUploadOrigin,
+  authenticateAccess, log = console, now = () => new Date(),
 }) {
   if (!db?.query) throw new TypeError('dashboard requires a database');
   if (typeof appOrigin !== 'string' || !appOrigin.startsWith('https://')) {
@@ -111,6 +127,19 @@ export function createDashboardHandler({
   if (typeof authenticateAccess !== 'function') {
     throw new TypeError('dashboard requires Access authentication');
   }
+  if (!pool?.connect || !inputStore?.createUploadGrant || !inputStore?.head) {
+    throw new TypeError('dashboard browser upload requires the existing job plane');
+  }
+  let parsedUploadOrigin;
+  try {
+    parsedUploadOrigin = new URL(inputUploadOrigin);
+  } catch {
+    throw new TypeError('dashboard requires an https inputUploadOrigin');
+  }
+  if (parsedUploadOrigin.protocol !== 'https:' || parsedUploadOrigin.origin !== inputUploadOrigin) {
+    throw new TypeError('dashboard requires an https inputUploadOrigin');
+  }
+  const uploadCsp = `${CSP}; script-src 'self'; connect-src 'self' ${inputUploadOrigin}`;
 
   return async function dashboard(req, res, requestId) {
     let operation = 'dashboard_unknown';
@@ -147,6 +176,12 @@ export function createDashboardHandler({
           throw new ApiError(404, 'not_found', 'Page was not found.');
         }
         return sendHtml(res, 200, jobsPage({ identity, filters, result, now: current }), requestId);
+      }
+      if (req.method === 'GET' && path === '/jobs/new') {
+        return sendHtml(
+          res, 200, newJobPage({ identity }), requestId,
+          { 'content-security-policy': uploadCsp },
+        );
       }
       if (req.method === 'GET' && path === '/usage') {
         const current = now();
@@ -191,6 +226,38 @@ export function createDashboardHandler({
           rejectionLogged = true;
           throw new ApiError(403, 'forbidden', 'Access denied.');
         }
+        if (path === '/jobs') {
+          const body = exactObject(await jsonBody(req), ['input_sha256']);
+          const result = await createOrReplayJob({
+            pool,
+            userId: identity.userId,
+            idempotencyKey: req.headers['idempotency-key'],
+            inputSha256: body.input_sha256,
+            inputBucket,
+            unitPriceMicros,
+          });
+          const row = result.row;
+          const upload = row.state === 'uploading' && new Date(row.upload_expires_at) > now()
+            ? await inputStore.createUploadGrant({
+              jobId: row.id, expiresAt: row.upload_expires_at,
+            }) : null;
+          return sendJson(
+            res, result.created ? 201 : 200,
+            { job: jobView(row), upload }, requestId,
+            { 'content-security-policy': uploadCsp },
+          );
+        }
+        if (/^\/jobs\/[^/]+\/finalize$/u.test(path)) {
+          const jobId = matchUuid(path, /^\/jobs\/([^/]+)\/finalize$/u);
+          exactObject(await jsonBody(req), []);
+          const result = await finalizeJob({
+            db, inputStore, userId: identity.userId, jobId, now: now(),
+          });
+          return sendJson(
+            res, result.status, { job: jobView(result.row) }, requestId,
+            { 'content-security-policy': uploadCsp },
+          );
+        }
         if (path === '/keys') {
           const body = await formBody(req, ['name']);
           let issued;
@@ -229,6 +296,11 @@ export function createDashboardHandler({
         logFailure(log, 'dashboard_request_failed', {
           requestId, method: req.method, operation, error,
         });
+      }
+      if (operation === 'job_browser_submit' || operation === 'job_browser_finalize') {
+        return sendJson(res, failure.status, {
+          error: { code: failure.code, message: failure.message, request_id: requestId },
+        }, requestId, { ...failure.headers, 'content-security-policy': uploadCsp });
       }
       const content = identity
         ? errorPage({ identity, statusCode: failure.status, message: failure.message, requestId })

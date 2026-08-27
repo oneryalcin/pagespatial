@@ -48,6 +48,7 @@ beforeEach(async () => {
     pool,
     inputStore: {
       bucket: 'inputs',
+      uploadOrigin: 'https://upload.invalid',
       async createUploadGrant() {
         return {
           method: 'PUT', url: 'https://upload.invalid/signed',
