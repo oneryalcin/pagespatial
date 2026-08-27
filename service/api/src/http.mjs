@@ -76,7 +76,9 @@ export function createApiHandler({
   if (typeof appHost !== 'string' || !appHost || appHost === apiHost) {
     throw new TypeError('a distinct appHost is required');
   }
-  const dashboard = createDashboardHandler({ db, appOrigin, authenticateAccess, log });
+  const dashboard = createDashboardHandler({
+    db, resultStore, appOrigin, authenticateAccess, log,
+  });
   return async function apiHandler(req, res, suppliedRequestId) {
     const requestId = suppliedRequestId ?? createRequestId();
     let operation = 'route_unknown';

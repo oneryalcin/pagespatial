@@ -33,7 +33,12 @@ beforeEach(async () => {
     db,
     pool,
     inputStore: { bucket: 'inputs' },
-    resultStore: { bucket: 'results' },
+    resultStore: {
+      bucket: 'results',
+      async createDownloadGrant({ key }) {
+        return { download_url: `https://download.test/${key}?signature=secret` };
+      },
+    },
     apiHost: 'api.test',
     appHost: 'app.test',
     appOrigin: 'https://app.test',
@@ -90,6 +95,50 @@ const form = {
   'content-type': 'application/x-www-form-urlencoded',
 };
 
+async function seedJob({
+  owner = userId, state = 'uploading', pages = null, cost = null,
+  failureCode = null, retained = true,
+} = {}) {
+  const row = (await db.query(
+    `INSERT INTO jobs (
+       user_id, state, input_uri, input_digest, input_bytes,
+       pages_actual, unit_price_micros, estimated_cost_micros,
+       error, failure_code, created_at, queued_at, completed_at,
+       upload_expires_at, retention_expires_at
+     ) VALUES (
+       $1, CASE WHEN $2 = 'succeeded' THEN 'uploading' ELSE $2 END,
+       'r2://inputs/inputs/pending.pdf', repeat('a', 64),
+       CASE WHEN $2 = 'uploading' THEN NULL ELSE 1024 END,
+       $3, 1000, $4, CASE WHEN $2 = 'failed' THEN 'private detail' ELSE NULL END,
+       $5, now() - interval '10 minutes',
+       CASE WHEN $2 IN ('queued','dispatched','succeeded','failed')
+         THEN now() - interval '9 minutes' ELSE NULL END,
+       CASE WHEN $2 IN ('succeeded','failed') THEN now() - interval '1 minute' ELSE NULL END,
+       now() + interval '50 minutes',
+       CASE WHEN $2 = 'succeeded' THEN now() + ($6::boolean::integer * interval '2 days')
+         ELSE NULL END
+     ) RETURNING *`,
+    [owner, state, pages, cost, failureCode, retained],
+  )).rows[0];
+  if (state !== 'succeeded') return row;
+  const attempt = (await db.query(
+    `INSERT INTO job_attempts (
+       job_id, modal_call_id, state, result_uri, result_digest, pages,
+       dispatched_at, completed_at
+     ) VALUES ($1::uuid, 'call-' || $1::text, 'succeeded',
+       'r2://results/results/' || $1::text || '/attempt/result.json',
+       repeat('b', 64), $2, now() - interval '8 minutes', now() - interval '1 minute')
+     RETURNING id, result_uri, result_digest`,
+    [row.id, pages],
+  )).rows[0];
+  return (await db.query(
+    `UPDATE jobs SET state = 'succeeded', accepted_attempt_id = $2,
+                     result_uri = $3, result_digest = $4
+      WHERE id = $1 RETURNING *`,
+    [row.id, attempt.id, attempt.result_uri, attempt.result_digest],
+  )).rows[0];
+}
+
 test('dashboard creates, lists, and revokes a key without redisclosing its secret', async () => {
   await issueApiKey(db, { userId, name: '<existing>' });
   const listed = await request('/keys', { headers: access });
@@ -118,6 +167,99 @@ test('dashboard creates, lists, and revokes a key without redisclosing its secre
   assert.equal(revoked.status, 303);
   assert.equal(revoked.headers.location, '/keys');
   assert.ok((await db.query('SELECT revoked_at FROM api_keys WHERE id = $1', [keyId])).rows[0].revoked_at);
+});
+
+test('dashboard jobs and usage show only tenant-owned, truthful terminal data', async () => {
+  const succeeded = await seedJob({ state: 'succeeded', pages: 12, cost: 12_000 });
+  const failed = await seedJob({ state: 'failed', failureCode: 'invalid_pdf' });
+  const uploading = await seedJob();
+  const foreign = (await db.query(
+    "INSERT INTO users (email, status) VALUES ('foreign-jobs@example.test','active') RETURNING id",
+  )).rows[0];
+  const foreignJob = await seedJob({ owner: foreign.id });
+
+  const jobs = await request('/jobs', { headers: access });
+  assert.equal(jobs.status, 200);
+  assert.match(jobs.body, /Documents submitted through your API keys/u);
+  assert.match(jobs.body, /Waiting for upload/u);
+  assert.match(jobs.body, /Succeeded/u);
+  assert.match(jobs.body, /Failed/u);
+  assert.match(jobs.body, /\$0\.012/u);
+  assert.match(jobs.body, /It is not an invoice or a measured per-job cloud bill/u);
+  assert.match(jobs.body, new RegExp(succeeded.id.slice(0, 8), 'u'));
+  assert.match(jobs.body, new RegExp(failed.id.slice(0, 8), 'u'));
+  assert.match(jobs.body, new RegExp(uploading.id.slice(0, 8), 'u'));
+  assert.doesNotMatch(jobs.body, new RegExp(foreignJob.id.slice(0, 8), 'u'));
+  assert.doesNotMatch(jobs.body, /private detail/u);
+
+  const active = await request('/jobs?state=active&date=all&page=1', { headers: access });
+  assert.equal(active.status, 200);
+  assert.match(active.body, new RegExp(uploading.id.slice(0, 8), 'u'));
+  assert.doesNotMatch(active.body, new RegExp(succeeded.id.slice(0, 8), 'u'));
+
+  const usage = await request('/usage', { headers: access });
+  assert.equal(usage.status, 200);
+  assert.match(usage.body, />12</u);
+  assert.match(usage.body, /\$0\.012/u);
+  assert.doesNotMatch(usage.body, /private detail/u);
+});
+
+test('dashboard job detail keeps internals private and grants only retained owned results', async () => {
+  const succeeded = await seedJob({ state: 'succeeded', pages: 3, cost: 3000 });
+  const detail = await request(`/jobs/${succeeded.id}`, { headers: access });
+  assert.equal(detail.status, 200);
+  assert.match(detail.body, new RegExp(succeeded.id, 'u'));
+  assert.match(detail.body, /Download JSON/u);
+  assert.match(detail.body, /All times shown in UTC/u);
+  assert.doesNotMatch(detail.body, /modal_call_id|accepted_attempt_id|r2:\/\//u);
+
+  const grant = await request(`/jobs/${succeeded.id}/result`, { headers: access });
+  assert.equal(grant.status, 303);
+  assert.match(grant.headers.location, /^https:\/\/download\.test\//u);
+  assert.doesNotMatch(grant.body, /signature=secret/u);
+
+  const expired = await seedJob({ state: 'succeeded', pages: 1, cost: 1000, retained: false });
+  assert.match((await request(`/jobs/${expired.id}`, { headers: access })).body, /Result expired/u);
+  assert.equal((await request(`/jobs/${expired.id}/result`, { headers: access })).status, 410);
+
+  const foreign = (await db.query(
+    "INSERT INTO users (email, status) VALUES ('foreign-detail@example.test','active') RETURNING id",
+  )).rows[0];
+  const foreignJob = await seedJob({ owner: foreign.id });
+  assert.equal((await request(`/jobs/${foreignJob.id}`, { headers: access })).status, 404);
+});
+
+test('dashboard has a no-JavaScript guide, fixed pagination, and strict filters', async () => {
+  for (let index = 0; index < 26; index += 1) await seedJob();
+  const first = await request('/jobs?date=all', { headers: access });
+  assert.equal(first.status, 200);
+  assert.match(first.body, /Page 1 of 2/u);
+  assert.match(first.body, /page=2/u);
+  const second = await request('/jobs?date=all&page=2', { headers: access });
+  assert.equal(second.status, 200);
+  assert.match(second.body, /Page 2 of 2/u);
+  assert.equal((await request('/jobs?state=unknown', { headers: access })).status, 400);
+  assert.equal((await request('/jobs?date=all&page=3', { headers: access })).status, 404);
+
+  const guide = await request('/guide', { headers: access });
+  assert.equal(guide.status, 200);
+  assert.match(guide.body, /sha256sum document\.pdf/u);
+  assert.match(guide.body, /api\.pagespatial\.dev/u);
+  assert.doesNotMatch(guide.body, /<script/iu);
+
+  const styles = await request('/dashboard.css', { headers: access });
+  assert.equal(styles.status, 200);
+  assert.match(styles.headers['content-type'], /^text\/css/u);
+  assert.match(styles.body, /--canvas: #e9e4d8/u);
+});
+
+test('dashboard uses an explicit revoke confirmation and preserves revocation time', async () => {
+  const issued = await issueApiKey(db, { userId, name: 'Production' });
+  const confirm = await request(`/keys/${issued.key.id}/revoke`, { headers: access });
+  assert.equal(confirm.status, 200);
+  assert.match(confirm.body, /Revoke API key\?/u);
+  assert.match(confirm.body, /Production/u);
+  assert.ok((await db.query('SELECT revoked_at FROM api_keys WHERE id = $1', [issued.key.id])).rows[0].revoked_at == null);
 });
 
 test('dashboard rejects forged identity, foreign Origin, extra fields, and foreign keys', async () => {
