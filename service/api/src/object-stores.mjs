@@ -92,6 +92,10 @@ export function s3ClientFromConfig({ endpoint, accessKeyId, secretAccessKey }) {
   return new S3Client({
     endpoint: endpoint.replace(/\/$/u, ''),
     region: 'auto',
+    // Keep presigned URLs on the configured R2 account origin. Without this,
+    // the AWS SDK uses a bucket-prefixed hostname that the dashboard's exact
+    // connect-src policy does not permit.
+    forcePathStyle: true,
     credentials: { accessKeyId, secretAccessKey },
   });
 }
