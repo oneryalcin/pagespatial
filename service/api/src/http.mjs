@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import { ApiError, invalidRequest } from './api-errors.mjs';
+import { ApiError } from './api-errors.mjs';
 import { authenticateApiKey } from './api-keys.mjs';
 import { createDashboardHandler } from './dashboard.mjs';
 import { logFailure } from './safe-log.mjs';
 import {
   createOrReplayJob, finalizeJob, jobView, ownedJob, resultGrant,
 } from './jobs.mjs';
+import { exactObject, jsonBody } from './request-json.mjs';
 
-const MAX_JSON_BYTES = 4 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
 function sendJson(res, status, body, requestId, headers = {}) {
@@ -19,36 +19,6 @@ function sendJson(res, status, body, requestId, headers = {}) {
     ...headers,
   });
   res.end(bytes);
-}
-
-async function jsonBody(req) {
-  if ((req.headers['content-type'] ?? '').split(';', 1)[0].trim() !== 'application/json') {
-    throw invalidRequest('Content-Type must be application/json.');
-  }
-  const chunks = [];
-  let total = 0;
-  for await (const chunk of req) {
-    total += chunk.byteLength;
-    if (total > MAX_JSON_BYTES) throw invalidRequest('JSON request body exceeds 4 KiB.');
-    chunks.push(chunk);
-  }
-  try {
-    return JSON.parse(Buffer.concat(chunks, total).toString('utf8'));
-  } catch {
-    throw invalidRequest('Request body is not valid JSON.');
-  }
-}
-
-function exactObject(value, keys) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw invalidRequest('Request body must be an object.');
-  }
-  const actual = Object.keys(value).sort();
-  const expected = [...keys].sort();
-  if (actual.length !== expected.length || actual.some((key, i) => key !== expected[i])) {
-    throw invalidRequest(`Request fields must equal: ${expected.join(', ')}.`);
-  }
-  return value;
 }
 
 function jobId(parts) {
@@ -77,7 +47,9 @@ export function createApiHandler({
     throw new TypeError('a distinct appHost is required');
   }
   const dashboard = createDashboardHandler({
-    db, resultStore, appOrigin, authenticateAccess, log,
+    db, pool, inputStore, inputBucket, resultStore, unitPriceMicros,
+    appOrigin, inputUploadOrigin: inputStore?.uploadOrigin,
+    authenticateAccess, log,
   });
   return async function apiHandler(req, res, suppliedRequestId) {
     const requestId = suppliedRequestId ?? createRequestId();

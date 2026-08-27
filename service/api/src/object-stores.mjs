@@ -19,7 +19,7 @@ const missing = (error) => error?.name === 'NotFound'
   || error?.$metadata?.httpStatusCode === 404;
 
 export function createInputObjectStore({
-  client, bucket, sign = getSignedUrl, operationTimeoutMs = 10_000,
+  client, bucket, uploadOrigin, sign = getSignedUrl, operationTimeoutMs = 10_000,
 }) {
   if (!client?.send || typeof bucket !== 'string' || !bucket) {
     throw new TypeError('input object store requires an S3 client and bucket');
@@ -43,6 +43,7 @@ export function createInputObjectStore({
   };
   return {
     bucket,
+    uploadOrigin,
     key,
     async probe() {
       await head({ jobId: '00000000-0000-4000-8000-000000000000' });

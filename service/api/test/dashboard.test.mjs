@@ -16,11 +16,13 @@ let userId;
 let server;
 let port;
 let logs;
+let uploadedJobs;
 
 before(async () => { db = await PGlite.create(); });
 
 beforeEach(async () => {
   logs = [];
+  uploadedJobs = new Set();
   await db.exec('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   await migrate(db);
   userId = (await db.query(
@@ -32,7 +34,22 @@ beforeEach(async () => {
   const handler = createApiHandler({
     db,
     pool,
-    inputStore: { bucket: 'inputs' },
+    inputStore: {
+      bucket: 'inputs',
+      uploadOrigin: 'https://input.r2.test',
+      async createUploadGrant({ jobId }) {
+        return {
+          method: 'PUT',
+          url: `https://input.r2.test/inputs/${jobId}.pdf?signature=secret`,
+          expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+          headers: { 'content-type': 'application/pdf' },
+        };
+      },
+      async head({ jobId }) {
+        return uploadedJobs.has(jobId)
+          ? { bytes: 1024, contentType: 'application/pdf' } : null;
+      },
+    },
     resultStore: {
       bucket: 'results',
       async createDownloadGrant({ key }) {
@@ -93,6 +110,11 @@ const form = {
   ...access,
   origin: 'https://app.test',
   'content-type': 'application/x-www-form-urlencoded',
+};
+const browserJson = {
+  ...access,
+  origin: 'https://app.test',
+  'content-type': 'application/json',
 };
 
 async function seedJob({
@@ -180,7 +202,7 @@ test('dashboard jobs and usage show only tenant-owned, truthful terminal data', 
 
   const jobs = await request('/jobs', { headers: access });
   assert.equal(jobs.status, 200);
-  assert.match(jobs.body, /Documents submitted through your API keys/u);
+  assert.match(jobs.body, /Documents submitted through the dashboard or API/u);
   assert.match(jobs.body, /Waiting for upload/u);
   assert.match(jobs.body, /Succeeded/u);
   assert.match(jobs.body, /Failed/u);
@@ -228,6 +250,82 @@ test('dashboard job detail keeps internals private and grants only retained owne
   )).rows[0];
   const foreignJob = await seedJob({ owner: foreign.id });
   assert.equal((await request(`/jobs/${foreignJob.id}`, { headers: access })).status, 404);
+});
+
+test('dashboard browser upload reuses the job plane without exposing credentials', async () => {
+  const page = await request('/jobs/new', { headers: access });
+  assert.equal(page.status, 200);
+  assert.match(page.body, /Submit a PDF/u);
+  assert.match(page.body, /dashboard-upload\.js/u);
+  assert.match(page.headers['content-security-policy'], /script-src 'self'/u);
+  assert.match(
+    page.headers['content-security-policy'],
+    /connect-src 'self' https:\/\/input\.r2\.test/u,
+  );
+  assert.doesNotMatch(page.body, /ps_live_|R2_API_|SECRET_ACCESS/u);
+
+  const script = await request('/assets/dashboard-upload.js', { headers: access });
+  assert.equal(script.status, 200);
+  assert.match(script.headers['content-type'], /^text\/javascript/u);
+  assert.match(script.body, /crypto\.subtle\.digest/u);
+  assert.match(script.body, /XMLHttpRequest/u);
+  assert.doesNotMatch(script.body, /api[_-]?key|authorization/iu);
+
+  const created = await request('/jobs', {
+    method: 'POST',
+    headers: { ...browserJson, 'idempotency-key': 'browser-attempt-1' },
+    body: JSON.stringify({ input_sha256: 'c'.repeat(64) }),
+  });
+  assert.equal(created.status, 201);
+  const createdBody = JSON.parse(created.body);
+  assert.equal(createdBody.job.state, 'uploading');
+  assert.equal(createdBody.upload.method, 'PUT');
+  assert.deepEqual(createdBody.upload.headers, { 'content-type': 'application/pdf' });
+  assert.match(createdBody.upload.url, /^https:\/\/input\.r2\.test\//u);
+  assert.doesNotMatch(created.body, /access_key|secret_access|ps_live_/iu);
+
+  const replayed = await request('/jobs', {
+    method: 'POST',
+    headers: { ...browserJson, 'idempotency-key': 'browser-attempt-1' },
+    body: JSON.stringify({ input_sha256: 'c'.repeat(64) }),
+  });
+  assert.equal(replayed.status, 200);
+  assert.equal(JSON.parse(replayed.body).job.id, createdBody.job.id);
+
+  const incomplete = await request(`/jobs/${createdBody.job.id}/finalize`, {
+    method: 'POST', headers: browserJson, body: '{}',
+  });
+  assert.equal(incomplete.status, 409);
+  assert.equal(JSON.parse(incomplete.body).error.code, 'upload_incomplete');
+
+  uploadedJobs.add(createdBody.job.id);
+  const finalized = await request(`/jobs/${createdBody.job.id}/finalize`, {
+    method: 'POST', headers: browserJson, body: '{}',
+  });
+  assert.equal(finalized.status, 202);
+  assert.equal(JSON.parse(finalized.body).job.state, 'queued');
+  assert.equal((await request(`/jobs/${createdBody.job.id}`, { headers: access })).status, 200);
+});
+
+test('dashboard browser upload rejects CSRF and cross-tenant finalization', async () => {
+  const missingOrigin = await request('/jobs', {
+    method: 'POST',
+    headers: { ...access, 'content-type': 'application/json', 'idempotency-key': 'missing-origin' },
+    body: JSON.stringify({ input_sha256: 'd'.repeat(64) }),
+  });
+  assert.equal(missingOrigin.status, 403);
+  assert.equal(JSON.parse(missingOrigin.body).error.code, 'forbidden');
+
+  const foreign = (await db.query(
+    "INSERT INTO users (email, status) VALUES ('foreign-upload@example.test','active') RETURNING id",
+  )).rows[0];
+  const foreignJob = await seedJob({ owner: foreign.id });
+  uploadedJobs.add(foreignJob.id);
+  const response = await request(`/jobs/${foreignJob.id}/finalize`, {
+    method: 'POST', headers: browserJson, body: '{}',
+  });
+  assert.equal(response.status, 404);
+  assert.equal(JSON.parse(response.body).error.code, 'not_found');
 });
 
 test('dashboard has a no-JavaScript guide, fixed pagination, and strict filters', async () => {

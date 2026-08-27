@@ -9,11 +9,17 @@
 **Parent design:** `docs/design/2026-08-26-service-control-plane.md`
 **API guide:** `docs/api-guide.md`
 
+**Accepted amendment (2026-08-27):** real use selected browser upload as the
+next product need. `2026-08-27-dashboard-browser-upload-contract.md` adds one
+PDF submission path through the Access-protected dashboard. It supersedes only
+the API-only intake statements below; the job lifecycle and other non-goals do
+not change.
+
 ## 1. Product decision
 
 Build a small customer dashboard for the working invite-only PageSpatial API.
-The dashboard is an operational window into API usage. It is not a second way
-to process documents and it is not an administration console.
+The dashboard is an operational window into PageSpatial usage. It is not an
+administration console or a second processing system.
 
 The customer should be able to answer four questions without using SQL,
 reading logs, or contacting support:
@@ -44,7 +50,7 @@ destination.
 
 ### Not in M3
 
-- Browser PDF upload.
+- Multiple-file, batch, resumable, or multipart browser upload.
 - Self-serve signup or invitations.
 - Payments, invoices, credits, or Stripe.
 - Teams, organizations, roles, or shared projects.
@@ -56,8 +62,9 @@ destination.
 - A SPA, client-side router, frontend framework, bundler, or chart library.
 - A general design system package.
 
-These omissions are deliberate. The dashboard serves API customers. The API
-remains the document-submission surface.
+These omissions are deliberate. The dashboard serves technical customers. The
+API remains the automation surface; the accepted amendment adds one manual PDF
+submission path.
 
 ### Accepted progressive enhancements
 
@@ -214,9 +221,9 @@ Show what the customer's API calls produced and make the next action obvious.
 ### Header
 
 - Title: `Jobs`
-- Supporting text: `Documents submitted through your API keys.`
-- Secondary link: `View API guide`
-- No `New job` button because the dashboard cannot submit a document.
+- Supporting text: `Documents submitted through the dashboard or API.`
+- Primary action: `New job`
+- Secondary link: `API guide`
 
 ### Summary row
 
@@ -656,7 +663,8 @@ M3 is complete when:
 9. Revocation is tenant-scoped, explicit, and irreversible.
 10. Empty and outage states cannot be confused.
 11. Desktop and mobile layouts pass the agreed accessibility review.
-12. The implementation introduces no new job lifecycle or public API.
+12. The implementation introduces no new job lifecycle or public API. The
+    browser-upload amendment calls the existing job-plane operations directly.
 
 The M3 database migration must add a tenant timeline index equivalent to
 `jobs (user_id, created_at DESC)`. Existing partial indexes serve active-job
@@ -671,7 +679,8 @@ The dashboard should help us observe, not prematurely answer:
   product need?
 - Which failures create support requests?
 - Do users understand the estimated-cost caveat?
-- Do users need browser upload, or is API-only intake correct?
+- Does single-PDF browser upload cover the manual workflow, or is measured
+  demand strong enough to justify batch or resumable upload?
 - Is two-day result retention adequate?
 
 Those answers should determine M4. They should not be guessed into M3.

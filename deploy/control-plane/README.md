@@ -48,3 +48,17 @@ untracked deployment `.env` or a host secret manager.
 The API calls Modal from inside the container. Give this deployment a distinct
 Modal token through `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`; do not copy a
 developer profile into the image.
+
+## Browser-upload CORS
+
+Browser uploads require the exact input-bucket CORS policy in
+`r2-input-cors.json`. Apply it to the input bucket only:
+
+```sh
+wrangler r2 bucket cors set "$R2_INPUT_BUCKET" \
+  --file deploy/control-plane/r2-input-cors.json
+```
+
+The policy permits `PUT` from `https://app.pagespatial.dev` with only the
+`Content-Type` request header. It does not make the bucket or its objects
+public; the presigned URL remains the upload authorization.
