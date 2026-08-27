@@ -8,10 +8,10 @@ const escapeHtml = (value) => String(value)
 const COST_CAVEAT = 'Estimated cost is a placeholder based on the rate recorded when each job was submitted. It is not an invoice or a measured per-job cloud bill.';
 
 const STATUS = Object.freeze({
-  uploading: { label: 'Waiting for upload', tone: 'queued', copy: 'The PDF upload has not been finalized.' },
-  queued: { label: 'Queued', tone: 'queued', copy: 'The document is waiting for processing capacity.' },
-  dispatched: { label: 'In progress', tone: 'progress', copy: 'The job was sent for processing. Execution may still be queued.' },
-  succeeded: { label: 'Succeeded', tone: 'success', copy: 'The result is ready.' },
+  uploading: { label: 'Waiting for upload', tone: 'waiting', copy: 'The PDF has not been finalized.' },
+  queued: { label: 'Queued', tone: 'queued', copy: 'The upload passed validation and is waiting for dispatch.' },
+  dispatched: { label: 'In progress', tone: 'progress', copy: 'The parse call was accepted. Execution may still be queued.' },
+  succeeded: { label: 'Succeeded', tone: 'success', copy: 'The validated result is ready.' },
   failed: { label: 'Failed', tone: 'failure', copy: 'The document did not complete.' },
 });
 
@@ -50,7 +50,7 @@ export function formatTimestamp(value) {
 
 function shortId(value) {
   const text = String(value);
-  return text.length > 13 ? `${text.slice(0, 8)}…${text.slice(-4)}` : text;
+  return text.length > 8 ? text.slice(0, 8) : text;
 }
 
 function status(row) {
@@ -67,7 +67,7 @@ function navLink(path, label, active) {
 }
 
 function accountMenu(identity) {
-  return `<details class="account-menu"><summary>${escapeHtml(identity.email)}</summary><div class="account-panel"><strong>Service limits</strong><span>5 active jobs</span><span>90 MiB per PDF</span><span>200 pages per job</span><span>1 hour to upload</span><a href="/cdn-cgi/access/logout">Sign out</a></div></details>`;
+  return `<details class="account-menu"><summary>${escapeHtml(identity.email)}<span aria-hidden="true"></span></summary><div class="account-panel"><strong>${escapeHtml(identity.email)}</strong><em>Account active</em><dl><dt>Profile</dt><dd>Parse-only v1</dd><dt>Limits</dt><dd>90 MiB · 200 pages · 5 active jobs</dd><dt>Upload window</dt><dd>1 hour</dd><dt>Retention</dt><dd>Inputs and results up to 2 days</dd></dl><div><a href="/guide">API guide</a><a href="/cdn-cgi/access/logout">Sign out</a></div></div></details>`;
 }
 
 export function shell({ title, active, identity, content, description = '' }) {
@@ -83,36 +83,65 @@ export function shell({ title, active, identity, content, description = '' }) {
 <body>
   <a class="skip-link" href="#content">Skip to content</a>
   <header class="site-header">
-    <a class="wordmark" href="/jobs" aria-label="PageSpatial home"><span aria-hidden="true"></span>PageSpatial</a>
+    <a class="wordmark" href="/jobs" aria-label="PageSpatial home"><img src="/assets/pagespatial-logo.png" alt="PageSpatial"></a>
     <nav class="primary-nav" aria-label="Primary">
       ${navLink('/jobs', 'Jobs', active)}
       ${navLink('/usage', 'Usage', active)}
       ${navLink('/keys', 'API keys', active)}
-      <a href="/guide">API guide</a>
     </nav>
+    <a class="guide-link" href="/guide">API guide</a>
     ${accountMenu(identity)}
-    <details class="mobile-nav"><summary>Menu</summary><nav aria-label="Mobile primary">${navLink('/jobs', 'Jobs', active)}${navLink('/usage', 'Usage', active)}${navLink('/keys', 'API keys', active)}<a href="/guide">API guide</a><a href="/cdn-cgi/access/logout">Sign out</a></nav></details>
+    <details class="mobile-nav"><summary><span class="menu-icon" aria-hidden="true"></span><span class="sr-only">Menu</span></summary><nav aria-label="Mobile primary">${navLink('/jobs', 'Jobs', active)}${navLink('/usage', 'Usage', active)}${navLink('/keys', 'API keys', active)}<a href="/guide">API guide</a><span class="mobile-identity">${escapeHtml(identity.email)} · Parse-only v1</span><a href="/cdn-cgi/access/logout">Sign out</a></nav></details>
   </header>
   <main id="content" class="page-shell">${content}</main>
-  <footer class="site-footer"><span>PageSpatial parse API</span><span>All times shown in UTC</span></footer>
 </body>
 </html>`;
 }
 
-function metric(label, value, detail = '') {
-  return `<section class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong>${detail ? `<small>${escapeHtml(detail)}</small>` : ''}</section>`;
+function summaryStrip(label, metrics) {
+  return `<section class="summary-strip" aria-label="${escapeHtml(label)} summary"><span class="summary-label">${escapeHtml(label)}</span><span class="summary-divider" aria-hidden="true"></span>${metrics.map(([name, value]) => `<span class="summary-metric"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(name)}</span></span>`).join('')}</section>`;
 }
 
 function filterOption(value, selected, label) {
   return `<option value="${value}"${value === selected ? ' selected' : ''}>${label}</option>`;
 }
 
+function formatCompactTimestamp(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  const display = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false, timeZone: 'UTC',
+  }).format(date).replace(',', '');
+  return `<time datetime="${escapeHtml(date.toISOString())}">${escapeHtml(display)}</time>`;
+}
+
+function dateGroup(value, now) {
+  const date = new Date(value);
+  const day = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const prefix = day === today ? 'Today · ' : day === today - 86_400_000 ? 'Yesterday · ' : '';
+  return `${prefix}${new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+  }).format(date)}`;
+}
+
 function jobRow(row) {
-  return `<tr><th scope="row"><a class="mono" href="/jobs/${row.id}" title="${row.id}">${escapeHtml(shortId(row.id))}</a></th><td>${statusBadge(row)}</td><td>${formatTimestamp(row.created_at)}</td><td>${row.pages_actual == null ? '—' : escapeHtml(row.pages_actual)}</td><td>${formatCost(row.estimated_cost_micros)}</td><td><a href="/jobs/${row.id}">View</a></td></tr>`;
+  return `<tr><td>${statusBadge(row)}</td><td class="mono">${formatCompactTimestamp(row.created_at)}</td><th scope="row"><a class="mono" href="/jobs/${row.id}" title="${row.id}">${escapeHtml(shortId(row.id))}</a></th><td class="numeric">${row.pages_actual == null ? '—' : escapeHtml(row.pages_actual)}</td><td class="numeric">${formatCost(row.estimated_cost_micros)}</td><td class="row-action"><a href="/jobs/${row.id}">View</a></td></tr>`;
 }
 
 function jobCard(row) {
-  return `<article class="stacked-record"><div>${statusBadge(row)}<span>${formatTimestamp(row.created_at)}</span></div><a class="mono record-id" href="/jobs/${row.id}">${escapeHtml(shortId(row.id))}</a><dl><div><dt>Pages</dt><dd>${row.pages_actual == null ? '—' : escapeHtml(row.pages_actual)}</dd></div><div><dt>Estimated cost</dt><dd>${formatCost(row.estimated_cost_micros)}</dd></div></dl></article>`;
+  return `<article class="stacked-record"><div>${statusBadge(row)}<span class="mono">${formatCompactTimestamp(row.created_at)} UTC</span></div><p class="mono record-id">${escapeHtml(shortId(row.id))} · ${row.pages_actual == null ? '— pages' : `${escapeHtml(row.pages_actual)} pages`} · ${formatCost(row.estimated_cost_micros)}</p><a class="record-action" href="/jobs/${row.id}">View job</a></article>`;
+}
+
+function groupedJobRows(rows, now) {
+  let previous = null;
+  return rows.map((row) => {
+    const group = dateGroup(row.created_at, now);
+    const heading = group === previous ? '' : `<tr class="date-group"><th scope="rowgroup" colspan="6">${escapeHtml(group)}</th></tr>`;
+    previous = group;
+    return `${heading}${jobRow(row)}`;
+  }).join('');
 }
 
 function queryHref(filters, page) {
@@ -125,21 +154,21 @@ function pagination(filters, page, pageCount) {
   return `<nav class="pagination" aria-label="Pagination"><a${page <= 1 ? ' aria-disabled="true"' : ` href="${queryHref(filters, page - 1)}"`}>Previous</a><span>Page ${page} of ${pageCount}</span><a${page >= pageCount ? ' aria-disabled="true"' : ` href="${queryHref(filters, page + 1)}"`}>Next</a></nav>`;
 }
 
-export function jobsPage({ identity, filters, result }) {
+export function jobsPage({ identity, filters, result, now = new Date() }) {
   const summary = result.summary;
   const hasFilters = filters.state !== 'all' || filters.date !== '7d';
-  const rows = result.rows.map(jobRow).join('');
+  const rows = groupedJobRows(result.rows, now);
   const cards = result.rows.map(jobCard).join('');
   const empty = result.total === 0
     ? `<section class="empty-state"><h2>${hasFilters ? 'No matching jobs' : 'No jobs yet'}</h2><p>${hasFilters ? 'Change or clear the filters to see other jobs.' : 'Create an API key, then follow the API guide to submit your first PDF.'}</p><div class="button-row">${hasFilters ? '<a class="button button--secondary" href="/jobs">Clear filters</a>' : '<a class="button" href="/keys">Create an API key</a><a class="button button--secondary" href="/guide">Open API guide</a>'}</div></section>`
-    : `<div class="data-table"><table><caption class="sr-only">Document processing jobs</caption><thead><tr><th scope="col">Job</th><th scope="col">State</th><th scope="col">Submitted</th><th scope="col">Pages</th><th scope="col">Estimated cost</th><th scope="col"><span class="sr-only">Action</span></th></tr></thead><tbody>${rows}</tbody></table></div><div class="stacked-list">${cards}</div>${pagination(filters, result.page, result.pageCount)}`;
+    : `<div class="data-table jobs-table"><table><caption class="sr-only">Document processing jobs</caption><thead><tr><th scope="col">State</th><th scope="col">Submitted (UTC)</th><th scope="col">Job</th><th class="numeric" scope="col">Pages</th><th class="numeric" scope="col">Est. cost</th><th scope="col"><span class="sr-only">Action</span></th></tr></thead><tbody>${rows}</tbody></table></div><div class="stacked-list">${cards}</div>${pagination(filters, result.page, result.pageCount)}`;
   return shell({
     title: 'Jobs', active: '/jobs', identity,
     description: 'Documents submitted through your PageSpatial API keys.',
-    content: `<header class="page-header"><div><p class="eyebrow">Operations</p><h1>Jobs</h1><p>Documents submitted through your API keys.</p></div><a href="/guide">View API guide</a></header>
-      <section class="metrics" aria-label="Selected period summary">${metric('Documents', summary.documents)}${metric('Pages completed', summary.pages)}${metric('Estimated cost', formatCost(summary.cost))}</section>
+    content: `<header class="page-header"><div><h1>Jobs</h1><p>Documents submitted through your API keys.</p></div><a href="/guide">View API guide</a></header>
+      ${summaryStrip(filters.date === '7d' ? 'Last 7 days' : filters.date === '24h' ? 'Last 24 hours' : filters.date === '30d' ? 'Last 30 days' : 'All time', [['documents', summary.documents], ['pages completed', summary.pages], ['estimated cost', formatCost(summary.cost)]])}
       <p class="cost-note">${COST_CAVEAT}</p>
-      <form class="filters" method="get" action="/jobs"><label>State<select name="state">${filterOption('all', filters.state, 'All')}${filterOption('active', filters.state, 'Active')}${filterOption('succeeded', filters.state, 'Succeeded')}${filterOption('failed', filters.state, 'Failed')}</select></label><label>Date<select name="date">${filterOption('24h', filters.date, 'Last 24 hours')}${filterOption('7d', filters.date, 'Last 7 days')}${filterOption('30d', filters.date, 'Last 30 days')}${filterOption('all', filters.date, 'All time')}</select></label><button type="submit">Apply</button>${hasFilters ? '<a href="/jobs">Clear</a>' : ''}</form>${empty}`,
+      <form class="filters" method="get" action="/jobs"><label>State<select name="state">${filterOption('all', filters.state, 'All states')}${filterOption('active', filters.state, 'Active')}${filterOption('succeeded', filters.state, 'Succeeded')}${filterOption('failed', filters.state, 'Failed')}</select></label><label>Date range<select name="date">${filterOption('24h', filters.date, 'Last 24 hours')}${filterOption('7d', filters.date, 'Last 7 days')}${filterOption('30d', filters.date, 'Last 30 days')}${filterOption('all', filters.date, 'All time')}</select></label><button type="submit">Apply filters</button>${hasFilters ? '<a href="/jobs">Clear filters</a>' : ''}</form>${empty}`,
   });
 }
 
@@ -154,7 +183,7 @@ export function jobDetailPage({ identity, row, view, now = new Date() }) {
   let outcome = '';
   if (row.state === 'succeeded') {
     outcome = retained
-      ? `<section class="result-panel"><div><h2>Result</h2><p>The result is available until ${formatTimestamp(row.retention_expires_at)}.</p></div><a class="button" href="/jobs/${row.id}/result">Download JSON</a><p class="small-note">The download link is a five-minute bearer URL and may appear in browser history.</p></section>`
+      ? `<section class="result-panel"><div><h2>Result</h2><p>This link is short-lived. You can request another while the result is retained.</p><p>Available until ${formatTimestamp(row.retention_expires_at)}.</p></div><a class="button" href="/jobs/${row.id}/result">Download JSON result</a><p class="small-note">The five-minute bearer URL may appear in browser history.</p></section>`
       : '<section class="notice notice--warning"><h2>Result expired</h2><p>The stored result is no longer available. Submit the source PDF as a new job.</p></section>';
   } else if (row.state === 'failed') {
     const error = view.error ?? { code: 'processing_failed', message: 'Document processing failed.' };
@@ -162,19 +191,20 @@ export function jobDetailPage({ identity, row, view, now = new Date() }) {
   }
   return shell({
     title: `Job ${shortId(row.id)}`, active: '/jobs', identity,
-    content: `<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/jobs">Jobs</a><span aria-hidden="true">/</span><span>Job detail</span></nav><header class="page-header job-heading"><div><p class="eyebrow">Job</p><h1 class="mono">${escapeHtml(row.id)}</h1><p>${escapeHtml(item.copy)}</p></div>${statusBadge(row)}</header><dl class="definition-list">${definition('Submitted', formatTimestamp(row.created_at))}${definition('Queued', formatTimestamp(row.queued_at))}${definition('Completed', formatTimestamp(row.completed_at))}${definition('Processing deadline', formatTimestamp(view.processing_deadline_at))}${definition('Pages', view.pages == null ? '—' : escapeHtml(view.pages))}${definition('Input size', view.input_bytes == null ? '—' : `${(view.input_bytes / (1024 * 1024)).toFixed(2)} MiB`)}${definition('Estimated cost', escapeHtml(formatCost(view.estimated_cost_micros)))}${definition('Processing profile', escapeHtml(view.processing_profile))}</dl><p class="cost-note">${COST_CAVEAT}</p>${outcome}`,
+    content: `<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/jobs">Jobs</a><span aria-hidden="true">/</span><span class="mono">${escapeHtml(shortId(row.id))}</span></nav><header class="page-header job-heading"><div><h1 class="mono">${escapeHtml(row.id)}</h1><p>${escapeHtml(item.copy)}</p></div>${statusBadge(row)}</header><dl class="definition-list">${definition('Processing profile', escapeHtml(view.processing_profile))}${definition('Submitted', formatTimestamp(row.created_at))}${definition('Queued', formatTimestamp(row.queued_at))}${definition('Completed', formatTimestamp(row.completed_at))}${definition('Processing deadline', formatTimestamp(view.processing_deadline_at))}${definition('Input size', view.input_bytes == null ? '—' : `${(view.input_bytes / (1024 * 1024)).toFixed(2)} MiB`)}${definition('Pages', view.pages == null ? '—' : escapeHtml(view.pages))}${definition('Estimated cost', escapeHtml(formatCost(view.estimated_cost_micros)))}${definition('Result retention deadline', formatTimestamp(row.retention_expires_at))}${definition('Input SHA-256', escapeHtml(row.input_digest), ' class="digest"')}</dl><p class="cost-note">${COST_CAVEAT}</p>${outcome}`,
   });
 }
 
 export function usagePage({ identity, usage, now = new Date() }) {
   const month = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(now);
-  const rows = usage.days.map((day) => `<tr><th scope="row"><time datetime="${escapeHtml(day.day)}">${escapeHtml(day.day)} UTC</time></th><td>${escapeHtml(day.documents)}</td><td>${escapeHtml(day.pages)}</td><td>${formatCost(day.cost)}</td></tr>`).join('');
+  const maxPages = Math.max(1, ...usage.days.map((day) => number(day.pages)));
+  const rows = usage.days.map((day) => `<tr><th scope="row"><time datetime="${escapeHtml(day.day)}">${escapeHtml(day.day)} UTC</time></th><td class="numeric">${escapeHtml(day.documents)}</td><td class="numeric">${escapeHtml(day.pages)}</td><td><span class="usage-bar"><span style="width:${Math.round(number(day.pages) / maxPages * 100)}%"></span></span></td><td class="numeric">${formatCost(day.cost)}</td></tr>`).join('');
   const content = rows
-    ? `<div class="data-table"><table><caption class="sr-only">Daily usage for ${escapeHtml(month)}</caption><thead><tr><th scope="col">Day</th><th scope="col">Documents</th><th scope="col">Pages</th><th scope="col">Estimated cost</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    ? `<div class="data-table usage-table"><table><caption class="sr-only">Daily usage for ${escapeHtml(month)}</caption><thead><tr><th scope="col">Day (UTC)</th><th class="numeric" scope="col">Documents</th><th class="numeric" scope="col">Pages</th><th scope="col"><span class="sr-only">Relative pages</span></th><th class="numeric" scope="col">Est. cost</th></tr></thead><tbody>${rows}</tbody></table></div>`
     : '<section class="empty-state"><h2>No succeeded jobs this month</h2><p>Usage appears after a job succeeds.</p><a class="button button--secondary" href="/guide">Open API guide</a></section>';
   return shell({
     title: 'Usage', active: '/usage', identity,
-    content: `<header class="page-header"><div><p class="eyebrow">Current month</p><h1>Usage</h1><p>Succeeded jobs in ${escapeHtml(month)}.</p></div></header><section class="metrics">${metric('Documents', usage.summary.documents)}${metric('Pages completed', usage.summary.pages)}${metric('Estimated cost', formatCost(usage.summary.cost))}</section><p class="cost-note">${COST_CAVEAT}</p>${content}`,
+    content: `<header class="page-header"><div><h1>Usage</h1><p>Succeeded processing recorded for your account.</p></div></header>${summaryStrip('Month to date', [['documents', usage.summary.documents], ['pages completed', usage.summary.pages], ['estimated cost', formatCost(usage.summary.cost)]])}<p class="cost-note">${COST_CAVEAT}</p>${content}`,
   });
 }
 
@@ -183,17 +213,17 @@ function keyState(key) {
 }
 
 export function keysPage({ identity, keys }) {
-  const rows = keys.map((key) => `<tr><th scope="row">${escapeHtml(key.name)}</th><td class="mono">${escapeHtml(key.prefix)}…</td><td>${keyState(key)}</td><td>${formatTimestamp(key.created_at)}</td><td>${formatTimestamp(key.last_used_at)}</td><td>${key.revoked_at == null ? `<a href="/keys/${key.id}/revoke">Revoke</a>` : '—'}</td></tr>`).join('');
+  const rows = keys.map((key) => `<tr><th scope="row">${escapeHtml(key.name)}</th><td class="mono">${escapeHtml(key.prefix)}…</td><td class="mono">${formatTimestamp(key.created_at)}</td><td class="mono">${formatTimestamp(key.last_used_at)}</td><td>${keyState(key)}</td><td class="row-action">${key.revoked_at == null ? `<a class="danger-link" href="/keys/${key.id}/revoke">Revoke</a>` : '—'}</td></tr>`).join('');
   return shell({
     title: 'API keys', active: '/keys', identity,
-    content: `<header class="page-header"><div><p class="eyebrow">Credentials</p><h1>API keys</h1><p>Create and revoke credentials for the PageSpatial API.</p></div></header><section class="split-layout"><form class="panel key-form" method="post" action="/keys"><h2>Create key</h2><label>Name<input name="name" maxlength="64" autocomplete="off" required placeholder="Production CLI"></label><button type="submit">Create API key</button><p class="small-note">The secret is shown once and is never stored in plaintext.</p></form><section><h2>Your keys</h2>${rows ? `<div class="data-table"><table><caption class="sr-only">API keys</caption><thead><tr><th scope="col">Name</th><th scope="col">Prefix</th><th scope="col">State</th><th scope="col">Created</th><th scope="col">Last used</th><th scope="col"><span class="sr-only">Action</span></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty-state"><h3>No API keys</h3><p>Create a key to call the API.</p></div>'}</section></section>`,
+    content: `<header class="page-header"><div><h1>API keys</h1><p>Keys authenticate calls to <span class="mono">api.pagespatial.dev</span>.</p></div><a href="/guide">View API guide</a></header><form class="key-create" method="post" action="/keys"><label>Key name<input name="name" maxlength="64" autocomplete="off" required placeholder="e.g. production-ingest"></label><button type="submit">Create API key</button><p>Use a name that identifies the application or environment. The secret is shown once.</p></form>${rows ? `<div class="data-table keys-table"><table><caption class="sr-only">API keys</caption><thead><tr><th scope="col">Name</th><th scope="col">Prefix</th><th scope="col">Created</th><th scope="col">Last used</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Action</span></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty-state"><h2>No API keys</h2><p>Create a key to call the API.</p></div>'}`,
   });
 }
 
 export function createdKeyPage({ identity, secret }) {
   return shell({
     title: 'API key created', active: '/keys', identity,
-    content: `<section class="narrow-page"><p class="eyebrow">One-time secret</p><h1>API key created</h1><div class="notice notice--warning"><strong>Copy this key now.</strong><p>It will not be shown again. If you lose it, revoke it and create another.</p></div><pre class="secret"><code>${escapeHtml(secret)}</code></pre><a class="button button--secondary" href="/keys">Return to API keys</a></section>`,
+    content: `<section class="narrow-page"><nav class="breadcrumbs"><a href="/keys">API keys</a><span aria-hidden="true">/</span><span>created</span></nav><h1>API key created</h1><div class="notice notice--warning"><strong>Copy this key now.</strong><p>It will not be shown again. If you lose it, revoke it and create another.</p></div><pre class="secret"><code>${escapeHtml(secret)}</code></pre><a class="button button--secondary" href="/keys">I have saved the key</a></section>`,
   });
 }
 

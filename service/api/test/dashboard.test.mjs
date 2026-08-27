@@ -209,8 +209,9 @@ test('dashboard job detail keeps internals private and grants only retained owne
   const detail = await request(`/jobs/${succeeded.id}`, { headers: access });
   assert.equal(detail.status, 200);
   assert.match(detail.body, new RegExp(succeeded.id, 'u'));
-  assert.match(detail.body, /Download JSON/u);
-  assert.match(detail.body, /All times shown in UTC/u);
+  assert.match(detail.body, /Download JSON result/u);
+  assert.match(detail.body, /Submitted.*UTC/us);
+  assert.match(detail.body, /Input SHA-256/u);
   assert.doesNotMatch(detail.body, /modal_call_id|accepted_attempt_id|r2:\/\//u);
 
   const grant = await request(`/jobs/${succeeded.id}/result`, { headers: access });
@@ -250,7 +251,18 @@ test('dashboard has a no-JavaScript guide, fixed pagination, and strict filters'
   const styles = await request('/dashboard.css', { headers: access });
   assert.equal(styles.status, 200);
   assert.match(styles.headers['content-type'], /^text\/css/u);
-  assert.match(styles.body, /--canvas: #e9e4d8/u);
+  assert.match(styles.body, /--wall: #e9e4d8/u);
+  assert.match(styles.body, /font-family: "Newsreader"/u);
+
+  const logo = await request('/assets/pagespatial-logo.png', { headers: access });
+  assert.equal(logo.status, 200);
+  assert.match(logo.headers['content-type'], /^image\/png/u);
+  assert.ok(logo.body.length > 1000);
+
+  const font = await request('/assets/fonts/instrument-sans-400.ttf', { headers: access });
+  assert.equal(font.status, 200);
+  assert.match(font.headers['content-type'], /^font\/ttf/u);
+  assert.ok(font.body.length > 1000);
 });
 
 test('dashboard uses an explicit revoke confirmation and preserves revocation time', async () => {

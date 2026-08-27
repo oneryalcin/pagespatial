@@ -68,6 +68,31 @@ handler against both PGlite and PostgreSQL 18, then verified the deployed
 Cloudflare boundary and container health. It does not claim a second live
 human-login trial.
 
+## Accepted v2 visual-fidelity deployment — 2026-08-27
+
+Commit `c7c79f6` ports the owner's accepted `pagespatial_v2.zip` directly onto
+the existing server-rendered dashboard. It uses the supplied logo byte-for-byte
+(SHA-256 `bf7174cbac4cf609d88120b9bd37cc881feb9ff06cbecec91ed3253bee3c3e4a`),
+bundles the accepted OFL font families locally, and applies the compact Ivory
+Ledger shell, summary strip, ledgers, and responsive record cards without
+adding JavaScript or an unimplemented search control.
+
+The repository-wide check passed. The API suite reported 103 pass and 2
+native-Postgres skips; this visual-only change adds no migration or SQL. Local
+desktop checks covered Jobs, Usage, and API keys. A complete 500 px capture
+verified the responsive navigation, summary, filters, and job cards; Chrome's
+macOS headless runner enforces a 500 px minimum CSS viewport, so a nominal
+390 px screenshot was not used as mobile-width evidence for this amendment.
+
+Only `service/api/src` dashboard files and assets were copied into the isolated
+deployment context. Only the API image and container were rebuilt. The live
+image is
+`sha256:4379836ecfa838c99624d12978cd267adc22d2f55cc692fb31288dfe919dcd49`.
+The API became healthy, `api.pagespatial.dev/health` returned 200 ready with no
+degraded dependency, and both `/jobs` and the new logo route remained behind
+Cloudflare Access. PostgreSQL container `c5d6ff969938` and Tunnel container
+`a963ec71e205` were not recreated.
+
 ## Product boundary
 
 The UI is deliberately server-rendered and functional without JavaScript.
