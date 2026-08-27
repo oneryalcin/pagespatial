@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Why PageSpatial preserves native and OCR evidence instead of silently choosing one reading.">
+  <title>Why PageSpatial preserves conflicting readings</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header shell">
+    <a href="/" aria-label="PageSpatial home"><img class="logo" src="/assets/logo.png" alt="PageSpatial"></a>
+    <nav class="nav" aria-label="Main navigation"><a href="/#how">How it works</a><a href="/#pilot">Pilot</a><a aria-current="page" href="/blog/">Blog</a><a class="sign-in" href="/sign-in">Sign in</a><a class="button" href="/sign-in">Pilot sign in</a></nav>
+  </header>
+  <main class="article-main" id="main">
+    <div class="meta"><a href="/blog/">Blog</a> / Evaluation note</div>
+    <h1>Why PageSpatial preserves both readings when native text and OCR disagree</h1>
+    <div class="article-meta meta"><span>27 Aug 2026</span><span>·</span><span>5 min read</span><span>·</span><span>Evaluation note</span></div>
+    <p>A PDF can contain two different truths: the text encoded inside the file and the ink visible on the rendered page. Native extraction reads the first. OCR reads the second. Either witness can fail while still returning a confident-looking value.</p>
+    <p>PageSpatial therefore keeps both raw observations. Matching, reading order, tables, Markdown, and conflict records are derived data that reference those sources. A derived view cannot erase the evidence it came from.</p>
+
+    <h2>The measured reason</h2>
+    <p>In the project’s adjudicated conflict set, OCR was right in 23 cases, native extraction was right in 17, and both were wrong in 6. The split is not a production accuracy estimate; it is evidence that “always trust native,” “always trust OCR,” and “pick the higher confidence” are unsafe policies.</p>
+    <pre class="code">adjudicated conflicts
+
+OCR right       23
+native right    17
+both wrong       6
+total           46</pre>
+    <p>The evaluation also confirmed all 14 blocking conflict escalations that were checked. That result supports a narrow claim: when the current rule set says a disagreement is material, hiding it would be unsafe.</p>
+
+    <h2>What the service does</h2>
+    <p>The deployed parse path runs native PDF extraction and local CPU OCR. It associates observations that refer to the same ink. When a critical value remains materially different, PageSpatial preserves both readings and raises a blocking conflict rather than silently choosing one.</p>
+    <div class="callout">The system does not claim that disagreement reveals the correct answer. It claims that disagreement must remain visible.</div>
+    <p>Downstream systems can route that record to a stronger automated tier, exclude it from trusted retrieval, or inspect the cited page region. The evidence record makes those choices possible without pretending certainty.</p>
+
+    <h2>Scope of the claim</h2>
+    <p>The figures above come from a development and gold evaluation corpus, not a random production sample. Geometry precision, table structure, retrieval quality, and answer grounding still require their own measurements. PageSpatial’s contract is narrower: retain source evidence, make derivation explicit, and fail visibly when a trusted value cannot be justified.</p>
+
+    <aside class="article-cta"><div><strong>Already invited to the pilot?</strong><span>Sign in to upload a PDF or create an API key.</span></div><a class="button" href="/sign-in">Sign in</a></aside>
+  </main>
+  <footer class="site-footer"><div class="footer-inner shell"><img class="logo" src="/assets/logo.png" alt="PageSpatial"><div class="footer-links"><a href="/">Home</a><a href="/api-guide">API guide</a><a href="/blog/">Blog</a><a href="/sign-in">Sign in</a><span>© 2026 PageSpatial</span></div></div></footer>
+</body>
+</html>

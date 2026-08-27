@@ -9,5 +9,6 @@ deploy/control-plane/.env
 .env.*
 !.env.example
 .omx/
+.wrangler/
 service/data/
 __pycache__/
