@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="PageSpatial parses PDFs into source-preserving evidence records with native text, OCR, page coordinates, and explicit conflicts.">
+  <title>PageSpatial — source-preserving PDF parsing</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="hero">
+    <header class="site-header site-header--dark shell">
+      <a href="/" aria-label="PageSpatial home"><img class="logo logo--light" src="/assets/logo.png" alt="PageSpatial"></a>
+      <nav class="nav nav--dark" aria-label="Main navigation">
+        <a href="#how">How it works</a>
+        <a href="#pilot">Pilot</a>
+        <a href="/blog/">Blog</a>
+        <a class="sign-in" href="/sign-in">Sign in</a>
+        <a class="button" href="/sign-in">Sign in</a>
+      </nav>
+    </header>
+    <main id="main">
+      <section class="hero-grid shell">
+        <div>
+          <div class="eyebrow">Invite-only pilot · API and browser upload</div>
+          <h1>Know where every answer came from.</h1>
+          <p class="hero-copy">Source-preserving PDF parsing for search and RAG. Native text and visual OCR remain separate, with page coordinates and explicit conflict records attached.</p>
+          <div class="actions">
+            <a class="button" href="/sign-in">Sign in to the pilot</a>
+            <a class="button button--quiet" href="/api-guide">Read the API guide</a>
+          </div>
+        </div>
+        <div class="evidence-stack" aria-label="Illustration of two independent readings">
+          <div class="evidence-card">
+            <h2>Example page evidence</h2>
+            <div class="placeholder"></div>
+            <div class="placeholder"></div>
+            <div class="reading"><span>Native reading</span><span>17</span><span class="reading-label">conflict</span></div>
+            <div class="reading reading--match"><span>OCR reading</span><span>23</span><span class="reading-label">preserved</span></div>
+            <div class="placeholder"></div>
+          </div>
+          <pre class="json-card">{
+  "page": 14,
+  "sources": ["native", "ocr"],
+  "state": "conflict",
+  "action": "block"
+}</pre>
+        </div>
+      </section>
+  </div>
+
+  <section class="content shell" id="how">
+    <div class="section-label">How it works</div>
+    <h2>Two witnesses per page. Evidence, not guesses.</h2>
+    <div class="cards">
+      <article class="card"><div class="card-number">01</div><h3>Submit a PDF</h3><p>Upload in the dashboard or use plain HTTPS. The service accepts PDFs up to 90 MiB and 200 pages during the pilot.</p></article>
+      <article class="card"><div class="card-number">02</div><h3>Keep both readings</h3><p>Native PDF extraction and CPU OCR read the document. Raw observations stay separate even when they match.</p></article>
+      <article class="card"><div class="card-number">03</div><h3>Return a defensible record</h3><p>Derived associations reference their source observations. Material disagreement becomes a blocking conflict, not a silent choice.</p></article>
+    </div>
+
+    <div class="output-grid">
+      <div>
+        <div class="section-label">The output</div>
+        <h2>JSON your retrieval layer can defend.</h2>
+        <p class="prose">Page geometry, native observations, OCR observations, associations, and conflicts remain explicit. Markdown and other convenient views stay derived from that evidence.</p>
+      </div>
+      <pre class="code">{
+  "page": 14,
+  "nativeObservations": ["..."],
+  "ocrObservations": ["..."],
+  "criticalConflicts": ["..."],
+  "requiresEscalation": true
+}</pre>
+    </div>
+
+    <div class="section-label">Where it fits</div>
+    <div class="uses">
+      <article class="use"><h3>RAG grounding</h3><p>Carry page-level evidence into retrieval instead of indexing bare strings.</p></article>
+      <article class="use"><h3>Enterprise search</h3><p>Preserve provenance and trust metadata beside searchable content.</p></article>
+      <article class="use"><h3>Audit workflows</h3><p>Trace extracted values to their source page and exact observation geometry.</p></article>
+    </div>
+
+    <div class="pilot-grid" id="pilot">
+      <div>
+        <div class="section-label">Pilot</div>
+        <h2>Metered by completed page.</h2>
+        <div class="price">$0.001<span> estimated usage / completed page</span></div>
+        <p class="prose">This is an invite-only value proof. The dashboard records a placeholder usage estimate; it is not an invoice or a measured per-job cloud bill.</p>
+      </div>
+      <aside class="invite-card">
+        <h2>Invite-only access</h2>
+        <p>Pilot invitations are currently issued directly by the owner. The public site does not pretend to collect requests before an intake path exists.</p>
+        <a class="button" href="/sign-in">Already invited? Sign in</a>
+      </aside>
+    </div>
+
+    <div class="section-label">FAQ</div>
+    <div class="faq">
+      <article><h3>How is this different from a plain OCR API?</h3><p>PageSpatial keeps native and OCR evidence separate, associates it without overwriting either source, and exposes material conflicts.</p></article>
+      <article><h3>How long are files retained?</h3><p>Input PDFs and result objects are retained for up to two days. Download results into your own store.</p></article>
+      <article><h3>What is supported?</h3><p>PDF only, up to 90 MiB and 200 pages. Enrichment is off in the external pilot.</p></article>
+      <article><h3>Does it claim to know which witness is right?</h3><p>No. A material disagreement is preserved and blocks trusted output instead of being resolved from confidence alone.</p></article>
+      <article><h3>Is my document used for model training?</h3><p>No. The deployed parse path uses deterministic native extraction, local OCR, and rule-based association.</p></article>
+      <article><h3>What happens after an idle period?</h3><p>The parser scales to zero. The first job after idle can include roughly 70–102 seconds of cold-start time.</p></article>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <div class="footer-inner shell">
+      <img class="logo" src="/assets/logo.png" alt="PageSpatial">
+      <div class="footer-links"><a href="/api-guide">API guide</a><a href="/blog/">Blog</a><a href="/sign-in">Sign in</a><span>© 2026 PageSpatial</span></div>
+    </div>
+  </footer>
+</body>
+</html>
