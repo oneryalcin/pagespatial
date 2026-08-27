@@ -138,6 +138,11 @@ export async function startRuntime({ env = process.env, log = console } = {}) {
     createRequestId,
     log,
     unitPriceMicros: Number(env.PAGESPATIAL_UNIT_PRICE_MICROS ?? 1000),
+    healthDependencies: {
+      r2_input: () => inputStore.probe(),
+      r2_results: () => resultStore.probe(),
+      modal: () => modalCalls.probe(),
+    },
   });
   const server = createServer((req, res) => {
     const requestId = createRequestId();

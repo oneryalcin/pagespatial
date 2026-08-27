@@ -70,7 +70,7 @@ export function createApiHandler({
   db, pool, inputStore, resultStore, inputBucket = inputStore?.bucket,
   unitPriceMicros = 1000, apiHost, appHost, appOrigin, authenticateAccess,
   authenticate = (authorization) => authenticateApiKey(db, authorization),
-  createRequestId = randomUUID, log = console,
+  createRequestId = randomUUID, log = console, healthDependencies = {},
 }) {
   if (typeof apiHost !== 'string' || !apiHost) throw new TypeError('apiHost is required');
   if (typeof appHost !== 'string' || !appHost || appHost === apiHost) {
@@ -90,7 +90,17 @@ export function createApiHandler({
       operation = apiOperation(req.method, url.pathname);
       if (req.method === 'GET' && url.pathname === '/health') {
         await db.query('SELECT 1');
-        return sendJson(res, 200, { status: 'ready' }, requestId);
+        const degraded = Object.fromEntries(await Promise.all(
+          Object.entries(healthDependencies).map(async ([name, probe]) => {
+            try {
+              await probe();
+              return [name, false];
+            } catch {
+              return [name, true];
+            }
+          }),
+        ));
+        return sendJson(res, 200, { status: 'ready', degraded }, requestId);
       }
       const parts = url.pathname.split('/').filter(Boolean);
       if (parts[0] !== 'v1') throw new ApiError(404, 'not_found', 'Route was not found.');

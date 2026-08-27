@@ -25,9 +25,28 @@ export function createInputObjectStore({
     throw new TypeError('input object store requires an S3 client and bucket');
   }
   const key = (jobId) => `inputs/${jobId}.pdf`;
+  const head = async ({ jobId }) => {
+    try {
+      const value = await sendWithDeadline(
+        client, new HeadObjectCommand({ Bucket: bucket, Key: key(jobId) }),
+        operationTimeoutMs, 'R2 input head',
+      );
+      return {
+        bytes: value.ContentLength,
+        contentType: value.ContentType,
+        lastModified: value.LastModified,
+      };
+    } catch (error) {
+      if (missing(error)) return null;
+      throw new ObjectStoreUnavailableError('input object could not be inspected', { cause: error });
+    }
+  };
   return {
     bucket,
     key,
+    async probe() {
+      await head({ jobId: '00000000-0000-4000-8000-000000000000' });
+    },
     async createUploadGrant({ jobId, expiresAt, now = new Date() }) {
       const command = new PutObjectCommand({
         Bucket: bucket, Key: key(jobId), ContentType: contentType,
@@ -40,22 +59,7 @@ export function createInputObjectStore({
         headers: { 'content-type': contentType },
       };
     },
-    async head({ jobId }) {
-      try {
-        const value = await sendWithDeadline(
-          client, new HeadObjectCommand({ Bucket: bucket, Key: key(jobId) }),
-          operationTimeoutMs, 'R2 input head',
-        );
-        return {
-          bytes: value.ContentLength,
-          contentType: value.ContentType,
-          lastModified: value.LastModified,
-        };
-      } catch (error) {
-        if (missing(error)) return null;
-        throw new ObjectStoreUnavailableError('input object could not be inspected', { cause: error });
-      }
-    },
+    head,
   };
 }
 

@@ -709,8 +709,8 @@ continue.
 
 ### Live M2 gate
 
-Run one invited-user path through the actual Tunnel, Access, managed
-Postgres, R2, and Modal deployment:
+Run one invited-user path through the actual Tunnel, Access, Postgres, R2,
+and Modal deployment:
 
 ```text
 Access login → create key → submit → PUT → finalize → queued sweep
@@ -733,7 +733,15 @@ Do not call M2 complete from component tests alone.
    safe public errors and logs.
 4. **M2.4 live deployment:** a dedicated control-plane image/artifact (separate
    from the qualified parse-worker Dockerfile), domain, Tunnel, Access policy,
-   managed Postgres, R2 lifecycle rules, and the live gate.
+   Postgres, R2 lifecycle rules, and the live gate.
+
+**Owner deployment amendment (2026-08-27):** the initial value-proof runs an
+isolated PostgreSQL 18 container on the control-plane VPS instead of paying for
+managed Postgres before demand exists. The database has no published host port
+and no shared volume. This is not highly available: loss of the VPS stalls the
+service. A byte-verified off-site backup and successful restore are required by
+the M2.4 gate. Automation and managed Postgres remain operational follow-ups,
+not properties of this deployment.
 
 M3 starts only after this path is live. M3 adds presentation, not another job
 lifecycle.

@@ -39,32 +39,39 @@ async function readBounded(body, declaredLength) {
 export function createR2ResultStore({ client, bucket, operationTimeoutMs = 10_000 }) {
   if (!client || typeof client.send !== 'function') throw new TypeError('R2 client must provide send()');
   if (typeof bucket !== 'string' || !bucket) throw new TypeError('R2 results bucket is required');
+  const listAttemptResults = async ({ jobId, attemptId }) => {
+    const prefix = `results/${jobId}/${attemptId}/`;
+    const found = [];
+    let continuationToken;
+    do {
+      let response;
+      try {
+        response = await sendWithDeadline(client, new ListObjectsV2Command({
+          Bucket: bucket, Prefix: prefix, ContinuationToken: continuationToken,
+          MaxKeys: MAX_ATTEMPT_OBJECTS + 1,
+        }), operationTimeoutMs, 'R2 result list');
+      } catch (error) {
+        throw new ResultStoreUnavailableError('R2 result prefix could not be listed', { cause: error });
+      }
+      for (const item of response.Contents ?? []) {
+        if (typeof item.Key === 'string') found.push({ key: item.Key, lastModified: item.LastModified });
+        if (found.length > MAX_ATTEMPT_OBJECTS) {
+          throw new InvalidResultError('attempt result prefix contains too many objects');
+        }
+      }
+      continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+    } while (continuationToken);
+    return found.sort((a, b) => a.key.localeCompare(b.key));
+  };
   return {
     bucket,
-    async listAttemptResults({ jobId, attemptId }) {
-      const prefix = `results/${jobId}/${attemptId}/`;
-      const found = [];
-      let continuationToken;
-      do {
-        let response;
-        try {
-          response = await sendWithDeadline(client, new ListObjectsV2Command({
-            Bucket: bucket, Prefix: prefix, ContinuationToken: continuationToken,
-            MaxKeys: MAX_ATTEMPT_OBJECTS + 1,
-          }), operationTimeoutMs, 'R2 result list');
-        } catch (error) {
-          throw new ResultStoreUnavailableError('R2 result prefix could not be listed', { cause: error });
-        }
-        for (const item of response.Contents ?? []) {
-          if (typeof item.Key === 'string') found.push({ key: item.Key, lastModified: item.LastModified });
-          if (found.length > MAX_ATTEMPT_OBJECTS) {
-            throw new InvalidResultError('attempt result prefix contains too many objects');
-          }
-        }
-        continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
-      } while (continuationToken);
-      return found.sort((a, b) => a.key.localeCompare(b.key));
+    async probe() {
+      await listAttemptResults({
+        jobId: '00000000-0000-4000-8000-000000000000',
+        attemptId: '00000000-0000-4000-8000-000000000000',
+      });
     },
+    listAttemptResults,
     async readResult({ key }) {
       let body;
       try {

@@ -36,6 +36,9 @@ export function createModalCalls({
     return methodPromise;
   };
   return {
+    async probe() {
+      await withDeadline(method(), inspectTimeoutMs, 'Modal method lookup');
+    },
     async spawn(payload) {
       const call = await withDeadline(
         method().then((value) => value.spawn([payload])),
