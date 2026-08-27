@@ -85,7 +85,9 @@ Onboarding order: [principles](principles.md) →
   credential roles were exercised. PostgreSQL 18 currently runs on the same
   VPS by owner decision; this is a value-proof single point of failure, not
   managed or highly available Postgres. A manual off-site backup and restore
-  passed, but scheduled backups remain an operational prerequisite. The live
+  passed, but there is no schedule yet, so **RPO is currently unbounded** —
+  not ≤24h. Build the schedule before inviting a user who would be harmed by
+  losing the ledger; move to managed Postgres once usage justifies the cost. The live
   M2.4 evidence becomes the repository baseline only when this branch merges.
   Progressive page polling, enrichment spend control, payments, organizations,
   and a second worker provider remain deliberately out of v1.
