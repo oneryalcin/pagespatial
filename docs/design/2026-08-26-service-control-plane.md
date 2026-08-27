@@ -69,8 +69,8 @@ page against the owner's Gemini key and there is no per-caller spend cap.
         │   api (Node, server-rendered HTML) — STATELESS  │
         └──────┬──────────────────────┬──────────────────┘
                │                      │
-        managed Postgres              │
-        (vendor PITR)                 │
+        Postgres (target: managed    │
+        w/ vendor PITR; POC: on-box)  │
                │                      │
                │ modal.cls.fromName   │ presigned S3
                │   .spawn()           │
@@ -531,6 +531,26 @@ until a consumer needs them.
 
 ## Durability
 
+> **DEPLOYED DEVIATION (owner decision, 2026-08-27).** The v1 POC runs
+> **PostgreSQL 18 in Compose on the VPS**, not managed Postgres — cheaper,
+> and sufficient to prove demand. **Everything in this section describes the
+> target state, not what is deployed.** While the deviation stands, the VPS
+> is *not* stateless, there is no vendor PITR, and the three obligations
+> managed Postgres was chosen to delete are all back and live:
+>
+> - a scheduled off-site `pg_dump` (**not yet built — RPO is currently
+>   unbounded, not ≤24h**);
+> - backup credentials separate from the application's R2 access;
+> - a restore drill that is repeated, not proven once.
+>
+> Proven so far: one byte-exact restore into a temporary database, and a
+> backup bucket with a seven-day lifecycle rule
+> (`docs/trials/2026-08-27-service-m2-live-deployment.md`).
+>
+> **Revert trigger:** move the ledger to managed Postgres once real usage
+> justifies the cost. Do not invite a user who would be harmed by losing the
+> ledger before the backup schedule exists.
+
 **The VPS holds no state.** Postgres is managed (owner decision,
 2026-08-26); the ledger lives with a vendor that provides point-in-time
 recovery, and R2 holds every document and result.
@@ -811,4 +831,7 @@ the backup cron; it does not remove the need to test recovery.
 - Postgres was specified **self-hosted on the VPS**, which forced a
   `pg_dump` cron, separate backup credentials, a restore-testing
   obligation, and RPO ≤ 24h. Managed Postgres deletes all four (owner
-  decision, 2026-08-26) and makes the box stateless.
+  decision, 2026-08-26) and makes the box stateless. **Partially reversed
+  for the POC (2026-08-27)** — self-hosted is what actually deployed, so
+  those four obligations are live again. See the deviation note in
+  [Durability](#durability); managed Postgres remains the target.

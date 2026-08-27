@@ -12,9 +12,9 @@ Onboarding order: [principles](principles.md) →
 
 ## State snapshot (update the date when you touch this)
 
-*As of 2026-08-26, after PR #109.*
+*As of 2026-08-27, on `service/m2-live-deployment` after the M2.4 live gate.*
 
-- **main**: through PR #109 (`c54e813`). CI is green. Current record
+- **main baseline**: `a7e1f13` before the M2.4 branch. Current record
   versions remain schema 0.6.0 and enrichment-0.2.0.
 - **Internal Modal parse is ADOPTED**: the CPU/OpenVINO warm-`Cls` adapter
   passed its 12/12 qualification for controlled internal, parse-only jobs.
@@ -42,13 +42,13 @@ Onboarding order: [principles](principles.md) →
   measurement. Modal-native dispatch is the current implementation. No SQS,
   Kubernetes, custom multi-cloud scheduler, AWS Spot adapter, or GPU tier is
   justified for v1.
-- **Control plane M0 verified and M1 job plane shipped (PRs #107–#109,
-  2026-08-26)**:
+- **Control plane M0, M1, and M2.1–M2.3 shipped; M2.4 live-qualified on its
+  branch (PRs #107–#112, 2026-08-26/27)**:
   `docs/design/2026-08-26-service-control-plane.md`. Modal is the queue and
   autoscaler — **the #105 pull-worker architecture is withdrawn**, because a
   worker at `min_containers=0` cannot poll for work and, once the API must
   dispatch to start anything, a lease protocol is a second queue over
-  Modal's qualified one. Managed Postgres ledger (stateless VPS), R2, four
+  Modal's qualified one. Postgres ledger, R2, four
   tables, per-**execution** immutable result keys, Cloudflare Access +
   Tunnel. Dispatch is at-least-once, stated as a property. **M0 PASS**
   (`desia`, app stopped at 0 tasks): a JS `Uint8Array` reaches Python as
@@ -67,20 +67,30 @@ Onboarding order: [principles](principles.md) →
   An original attempt whose call id was lost stays harvestable alongside at
   most one replacement; either may win, and the 24-hour job deadline bounds
   the wait without adding another state.
-  Dedicated input and result buckets will use **two-day R2 lifecycle rules**:
+  Dedicated input and result buckets use **two-day R2 lifecycle rules**:
   inputs age from upload and results age from creation. Jobs unresolved for
   24 hours after queueing fail; the upload window is capped at one hour, which
   derives at least 23 hours before the earliest input expiry. Accepted-result
   access expires from R2 `LastModified + 2 days`, not reconciliation time. The
   reconciler does not normally delete objects individually (owner decision,
   2026-08-26).
-- **Still not public-service ready**: no submission/finalize API, API-key
-  authentication, tenant-facing routes, Cloudflare Access integration, or
-  dashboard exists. M2 starts with the smallest end-to-end HTTP slice, then
-  absorbs #87's admission, idempotency, and `429` requirements;
-  progressive page polling is deliberately deferred in v1. #76 retains
-  quotas, spend caps, and API versioning; #83 owns runtime dependency
-  slimming. The existing HTTP service remains trusted-caller only.
+- **Invite-only public v1 live gate PASS on `service/m2-live-deployment`**:
+  `api.pagespatial.dev` and Access-protected `app.pagespatial.dev` reach an
+  isolated Compose control plane through outbound-only Cloudflare Tunnel;
+  no host port is published. The full invited-user path passed through API
+  key creation, presigned upload, finalize, Modal dispatch, reconciliation,
+  status polling, and the validated public result envelope. Tenant 404,
+  idempotent replay, admission 429, upload and result expiry, forged Access
+  header, suspended/revoked/query-string keys, wrong digest, and all four R2
+  credential roles were exercised. PostgreSQL 18 currently runs on the same
+  VPS by owner decision; this is a value-proof single point of failure, not
+  managed or highly available Postgres. A manual off-site backup and restore
+  passed, but there is no schedule yet, so **RPO is currently unbounded** —
+  not ≤24h. Build the schedule before inviting a user who would be harmed by
+  losing the ledger; move to managed Postgres once usage justifies the cost. The live
+  M2.4 evidence becomes the repository baseline only when this branch merges.
+  Progressive page polling, enrichment spend control, payments, organizations,
+  and a second worker provider remain deliberately out of v1.
 - **Retrieval thesis measured (issue #36 CLOSED)**: pre-registered
   outcome "flat everywhere" — trust metadata does NOT pay in ranking,
   not even the corroboration links (five-way ablation, n=101 queries,

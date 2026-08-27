@@ -17,6 +17,7 @@ let apiKey;
 let authFailure;
 let logs;
 let logThrows;
+let healthDependencies;
 
 before(async () => { db = await PGlite.create(); });
 
@@ -28,6 +29,11 @@ beforeEach(async () => {
   authFailure = null;
   logs = [];
   logThrows = false;
+  healthDependencies = {
+    r2_input: async () => {},
+    r2_results: async () => {},
+    modal: async () => {},
+  };
   await db.exec('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   await migrate(db);
   userId = (await db.query(
@@ -62,11 +68,22 @@ beforeEach(async () => {
     },
     log: { error(...args) { if (logThrows) throw new Error('logger failed'); logs.push(args); } },
     createRequestId: () => '11111111-1111-4111-8111-111111111111',
+    healthDependencies,
   });
   server = createServer(handler);
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   base = `http://127.0.0.1:${server.address().port}`;
+});
+
+test('health keeps Postgres readiness and reports optional dependencies separately', async () => {
+  healthDependencies.r2_results = async () => { throw new Error('secret provider detail'); };
+  const response = await fetch(`${base}/health`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    status: 'ready',
+    degraded: { r2_input: false, r2_results: true, modal: false },
+  });
 });
 
 test('HTTP authentication failures advertise Bearer authentication', async () => {

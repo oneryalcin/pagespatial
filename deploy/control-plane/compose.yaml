@@ -1,0 +1,79 @@
+name: pagespatial-control-plane
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/control-plane/Dockerfile
+    image: pagespatial-control-plane:local
+    init: true
+    restart: unless-stopped
+    env_file:
+      - ${PAGESPATIAL_ENV_FILE:-.env}
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8580
+    expose:
+      - "8580"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          require('node:http').get({host:'127.0.0.1',port:8580,path:'/health',
+          headers:{host:process.env.PAGESPATIAL_API_HOST}},
+          r=>{r.resume();process.exit(r.statusCode===200?0:1)})
+          .on('error',()=>process.exit(1))
+      interval: 15s
+      timeout: 12s
+      retries: 4
+      start_period: 15s
+
+  postgres:
+    image: postgres:18.6-bookworm
+    restart: unless-stopped
+    env_file:
+      - ${PAGESPATIAL_ENV_FILE:-.env}
+    volumes:
+      - pagespatial-postgres-data:/var/lib/postgresql
+    shm_size: 128mb
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    init: true
+    restart: unless-stopped
+    env_file:
+      - ${PAGESPATIAL_ENV_FILE:-.env}
+    # cloudflared reads TUNNEL_TOKEN directly from env_file. Compose does not
+    # interpolate values that exist only in env_file into command arguments.
+    command: tunnel --no-autoupdate run
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  pagespatial-postgres-data:

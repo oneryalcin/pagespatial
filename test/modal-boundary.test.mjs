@@ -1,8 +1,9 @@
 /**
  * Source-boundary invariants for the Modal adapter (design doc
  * 2026-08-23-modal-scaling-and-deployment.md §6, §17): Modal is a
- * deployment dependency confined to deploy/modal/, never a runtime
- * dependency of the parser or the service. Config invariants are asserted
+ * deployment dependency confined to the deployment edge, never a runtime
+ * dependency of the parser or parse service. The public control plane is an
+ * intentional Modal client. Config invariants are asserted
  * textually against the adapter file — cheap, and they fail loudly if a
  * refactor drops a required bound.
  */
@@ -24,22 +25,21 @@ function walk(dir) {
   return files;
 }
 
-test('zero Modal imports in src/ and service/', () => {
+test('zero Modal imports in the parser and parse service', () => {
   const offenders = [];
   for (const base of ['src', 'service']) {
     for (const path of walk(join(root, base))) {
+      if (path.startsWith(join(root, 'service', 'api'))) continue;
       const text = readFileSync(path, 'utf8');
-      if (/^\s*(import\s+modal\b|from\s+modal\b)/m.test(text)) offenders.push(path);
+      if (/from\s+['"]modal['"]|^\s*(import\s+modal\b|from\s+modal\b)/m.test(text)) offenders.push(path);
     }
   }
   assert.deepEqual(offenders, []);
 });
 
-test('the Modal adapter is confined to deploy/modal/', () => {
+test('the qualified Modal worker has one canonical adapter', () => {
   const deployDir = join(root, 'deploy');
   assert.ok(existsSync(join(deployDir, 'modal', 'modal_app.py')), 'deploy/modal/modal_app.py exists');
-  const strays = readdirSync(deployDir).filter((name) => name !== 'modal');
-  assert.deepEqual(strays, [], 'deploy/ contains only the modal adapter');
 });
 
 test('adapter config invariants (§7): parse-only, loopback, bounded', () => {

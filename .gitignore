@@ -5,6 +5,7 @@ public/ocr-assets/
 .evaluation/
 .DS_Store
 .env
+deploy/control-plane/.env
 .env.*
 !.env.example
 .omx/
