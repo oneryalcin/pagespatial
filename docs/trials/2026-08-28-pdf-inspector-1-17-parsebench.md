@@ -84,14 +84,37 @@ tests. Exact current counts belong to the PR checks rather than this record.
 
 ## Linux x86-64 and live object-path gate
 
-Pending a clean-source worker build. The earlier dirty-tree World Bank run is
-not evidence for ParseBench platform parity and is superseded by this gate.
-The gate must:
+The clean Modal worker used committed revision `78e7869d0ae7`, image pin
+`535bed0b1547`, Linux x86-64, and exact PDF Inspector 1.17.0. All 12 cohort
+documents completed. After the same leading/trailing whitespace normalization
+used by the committed adapter, native PDF Inspector Markdown matched the macOS
+1.17.0 arm on all 12 pages.
 
-1. run the 1.17.0 cohort through the clean Linux worker and compare native
-   Markdown hashes with the macOS 1.17.0 arm;
-2. run the existing direct-versus-R2 parity, immutable-key recovery,
-   wrong-digest, and cross-role ACL qualification; and
-3. retain compact hashes and environment identity in git.
+| Headline dimension | macOS arm64 | Linux x86-64 |
+| --- | ---: | ---: |
+| Charts: Data Point Match | 0.00% | 0.00% |
+| Tables: GTRM composite | 36.06% | 36.06% |
+| Content Faithfulness | 88.08% | 87.80% |
+| Semantic Formatting | 36.53% | 36.53% |
+| Visual Grounding: Element Pass Rate | 11.78% | 11.78% |
+| Unweighted five-dimension mean | 34.49% | 34.44% |
+
+The small content difference is not a PDF Inspector parity failure. The
+ParseBench projection also includes unmatched OCR evidence from the full
+PageSpatial worker, and that evidence can vary across platforms. The isolated
+native PDF Inspector Markdown is byte-identical after the adapter's documented
+whitespace normalization; the normalized byte strings match on all 12 pages.
+
+The existing live object-path qualification also passed on the clean worker:
+
+- direct-versus-R2 and repeat execution matched at zero tolerance across 402
+  critical tokens and 724 raw lines;
+- duplicate executions wrote distinct immutable result keys and both were
+  recoverable by prefix LIST;
+- the wrong-digest probe published no result; and
+- all five forbidden cross-role R2 operations returned `AccessDenied`.
+
+The harness removed every test object. Compact evidence and hashes are in
+`docs/trials/evidence/2026-08-29-pdf-inspector-parsebench-linux.json`.
 
 No production app is changed by this experiment.

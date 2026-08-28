@@ -22,6 +22,6 @@
   },
   "evidence": {
     "macos": "docs/trials/evidence/2026-08-28-pdf-inspector-parsebench-macos.json",
-    "linux": "pending-clean-worker-run"
+    "linux": "docs/trials/evidence/2026-08-29-pdf-inspector-parsebench-linux.json"
   }
 }
