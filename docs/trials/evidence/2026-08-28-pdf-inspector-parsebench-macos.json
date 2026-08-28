@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "platform": {"os": "macos", "architecture": "arm64"},
+  "cohort": {
+    "documents": 12,
+    "pages": 12,
+    "parsebench_commit": "72f8882174e175b5f4db401ff0cff8047054f46b",
+    "dataset_commit": "68bbab242f749df2e2ef753daabcbbbe291d943e"
+  },
+  "adapter": {
+    "path": "scripts/evaluation/parsebench_pagespatial.py",
+    "policy": "render only explicit pipe-table headers; never promote a data row"
+  },
+  "arms": {
+    "1.14.2": {
+      "extraction_sha256": "294c1016a39dd715164c6fc19b52a8f4d2aff52b39c1294262a90536bc68090e",
+      "aggregate_report_sha256": "f4faa91b842aac65abccd9e24ab2671440c8f71ff108fb38fa50e0f3e7ae30fb",
+      "category_report_sha256": {
+        "chart": "c0f45f779137c90de4b5cae5531caac37de8e8075354ac5103d677742cf92860",
+        "table": "cc1af9481e44eb1225512cfa33e281a0b905a877d778ecbae799d68711d6dfaa",
+        "text_content": "a726d4aa80a1503b58d381db25d3915ba4481afe439637c77ab2359876614372",
+        "text_formatting": "3ebe7c2f5ca70cb6a0aaa1da5585a13e6185757113162b79866dd741669f86a6"
+      },
+      "scores": {"chart_data_point_match": 0.0, "table_gtrm_composite": 0.22775339637661418, "content_faithfulness": 0.8805, "semantic_formatting": 0.3653259922856787, "layout_element_pass_rate": 0.11775937689050213, "unweighted_five_dimension_mean": 0.318267753110559}
+    },
+    "1.15.0": {
+      "extraction_sha256": "bf51dde8c758e49040cd8c2773be15352203547c793cb84d4b4f671ef32d7824",
+      "aggregate_report_sha256": "0e9b28e358f0da42e4fc95669ccead8a6e6070ff120bacec2c0e1db12d8a087f",
+      "category_report_sha256": {
+        "chart": "3408a858ec27110c45d352408eeee9278c86c7e225759f98e86d150cd2d6e92a",
+        "table": "4489034b632e165e17090272b4a2d5d387fa9093a5dc89f945ffcf56f8a22096",
+        "text_content": "10c2179e76e00b6bfa02adf206997fe50e6a57ffa22e49657a331d6ab541c33e",
+        "text_formatting": "f47650ecdcf479dc7eb961e05168786c98211780bc3474a413da116eaaa0f12c"
+      },
+      "scores": {"chart_data_point_match": 0.0, "table_gtrm_composite": 0.22775339637661418, "content_faithfulness": 0.8808, "semantic_formatting": 0.3653259922856787, "layout_element_pass_rate": 0.11775937689050213, "unweighted_five_dimension_mean": 0.318327753110559}
+    },
+    "1.17.0": {
+      "extraction_sha256": "7e7ed928a57190f81c1ed4169319e448a915c665b10c5f16eb71af6806417702",
+      "aggregate_report_sha256": "18733dc6c8ff2140cd696b0bd530407034a099fbdd49f02f990e869ac583d4a9",
+      "category_report_sha256": {
+        "chart": "8f14574950f57515ecc60db7adbfc44f95ffed5c430aff3dceaaca8e839d89ca",
+        "table": "2fbefe6788bf5376d04c94cb1b4b86616996502a2263bba36315b6d3d2272156",
+        "text_content": "c7015afc0e9b2a9cea54cdcc1d1e23382804912e65d95b6e6ecd330822938d6b",
+        "text_formatting": "8c3c573f6a313308d2ad1b3c64afefdf5478f297d32042da2cb9ed723dc96e49"
+      },
+      "scores": {"chart_data_point_match": 0.0, "table_gtrm_composite": 0.36064323504657847, "content_faithfulness": 0.8808, "semantic_formatting": 0.3653259922856787, "layout_element_pass_rate": 0.11775937689050213, "unweighted_five_dimension_mean": 0.34490572084455184}
+    }
+  },
+  "limitations": [
+    "Raw reports and extraction payloads are not committed because they contain benchmark text.",
+    "Timing is excluded from the adoption claim; retained extraction artifacts contain only three rotated repeats.",
+    "Linux x86-64 evidence is recorded separately after a clean worker build."
+  ]
+}
