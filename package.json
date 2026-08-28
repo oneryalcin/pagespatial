@@ -69,7 +69,7 @@
     "zod": "4.4.3"
   },
   "peerDependencies": {
-    "@firecrawl/pdf-inspector": "1.14.2",
+    "@firecrawl/pdf-inspector": "1.17.0",
     "@paddleocr/paddleocr-js": "0.4.2",
     "@techstark/opencv-js": "4.10.0-release.1",
     "onnxruntime-web": "1.24.3",
@@ -93,7 +93,7 @@
     }
   },
   "devDependencies": {
-    "@firecrawl/pdf-inspector": "1.14.2",
+    "@firecrawl/pdf-inspector": "1.17.0",
     "@paddleocr/paddleocr-js": "0.4.2",
     "@techstark/opencv-js": "4.10.0-release.1",
     "@types/node": "24.10.13",
