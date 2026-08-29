@@ -27,6 +27,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { cpus, totalmem } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
+import { pdfInspectorNativeAdapterIdentity } from '../../dist/node/pdf-inspector.js';
 import { atomicCreateJson, atomicWriteJson, appendJsonLine, sha256File } from './lib/atomic-json.mjs';
 import { stableFingerprint, workspaceIdentity } from './lib/fingerprint.mjs';
 import { getDevelopmentDocuments, loadCorpusManifest } from './lib/manifest.mjs';
@@ -128,7 +129,7 @@ const sidecarSession = {
 
 const profile = {
   id: 'pdf-inspector-ppocrv6-sidecar-service-v1',
-  nativeAdapter: 'pdf-inspector-markdown-pdfjs-geometry@1.14.2+pdfjs.5.5.207',
+  nativeAdapter: pdfInspectorNativeAdapterIdentity,
   renderer: 'pdftoppm+pdfjs-geometry',
   ocrAdapter: adapter.descriptor,
   ocrVariant: 'small',

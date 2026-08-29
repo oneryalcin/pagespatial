@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { createRequire } from 'node:module';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api.js';
 import type { NativePageAdapter } from '../adapters.js';
 import { pdfJsPageMarkdown, pdfJsTextObservations, type PdfJsTextMetadata } from '../pdfjs-text.js';
@@ -35,6 +36,17 @@ interface InspectorExtraction {
   structure: InspectorStructure[];
   markdownPages: InspectorPageMarkdown[];
 }
+
+interface PackageMetadata {
+  version: string;
+}
+
+const require = createRequire(import.meta.url);
+const pdfInspectorVersion = (require('@firecrawl/pdf-inspector/package.json') as PackageMetadata).version;
+const pdfJsVersion = (require('pdfjs-dist/package.json') as PackageMetadata).version;
+
+export const pdfInspectorNativeAdapterIdentity =
+  `pdf-inspector-markdown-pdfjs-geometry@${pdfInspectorVersion}+pdfjs.${pdfJsVersion}`;
 
 export interface PdfInspectorAdapterOptions {
   /** Whole-document extraction is cached once per PDF.js session. */
@@ -77,7 +89,7 @@ export function createPdfInspectorNativeAdapter(options: PdfInspectorAdapterOpti
 
   return {
     name: 'pdf-inspector-markdown-pdfjs-geometry',
-    version: '1.14.2+pdfjs.5.5.207',
+    version: `${pdfInspectorVersion}+pdfjs.${pdfJsVersion}`,
     async extractPage(source, pageNumber, extractOptions) {
       abortIfNeeded(extractOptions?.signal);
       const [page, extraction] = await Promise.all([

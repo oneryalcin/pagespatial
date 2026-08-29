@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { degrees, PDFDocument, StandardFonts } from 'pdf-lib';
 globalThis.DOMMatrix ??= class DOMMatrix {};
 globalThis.ImageData ??= class ImageData {};
@@ -11,7 +12,11 @@ const {
   openPdfJsSession,
   pdfJsNativeAdapter
 } = await import('../dist/browser/index.js');
-const { createPdfInspectorNativeAdapter, openNodePdfSession } = await import('../dist/node/pdf-inspector.js');
+const {
+  createPdfInspectorNativeAdapter,
+  openNodePdfSession,
+  pdfInspectorNativeAdapterIdentity
+} = await import('../dist/node/pdf-inspector.js');
 const { buildPageSpatial, pointBoxToRenderedBox } = await import('../dist/index.js');
 
 function simplePdf() {
@@ -77,6 +82,15 @@ test('Firecrawl PDF Inspector returns page-aligned Markdown and native positions
   } finally {
     await session.dispose();
   }
+});
+
+test('PDF Inspector adapter provenance matches installed dependency versions', () => {
+  const require = createRequire(import.meta.url);
+  const inspectorVersion = require('@firecrawl/pdf-inspector/package.json').version;
+  const pdfJsVersion = require('pdfjs-dist/package.json').version;
+  const adapter = createPdfInspectorNativeAdapter();
+  assert.equal(adapter.version, `${inspectorVersion}+pdfjs.${pdfJsVersion}`);
+  assert.equal(pdfInspectorNativeAdapterIdentity, `${adapter.name}@${adapter.version}`);
 });
 
 test('Node PDF session checks known byte size before copying', async () => {
