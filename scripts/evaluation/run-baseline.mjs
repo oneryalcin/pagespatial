@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { assemblePageSpatial } from '../../dist/page-parser.js';
 import { pageSpatialSchema } from '../../dist/schema.js';
+import { pdfInspectorNativeAdapterIdentity } from '../../dist/node/pdf-inspector.js';
 import { atomicCreateJson, atomicWriteJson, appendJsonLine, sha256File } from './lib/atomic-json.mjs';
 import { startBrowserBridge } from './lib/browser-bridge.mjs';
 import { stableFingerprint, workspaceIdentity } from './lib/fingerprint.mjs';
@@ -94,10 +95,9 @@ await exec(process.execPath, [join(root, 'scripts/prepare-ppocr-assets.mjs'), '-
 const assetManifestPath = join(ocrAssets, 'manifest.json');
 const assetManifest = JSON.parse(await readFile(assetManifestPath, 'utf8'));
 const assetManifestHash = await sha256File(assetManifestPath);
-const nativeAdapterIdentity = 'pdf-inspector-markdown-pdfjs-geometry@1.14.2+pdfjs.5.5.207';
 const profile = {
   id: 'pdf-inspector-ppocrv6-selected-pages-v1',
-  nativeAdapter: nativeAdapterIdentity,
+  nativeAdapter: pdfInspectorNativeAdapterIdentity,
   renderer: 'pdfjs-dist@5.5.207',
   ocrAdapter: '@paddleocr/paddleocr-js@0.4.2',
   ocrVariant,
@@ -493,7 +493,7 @@ try {
             ocrPage: browserPage.ocr,
             unreadInkRegions: browserPage.unreadInkRegions ?? [],
             runId,
-            nativeAdapter: nativeAdapterIdentity,
+            nativeAdapter: pdfInspectorNativeAdapterIdentity,
             renderer: 'pdfjs-dist@5.5.207',
             ocrAdapter: '@paddleocr/paddleocr-js@0.4.2',
             createdAt,
@@ -522,7 +522,7 @@ try {
                 unreadInkRegions: browserPage.unreadInkRegions ?? [],
                 secondOpinion,
                 runId,
-                nativeAdapter: nativeAdapterIdentity,
+                nativeAdapter: pdfInspectorNativeAdapterIdentity,
                 renderer: 'pdfjs-dist@5.5.207',
                 ocrAdapter: '@paddleocr/paddleocr-js@0.4.2',
                 createdAt,

@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "platform": {
+    "os": "linux",
+    "architecture": "x86_64",
+    "modal_app": "pagespatial-parse-m8-dev"
+  },
+  "worker": {
+    "git_revision": "e5ff08a180e3",
+    "image_pin_revision": "535bed0b1547",
+    "pdf_inspector_version": "1.17.0",
+    "native_adapter_identity": "pdf-inspector-markdown-pdfjs-geometry@1.17.0+pdfjs.5.5.207",
+    "native_adapter_identity_matches_installed_packages": true
+  },
+  "cohort": {
+    "documents": 12,
+    "pages": 12,
+    "successful": 12,
+    "failed": 0,
+    "parsebench_commit": "72f8882174e175b5f4db401ff0cff8047054f46b",
+    "dataset_commit": "68bbab242f749df2e2ef753daabcbbbe291d943e"
+  },
+  "native_markdown_parity": {
+    "normalization": "trim leading and trailing whitespace, matching the committed adapter",
+    "matched": 12,
+    "compared": 12,
+    "documents": {
+      "chart/05021ff2-en_p19": "d32c70cede6955edc8740a8595e54cd632fd4fb90c13bf8b0817976878ab75bf",
+      "chart/ADL_Future_of_automotive_mobility_2024_1_p17": "03eea4959ef8d10f98d96838f97c8f7a792fe831b25a809436dc2ca18efc3c5a",
+      "chart/US_Professional_Services_Partner_Compensation_Survey_2024_p11": "d55ddba1fa3de53a01bbcb253eed3018fe33453eb2c7d31aeff0f559899c4012",
+      "layout/20240924_000946_P40U_HOWLKAL1IL81NTE2.1_p44": "61c0c7b7b519aaa01365a0e4138e85c592f16cdb0c21e207034e73b9e9103426",
+      "layout/2602.19961v1_p1": "5212001fd016cf1dc9982391d4c4b99a8748504cf91aa0e4e9e93e46b822622c",
+      "layout/3m-2025-global-impact-report_p26": "e53c696328c279071cd6e7b3a3ab07b56cea07955cfe74459992f0cb9080efa6",
+      "table/222876fb_page22": "9d35d2b06f785d129087776cc42b857c7ded19ab505a362b3374588153340752",
+      "table/SERFF_Interstate_random_pages 1_page276": "ab7c6631f2aeeae0cb2a71ff9ee29b9b377145e3f462ec920ca16a1cff5f3b50",
+      "table/SERFF_TX_random_pages 1_page1299": "63a2b8b9070ded036f81fab1d1174b83c41ceb20d3b587d04d732241ac31805b",
+      "text/text_ocr__p4013": "73c46f12dba474fd4561dd6e103aa29addf25521541bd9f199f800c0c57d66a8",
+      "text/text_simple__edited": "e7aa64e45bce2858e78297b3d33a8df36238bcdf6a1a685cb5b1648dc6d806d2",
+      "text/text_simple__results": "4c1fb839f34076d8609dad0358ec2667d48a4d7ec7543da46dc60582fe444967"
+    }
+  },
+  "parsebench": {
+    "category_report_sha256": {
+      "chart": "54a9921ab401fae19eece2ac8ca940f3d0a9cd61fce30adef1ae89555e4eb9e1",
+      "layout": "3d134db0df33d14cc36f3214b0220dee3e3444a1c3f80959ab8fdfd912030baf",
+      "table": "1c034202e0eb23eb212fac74af1556e78cd949634295506c34efe77a66874343",
+      "text_content": "8ca7482d4a77df535f0adbf93314df21be087f6e5daacb8f5ed0a4b4e775ca71",
+      "text_formatting": "bd8e02dc53b9ddb52803bf344212b75ed54db71c3be38e3ad22325fb8a09d769"
+    },
+    "scores": {
+      "chart_data_point_match": 0.0,
+      "table_gtrm_composite": 0.36064323504657847,
+      "content_faithfulness": 0.880794992812962,
+      "semantic_formatting": 0.3653259922856787,
+      "layout_element_pass_rate": 0.11775937689050213,
+      "unweighted_five_dimension_mean": 0.3449047194071443
+    }
+  },
+  "object_path_qualification": {
+    "input_sha256": "a2878cd9feaae81354b195463d76296ccb41d73c46462b6e5262bd0e7ecc667e",
+    "pages": 3,
+    "critical_tokens_compared": 397,
+    "raw_lines_compared": 715,
+    "direct_vs_object_zero_tolerance": true,
+    "object_repeat_zero_tolerance": true,
+    "immutable_result_keys": true,
+    "list_recovered_both": true,
+    "wrong_digest_rejected": true,
+    "forbidden_acl_operations_denied": 5,
+    "objects_retained": false,
+    "native_adapter_identity_matches_installed_packages": true,
+    "private_metadata_sha256": "699da5b248751c0a30577106ffb718ba9af11d91cd7ecb9a26cf2f8c8bbd289c"
+  },
+  "limitations": [
+    "Raw ParseBench reports and worker outputs are not committed because they contain benchmark text.",
+    "The fresh Linux content score matches the macOS score at the reported precision, and the native PDF Inspector Markdown matched 12 of 12.",
+    "The R2 metadata capture is private because it contains live object identifiers; its hash is retained here."
+  ]
+}

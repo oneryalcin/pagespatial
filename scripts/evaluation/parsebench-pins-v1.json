@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "parsebench": {
+    "repository": "https://github.com/run-llama/parse-bench",
+    "commit": "72f8882174e175b5f4db401ff0cff8047054f46b"
+  },
+  "dataset": {
+    "repository": "https://huggingface.co/datasets/llamaindex/ParseBench",
+    "branch": "test-data",
+    "commit": "68bbab242f749df2e2ef753daabcbbbe291d943e"
+  },
+  "pipeline": {
+    "name": "pagespatial_basic",
+    "tier": "basic",
+    "enrichment": "off",
+    "adapter": "scripts/evaluation/parsebench_pagespatial.py"
+  },
+  "package_arms": {
+    "control": "1.14.2",
+    "documented_release": "1.15.0",
+    "treatment": "1.17.0"
+  },
+  "evidence": {
+    "macos": "docs/trials/evidence/2026-08-28-pdf-inspector-parsebench-macos.json",
+    "linux": "docs/trials/evidence/2026-08-29-pdf-inspector-parsebench-linux.json"
+  }
+}
