@@ -3,12 +3,14 @@
   "platform": {
     "os": "linux",
     "architecture": "x86_64",
-    "modal_app": "pagespatial-parse-m7-dev"
+    "modal_app": "pagespatial-parse-m8-dev"
   },
   "worker": {
-    "git_revision": "78e7869d0ae7",
+    "git_revision": "e5ff08a180e3",
     "image_pin_revision": "535bed0b1547",
-    "pdf_inspector_version": "1.17.0"
+    "pdf_inspector_version": "1.17.0",
+    "native_adapter_identity": "pdf-inspector-markdown-pdfjs-geometry@1.17.0+pdfjs.5.5.207",
+    "native_adapter_identity_matches_installed_packages": true
   },
   "cohort": {
     "documents": 12,
@@ -39,11 +41,11 @@
   },
   "parsebench": {
     "category_report_sha256": {
-      "chart": "7eeb4b6ac02a298c7ae957a98aa030bafbebf51e3f995ee1888d419ab4a79c0d",
-      "layout": "27a9faf3f95077c1ef1923a924cec0d52c1ba0104948367581ef88e80f81d108",
-      "table": "389a296cb8ff41fe3c2279a4f8eda8087098d87f484f9620f32d843d34ababd7",
-      "text_content": "3b17bbae73fff5ae7cf4d728308d0f21260f5d7c04f226d6ce43bbfc2554cc7d",
-      "text_formatting": "b300761c2dae831000b92eb074d7e32dddd2f92aa0509e4e18533f80d57da1fb"
+      "chart": "54a9921ab401fae19eece2ac8ca940f3d0a9cd61fce30adef1ae89555e4eb9e1",
+      "layout": "3d134db0df33d14cc36f3214b0220dee3e3444a1c3f80959ab8fdfd912030baf",
+      "table": "1c034202e0eb23eb212fac74af1556e78cd949634295506c34efe77a66874343",
+      "text_content": "8ca7482d4a77df535f0adbf93314df21be087f6e5daacb8f5ed0a4b4e775ca71",
+      "text_formatting": "bd8e02dc53b9ddb52803bf344212b75ed54db71c3be38e3ad22325fb8a09d769"
     },
     "scores": {
       "chart_data_point_match": 0.0,
@@ -57,8 +59,8 @@
   "object_path_qualification": {
     "input_sha256": "a2878cd9feaae81354b195463d76296ccb41d73c46462b6e5262bd0e7ecc667e",
     "pages": 3,
-    "critical_tokens_compared": 402,
-    "raw_lines_compared": 724,
+    "critical_tokens_compared": 397,
+    "raw_lines_compared": 715,
     "direct_vs_object_zero_tolerance": true,
     "object_repeat_zero_tolerance": true,
     "immutable_result_keys": true,
@@ -66,7 +68,8 @@
     "wrong_digest_rejected": true,
     "forbidden_acl_operations_denied": 5,
     "objects_retained": false,
-    "private_metadata_sha256": "db4228cb305113bc5531aed703349b10231bc3094089215ca6aab714e8678f12"
+    "native_adapter_identity_matches_installed_packages": true,
+    "private_metadata_sha256": "699da5b248751c0a30577106ffb718ba9af11d91cd7ecb9a26cf2f8c8bbd289c"
   },
   "limitations": [
     "Raw ParseBench reports and worker outputs are not committed because they contain benchmark text.",

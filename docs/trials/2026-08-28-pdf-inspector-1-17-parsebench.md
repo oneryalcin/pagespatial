@@ -84,11 +84,15 @@ tests. Exact current counts belong to the PR checks rather than this record.
 
 ## Linux x86-64 and live object-path gate
 
-The clean Modal worker used committed revision `78e7869d0ae7`, image pin
+The clean Modal worker used committed revision `e5ff08a180e3`, image pin
 `535bed0b1547`, Linux x86-64, and exact PDF Inspector 1.17.0. All 12 cohort
 documents completed. After the same leading/trailing whitespace normalization
 used by the committed adapter, native PDF Inspector Markdown matched the macOS
 1.17.0 arm on all 12 pages.
+
+The adapter identity is derived from the installed package metadata rather than
+a copied version literal. The cohort and live object-path outputs both reported
+`pdf-inspector-markdown-pdfjs-geometry@1.17.0+pdfjs.5.5.207`.
 
 | Headline dimension | macOS arm64 | Linux x86-64 |
 | --- | ---: | ---: |
@@ -107,8 +111,8 @@ whitespace normalization; the normalized byte strings match on all 12 pages.
 
 The existing live object-path qualification also passed on the clean worker:
 
-- direct-versus-R2 and repeat execution matched at zero tolerance across 402
-  critical tokens and 724 raw lines;
+- direct-versus-R2 and repeat execution matched at zero tolerance across 397
+  critical tokens and 715 raw lines;
 - duplicate executions wrote distinct immutable result keys and both were
   recoverable by prefix LIST;
 - the wrong-digest probe published no result; and
