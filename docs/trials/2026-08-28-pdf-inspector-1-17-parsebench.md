@@ -98,16 +98,15 @@ a copied version literal. The cohort and live object-path outputs both reported
 | --- | ---: | ---: |
 | Charts: Data Point Match | 0.00% | 0.00% |
 | Tables: GTRM composite | 36.06% | 36.06% |
-| Content Faithfulness | 88.08% | 87.80% |
+| Content Faithfulness | 88.08% | 88.08% |
 | Semantic Formatting | 36.53% | 36.53% |
 | Visual Grounding: Element Pass Rate | 11.78% | 11.78% |
-| Unweighted five-dimension mean | 34.49% | 34.44% |
+| Unweighted five-dimension mean | 34.49% | 34.49% |
 
-The small content difference is not a PDF Inspector parity failure. The
-ParseBench projection also includes unmatched OCR evidence from the full
-PageSpatial worker, and that evidence can vary across platforms. The isolated
-native PDF Inspector Markdown is byte-identical after the adapter's documented
-whitespace normalization; the normalized byte strings match on all 12 pages.
+The fresh Linux content score matches the macOS score at the displayed
+precision. The isolated native PDF Inspector Markdown is byte-identical after
+the adapter's documented whitespace normalization; the normalized byte strings
+match on all 12 pages.
 
 The existing live object-path qualification also passed on the clean worker:
 

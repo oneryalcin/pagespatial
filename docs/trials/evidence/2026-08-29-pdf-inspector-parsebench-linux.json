@@ -50,10 +50,10 @@
     "scores": {
       "chart_data_point_match": 0.0,
       "table_gtrm_composite": 0.36064323504657847,
-      "content_faithfulness": 0.8780410489575688,
+      "content_faithfulness": 0.880794992812962,
       "semantic_formatting": 0.3653259922856787,
       "layout_element_pass_rate": 0.11775937689050213,
-      "unweighted_five_dimension_mean": 0.3443539306360656
+      "unweighted_five_dimension_mean": 0.3449047194071443
     }
   },
   "object_path_qualification": {
@@ -73,7 +73,7 @@
   },
   "limitations": [
     "Raw ParseBench reports and worker outputs are not committed because they contain benchmark text.",
-    "The full content score differs slightly from macOS because the PageSpatial result also contains platform-dependent OCR evidence; the native PDF Inspector Markdown matched 12 of 12.",
+    "The fresh Linux content score matches the macOS score at the reported precision, and the native PDF Inspector Markdown matched 12 of 12.",
     "The R2 metadata capture is private because it contains live object identifiers; its hash is retained here."
   ]
 }
