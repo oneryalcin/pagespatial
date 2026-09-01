@@ -54,7 +54,9 @@
     "test": "npm run build && node --test test/*.test.mjs",
     "test:browser:wasm": "npm run build && node test/browser-smoke/run.mjs wasm",
     "test:browser:webgpu": "npm run build && node test/browser-smoke/run.mjs webgpu",
-    "check": "npm run typecheck && npm test && npm run test:api && npm run verify:schema",
+    "build:site": "vite build --config site/vite.config.mjs && node scripts/prepare-site-assets.mjs",
+    "typecheck:site": "tsc -p site/tsconfig.json",
+    "check": "npm run typecheck && npm run typecheck:site && npm test && npm run test:api && npm run verify:schema",
     "example": "npm run build && node examples/merge-page.mjs",
     "prepare:ocr-assets": "node scripts/prepare-ppocr-assets.mjs",
     "eval:corpus:check": "node scripts/evaluation/generate-corpus-manifest.mjs --check",
@@ -94,6 +96,7 @@
   },
   "devDependencies": {
     "@firecrawl/pdf-inspector": "1.17.0",
+    "@firecrawl/pdf-inspector-wasm": "1.17.0",
     "@paddleocr/paddleocr-js": "0.4.2",
     "@techstark/opencv-js": "4.10.0-release.1",
     "@types/node": "24.10.13",
