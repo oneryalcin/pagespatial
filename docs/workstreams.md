@@ -13,9 +13,9 @@ Onboarding order: [principles](principles.md) →
 ## State snapshot (update the date when you touch this)
 
 *As of 2026-09-01, after the PDF Inspector 1.17, browser-upload, ParseBench,
-and 8 GiB Modal qualification work (PRs #120–#122).*
+and 8 GiB Modal snapshot production activation (PRs #120–#123).*
 
-- **main baseline**: `58cbcfa` after PR #122. Current record
+- **main baseline**: `a7171d6` after PR #123. Current record
   versions remain schema 0.6.0 and enrichment-0.2.0.
 - **Internal Modal parse is ADOPTED**: the CPU/OpenVINO warm-`Cls` adapter
   passed its 12/12 qualification for controlled internal, parse-only jobs.
@@ -29,9 +29,13 @@ and 8 GiB Modal qualification work (PRs #120–#122).*
   snapshot implementation is production-shaped and qualified: the existing
   Node/Python process tree restored successfully at 8 GiB, a fresh snapshot-hit
   one-page call took 26.1 seconds client wall, and the real R2 pointer/ACL gate
-  passed with exact 0/0 output tolerance. Snapshots are per Modal CPU worker
-  type: a redeploy reopens the expensive population window, which measured
-  78.2–269.9 seconds in this bounded run. These are observations, not an SLA.
+  passed with exact 0/0 output tolerance. The exact merged revision is live on
+  `pagespatial-parse-internal`: after two worker-type population calls, a fresh
+  production snapshot hit completed one page in 7.7 seconds client wall and
+  its warm follow-up in 2.5 seconds. Snapshots are per Modal CPU worker type: a
+  redeploy reopens the expensive population window, which measured 78.2–269.9
+  seconds in the development qualification and 83.8–102.3 seconds during
+  production activation. These are observations, not an SLA.
   A separate two-call-per-
   arm 100-page trial completed 600/600 pages with no retry or OOM at 12, 16,
   and 24 GiB; 12 GiB used the least allocated memory-time in that trial. An
@@ -40,8 +44,7 @@ and 8 GiB Modal qualification work (PRs #120–#122).*
   cgroup samples peaked at 5.92–6.01 GiB and left 1.99–2.08 GiB headroom, so
   8 GiB is the committed POC default. Every result and terminal log now reports
   sampled cgroup peak, headroom, utilization, and OOM deltas; the sampled peak
-  is a lower bound, not a kernel high-water mark. The allocation becomes live
-  only when the merged revision is deployed to the production Modal app. Trials:
+  is a lower bound, not a kernel high-water mark. Trials:
   `docs/trials/2026-08-23-modal-qualification.md`,
   `docs/trials/2026-08-28-modal-memory-snapshot.md`,
   `docs/trials/2026-09-01-modal-memory-snapshot-qualification.md`, and

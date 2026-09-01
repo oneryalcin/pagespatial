@@ -77,6 +77,17 @@ Compact evidence: `evidence/2026-09-01-modal-memory-snapshot-8gib.json`.
 - Memory measurement starts after restore rather than inheriting snapshot
   population peaks or OOM counters.
 
+## Production activation
+
+PR #123 merged as `a7171d63748b` and that exact clean revision was deployed to
+`pagespatial-parse-internal` with 4 vCPU, 8 GiB, and snapshots enabled. Two
+uncovered Modal CPU worker types paid population calls of 83.8 and 102.3
+seconds. The next deliberately fresh container logged `Restoring Function from
+memory snapshot` with no creation event and completed the one-page call in 7.7
+seconds client wall (2.450 seconds parse, 86 ms post-restore health). Its warm
+follow-up completed in 2.5 seconds. No pressure, OOM, or OOM-kill event was
+reported. The production app remains deployed with `max_containers=1`.
+
 ## Limits and operations
 
 - Modal maintains snapshots per CPU worker type. Coverage is not immediate.
