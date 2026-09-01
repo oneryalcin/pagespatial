@@ -12,10 +12,12 @@ Onboarding order: [principles](principles.md) →
 
 ## State snapshot (update the date when you touch this)
 
-*As of 2026-09-01, after the PDF Inspector 1.17, browser-upload, ParseBench,
-and 8 GiB Modal snapshot production activation (PRs #120–#123).*
+*As of 2026-09-02, after the PDF Inspector 1.17, browser upload, ParseBench,
+8 GiB Modal snapshot production activation, and open-alpha self-signup with
+trial credits (PRs #120–#125).*
 
-- **main baseline**: `a7171d6` after PR #123. Current record
+- **main baseline at this snapshot's branch point**: `3b79e51` after PR #125.
+  Current record
   versions remain schema 0.6.0 and enrichment-0.2.0.
 - **Internal Modal parse is ADOPTED**: the CPU/OpenVINO warm-`Cls` adapter
   passed its 12/12 qualification for controlled internal, parse-only jobs.
@@ -49,17 +51,22 @@ and 8 GiB Modal snapshot production activation (PRs #120–#123).*
   `docs/trials/2026-08-28-modal-memory-snapshot.md`,
   `docs/trials/2026-09-01-modal-memory-snapshot-qualification.md`, and
   `docs/trials/2026-09-01-modal-memory-allocation.md`.
-- **GPU optimization workstream CLOSED without adoption (PR #104)**:
+- **GPU deployment workstream CLOSED without adoption (PR #104); OCR
+  efficiency follow-up PARKED in #126**:
   M2 selected producer starvation; M3 showed thousands of small recognizer
   calls dominated by TensorRT enqueue and device-to-host transfer, while the
   independent CPU profile named repeated recognizer execution—not PDF
   rendering, crop generation, decoding, or Python scheduling—as the useful
-  boundary. The direct treatment rejected B8 (12.7% slower than B1); B4 did
-  not demonstrate a causal gain under 74.8% host drift. CPU/OpenVINO remains
-  the deployment default. No H100 sweep, split-serving rewrite, M4 kernel
-  analysis, or automatic M5 is justified. Trial:
-  `docs/trials/2026-08-25-gpu-bottleneck-instrumentation.md`; follow-up issue
-  #97 stays as a record, not an active commitment.
+  boundary. The direct treatment rejected B8 for the pinned PaddleX/UltraInfer
+  implementation and tested shapes (12.7% slower than B1); it did not prove
+  that recognizer batching is universally ineffective. B4 did not demonstrate
+  a causal gain under 74.8% host drift. CPU/OpenVINO remains the deployment
+  default. No H100 sweep, split-serving rewrite, M4 kernel analysis, or
+  automatic M5 is justified. Issue #126 records a bounded thread,
+  instrumentation, and shadow-coverage experiment plan; it is parked and
+  authorizes no production recognition-policy change. Trial:
+  `docs/trials/2026-08-25-gpu-bottleneck-instrumentation.md`; issue #97 stays
+  as the historical GPU record.
 - **Standard/Flex pull-worker architecture PARKED in #105**: it remains a
   possible future shape only after a second compute provider is earned by
   measurement. Modal-native dispatch is the current implementation. No SQS,
@@ -438,13 +445,14 @@ current scorer; decides instrument-fix vs detector-project).
 | Recovery tile budget (cost bound) | #13 | open — small, well-specified; good first task | — | src/browser/region-recovery.ts, tuning | nothing |
 | Batch API + residue-crop rungs | #20 | **shipped** (PR #23) | session | — | — |
 | Internal Modal parse deployment | #22 | **adopted within qualified bounds**: CPU/OpenVINO warm `Cls`, parse-only, no public ingress. Production service work is split into #76/#87/#105. | — | deploy/modal, service | public product contract |
-| Service control plane (accounts, keys, dashboard) | #76 | **Invite-only parse-only v1 live; M1–M3 shipped in PRs #107–#115.** Four-table Postgres ledger, split-credential R2 pointer transport, Modal dispatch/reconciliation, bounded uncertainty, public intake/status, Access identity, API keys, exact admission, and the server-rendered customer dashboard are proven. Dedicated R2 buckets use two-day lifecycle rules; unresolved jobs fail after 24 hours. | — | service/api, deploy/control-plane, deploy/modal | real use determines browser upload, evidence viewer, payments, and managed Postgres timing |
+| Service control plane (accounts, keys, dashboard) | #76 | **Open-alpha parse-only v1 live; M1–M3 shipped in PRs #107–#115 and self-signup/trial credits in PR #125.** Four-table Postgres ledger, split-credential R2 pointer transport, Modal dispatch/reconciliation, bounded uncertainty, public intake/status, Access identity, API keys, exact admission, browser upload, and the server-rendered customer dashboard are proven. Dedicated R2 buckets use two-day lifecycle rules; unresolved jobs fail after 24 hours. | — | service/api, deploy/control-plane, deploy/modal | real use determines the evidence viewer, payments, and managed Postgres timing |
 | Standard/Flex pull-worker execution | #105 | **PARKED — pull architecture withdrawn (PR #107)**: a worker at `min_containers=0` cannot poll for work, so a Postgres lease queue would be a second queue over Modal's qualified one. Unpark only when a second compute provider (AWS Spot) is genuinely earned. | — | — | a measured second-provider win |
 | Commercial hardening (quotas, tenancy, retention) | #76 | **partly absorbed by PR #107** (auth, tenant isolation, API keys, retention columns). Still open: per-tenant quotas, spend caps, public API versioning + deprecation policy. | — | service contract | a real consumer |
-| HTTP admission and idempotency | #87 | **partly absorbed by control-plane M2**: presigned intake removes body buffering; add admission limits, `429`, idempotency, and queue metrics at the public API. Progressive page polling remains deliberately out of v1. | — | service/api | service-tier limits |
+| HTTP admission and idempotency | #87 | **core public-path scope absorbed by control-plane M2**: presigned intake removes API body buffering; exact admission, `429`, and durable idempotency are live. Queue metrics and progressive page polling remain deliberately out of v1; the legacy trusted-network service still has its original local-buffering limits. | — | service/api, service | demonstrated need for metrics or progressive polling |
 | Service dependency slimming | #83 | **open, bounded**: express real runtime dependencies and stop copying the full dev toolchain into the image. | — | package manifests, Dockerfile | nothing |
 | GPU bottleneck follow-up | #97 | **parked**: instrumentation and B1/B4/B8 treatments did not earn a GPU deployment change. Resume only for a new measured hypothesis. | — | evaluation only | concrete throughput/cost trigger |
-| pdf-inspector WASM in browser (markdown parity) | #25 | open — low priority; CJK/CMap gate first (monotaro p61); pair with native 1.14.2→1.15.0 bump | — | src/browser, package.json | nothing |
+| OCR inference efficiency follow-up | #126 | **parked**: measured model-output volume and a possible OpenVINO thread mismatch justify a bounded experiment, not a production change. The plan requires in-band thread attestation, transfer/host timing, output hashes, and shadow-only native-coverage diagnostics before any recognition skip is considered. | — | evaluation/instrumentation only | owner explicitly unparks a bounded experiment |
+| pdf-inspector WASM in browser (markdown parity) | #25 | **shipped in PRs #121/#122**: native and WASM packages are pinned to 1.17.0; the public browser-local demo uses PDF Inspector WASM for Markdown and uploads no document bytes. The original issue remains open only for any broader corpus-parity follow-up. | — | site/demo, package.json | broader parity work requires a measured need |
 | Cross-family second opinion | PR #19 | **shipped** | session | — | — |
 | Pictorial threshold + residue-severity data check | #14 | parked, gold-gated | — | tuning, ink.ts | #1 |
 | Conflict triage taxonomy | #5 | parked, gold-gated | — | evaluation | #1 |
