@@ -7,6 +7,7 @@ import { InvalidResultError, RESULT_LIMIT_BYTES } from '../src/result-contract.m
 import {
   createR2ResultStore, ResultStoreUnavailableError, r2ClientFromConfig,
 } from '../src/r2-results.mjs';
+import { createInputObjectStore, s3ClientFromConfig } from '../src/object-stores.mjs';
 import { validateR2Isolation } from '../src/runtime.mjs';
 
 test('Modal adapter hydrates the method once and returns a persisted call id', async () => {
@@ -128,6 +129,28 @@ test('R2 configuration refuses plaintext endpoints', () => {
       endpoint: 'http://example.test', accessKeyId: 'id', secretAccessKey: 'secret',
     }),
     /must use https/,
+  );
+});
+
+test('R2 upload grants stay on the origin permitted by dashboard CSP', async () => {
+  const endpoint = 'https://account.r2.cloudflarestorage.com';
+  const store = createInputObjectStore({
+    client: s3ClientFromConfig({
+      endpoint, accessKeyId: 'input-key', secretAccessKey: 'input-secret',
+    }),
+    bucket: 'pagespatial-inputs',
+    uploadOrigin: new URL(endpoint).origin,
+  });
+  const grant = await store.createUploadGrant({
+    jobId: '00000000-0000-4000-8000-000000000001',
+    now: new Date('2026-08-27T00:00:00Z'),
+    expiresAt: new Date('2026-08-27T00:10:00Z'),
+  });
+
+  assert.equal(new URL(grant.url).origin, store.uploadOrigin);
+  assert.equal(
+    new URL(grant.url).pathname,
+    '/pagespatial-inputs/inputs/00000000-0000-4000-8000-000000000001.pdf',
   );
 });
 
