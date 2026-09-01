@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from 'jose';
 import { ApiError } from './api-errors.mjs';
+import { assertTrialPages, provisionAccessUser } from './credits.mjs';
 
 const denied = (cause) => new ApiError(
   403, 'forbidden', 'Access denied.', cause ? { cause } : undefined,
@@ -25,7 +26,9 @@ const credentialErrors = [
 
 const isCredentialError = (error) => credentialErrors.some((Type) => error instanceof Type);
 
-export function createAccessAuthenticator({ db, issuer, audience, jwks }) {
+export function createAccessAuthenticator({
+  db, issuer, audience, jwks, allowSelfSignup = false, trialPages = 100,
+}) {
   if (!db?.query) throw new TypeError('Access authentication requires a database');
   if (typeof issuer !== 'string' || !issuer.startsWith('https://') || issuer.endsWith('/')) {
     throw new TypeError('Access issuer must be an https origin without a trailing slash');
@@ -33,6 +36,8 @@ export function createAccessAuthenticator({ db, issuer, audience, jwks }) {
   if (typeof audience !== 'string' || !audience) {
     throw new TypeError('Access audience is required');
   }
+  if (typeof allowSelfSignup !== 'boolean') throw new TypeError('allowSelfSignup must be boolean');
+  assertTrialPages(trialPages);
   const keySet = jwks ?? createRemoteJWKSet(
     new URL(`${issuer}/cdn-cgi/access/certs`),
     { timeoutDuration: 5_000, cooldownDuration: 30_000, cacheMaxAge: 10 * 60_000 },
@@ -52,27 +57,10 @@ export function createAccessAuthenticator({ db, issuer, audience, jwks }) {
     if (payload.type !== 'app' || typeof payload.email !== 'string') throw denied();
     const email = payload.email.trim().toLowerCase();
     if (!email) throw denied();
-    const { rows } = await db.query(
-      `SELECT id, status FROM users
-        WHERE email = $1 AND status IN ('invited','active')`,
-      [email],
-    );
-    if (!rows[0]) throw denied();
-    if (rows[0].status === 'active') return { userId: rows[0].id, email };
-
-    const activated = await db.query(
-      `UPDATE users SET status = 'active'
-        WHERE id = $1 AND status = 'invited'
-        RETURNING id`,
-      [rows[0].id],
-    );
-    if (activated.rows[0]) return { userId: activated.rows[0].id, email };
-
-    const concurrent = await db.query(
-      "SELECT id FROM users WHERE id = $1 AND status = 'active'",
-      [rows[0].id],
-    );
-    if (!concurrent.rows[0]) throw denied();
-    return { userId: concurrent.rows[0].id, email };
+    const userId = await provisionAccessUser(db, {
+      email, allowSelfSignup, trialPages,
+    });
+    if (!userId) throw denied();
+    return { userId, email };
   };
 }

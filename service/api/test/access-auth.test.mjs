@@ -103,6 +103,28 @@ test('Access rejects invalid claims, unknown users, and suspended users with one
   }
 });
 
+test('Access self-signup provisions a verified identity once when enabled', async () => {
+  const authenticate = createAccessAuthenticator({
+    db,
+    issuer: ISSUER,
+    audience: AUDIENCE,
+    jwks: createLocalJWKSet({ keys: keys.map((key) => key.jwk) }),
+    allowSelfSignup: true,
+    trialPages: 100,
+  });
+  const jwt = await token({ email: ' Alpha@Example.COM ' });
+  const first = await authenticate(jwt);
+  const replay = await authenticate(jwt);
+  assert.deepEqual(replay, first);
+  assert.equal(first.email, 'alpha@example.com');
+  assert.equal(Number((await db.query(
+    'SELECT count(*) FROM credit_grants WHERE user_id = $1', [first.userId],
+  )).rows[0].count), 1);
+  assert.equal(Number((await db.query(
+    'SELECT pages FROM credit_grants WHERE user_id = $1', [first.userId],
+  )).rows[0].pages), 100);
+});
+
 test('Access reports JWKS provider failures as unavailable, not forbidden', async () => {
   for (const cause of [
     new errors.JWKSTimeout(),

@@ -24,6 +24,11 @@ beforeEach(async () => {
   userId = (await db.query(
     "INSERT INTO users (email, status) VALUES ('m2@example.test','active') RETURNING id",
   )).rows[0].id;
+  await db.query(
+    `INSERT INTO credit_grants (user_id, pages, source, reference)
+     VALUES ($1, 2000, 'manual', 'test-fixture')`,
+    [userId],
+  );
   pool = {
     async connect() {
       return { query: (...args) => db.query(...args), release() {} };

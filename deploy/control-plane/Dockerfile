@@ -15,6 +15,7 @@ RUN npm ci --omit=dev --workspace=@pagespatial/api --include-workspace-root=fals
 
 COPY schemas ./schemas
 COPY service/api/migrations ./service/api/migrations
+COPY service/api/scripts ./service/api/scripts
 COPY service/api/src ./service/api/src
 
 RUN useradd --create-home --uid 10001 pagespatial

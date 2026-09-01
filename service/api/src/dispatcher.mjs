@@ -11,13 +11,19 @@ function inputKey(inputUri, inputBucket) {
   return key;
 }
 
-export function modalPayload({ jobId, attemptId, inputUri, inputDigest, inputBucket }) {
+export function modalPayload({
+  jobId, attemptId, inputUri, inputDigest, inputBucket, pageLimit,
+}) {
+  if (!Number.isSafeInteger(pageLimit) || pageLimit < 1 || pageLimit > 200) {
+    throw new TypeError('job page limit must be an integer from 1 to 200');
+  }
   return {
     job_id: jobId,
     attempt_id: attemptId,
     expected_sha256: inputDigest,
     input_key: inputKey(inputUri, inputBucket),
     result_prefix: `results/${jobId}/${attemptId}`,
+    page_limit: pageLimit,
   };
 }
 
@@ -25,7 +31,7 @@ export function modalPayload({ jobId, attemptId, inputUri, inputDigest, inputBuc
 export async function dispatchExistingAttempt({ db, modalCalls, inputBucket, attemptId }) {
   const { rows } = await db.query(
     `SELECT a.id AS attempt_id, a.job_id, a.state,
-            j.input_uri, j.input_digest
+            j.input_uri, j.input_digest, j.reserved_pages
        FROM job_attempts a JOIN jobs j ON j.id = a.job_id
       WHERE a.id = $1`,
     [attemptId],
@@ -37,6 +43,7 @@ export async function dispatchExistingAttempt({ db, modalCalls, inputBucket, att
     payload = modalPayload({
       jobId: row.job_id, attemptId: row.attempt_id,
       inputUri: row.input_uri, inputDigest: row.input_digest, inputBucket,
+      pageLimit: Number(row.reserved_pages),
     });
   } catch (error) {
     const detail = `${error?.constructor?.name ?? 'Error'}: ${error?.message ?? error}`;

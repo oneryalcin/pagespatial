@@ -56,7 +56,7 @@ export async function getAttempt(db, attemptId) {
     `SELECT a.id AS attempt_id, a.job_id, a.state AS attempt_state,
             a.modal_call_id, a.created_at AS attempt_created_at,
             a.replaces_attempt_id,
-            j.state AS job_state, j.input_uri, j.input_digest,
+            j.state AS job_state, j.input_uri, j.input_digest, j.reserved_pages,
             j.queued_at, j.accepted_attempt_id
        FROM job_attempts a
        JOIN jobs j ON j.id = a.job_id

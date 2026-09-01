@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { TextDecoder } from 'node:util';
 import { ApiError } from './api-errors.mjs';
+import { requestMoreCredits } from './credits.mjs';
 import {
   InactiveApiKeyOwnerError, InvalidApiKeyNameError,
   issueApiKey, listApiKeys, revokeApiKey,
@@ -101,6 +102,7 @@ function dashboardOperation(method, path) {
   if (method === 'GET' && /^\/jobs\/[^/]+\/result$/u.test(path)) return 'job_result';
   if (method === 'GET' && /^\/jobs\/[^/]+$/u.test(path)) return 'job_detail';
   if (method === 'GET' && path === '/usage') return 'usage_view';
+  if (method === 'POST' && path === '/credits/request') return 'credits_request';
   if (method === 'GET' && path === '/guide') return 'api_guide';
   if (method === 'GET' && path === '/keys') return 'keys_list';
   if (method === 'POST' && path === '/keys') return 'keys_create';
@@ -273,6 +275,11 @@ export function createDashboardHandler({
             throw error;
           }
           return sendHtml(res, 201, createdKeyPage({ identity, secret: issued.secret }), requestId);
+        }
+        if (path === '/credits/request') {
+          await formBody(req, []);
+          await requestMoreCredits(db, { userId: identity.userId });
+          return sendHtml(res, 303, '', requestId, { location: '/usage' });
         }
         if (/^\/keys\/[^/]+\/revoke$/u.test(path)) {
           const keyId = matchUuid(path, /^\/keys\/([^/]+)\/revoke$/u);

@@ -19,18 +19,18 @@
         <a href="#pilot">Pilot</a>
         <a href="/blog/">Blog</a>
         <a class="sign-in" href="/sign-in">Sign in</a>
-        <a class="button" href="/sign-in">Sign in</a>
+        <a class="button" href="/sign-in">Start free</a>
       </nav>
     </header>
     <main id="main">
       <section class="hero-grid shell">
         <div>
-          <div class="eyebrow">Invite-only pilot · API and browser upload</div>
+          <div class="eyebrow">Alpha · 100 trial pages · API and browser upload</div>
           <h1>Know where every answer came from.</h1>
           <p class="hero-copy">Source-preserving PDF parsing for search and RAG. Native text and visual OCR remain separate, with page coordinates and explicit conflict records attached.</p>
           <div class="actions">
             <a class="button" href="#demo">Try 4 pages locally</a>
-            <a class="button button--quiet" href="/sign-in">Sign in to the pilot</a>
+            <a class="button button--quiet" href="/sign-in">Start with 100 pages</a>
             <a class="button button--quiet" href="/api-guide">Read the API guide</a>
           </div>
         </div>
@@ -108,7 +108,7 @@
     <div class="section-label">How it works</div>
     <h2>Two witnesses per page. Evidence, not guesses.</h2>
     <div class="cards">
-      <article class="card"><div class="card-number">01</div><h3>Submit a PDF</h3><p>Upload in the dashboard or use plain HTTPS. The service accepts PDFs up to 90 MiB and 200 pages during the pilot.</p></article>
+      <article class="card"><div class="card-number">01</div><h3>Submit a PDF</h3><p>Upload in the dashboard or use plain HTTPS. The alpha accepts PDFs up to 90 MiB and 200 pages, subject to available credits.</p></article>
       <article class="card"><div class="card-number">02</div><h3>Keep both readings</h3><p>Native PDF extraction and CPU OCR read the document. Raw observations stay separate even when they match.</p></article>
       <article class="card"><div class="card-number">03</div><h3>Return a defensible record</h3><p>Derived associations reference their source observations. Material disagreement becomes a blocking conflict, not a silent choice.</p></article>
     </div>
@@ -137,15 +137,15 @@
 
     <div class="pilot-grid" id="pilot">
       <div>
-        <div class="section-label">Pilot</div>
+        <div class="section-label">Alpha</div>
         <h2>Metered by completed page.</h2>
         <div class="price">$0.001<span> estimated usage / completed page</span></div>
-        <p class="prose">This is an invite-only value proof. The dashboard records a placeholder usage estimate; it is not an invoice or a measured per-job cloud bill.</p>
+        <p class="prose">Start with 100 page credits. The dashboard records a placeholder usage estimate; it is not an invoice or a measured per-job cloud bill.</p>
       </div>
       <aside class="invite-card">
-        <h2>Invite-only access</h2>
-        <p>Pilot invitations are currently issued directly by the owner. The public site does not pretend to collect requests before an intake path exists.</p>
-        <a class="button" href="/sign-in">Already invited? Sign in</a>
+        <h2>Alpha access</h2>
+        <p>Verify your email with a one-time PIN to create an account. If you need more pages, send a request from the Usage page.</p>
+        <a class="button" href="/sign-in">Start free</a>
       </aside>
     </div>
 
@@ -153,7 +153,7 @@
     <div class="faq">
       <article><h3>How is this different from a plain OCR API?</h3><p>PageSpatial keeps native and OCR evidence separate, associates it without overwriting either source, and exposes material conflicts.</p></article>
       <article><h3>How long are files retained?</h3><p>Input PDFs and result objects are retained for up to two days. Download results into your own store.</p></article>
-      <article><h3>What is supported?</h3><p>PDF only, up to 90 MiB and 200 pages. Enrichment is off in the external pilot.</p></article>
+      <article><h3>What is supported?</h3><p>PDF only, up to 90 MiB and 200 pages per job. Enrichment is off in the public alpha.</p></article>
       <article><h3>Does it claim to know which witness is right?</h3><p>No. A material disagreement is preserved and blocks trusted output instead of being resolved from confidence alone.</p></article>
       <article><h3>Is my document used for model training?</h3><p>No. The deployed parse path uses deterministic native extraction, local OCR, and rule-based association.</p></article>
       <article><h3>What happens after an idle period?</h3><p>The parser scales to zero. The first job after idle can include roughly 70–102 seconds of cold-start time.</p></article>

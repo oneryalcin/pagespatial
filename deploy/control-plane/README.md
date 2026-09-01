@@ -14,6 +14,23 @@ to use the private Compose origin `http://api:8580`. Protect only the dashboard
 hostname with Cloudflare Access; API clients authenticate with PageSpatial API
 keys.
 
+For the public alpha, configure the Access application to allow identities
+verified by One-time PIN, then set `PAGESPATIAL_ALLOW_SELF_SIGNUP=1`. The origin
+creates an active user only after it validates the Access JWT and grants the
+configured `PAGESPATIAL_TRIAL_PAGE_CREDITS` once. The default is 100 pages.
+There is no payment path in the alpha.
+
+Grant more pages for a pending request with:
+
+```sh
+docker compose -f deploy/control-plane/compose.yaml exec api \
+  npm run grant-credits -- user@example.com 100 "alpha top-up"
+```
+
+The command consumes the account's pending request. It refuses accounts with
+no pending request, so retrying an already-completed top-up cannot add pages
+twice.
+
 ## Start
 
 ```sh

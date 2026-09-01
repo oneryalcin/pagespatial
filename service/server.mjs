@@ -269,7 +269,20 @@ const server = createServer(async (req, res) => {
         uploaded = true;
       }
       try {
-        const submitted = await service.submit({ pdfPath, sourceUri, enrichment, source: uploaded ? 'upload' : 'path' });
+        const pageLimitText = url.searchParams.get('page_limit');
+        if (pageLimitText != null && !/^[1-9][0-9]*$/u.test(pageLimitText)) {
+          if (uploaded) rmSync(pdfPath, { force: true });
+          return json(res, 400, { code: 'invalid_request', error: 'page_limit must be a positive integer.' });
+        }
+        const pageLimit = pageLimitText == null ? null : Number(pageLimitText);
+        if (pageLimit != null && !Number.isSafeInteger(pageLimit)) {
+          if (uploaded) rmSync(pdfPath, { force: true });
+          return json(res, 400, { code: 'invalid_request', error: 'page_limit must be a positive integer.' });
+        }
+        const submitted = await service.submit({
+          pdfPath, sourceUri, enrichment, source: uploaded ? 'upload' : 'path',
+          maxPages: pageLimit,
+        });
         return json(res, 202, submitted);
       } catch (error) {
         // A rejected upload is dead weight (and its bytes may be sensitive).
