@@ -384,10 +384,17 @@ Each fresh container spent about 269-278 seconds building its TensorRT engine.
 That startup is reported separately and is not included in the warm document
 rates. The VM ran for 1,701 seconds; posted billing is not yet available.
 
-**Decision:** keep B1 with two owners. Recognition batch size is closed as a
-throughput lever for this architecture. This result does not trigger M4 kernel
-analysis, and there is no automatic M5. A new optimization requires a separate,
-specific hypothesis.
+**Decision:** keep B1 with two owners. Recognition batch size is rejected for
+the pinned PaddleX/UltraInfer implementation and tested shapes. This result does
+not trigger M4 kernel analysis, and there is no automatic M5. A new
+optimization requires a separate, specific hypothesis.
+
+**Dated correction (2026-09-02):** later model inspection measured 0.58–1.18 GB
+of logical recognizer probability output per sampled corpus page, with B8
+padding increasing logical output volume by 15–35%. Logical output volume is
+not a measurement of device-to-host transfer, and these samples do not prove
+causality. Whether reduced-output inference changes end-to-end throughput
+remains untested. Issue #126 records the bounded experiment and is parked.
 
 The compact result is
 [`b8-o2-gcp-summary-2026-08-25.json`](../../evaluation/gpu-instrumentation/b8-o2-gcp-summary-2026-08-25.json).
