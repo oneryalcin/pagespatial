@@ -83,8 +83,18 @@ PAGESPATIAL_MODAL_APP_NAME=pagespatial-parse-arm4-dev \
 `PAGESPATIAL_MEMORY_MIB` accepts `8192`, `12288`, `16384`, or `24576`. The
 default is `8192` MiB, selected by the bounded two-call 100-page allocation
 gate. Other values refuse at deploy time so this measurement knob cannot
-become an unbounded production configuration surface. Memory snapshots remain
-disabled.
+become an unbounded production configuration surface.
+
+CPU memory snapshots are enabled by default. Set
+`PAGESPATIAL_ENABLE_MEMORY_SNAPSHOT=0` at deploy time for the rollback path;
+only literal `0` and `1` are accepted. The warmed Node service, four Node
+workers, and four Python OCR sidecars are created in `@modal.enter(snap=True)`.
+Every restored container then revalidates `/health` and resets its cgroup
+memory/OOM baselines in `@modal.enter(snap=False)` before accepting work.
+Snapshots are created only for deployed apps. A redeploy invalidates them, and
+the first call on each uncovered Modal CPU worker type pays both normal startup
+and snapshot creation. Do not present the measured snapshot-hit latency as an
+SLA.
 
 Each result and terminal log contains a content-free `memory` report read from
 the container cgroup: current bytes, a two-second sampled peak, configured

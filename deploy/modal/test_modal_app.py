@@ -407,12 +407,61 @@ class DeployTimeGateTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("import-ok", result.stdout)
 
+    def test_memory_snapshot_defaults_on_and_can_be_disabled(self):
+        default = self._import_adapter({})
+        self.assertEqual(default.returncode, 0, default.stderr)
+        disabled = self._import_adapter({
+            "PAGESPATIAL_ENABLE_MEMORY_SNAPSHOT": "0",
+        })
+        self.assertEqual(disabled.returncode, 0, disabled.stderr)
+
+    def test_invalid_memory_snapshot_switch_refuses_to_deploy(self):
+        result = self._import_adapter({
+            "PAGESPATIAL_ENABLE_MEMORY_SNAPSHOT": "true",
+        })
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "PAGESPATIAL_ENABLE_MEMORY_SNAPSHOT must be '0' or '1'",
+            result.stderr)
+
     def test_injection_flag_with_dev_app_name_deploys(self):
         result = self._import_adapter({
             "PAGESPATIAL_ENABLE_TEST_FAILURES": "1",
             "PAGESPATIAL_MODAL_APP_NAME": "pagespatial-parse-arm9-dev"})
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("import-ok", result.stdout)
+
+
+class SnapshotRestoreTest(unittest.TestCase):
+    def test_restore_revalidates_children_and_resets_measurement_baselines(self):
+        inst = modal_app.ParseContainer.__new__(modal_app.ParseContainer)
+        inst.cold = False
+        inst.node = types.SimpleNamespace(pid=42)
+        inst.snapshot_prepare_ms = 91_000
+        inst.memory_container_sample_peak_bytes = 9
+        inst.memory_method_sample_peak_bytes = 8
+        inst.memory_events_at_container_start = {"oom": 2}
+        inst.memory_events_at_method_start = {"oom": 2}
+        inst._wait_health = mock.Mock()
+        inst._memory_report = mock.Mock(return_value={"pressure": False})
+        inst._log_event = mock.Mock()
+
+        with mock.patch.object(modal_app, "_read_memory_events",
+                               return_value={"oom": 0}), \
+             mock.patch.object(modal_app.time, "monotonic",
+                               side_effect=[10.0, 10.125]):
+            inst.after_snapshot_restore()
+
+        inst._wait_health.assert_called_once_with(deadline_s=60)
+        self.assertTrue(inst.cold)
+        self.assertEqual(inst.service_ready_ms, 125)
+        self.assertIsNone(inst.memory_container_sample_peak_bytes)
+        self.assertIsNone(inst.memory_method_sample_peak_bytes)
+        self.assertEqual(inst.memory_events_at_container_start, {"oom": 0})
+        inst._log_event.assert_called_once_with(
+            "service_started", node_pid=42, container_cold=True,
+            service_ready_ms=125, snapshot_prepare_ms=91_000,
+            memory={"pressure": False})
 
 
 class SurvivingChildrenTest(unittest.TestCase):
