@@ -17,14 +17,24 @@ publish a personal email address as a temporary substitute.
 Preview locally:
 
 ```bash
-npx wrangler pages dev site
+npm run build:site
+npx wrangler pages dev .site-dist
 ```
 
 Deploy after creating the `pagespatial-site` Pages project:
 
 ```bash
-npx wrangler pages deploy site --project-name pagespatial-site --branch main
+npx wrangler pages deploy .site-dist --project-name pagespatial-site --branch main
 ```
+
+The public demo parses at most four pages in the browser. PDF.js, PDF Inspector
+WASM, and PP-OCR run locally. The build copies their pinned same-origin assets
+into `.site-dist`; the demo does not call the PageSpatial API or Modal.
+
+The PP-OCR OpenCV runtime uses generated JavaScript and a data URL during
+initialization. The homepage CSP therefore permits `unsafe-eval` and `data:`
+connections. Scripts remain restricted to same-origin assets, and the stricter
+policy remains in force under `/blog/*`.
 
 Cloudflare Pages must associate the apex custom domain `pagespatial.dev` with
 the project. Adding only a DNS CNAME without that association is not enough.

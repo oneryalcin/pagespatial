@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "experiment": "parsebench-chart-semantic-bounded",
+  "model": "gemini-3.7-flash",
+  "corpus": "ParseBench pinned test/chart cohort",
+  "documents": [
+    {
+      "id": "chart/05021ff2-en_p19",
+      "pdf_sha256": "9d9777ea0c06854bbf760148bfceedea70f08f1b715e345523fb5d8302d08cd8",
+      "basic_result_sha256": "b814093eb83a814fd53d26ea6a1bae9c62308150896f742d96a040cd2de76704",
+      "rendered_png_sha256": "ac34df38cd0312922ad51b09ffd79d39fda392d2a8a40fccae0cdece0ab622bf",
+      "semantic_result_sha256": "92dbe6cc30caa614e46ca06b6ca75c4c75b48e5b52837e0a5a98d54539a2d09c",
+      "gemini_latency_ms": 18029,
+      "gemini_usage": {
+        "promptTokenCount": 1166,
+        "candidatesTokenCount": 1791,
+        "totalTokenCount": 3896,
+        "promptTokensDetails": [
+          {
+            "modality": "IMAGE",
+            "tokenCount": 1064
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 102
+          }
+        ],
+        "thoughtsTokenCount": 939,
+        "serviceTier": "standard"
+      },
+      "chart_count": 2,
+      "relation_count": 38
+    },
+    {
+      "id": "chart/ADL_Future_of_automotive_mobility_2024_1_p17",
+      "pdf_sha256": "55c69cf8a6dfb87ed2f6ed9ac67f13de11f1ef98fbf718a28d6d40eac65785c1",
+      "basic_result_sha256": "421b9230f32f274478910404ea1ae7d935e3a58bbcd46333bee36de71de74831",
+      "rendered_png_sha256": "0faa0d43347d23cf5ffb0eade5db812241c3313ce1d391dff4344d321e97a81f",
+      "semantic_result_sha256": "cb79d71aeb8f5f6afa5bb15b9bbb73a7d91e4cf4cb4f36572da10011a420819d",
+      "gemini_latency_ms": 9955,
+      "gemini_usage": {
+        "promptTokenCount": 1194,
+        "candidatesTokenCount": 336,
+        "totalTokenCount": 1916,
+        "promptTokensDetails": [
+          {
+            "modality": "IMAGE",
+            "tokenCount": 1092
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 102
+          }
+        ],
+        "thoughtsTokenCount": 386,
+        "serviceTier": "standard"
+      },
+      "chart_count": 1,
+      "relation_count": 8
+    },
+    {
+      "id": "chart/US_Professional_Services_Partner_Compensation_Survey_2024_p11",
+      "pdf_sha256": "0eb7e68d29397685cc72ca399733eae50bf440a84dafd7e57aee042b1837def7",
+      "basic_result_sha256": "f7b3b176d9547e34c69829c79bb0d49295f9031a0287c00a09c75f02e0692f81",
+      "rendered_png_sha256": "e0a01cde64128ec4e100a5b9e7214ebc9a57321ee19e303eec4839390465ab54",
+      "semantic_result_sha256": "9b754f72ef7e6dddc5e83d403b0e85f55a3a931a652d45e57ce48985aaba1a89",
+      "gemini_latency_ms": 22949,
+      "gemini_usage": {
+        "promptTokenCount": 1204,
+        "candidatesTokenCount": 542,
+        "totalTokenCount": 2290,
+        "promptTokensDetails": [
+          {
+            "modality": "IMAGE",
+            "tokenCount": 1102
+          },
+          {
+            "modality": "TEXT",
+            "tokenCount": 102
+          }
+        ],
+        "thoughtsTokenCount": 544,
+        "serviceTier": "standard"
+      },
+      "chart_count": 1,
+      "relation_count": 12
+    }
+  ],
+  "basic_results_unchanged": true,
+  "completed_at": "2026-09-01T09:14:25.279Z"
+}

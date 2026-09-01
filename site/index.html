@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="PageSpatial parses PDFs into source-preserving evidence records with native text, OCR, page coordinates, and explicit conflicts.">
   <title>PageSpatial — source-preserving PDF parsing</title>
+  <link rel="icon" href="/assets/logo.png">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -13,6 +14,7 @@
     <header class="site-header site-header--dark shell">
       <a href="/" aria-label="PageSpatial home"><img class="logo logo--light" src="/assets/logo.png" alt="PageSpatial"></a>
       <nav class="nav nav--dark" aria-label="Main navigation">
+        <a href="#demo">Local demo</a>
         <a href="#how">How it works</a>
         <a href="#pilot">Pilot</a>
         <a href="/blog/">Blog</a>
@@ -27,7 +29,8 @@
           <h1>Know where every answer came from.</h1>
           <p class="hero-copy">Source-preserving PDF parsing for search and RAG. Native text and visual OCR remain separate, with page coordinates and explicit conflict records attached.</p>
           <div class="actions">
-            <a class="button" href="/sign-in">Sign in to the pilot</a>
+            <a class="button" href="#demo">Try 4 pages locally</a>
+            <a class="button button--quiet" href="/sign-in">Sign in to the pilot</a>
             <a class="button button--quiet" href="/api-guide">Read the API guide</a>
           </div>
         </div>
@@ -49,6 +52,57 @@
         </div>
       </section>
   </div>
+
+  <section class="demo shell" id="demo" aria-labelledby="demo-title">
+    <div class="demo-intro">
+      <div class="section-label">Browser demo</div>
+      <h2 id="demo-title">Parse up to four pages without uploading.</h2>
+      <p>Your PDF stays on this device. Processing happens in this browser.</p>
+      <p class="demo-note">The browser downloads PDF, OCR, and WebAssembly assets from PageSpatial. It sends no document bytes to PageSpatial or Modal.</p>
+    </div>
+
+    <form class="demo-panel" id="demo-form" novalidate>
+      <div class="demo-control">
+        <label for="demo-file">PDF document</label>
+        <input id="demo-file" name="pdf" type="file" accept="application/pdf,.pdf" required>
+        <p>One PDF · 20 MiB maximum · 4 pages maximum</p>
+      </div>
+      <div class="demo-actions">
+        <button class="button" id="demo-submit" type="submit" disabled>Parse on this device</button>
+        <button class="button button--paper" id="demo-clear" type="button" hidden>Clear document</button>
+      </div>
+      <div class="demo-status" id="demo-status" role="status" aria-live="polite">Choose a PDF to begin.</div>
+      <div class="demo-error" id="demo-error" role="alert" tabindex="-1" hidden></div>
+
+      <section class="demo-results" id="demo-results" aria-labelledby="demo-results-title" hidden>
+        <div class="demo-result-heading">
+          <div>
+            <h3 id="demo-results-title" tabindex="-1">Local result</h3>
+            <p id="demo-backend"></p>
+          </div>
+          <div class="demo-pages" id="demo-pages" aria-label="Reconstruction page"></div>
+        </div>
+        <div class="demo-tabs" role="tablist" aria-label="Result format">
+          <button id="tab-reconstruction" role="tab" aria-controls="panel-reconstruction" aria-selected="true" tabindex="0" type="button">Reconstruction</button>
+          <button id="tab-markdown" role="tab" aria-controls="panel-markdown" aria-selected="false" tabindex="-1" type="button">Markdown</button>
+          <button id="tab-json" role="tab" aria-controls="panel-json" aria-selected="false" tabindex="-1" type="button">Evidence JSON</button>
+        </div>
+        <div id="panel-reconstruction" class="demo-tabpanel" role="tabpanel" aria-labelledby="tab-reconstruction">
+          <figure class="demo-reconstruction">
+            <img id="demo-reconstruction" alt="">
+            <figcaption id="demo-reconstruction-caption">Text and layout evidence only. This is not a visual facsimile of the PDF.</figcaption>
+          </figure>
+        </div>
+        <div id="panel-markdown" class="demo-tabpanel" role="tabpanel" aria-labelledby="tab-markdown" hidden>
+          <pre id="demo-markdown"></pre>
+        </div>
+        <div id="panel-json" class="demo-tabpanel" role="tabpanel" aria-labelledby="tab-json" hidden>
+          <pre id="demo-json"></pre>
+        </div>
+        <button class="button button--paper demo-download" id="demo-download" type="button">Download reconstruction</button>
+      </section>
+    </form>
+  </section>
 
   <section class="content shell" id="how">
     <div class="section-label">How it works</div>
@@ -112,5 +166,6 @@
       <div class="footer-links"><a href="/api-guide">API guide</a><a href="/blog/">Blog</a><a href="/sign-in">Sign in</a><span>© 2026 PageSpatial</span></div>
     </div>
   </footer>
+  <script type="module" src="/demo/demo.ts"></script>
 </body>
 </html>

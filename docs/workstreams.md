@@ -12,9 +12,10 @@ Onboarding order: [principles](principles.md) →
 
 ## State snapshot (update the date when you touch this)
 
-*As of 2026-08-27, after the M3 dashboard deployment (PR #115).*
+*As of 2026-09-01, after the PDF Inspector 1.17 and browser-upload fixes
+(PRs #121 and #120).*
 
-- **main baseline**: `c97cb45` after the M3 dashboard merge. Current record
+- **main baseline**: `15ee1b0` after PR #120. Current record
   versions remain schema 0.6.0 and enrichment-0.2.0.
 - **Internal Modal parse is ADOPTED**: the CPU/OpenVINO warm-`Cls` adapter
   passed its 12/12 qualification for controlled internal, parse-only jobs.
@@ -22,10 +23,25 @@ Onboarding order: [principles](principles.md) →
   lifetime, and `max_containers` in `{1, 4, 16}`. Direct result return retains
   its 64 MiB boundary; PR #108 separately qualified R2 pointer publication
   with a 128 MiB cap.
-  Enrichment and public ingress remain off. The current Modal adapter has
-  `min_containers=0`, `buffer_containers=0`, and no memory snapshot support;
-  observed cold readiness spans roughly 70–102 seconds. Trial:
-  `docs/trials/2026-08-23-modal-qualification.md`.
+  Enrichment and direct public Modal ingress remain off. The current deployed
+  adapter has `min_containers=0`, `buffer_containers=0`, 24 GiB memory, and
+  memory snapshots disabled; observed ordinary cold readiness spans roughly
+  70–102 seconds. An experiment restored the existing Node/Python process tree
+  from memory snapshots with a 7.1-second median client cold call, but the
+  implementation is deliberately not landed or production-qualified. A later
+  real-R2 snapshot gate is deferred by owner decision. A separate two-call-per-
+  arm 100-page trial completed 600/600 pages with no retry or OOM at 12, 16,
+  and 24 GiB; 12 GiB used the least allocated memory-time in that trial. An
+  owner-directed 8 GiB continuation then completed another 200/200 pages with
+  zero retry, page failure, OOM, or memory-pressure alarm. The two-second
+  cgroup samples peaked at 5.92–6.01 GiB and left 1.99–2.08 GiB headroom, so
+  8 GiB is the committed POC default. Every result and terminal log now reports
+  sampled cgroup peak, headroom, utilization, and OOM deltas; the sampled peak
+  is a lower bound, not a kernel high-water mark. The allocation becomes live
+  only when the merged revision is deployed to the production Modal app. Trials:
+  `docs/trials/2026-08-23-modal-qualification.md`,
+  `docs/trials/2026-08-28-modal-memory-snapshot.md`, and
+  `docs/trials/2026-09-01-modal-memory-allocation.md`.
 - **GPU optimization workstream CLOSED without adoption (PR #104)**:
   M2 selected producer starvation; M3 showed thousands of small recognizer
   calls dominated by TensorRT enqueue and device-to-host transfer, while the
@@ -74,7 +90,7 @@ Onboarding order: [principles](principles.md) →
   access expires from R2 `LastModified + 2 days`, not reconciliation time. The
   reconciler does not normally delete objects individually (owner decision,
   2026-08-26).
-- **Invite-only public v1 and M3 dashboard live gates PASS**:
+- **Invite-only public v1, M3 dashboard, and browser upload live gates PASS**:
   `api.pagespatial.dev` and Access-protected `app.pagespatial.dev` reach an
   isolated Compose control plane through outbound-only Cloudflare Tunnel;
   no host port is published. The full invited-user path passed through API
@@ -91,13 +107,35 @@ Onboarding order: [principles](principles.md) →
   M2.4 is merged. M3 adds an Access-protected, server-rendered Ivory Ledger
   dashboard with tenant-scoped Jobs, job detail and result grants, succeeded-
   only monthly Usage, API-key management, and an in-product API guide. It adds
-  no JavaScript, browser upload, queue, job lifecycle, or provider abstraction.
+  no queue, job lifecycle, or provider abstraction. The later browser upload
+  route now hashes the PDF locally, requests a presigned grant, uploads direct
+  to R2, and finalizes the job. PR #120 fixed the production R2 CORS origin;
+  a public-API proof uploaded from origin `https://app.pagespatial.dev`, then
+  reached `succeeded` with one validated result page. The public site also has
+  a browser-local demo that loads the PDF/OCR/WASM assets and sends no document
+  bytes to PageSpatial or Modal; this workstream update lands its previously
+  local source and tests.
   PR #115 passed 375 core tests, 103 local API tests, 113 PostgreSQL 18 API
   tests, responsive render checks at 1440/768/390 px, and the live Access,
   health, and host-separation probes. Evidence:
   `docs/trials/2026-08-27-service-m3-dashboard.md`.
   Progressive page polling, enrichment spend control, payments, organizations,
   and a second worker provider remain deliberately out of v1.
+- **PDF Inspector 1.17 is ADOPTED and qualified (PR #121)**: provenance now
+  derives from installed package versions. Linux qualification and the live
+  R2/Modal parity plus four-role ACL matrix passed on the upgraded worker.
+  Evidence: `docs/trials/2026-08-28-pdf-inspector-1-17-parsebench.md`.
+- **ParseBench Basic measured; chart-only Semantic is promising, not adopted**:
+  the pinned three-case-per-dimension Basic cohort measured 88.05% Content
+  Faithfulness, 41.22% table GTRM composite, 36.53% Semantic Formatting,
+  11.78% Visual Grounding Element Pass Rate, and 0/23 chart rules. One bounded
+  Gemini 3.7 Flash treatment made exactly one call for each of the three chart
+  pages and raised chart results to 12/23 without changing the stored Basic
+  outputs. One page remained 0/8 because its series labels did not associate
+  with the expected chart labels. Do not enable Semantic broadly or tune raw
+  strings against the benchmark. Trials:
+  `docs/trials/2026-08-28-parsebench-basic-test-cohort.md` and
+  `docs/trials/2026-09-01-parsebench-semantic-charts.md`.
 - **Retrieval thesis measured (issue #36 CLOSED)**: pre-registered
   outcome "flat everywhere" — trust metadata does NOT pay in ranking,
   not even the corroboration links (five-way ablation, n=101 queries,
