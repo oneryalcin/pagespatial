@@ -122,6 +122,7 @@ def summarize_result(page_count: int, pdf_bytes: bytes, result: dict[str, Any],
         },
         "modal": result.get("retry"),
         "resources": resources,
+        "memory": result.get("memory"),
         "adapter_revision": result.get("adapter_revision"),
         "image_pin_revision": result.get("image_pin_revision"),
     }

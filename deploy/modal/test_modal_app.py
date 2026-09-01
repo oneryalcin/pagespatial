@@ -250,6 +250,42 @@ class JobBudgetTest(unittest.TestCase):
         self.assertEqual(modal_app.JobBudget().limit, 100)
 
 
+class MemoryUsageReportTest(unittest.TestCase):
+    LIMIT = 8 * 1024 * 1024 * 1024
+
+    def test_reports_healthy_headroom_without_oom(self):
+        report = modal_app.memory_usage_report(
+            current_bytes=4 * 1024**3,
+            sampled_peak_bytes=5 * 1024**3,
+            configured_limit_bytes=self.LIMIT,
+            events_start={"oom": 2, "oom_kill": 1},
+            events_now={"oom": 2, "oom_kill": 1})
+        self.assertFalse(report["pressure"])
+        self.assertEqual(report["headroom_bytes"], 3 * 1024**3)
+        self.assertEqual(report["oom_events_delta"], 0)
+        self.assertTrue(report["peak_is_lower_bound"])
+
+    def test_flags_high_sampled_utilization(self):
+        report = modal_app.memory_usage_report(
+            current_bytes=7 * 1024**3,
+            sampled_peak_bytes=int(7.5 * 1024**3),
+            configured_limit_bytes=self.LIMIT,
+            events_start={}, events_now={})
+        self.assertTrue(report["pressure"])
+        self.assertGreaterEqual(
+            report["utilization_ratio"], modal_app.MEMORY_PRESSURE_RATIO)
+
+    def test_flags_new_oom_event_even_with_headroom(self):
+        report = modal_app.memory_usage_report(
+            current_bytes=2 * 1024**3,
+            sampled_peak_bytes=3 * 1024**3,
+            configured_limit_bytes=self.LIMIT,
+            events_start={"oom": 4, "oom_kill": 0},
+            events_now={"oom": 5, "oom_kill": 0})
+        self.assertTrue(report["pressure"])
+        self.assertEqual(report["oom_events_delta"], 1)
+
+
 class StopFetchingHelperTest(unittest.TestCase):
     def test_helper_calls_the_experimental_api(self):
         before = len(STOP_CALLS)
@@ -358,12 +394,12 @@ class DeployTimeGateTest(unittest.TestCase):
         self.assertIn("import-ok", result.stdout)
 
     def test_unlisted_memory_allocation_refuses_at_deploy_time(self):
-        result = self._import_adapter({"PAGESPATIAL_MEMORY_MIB": "8192"})
+        result = self._import_adapter({"PAGESPATIAL_MEMORY_MIB": "6144"})
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("PAGESPATIAL_MEMORY_MIB must be one of", result.stderr)
 
     def test_allowlisted_memory_allocations_deploy(self):
-        for memory_mib in ("12288", "16384", "24576"):
+        for memory_mib in ("8192", "12288", "16384", "24576"):
             with self.subTest(memory_mib=memory_mib):
                 result = self._import_adapter({
                     "PAGESPATIAL_MEMORY_MIB": memory_mib,

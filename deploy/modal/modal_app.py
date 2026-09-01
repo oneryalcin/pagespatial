@@ -68,7 +68,9 @@ TIMEOUT_INJECTION_SLEEP_S = METHOD_TIMEOUT_S + 120  # bounded even if the platfo
 
 # Resource configuration (§12: every result/log event carries it).
 CPU_CORES = 4.0                            # physical cores — measured trial topology
-DEFAULT_MEMORY_MIB = 12288
+DEFAULT_MEMORY_MIB = 8192
+MEMORY_LOW_HEADROOM_BYTES = 512 * 1024 * 1024
+MEMORY_PRESSURE_RATIO = 0.90
 SERVICE_WORKERS = 4
 SERVICE_SIDECAR_THREADS = 1
 RESOURCES = {
@@ -112,7 +114,7 @@ app = modal.App(APP_NAME)
 # any other value refuses to deploy. In-container re-imports ignore the
 # decorator arguments, so the container branch pins the default.
 ALLOWED_MAX_CONTAINERS = (1, 4, 16)
-ALLOWED_MEMORY_MIB = (12288, 16384, 24576)
+ALLOWED_MEMORY_MIB = (8192, 12288, 16384, 24576)
 if modal.is_local():
     _raw_max_containers = os.environ.get("PAGESPATIAL_MAX_CONTAINERS", "1")
     if _raw_max_containers not in {str(n) for n in ALLOWED_MAX_CONTAINERS}:
@@ -203,6 +205,104 @@ if modal.is_local():
 # Pure helpers — unit-testable without the Modal runtime.
 # ---------------------------------------------------------------------------
 
+_CGROUP_MEMORY_CURRENT_PATHS = (
+    Path("/sys/fs/cgroup/memory.current"),
+    Path("/sys/fs/cgroup/memory/memory.usage_in_bytes"),
+)
+_CGROUP_MEMORY_EVENTS_PATHS = (
+    Path("/sys/fs/cgroup/memory.events"),
+    Path("/sys/fs/cgroup/memory/memory.failcnt"),
+)
+
+
+class MemoryUsageReport(TypedDict):
+    current_bytes: int | None
+    sampled_peak_bytes: int | None
+    container_sampled_peak_bytes: int | None
+    configured_limit_bytes: int
+    headroom_bytes: int | None
+    utilization_ratio: float | None
+    oom_events_delta: int
+    oom_kill_events_delta: int
+    pressure: bool
+    sample_interval_ms: int
+    peak_is_lower_bound: Literal[True]
+
+
+def _read_first_int(paths: tuple[Path, ...]) -> int | None:
+    for path in paths:
+        try:
+            return int(path.read_text().strip())
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def _read_memory_events() -> dict[str, int]:
+    for path in _CGROUP_MEMORY_EVENTS_PATHS:
+        try:
+            text = path.read_text().strip()
+        except OSError:
+            continue
+        if path.name == "memory.failcnt":
+            try:
+                return {"oom": int(text), "oom_kill": 0}
+            except ValueError:
+                continue
+        events = {}
+        for line in text.splitlines():
+            try:
+                key, value = line.split(maxsplit=1)
+                if key in {"oom", "oom_kill"}:
+                    events[key] = int(value)
+            except ValueError:
+                continue
+        return events
+    return {}
+
+
+def memory_usage_report(*, current_bytes: int | None,
+                        sampled_peak_bytes: int | None,
+                        container_sampled_peak_bytes: int | None = None,
+                        configured_limit_bytes: int,
+                        events_start: dict[str, int],
+                        events_now: dict[str, int]) -> MemoryUsageReport:
+    """Build one content-free memory-pressure report.
+
+    Modal's gVisor environment does not expose a reliable kernel high-water
+    mark, so sampled_peak_bytes is explicitly a lower bound. OOM counters are
+    retained separately because an allocation failure matters even when the
+    sampled peak misses a short spike.
+    """
+    peak = sampled_peak_bytes if isinstance(sampled_peak_bytes, int) else None
+    headroom = (
+        max(0, configured_limit_bytes - peak) if peak is not None else None)
+    utilization = (
+        round(peak / configured_limit_bytes, 4)
+        if peak is not None and configured_limit_bytes > 0 else None)
+    oom_delta = max(0, events_now.get("oom", 0) - events_start.get("oom", 0))
+    oom_kill_delta = max(
+        0, events_now.get("oom_kill", 0) - events_start.get("oom_kill", 0))
+    pressure = (
+        oom_delta > 0
+        or oom_kill_delta > 0
+        or (headroom is not None and headroom < MEMORY_LOW_HEADROOM_BYTES)
+        or (utilization is not None and utilization >= MEMORY_PRESSURE_RATIO)
+    )
+    return {
+        "current_bytes": current_bytes,
+        "sampled_peak_bytes": peak,
+        "container_sampled_peak_bytes": container_sampled_peak_bytes,
+        "configured_limit_bytes": configured_limit_bytes,
+        "headroom_bytes": headroom,
+        "utilization_ratio": utilization,
+        "oom_events_delta": oom_delta,
+        "oom_kill_events_delta": oom_kill_delta,
+        "pressure": pressure,
+        "sample_interval_ms": 2000,
+        "peak_is_lower_bound": True,
+    }
+
 class InputRejected(ValueError):
     """Invalid caller input (§7.1) — rejected before any Node work."""
 
@@ -228,6 +328,7 @@ class ParseObjectTiming(TypedDict):
     parse_method_ms: int
     upload_ms: int
     total_method_ms: int
+    memory: MemoryUsageReport
 
 
 class ParseObjectSuccess(TypedDict):
@@ -680,6 +781,11 @@ class ParseContainer:
         self.cold = True
         self.budget = JobBudget()
         self.retired = False
+        self.memory_limit_bytes = MEMORY_MIB * 1024 * 1024
+        self.memory_container_sample_peak_bytes = None
+        self.memory_method_sample_peak_bytes = None
+        self.memory_events_at_container_start = _read_memory_events()
+        self.memory_events_at_method_start = self.memory_events_at_container_start
         # §12 identity context: attached to EVERY structured log event.
         self.log_context = {
             "app_name": os.environ.get("PAGESPATIAL_APP_NAME", APP_NAME),
@@ -724,11 +830,39 @@ class ParseContainer:
         # log event, never from results (§12; PR #89 closure).
         self._log_event("service_started", node_pid=self.node.pid,
                         container_cold=True,
-                        service_ready_ms=self.service_ready_ms)
+                        service_ready_ms=self.service_ready_ms,
+                        memory=self._memory_report())
+
+    def _sample_memory(self) -> int | None:
+        current = _read_first_int(_CGROUP_MEMORY_CURRENT_PATHS)
+        if current is not None:
+            container_peak = getattr(
+                self, "memory_container_sample_peak_bytes", None)
+            method_peak = getattr(self, "memory_method_sample_peak_bytes", None)
+            self.memory_container_sample_peak_bytes = (
+                current if container_peak is None else max(container_peak, current))
+            self.memory_method_sample_peak_bytes = (
+                current if method_peak is None else max(method_peak, current))
+        self.memory_current_bytes = current
+        return current
+
+    def _memory_report(self) -> MemoryUsageReport:
+        current = self._sample_memory()
+        return memory_usage_report(
+            current_bytes=current,
+            sampled_peak_bytes=getattr(
+                self, "memory_method_sample_peak_bytes", current),
+            container_sampled_peak_bytes=getattr(
+                self, "memory_container_sample_peak_bytes", current),
+            configured_limit_bytes=getattr(
+                self, "memory_limit_bytes", MEMORY_MIB * 1024 * 1024),
+            events_start=getattr(self, "memory_events_at_method_start", {}),
+            events_now=_read_memory_events())
 
     def _wait_health(self, deadline_s: float):
         start = time.monotonic()
         while time.monotonic() - start < deadline_s:
+            self._sample_memory()
             if self.node.poll() is not None:
                 raise RuntimeError(
                     f"node exited during startup (code {self.node.returncode}); "
@@ -746,6 +880,7 @@ class ParseContainer:
         raise RuntimeError(f"/health not ready within {deadline_s}s")
 
     def _health_ok(self) -> bool:
+        self._sample_memory()
         if self.node.poll() is not None:
             return False
         try:
@@ -817,6 +952,9 @@ class ParseContainer:
 
     def _begin_method(self):
         method_t0 = time.monotonic()
+        self.memory_method_sample_peak_bytes = None
+        self.memory_events_at_method_start = _read_memory_events()
+        self._sample_memory()
         container_cold = self.cold
         service_ready_ms = self.service_ready_ms if self.cold else 0
         self.cold = False
@@ -894,6 +1032,7 @@ class ParseContainer:
                     "parse_method_ms": int((time.monotonic() - parse_t0) * 1000),
                     "upload_ms": 0,
                     "total_method_ms": int((time.monotonic() - object_t0) * 1000),
+                    "memory": self._memory_report(),
                 })
 
         if parse_result.get("status") != "completed":
@@ -905,6 +1044,7 @@ class ParseContainer:
                         "total_method_ms", int((time.monotonic() - parse_t0) * 1000)),
                     "upload_ms": 0,
                     "total_method_ms": int((time.monotonic() - object_t0) * 1000),
+                    "memory": parse_result.get("memory", self._memory_report()),
                 })
 
         execution_id = uuid.uuid4().hex
@@ -941,6 +1081,7 @@ class ParseContainer:
                 "parse_method_ms": parse_result["timing"]["total_method_ms"],
                 "upload_ms": upload_ms,
                 "total_method_ms": int((time.monotonic() - object_t0) * 1000),
+                "memory": parse_result["memory"],
             },
         }
 
@@ -1050,6 +1191,7 @@ class ParseContainer:
 
             deadline = time.monotonic() + PARSE_DEADLINE_S
             while True:
+                self._sample_memory()
                 if self.node.poll() is not None:
                     self._retire("node_child_died")
                     raise RuntimeError("node child died mid-parse; instance retired")
@@ -1084,7 +1226,11 @@ class ParseContainer:
                             total_method_ms=result["timing"]["total_method_ms"],
                             pages_ok=result["pages_ok"],
                             pages_failed=result["pages_failed"],
-                            result_bytes=serialized)
+                            result_bytes=serialized,
+                            memory=result["memory"])
+            if result["memory"]["pressure"]:
+                self._log_event("memory_pressure", job_id=job_id,
+                                memory=result["memory"])
             return result
         finally:
             # §7.4: job dir + uploaded PDF removed after every terminal
@@ -1107,6 +1253,7 @@ class ParseContainer:
         # rejected first call, the next successful result carries
         # service_ready_ms=0 — cold readiness lives ONLY in the
         # `service_started` log event; aggregation reads it from logs.
+        memory = self._memory_report()
         return {
             "request_id": request_id,
             "document_sha256": sha256,
@@ -1131,6 +1278,7 @@ class ParseContainer:
                 **self._modal_ids(),
             },
             "resources": RESOURCES,
+            "memory": memory,
             "app_name": os.environ.get("PAGESPATIAL_APP_NAME", APP_NAME),
             "adapter_revision": os.environ.get("PAGESPATIAL_GIT_REV", "unknown"),
             "image_pin_revision": os.environ.get("PAGESPATIAL_IMAGE_PIN_REV", "unknown"),

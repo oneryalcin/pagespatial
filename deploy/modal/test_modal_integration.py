@@ -212,7 +212,7 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
         self.assertEqual(result["pages_failed"], 1)
         self.assertEqual(result["document_sha256"], SHA)
         self.assertEqual(result["resources"],
-                         {"cpu": 4.0, "memory_mib": 24576, "workers": 4, "sidecar_threads": 1})
+                         {"cpu": 4.0, "memory_mib": 8192, "workers": 4, "sidecar_threads": 1})
         self.assertEqual(result["adapter_revision"], "unknown")  # env not baked under stub
         self.assertIn("image_pin_revision", result)
         self.assertIn("app_name", result)

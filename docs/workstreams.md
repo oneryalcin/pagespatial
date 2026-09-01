@@ -31,8 +31,14 @@ Onboarding order: [principles](principles.md) →
   implementation is deliberately not landed or production-qualified. A later
   real-R2 snapshot gate is deferred by owner decision. A separate two-call-per-
   arm 100-page trial completed 600/600 pages with no retry or OOM at 12, 16,
-  and 24 GiB; 12 GiB used the least allocated memory-time and is the committed
-  next-deploy default. It is not yet the live production allocation. Trials:
+  and 24 GiB; 12 GiB used the least allocated memory-time in that trial. An
+  owner-directed 8 GiB continuation then completed another 200/200 pages with
+  zero retry, page failure, OOM, or memory-pressure alarm. The two-second
+  cgroup samples peaked at 5.92–6.01 GiB and left 1.99–2.08 GiB headroom, so
+  8 GiB is the committed POC default. Every result and terminal log now reports
+  sampled cgroup peak, headroom, utilization, and OOM deltas; the sampled peak
+  is a lower bound, not a kernel high-water mark. The allocation becomes live
+  only when the merged revision is deployed to the production Modal app. Trials:
   `docs/trials/2026-08-23-modal-qualification.md`,
   `docs/trials/2026-08-28-modal-memory-snapshot.md`, and
   `docs/trials/2026-09-01-modal-memory-allocation.md`.

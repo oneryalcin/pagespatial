@@ -80,10 +80,18 @@ PAGESPATIAL_MODAL_APP_NAME=pagespatial-parse-arm4-dev \
   modal deploy deploy/modal/modal_app.py
 ```
 
-`PAGESPATIAL_MEMORY_MIB` accepts `12288`, `16384`, or `24576`. The default is
-`12288` MiB, selected by the bounded 100-page allocation trial. Other values
-refuse at deploy time so this measurement knob cannot become an unbounded
-production configuration surface. Memory snapshots remain disabled.
+`PAGESPATIAL_MEMORY_MIB` accepts `8192`, `12288`, `16384`, or `24576`. The
+default is `8192` MiB, selected by the bounded two-call 100-page allocation
+gate. Other values refuse at deploy time so this measurement knob cannot
+become an unbounded production configuration surface. Memory snapshots remain
+disabled.
+
+Each result and terminal log contains a content-free `memory` report read from
+the container cgroup: current bytes, a two-second sampled peak, configured
+limit, headroom, utilization, and OOM/OOM-kill deltas. `pressure=true` at 90%
+sampled utilization, below 512 MiB headroom, or after any new OOM event. The
+sampled peak is explicitly a lower bound; it is an operational alarm, not a
+kernel high-water mark. A pressure report does not alter a valid parse result.
 
 ## Invocation
 
