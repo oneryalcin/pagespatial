@@ -80,6 +80,11 @@ PAGESPATIAL_MODAL_APP_NAME=pagespatial-parse-arm4-dev \
   modal deploy deploy/modal/modal_app.py
 ```
 
+`PAGESPATIAL_MEMORY_MIB` accepts `12288`, `16384`, or `24576`. The default is
+`12288` MiB, selected by the bounded 100-page allocation trial. Other values
+refuse at deploy time so this measurement knob cannot become an unbounded
+production configuration surface. Memory snapshots remain disabled.
+
 ## Invocation
 
 No Docker `CMD`/`USER` assumption: Modal ignores both, so `@enter` starts

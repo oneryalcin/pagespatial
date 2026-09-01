@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "experiment": "one-document-repeated-page-scaling",
+  "label": "mem24",
+  "started_at": "2026-09-01T09:11:59.243618+00:00",
+  "completed_at": "2026-09-01T09:19:46.703021+00:00",
+  "app": "pagespatial-parse-mem24-dev",
+  "source": "/Users/mehmetoneryalcin/dev/personal/pagespatial/.evaluation/m1-subset-pdfs/legistar_seattle_1859_v0_attachment_3318.pdf",
+  "source_sha256": "a1eb84b648551dc8cf491dd1e8520d823e8be02510770d25d5ab18cb46a4b564",
+  "source_page": 1,
+  "execution_order": [
+    100,
+    100
+  ],
+  "results": [
+    {
+      "page_count": 100,
+      "input_bytes": 88478,
+      "status": "completed",
+      "pages_ok": 100,
+      "pages_failed": 0,
+      "container_cold": true,
+      "service_ready_ms": 92279,
+      "parse_ms": 191284,
+      "total_method_ms": 191287,
+      "client_wall_ms": 294478.989,
+      "client_outside_method_ms": 103191.989,
+      "parse_pages_per_s": 0.5228,
+      "client_pages_per_s": 0.3396,
+      "allocated_cpu_seconds_method": 765.148,
+      "allocated_gib_seconds_method": 4590.888,
+      "page_wall_ms": {
+        "sum": 751549.0,
+        "mean": 7515.49,
+        "p50": 7408.0,
+        "p95": 8484.0,
+        "max": 9204.0
+      },
+      "effective_worker_parallelism": 3.929,
+      "node_worker_rss_peak_mib": 330.793,
+      "stage_service_ms": {
+        "assembly": 500082.2,
+        "native": 2364.3,
+        "ocr": 213966.3,
+        "ocrColdInit": 35743.0,
+        "render": 33616.0,
+        "secondOpinion": 497563.9
+      },
+      "modal": {
+        "attempt": null,
+        "function_call_id": "fc-01M1E3TRD6D39J4JQDNY8V469T",
+        "input_id": "in-01M1E3TRDESJPZ7MMBTEVFQY2K:1788253921731-0"
+      },
+      "resources": {
+        "cpu": 4.0,
+        "memory_mib": 24576,
+        "workers": 4,
+        "sidecar_threads": 1
+      },
+      "adapter_revision": "15ee1b093e0c-dirty",
+      "image_pin_revision": "ee110672752b"
+    },
+    {
+      "page_count": 100,
+      "input_bytes": 88478,
+      "status": "completed",
+      "pages_ok": 100,
+      "pages_failed": 0,
+      "container_cold": false,
+      "service_ready_ms": 0,
+      "parse_ms": 167458,
+      "total_method_ms": 167460,
+      "client_wall_ms": 172723.466,
+      "client_outside_method_ms": 5263.466,
+      "parse_pages_per_s": 0.5972,
+      "client_pages_per_s": 0.579,
+      "allocated_cpu_seconds_method": 669.84,
+      "allocated_gib_seconds_method": 4019.04,
+      "page_wall_ms": {
+        "sum": 654573.0,
+        "mean": 6545.73,
+        "p50": 6424.0,
+        "p95": 7096.0,
+        "max": 8811.0
+      },
+      "effective_worker_parallelism": 3.909,
+      "node_worker_rss_peak_mib": 297.445,
+      "stage_service_ms": {
+        "assembly": 453415.5,
+        "native": 451.4,
+        "ocr": 167482.8,
+        "render": 32821.0,
+        "secondOpinion": 451364.1
+      },
+      "modal": {
+        "attempt": null,
+        "function_call_id": "fc-01M1E43PSKW91HMTRV9KBBPR7R",
+        "input_id": "in-01M1E43PSWX7TG2NJH0X8MZ6X4:1788254214996-0"
+      },
+      "resources": {
+        "cpu": 4.0,
+        "memory_mib": 24576,
+        "workers": 4,
+        "sidecar_threads": 1
+      },
+      "adapter_revision": "15ee1b093e0c-dirty",
+      "image_pin_revision": "ee110672752b"
+    }
+  ],
+  "scope": {
+    "content_persisted": false,
+    "effective_worker_parallelism": "sum(page wall ms) / parse wall ms",
+    "allocated_resource_seconds": "configured resources times method wall; not a Modal invoice",
+    "rss": "Node worker RSS reported at page completion; excludes Python OCR sidecars"
+  }
+}

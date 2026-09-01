@@ -357,6 +357,20 @@ class DeployTimeGateTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("import-ok", result.stdout)
 
+    def test_unlisted_memory_allocation_refuses_at_deploy_time(self):
+        result = self._import_adapter({"PAGESPATIAL_MEMORY_MIB": "8192"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("PAGESPATIAL_MEMORY_MIB must be one of", result.stderr)
+
+    def test_allowlisted_memory_allocations_deploy(self):
+        for memory_mib in ("12288", "16384", "24576"):
+            with self.subTest(memory_mib=memory_mib):
+                result = self._import_adapter({
+                    "PAGESPATIAL_MEMORY_MIB": memory_mib,
+                })
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("import-ok", result.stdout)
+
     def test_injection_flag_with_dev_app_name_deploys(self):
         result = self._import_adapter({
             "PAGESPATIAL_ENABLE_TEST_FAILURES": "1",
