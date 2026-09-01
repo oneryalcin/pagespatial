@@ -38,5 +38,19 @@
     "oomEventsDelta": 0,
     "oomKillEventsDelta": 0,
     "objectsRetained": false
+  },
+  "productionActivation": {
+    "app": "pagespatial-parse-internal",
+    "adapterRevision": "a7171d63748b",
+    "populationClientWallSeconds": [83.8, 102.3],
+    "snapshotHit": {
+      "clientWallSeconds": 7.7,
+      "postRestoreHealthMs": 86,
+      "parseMs": 2450,
+      "memoryPressure": false,
+      "oomEventsDelta": 0,
+      "oomKillEventsDelta": 0
+    },
+    "warmFollowupClientWallSeconds": 2.5
   }
 }
