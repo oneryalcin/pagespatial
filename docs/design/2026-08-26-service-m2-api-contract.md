@@ -165,6 +165,7 @@ JobView = {
   input_sha256: lowercase-hex-64,
   input_bytes: integer | null,
   pages: integer | null,
+  page_limit: integer,
   estimated_cost_micros: integer | null,
   created_at: RFC3339,
   queued_at: RFC3339 | null,
@@ -563,6 +564,7 @@ not_found
 invalid_request
 idempotency_mismatch
 admission_limit
+credits_exhausted
 upload_incomplete
 upload_expired
 input_too_large
@@ -586,6 +588,7 @@ Every `/v1` error uses `ErrorResponse` with this status mapping:
 | `invalid_request` | 400 |
 | `idempotency_mismatch` | 422 |
 | `admission_limit` | 429 plus `Retry-After: 60` |
+| `credits_exhausted` | 402 |
 | `upload_incomplete` | 409 |
 | `upload_expired` | 410 |
 | `input_too_large` | 413 |
@@ -611,7 +614,7 @@ internal error string:
 | uploaded bytes disagree with declared digest | `input_digest_mismatch` | `Uploaded PDF did not match the declared SHA-256.` |
 | input exceeds 90 MiB | `input_too_large` | `PDF exceeds the 90 MiB limit.` |
 | zero-byte, wrong-type, malformed, or unreadable PDF | `invalid_pdf` | `Input is not a supported PDF.` |
-| document exceeds 200 pages | `page_limit_exceeded` | `PDF exceeds the 200-page limit.` |
+| document exceeds its reserved page allowance | `page_limit_exceeded` | `PDF exceeds this job's page allowance.` |
 | 24-hour processing deadline expires | `processing_deadline_exceeded` | `Document did not finish before its processing deadline.` |
 | all dispatch attempts definitively fail | `dispatch_failed` | `Document could not be started.` |
 | any other terminal internal failure | `processing_failed` | `Document processing failed.` |

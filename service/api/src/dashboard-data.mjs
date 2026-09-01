@@ -1,3 +1,5 @@
+import { loadCreditSummary } from './credits.mjs';
+
 const PAGE_SIZE = 25;
 
 const STATE_FILTERS = Object.freeze({
@@ -87,7 +89,7 @@ export async function loadJobsPage(db, {
 
 export async function loadUsagePage(db, { userId, now = new Date() }) {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const [summaryResult, dailyResult] = await Promise.all([
+  const [summaryResult, dailyResult, credits] = await Promise.all([
     db.query(
       `SELECT count(*)::integer AS documents,
               coalesce(sum(pages_actual), 0)::bigint AS pages,
@@ -107,11 +109,13 @@ export async function loadUsagePage(db, { userId, now = new Date() }) {
         ORDER BY day DESC`,
       [userId, monthStart.toISOString()],
     ),
+    loadCreditSummary(db, { userId }),
   ]);
   return {
     monthStart,
     summary: summaryResult.rows[0],
     days: dailyResult.rows,
+    credits,
   };
 }
 

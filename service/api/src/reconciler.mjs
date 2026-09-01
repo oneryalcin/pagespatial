@@ -20,6 +20,7 @@ function identity(row, { inputBucket, resultsBucket }) {
     attemptId: row.attempt_id,
     inputKey: row.input_uri.slice(prefix.length),
     inputDigest: row.input_digest,
+    maxPages: Number(row.reserved_pages),
     resultsBucket,
   };
 }

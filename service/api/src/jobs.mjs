@@ -1,4 +1,5 @@
 import { ApiError } from './api-errors.mjs';
+import { MAX_PAGES_PER_JOB } from './credits.mjs';
 import { PROCESSING_DEADLINE_MS } from './job-constants.mjs';
 
 const SHA256 = /^[0-9a-f]{64}$/u;
@@ -21,7 +22,7 @@ const terminalMessages = Object.freeze({
   input_digest_mismatch: 'Uploaded PDF did not match the declared SHA-256.',
   input_too_large: 'PDF exceeds the 90 MiB limit.',
   invalid_pdf: 'Input is not a supported PDF.',
-  page_limit_exceeded: 'PDF exceeds the 200-page limit.',
+  page_limit_exceeded: 'PDF exceeds this job\'s page allowance.',
   processing_deadline_exceeded: 'Document did not finish before its processing deadline.',
   dispatch_failed: 'Document could not be started.',
   processing_failed: 'Document processing failed.',
@@ -39,6 +40,7 @@ export function jobView(row) {
     input_sha256: row.input_digest,
     input_bytes: row.input_bytes == null ? null : Number(row.input_bytes),
     pages: row.pages_actual == null ? null : Number(row.pages_actual),
+    page_limit: Number(row.reserved_pages),
     estimated_cost_micros: row.estimated_cost_micros == null
       ? null : Number(row.estimated_cost_micros),
     created_at: date(row.created_at),
@@ -107,18 +109,33 @@ export async function createOrReplayJob({
         headers: { 'retry-after': '60' },
       });
     }
+    const credits = (await client.query(
+      `SELECT
+         coalesce((SELECT sum(pages) FROM credit_grants WHERE user_id = $1), 0)::bigint AS granted,
+         coalesce((SELECT sum(pages_actual) FROM jobs
+                    WHERE user_id = $1 AND state = 'succeeded'), 0)::bigint AS used,
+         coalesce((SELECT sum(reserved_pages) FROM jobs
+                    WHERE user_id = $1
+                      AND state IN ('uploading','queued','dispatched')), 0)::bigint AS reserved`,
+      [userId],
+    )).rows[0];
+    const available = Number(credits.granted) - Number(credits.used) - Number(credits.reserved);
+    if (available < 1) {
+      throw new ApiError(402, 'credits_exhausted', 'No page credits are available.');
+    }
+    const reservedPages = Math.min(MAX_PAGES_PER_JOB, available);
     const row = (await client.query(
       `WITH identity AS (SELECT gen_random_uuid() AS id)
        INSERT INTO jobs (
          id, user_id, idempotency_key, state, input_uri, input_digest,
-         unit_price_micros, upload_expires_at
+         unit_price_micros, upload_expires_at, reserved_pages
        )
        SELECT id, $1, $2, 'uploading',
               'r2://' || $3 || '/inputs/' || id::text || '.pdf',
-              $4, $5, now() + interval '1 hour'
+              $4, $5, now() + interval '1 hour', $6
          FROM identity
        RETURNING *`,
-      [userId, idempotencyKey, inputBucket, inputSha256, unitPriceMicros],
+      [userId, idempotencyKey, inputBucket, inputSha256, unitPriceMicros, reservedPages],
     )).rows[0];
     if (!row) throw new TypeError('job owner does not exist');
     await client.query('COMMIT');

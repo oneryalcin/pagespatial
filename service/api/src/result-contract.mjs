@@ -38,6 +38,7 @@ const exactKeys = (value, expected, label) => {
  *   inputKey: string,
  *   inputDigest: string,
  *   resultsBucket: string
+ *   maxPages: number
  * }} ResultIdentity
  */
 
@@ -47,6 +48,9 @@ const exactKeys = (value, expected, label) => {
  * validateStoredResult before any database transition.
  */
 export function validateModalPointer(value, expected) {
+  if (!Number.isSafeInteger(expected.maxPages) || expected.maxPages < 1 || expected.maxPages > 200) {
+    throw new InvalidResultError('expected maxPages must be an integer from 1 to 200');
+  }
   const pointer = object(value, 'Modal pointer');
   exactKeys(pointer, [
     'job_id', 'attempt_id', 'execution_id', 'document_sha256',
@@ -73,8 +77,9 @@ export function validateModalPointer(value, expected) {
       || pointer.result_bytes > MAX_RESULT_BYTES) {
     throw new InvalidResultError('Modal pointer result_bytes is outside the publication bound');
   }
-  if (!Number.isSafeInteger(pointer.page_count) || pointer.page_count < 1) {
-    throw new InvalidResultError('Modal pointer page_count must be positive');
+  if (!Number.isSafeInteger(pointer.page_count) || pointer.page_count < 1
+      || pointer.page_count > expected.maxPages) {
+    throw new InvalidResultError('Modal pointer page_count exceeds the job reservation');
   }
   object(pointer.timing, 'Modal pointer timing');
   return pointer;
@@ -106,7 +111,7 @@ export function validateModalFailure(value, expected) {
 
 function validatePublicPages(envelope, expected) {
   if (!Number.isSafeInteger(envelope.page_count)
-      || envelope.page_count < 1 || envelope.page_count > 200
+      || envelope.page_count < 1 || envelope.page_count > expected.maxPages
       || !Array.isArray(envelope.pages)
       || envelope.pages.length !== envelope.page_count) {
     throw new InvalidResultError('stored result page_count does not match its pages');
@@ -147,6 +152,9 @@ function validatePublicPages(envelope, expected) {
  * into acceptance SQL. `lastModified` is R2's lifecycle clock.
  */
 export function validateStoredResult({ bytes, lastModified, pointer = null, expected }) {
+  if (!Number.isSafeInteger(expected.maxPages) || expected.maxPages < 1 || expected.maxPages > 200) {
+    throw new InvalidResultError('expected maxPages must be an integer from 1 to 200');
+  }
   if (!(bytes instanceof Uint8Array) || bytes.byteLength < 1
       || bytes.byteLength > MAX_RESULT_BYTES) {
     throw new InvalidResultError('stored result bytes are outside the publication bound');

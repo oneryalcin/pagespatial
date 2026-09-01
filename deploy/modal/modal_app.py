@@ -338,6 +338,7 @@ class ParseObjectInput(TypedDict):
     expected_sha256: str
     input_key: str
     result_prefix: str
+    page_limit: int
 
 
 class ParseObjectTiming(TypedDict):
@@ -458,7 +459,10 @@ def _object_key(name: str, value) -> str:
 
 
 def validate_object_input(payload) -> ParseObjectInput:
-    fields = {"job_id", "attempt_id", "expected_sha256", "input_key", "result_prefix"}
+    fields = {
+        "job_id", "attempt_id", "expected_sha256", "input_key",
+        "result_prefix", "page_limit",
+    }
     if not isinstance(payload, dict) or set(payload) != fields:
         raise InputRejected(f"parse_object input must contain exactly {sorted(fields)}")
     job_id = _canonical_uuid("job_id", payload["job_id"])
@@ -474,12 +478,18 @@ def validate_object_input(payload) -> ParseObjectInput:
     expected_prefix = f"results/{job_id}/{attempt_id}"
     if result_prefix != expected_prefix:
         raise InputRejected(f"result_prefix must equal {expected_prefix}")
+    page_limit = payload["page_limit"]
+    if (not isinstance(page_limit, int) or isinstance(page_limit, bool)
+            or not 1 <= page_limit <= MAX_PAGES_PER_JOB):
+        raise InputRejected(
+            f"page_limit must be an integer from 1 to {MAX_PAGES_PER_JOB}")
     return {
         "job_id": job_id,
         "attempt_id": attempt_id,
         "expected_sha256": expected,
         "input_key": input_key,
         "result_prefix": result_prefix,
+        "page_limit": page_limit,
     }
 
 
@@ -528,7 +538,7 @@ def public_result_envelope(request: ParseObjectInput, execution_id: str,
     page_count = parse_result.get("page_count")
     pages = parse_result.get("pages")
     if (not isinstance(page_count, int) or isinstance(page_count, bool)
-            or not 1 <= page_count <= MAX_PAGES_PER_JOB
+            or not 1 <= page_count <= request["page_limit"]
             or not isinstance(pages, list) or len(pages) != page_count):
         raise InputRejected("completed parse has an invalid page collection")
     projected = []
@@ -1069,6 +1079,7 @@ class ParseContainer:
             "expected_sha256": request["expected_sha256"],
             "schema_version": SCHEMA_VERSION,
             "enrichment": "off",
+            "page_limit": request["page_limit"],
         }
         parse_t0 = time.monotonic()
         try:
@@ -1143,6 +1154,11 @@ class ParseContainer:
         # first call would make the next successful call misreport
         # container_cold=true (cold review PR #89, finding 2 — §8).
         pdf_bytes = validate_input(payload)  # raises InputRejected before Node work
+        page_limit = payload.get("page_limit", MAX_PAGES_PER_JOB)
+        if (not isinstance(page_limit, int) or isinstance(page_limit, bool)
+                or not 1 <= page_limit <= MAX_PAGES_PER_JOB):
+            raise InputRejected(
+                f"page_limit must be an integer from 1 to {MAX_PAGES_PER_JOB}")
         injection = validate_injection(payload)  # test-only; double-gated (§14.2)
         request_id = payload["request_id"]
         sha256 = payload["expected_sha256"]
@@ -1199,7 +1215,7 @@ class ParseContainer:
             # (design §3.1).
             try:
                 status, body = self._http(
-                    "POST", "/v1/jobs?enrichment=off", pdf_bytes,
+                    "POST", f"/v1/jobs?enrichment=off&page_limit={page_limit}", pdf_bytes,
                     "application/pdf", timeout=600)
             except Exception as error:
                 self._retire("submit_transport_failure")

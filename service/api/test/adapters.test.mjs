@@ -55,6 +55,7 @@ test('dispatcher does not relabel a call-id persistence failure as a spawn failu
       if (queries === 1) return { rows: [{
         attempt_id: 'a', job_id: 'j', state: 'dispatching',
         input_uri: 'r2://inputs/inputs/j.pdf', input_digest: 'a'.repeat(64),
+        reserved_pages: 200,
       }] };
       throw new Error('database write failed');
     },

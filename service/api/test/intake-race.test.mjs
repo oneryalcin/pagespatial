@@ -26,6 +26,10 @@ test('native Postgres admission is exact across independent connections', {
     const userId = (await admin.query(
       "INSERT INTO users (email, status) VALUES ('race@example.test','active') RETURNING id",
     )).rows[0].id;
+    await admin.query(
+      `INSERT INTO credit_grants (user_id, pages, source, reference)
+       VALUES ($1, 2000, 'manual', 'test-fixture')`, [userId],
+    );
     const outcomes = await Promise.allSettled(Array.from({ length: 12 }, (_, index) =>
       createOrReplayJob({
         pool,
@@ -45,6 +49,10 @@ test('native Postgres admission is exact across independent connections', {
     const replayUser = (await admin.query(
       "INSERT INTO users (email, status) VALUES ('same-key@example.test','active') RETURNING id",
     )).rows[0].id;
+    await admin.query(
+      `INSERT INTO credit_grants (user_id, pages, source, reference)
+       VALUES ($1, 2000, 'manual', 'test-fixture')`, [replayUser],
+    );
     const replays = await Promise.all(Array.from({ length: 12 }, () =>
       createOrReplayJob({
         pool,
@@ -86,6 +94,10 @@ test('native Postgres rolls back a failed admission and reuses the pool', {
     const userId = (await admin.query(
       "INSERT INTO users (email, status) VALUES ('rollback@example.test','active') RETURNING id",
     )).rows[0].id;
+    await admin.query(
+      `INSERT INTO credit_grants (user_id, pages, source, reference)
+       VALUES ($1, 2000, 'manual', 'test-fixture')`, [userId],
+    );
     admin.release();
 
     await assert.rejects(createOrReplayJob({

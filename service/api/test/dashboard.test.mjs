@@ -28,6 +28,11 @@ beforeEach(async () => {
   userId = (await db.query(
     "INSERT INTO users (email, status) VALUES ('dashboard@example.test','active') RETURNING id",
   )).rows[0].id;
+  await db.query(
+    `INSERT INTO credit_grants (user_id, pages, source, reference)
+     VALUES ($1, 2000, 'manual', 'test-fixture')`,
+    [userId],
+  );
   const pool = {
     async connect() { return { query: (...args) => db.query(...args), release() {} }; },
   };
@@ -224,6 +229,25 @@ test('dashboard jobs and usage show only tenant-owned, truthful terminal data', 
   assert.match(usage.body, />12</u);
   assert.match(usage.body, /\$0\.012/u);
   assert.doesNotMatch(usage.body, /private detail/u);
+});
+
+test('dashboard records only one pending alpha credit request', async () => {
+  const first = await request('/credits/request', {
+    method: 'POST', headers: form,
+  });
+  assert.equal(first.status, 303);
+  assert.equal(first.headers.location, '/usage');
+  const replay = await request('/credits/request', {
+    method: 'POST', headers: form,
+  });
+  assert.equal(replay.status, 303);
+  assert.equal(Number((await db.query(
+    `SELECT count(*) FROM credit_requests
+      WHERE user_id = $1 AND status = 'pending'`, [userId],
+  )).rows[0].count), 1);
+  const usage = await request('/usage', { headers: access });
+  assert.match(usage.body, /Request pending/u);
+  assert.doesNotMatch(usage.body, />Request more credits</u);
 });
 
 test('dashboard job detail keeps internals private and grants only retained owned results', async () => {

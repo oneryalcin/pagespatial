@@ -49,9 +49,15 @@ the property that made Modal the right choice.)
 SSO/SAML, organisations and teams, payment collection, webhooks,
 progressive/SSE page streaming, the Flex tier, Kubernetes, Redis, SQS, an
 ORM, a pricing table, provider abstraction, and any client-side framework.
-Self-serve signup is out: **v1 is invite-only** (owner decision,
-2026-08-26), which removes email verification, bot defence, and free-tier
-abuse quotas from the critical path.
+Self-serve signup was originally out: **v1 was invite-only** (owner decision,
+2026-08-26).
+
+**Alpha amendment (2026-09-01):** Cloudflare Access One-time PIN remains the
+email-verification boundary, but any verified email may create an active
+account. The origin grants 100 page credits exactly once. Active jobs reserve
+pages before dispatch and the worker enforces that reservation before OCR.
+There is no Stripe or mutable money balance. Users can submit one pending
+request for more credits; the owner grants pages manually during alpha.
 
 Enrichment stays **off** for external callers — it spends real money per
 page against the owner's Gemini key and there is no per-caller spend cap.
@@ -421,8 +427,10 @@ lifecycle, process management, or retry semantics change. They do not here.
 
 ## Authentication
 
-**Dashboard: Cloudflare Access**, one-time PIN against the invited email
-list, additional identity providers later. This deletes `login_tokens`,
+**Dashboard: Cloudflare Access**, with One-time PIN as the public-alpha email
+verification boundary and additional identity providers later. Access admits a
+verified identity; the origin still decides whether self-signup is enabled and
+whether that account is active or suspended. This deletes `login_tokens`,
 custom sessions, the email provider, and most future SSO migration work.
 
 The earlier draft called a custom magic-link flow "well-trodden." That was
@@ -487,8 +495,9 @@ routes.
 ## Cost display
 
 The placeholder is **$0.001/page**, and it is labelled **estimated usage
-cost**, never "billing" — there is no payment, credit, or reservation
-system, and submission reserves nothing.
+cost**, never "billing". The 2026-09-01 alpha amendment adds page allowances,
+but no payment or monetary balance. Submission reserves a bounded number of
+pages; succeeded work spends its actual page count.
 
 **The placeholder is honest about what it is.** The qualification publishes
 three per-page costs, and which one you compare against changes the answer:
@@ -719,7 +728,7 @@ running.
 
 ### M2 — identity
 
-Cloudflare Access + Tunnel, invite list, `users` mapping, API key
+Cloudflare Access + Tunnel, verified `users` mapping, API key
 issue/revoke, key auth on `/v1/jobs`. Public surface: presigned intake,
 `Idempotency-Key`, 429 + `Retry-After` (#87 items 1–4).
 
@@ -727,7 +736,8 @@ The exact HTTP, authentication, admission, and acceptance contract lives in
 `docs/design/2026-08-26-service-m2-api-contract.md`. This parent document
 continues to own architecture; the M2 contract must not reopen it.
 
-*Acceptance:* an invited user logs in, creates a key, submits a PDF, polls
+*Acceptance:* a One-time PIN-verified user self-provisions, creates a key,
+submits a PDF, and polls
 to completion. User B gets 404 on all of user A's routes. A replayed
 `Idempotency-Key` returns the original job rather than parsing twice, while
 a replay with a different body gets 422. **A request to the API hostname

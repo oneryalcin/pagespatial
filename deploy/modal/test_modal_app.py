@@ -152,6 +152,7 @@ class ValidateObjectInputTest(unittest.TestCase):
             "expected_sha256": "a" * 64,
             "input_key": f"inputs/{self.JOB_ID}.pdf",
             "result_prefix": f"results/{self.JOB_ID}/{self.ATTEMPT_ID}",
+            "page_limit": 100,
         }
         base.update(overrides)
         return base

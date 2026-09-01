@@ -9,6 +9,7 @@
   },
   "scripts": {
     "migrate": "node src/migrate.mjs",
+    "grant-credits": "node scripts/grant-credits.mjs",
     "start": "node src/server.mjs",
     "test": "node --test test/*.test.mjs"
   },

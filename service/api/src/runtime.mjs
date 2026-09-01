@@ -85,6 +85,8 @@ export async function startRuntime({ env = process.env, log = console } = {}) {
   const appHost = required(env, 'PAGESPATIAL_APP_HOST');
   const accessIssuer = required(env, 'CLOUDFLARE_ACCESS_ISSUER');
   const accessAudience = required(env, 'CLOUDFLARE_ACCESS_AUDIENCE');
+  const allowSelfSignup = env.PAGESPATIAL_ALLOW_SELF_SIGNUP === '1';
+  const trialPages = Number(env.PAGESPATIAL_TRIAL_PAGE_CREDITS ?? 100);
   if (apiHost === appHost) throw new TypeError('API and dashboard hosts must be distinct');
   validateR2Isolation({
     inputBucket, resultsBucket, inputAccessKeyId, resultsAccessKeyId,
@@ -127,6 +129,7 @@ export async function startRuntime({ env = process.env, log = console } = {}) {
   });
   const authenticateAccess = createAccessAuthenticator({
     db: pool, issuer: accessIssuer, audience: accessAudience,
+    allowSelfSignup, trialPages,
   });
   const createRequestId = randomUUID;
   const handler = createApiHandler({

@@ -61,6 +61,7 @@ def _object_payload(**overrides):
         "expected_sha256": SHA,
         "input_key": INPUT_KEY,
         "result_prefix": RESULT_PREFIX,
+        "page_limit": 200,
     }
     base.update(overrides)
     return base
@@ -98,6 +99,7 @@ class _FakeService:
             "health_status": 200,
         }
         self.posts = 0
+        self.post_paths = []
         fake = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -124,6 +126,7 @@ class _FakeService:
             def do_POST(self):
                 self.rfile.read(int(self.headers.get("content-length", 0)))
                 fake.posts += 1
+                fake.post_paths.append(self.path)
                 return self._json(fake.script["submit_status"], fake.script["submit_body"])
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -273,6 +276,15 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
         self.assertEqual(stored["page_count"], direct["page_count"])
         self.assertEqual(
             stored["pages"][0]["page_spatial"], direct["pages"][0]["pageSpatial"])
+
+    def test_parse_object_forwards_the_reserved_page_limit(self):
+        self._call_object(_object_payload(page_limit=2))
+        self.assertEqual(self.fake.post_paths, ["/v1/jobs?enrichment=off&page_limit=2"])
+
+    def test_parse_object_rejects_an_invalid_page_limit_before_node_work(self):
+        with self.assertRaises(modal_app.InputRejected):
+            self.instance.parse_object(_object_payload(page_limit=0))
+        self.assertEqual(self.fake.posts, 0)
 
     def test_parse_object_returns_a_typed_failure_without_a_public_object(self):
         self.fake.script["submit_status"] = 400

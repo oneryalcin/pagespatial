@@ -17,7 +17,7 @@ not change.
 
 ## 1. Product decision
 
-Build a small customer dashboard for the working invite-only PageSpatial API.
+Build a small customer dashboard for the working public-alpha PageSpatial API.
 The dashboard is an operational window into PageSpatial usage. It is not an
 administration console or a second processing system.
 
@@ -44,6 +44,7 @@ destination.
 - A server-rendered dashboard protected by Cloudflare Access.
 - A jobs timeline and a job-detail view.
 - A usage summary based on succeeded job rows.
+- An alpha page-credit summary and one pending manual top-up request.
 - API-key creation, one-time secret display, listing, and revocation.
 - Clear empty, loading, failure, expired, and unavailable states.
 - Responsive layouts for desktop and mobile.
@@ -51,8 +52,7 @@ destination.
 ### Not in M3
 
 - Multiple-file, batch, resumable, or multipart browser upload.
-- Self-serve signup or invitations.
-- Payments, invoices, credits, or Stripe.
+- Payments, invoices, checkout, subscriptions, or Stripe.
 - Teams, organizations, roles, or shared projects.
 - Document previews or an embedded result viewer.
 - Progressive page results or an invented percentage complete.
@@ -82,15 +82,16 @@ brand that page through Cloudflare rather than adding an unreachable
 dashboard-origin sign-in page. PageSpatial begins at the authenticated
 dashboard shell.
 
-A future public marketing or signup page may link to the protected dashboard,
-and a future self-serve account product may justify a different identity
-architecture. Neither is part of M3.
+The public marketing site links to the protected dashboard. During alpha,
+Cloudflare Access verifies the email by One-time PIN and the origin creates the
+account on first successful login. This narrow self-signup path does not require
+a separate registration form or a different identity architecture.
 
 ## 3. Users and primary journey
 
-The initial user is a technical operator or developer at an invited design
-partner. They already have access to `app.pagespatial.dev` and may already
-have an API key.
+The initial user is a technical operator or developer evaluating the public
+alpha. They enter `app.pagespatial.dev`, verify their email with a One-time PIN,
+and receive the default trial page allowance. They may then create an API key.
 
 Primary journey:
 
@@ -357,7 +358,7 @@ by the API. Add one actionable hint only where the action is real:
 | `upload_expired` | `Submit the document again with a new job.` |
 | `input_too_large` | `Split or reduce the PDF, then submit it again.` |
 | `input_digest_mismatch` | `Recompute the SHA-256 and submit a new job.` |
-| `page_limit_exceeded` | `Split the PDF into documents of 200 pages or fewer.` |
+| `page_limit_exceeded` | `Split the PDF to fit the page allowance shown for this job.` |
 | `invalid_pdf` / `invalid_upload` | `Check that the input is a valid PDF.` |
 | deadline, dispatch, processing failures | `You can submit a new job. Contact support if the problem repeats.` |
 
@@ -380,6 +381,13 @@ Give a transparent operational estimate, not a billing product.
 - Pages completed
 - Estimated cost
 
+### Alpha page credits
+
+Show pages granted, used, reserved by active jobs, and currently available.
+These are processing allowances, not money. If no request is pending, show one
+`Request more credits` action. If a request is pending, show that state and do
+not offer another action. Approval remains a manual operator task during alpha.
+
 The cost label and caveat must remain adjacent:
 
 > Estimated cost is a placeholder based on the rate recorded when each job
@@ -398,7 +406,7 @@ Columns:
 - Pages
 - Estimated cost
 
-Do not add plan limits, credits, invoices, forecasts, savings claims, or cost
+Do not add paid plans, invoices, checkout, forecasts, savings claims, or cost
 breakdowns by provider.
 
 ### Empty state
@@ -463,7 +471,8 @@ small help disclosure:
 - Signed-in email
 - Account status: `Active`
 - Service profile: `Parse-only v1`
-- Limits: 90 MiB, 200 pages, 5 active jobs
+- Limits: 90 MiB, up to 200 pages per job subject to available page credits,
+  5 active jobs
 - Upload/finalize window: one hour
 - Retention: inputs and results up to two days
 - Link to API guide
@@ -651,7 +660,8 @@ Any addition must answer: what real user action becomes possible?
 
 M3 is complete when:
 
-1. An invited user can navigate all three areas with keyboard only.
+1. A One-time PIN-verified user can self-provision and navigate all three areas
+   with keyboard only.
 2. Jobs are tenant-scoped, newest first, filterable, and paginated.
 3. Every internal job state has a truthful public presentation.
 4. A succeeded retained job provides a fresh result download.

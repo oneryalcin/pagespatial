@@ -94,7 +94,7 @@ and 8 GiB Modal qualification work (PRs #120–#122).*
   access expires from R2 `LastModified + 2 days`, not reconciliation time. The
   reconciler does not normally delete objects individually (owner decision,
   2026-08-26).
-- **Invite-only public v1, M3 dashboard, and browser upload live gates PASS**:
+- **Public alpha, M3 dashboard, and browser upload live gates PASS**:
   `api.pagespatial.dev` and Access-protected `app.pagespatial.dev` reach an
   isolated Compose control plane through outbound-only Cloudflare Tunnel;
   no host port is published. The full invited-user path passed through API
@@ -123,6 +123,12 @@ and 8 GiB Modal qualification work (PRs #120–#122).*
   tests, responsive render checks at 1440/768/390 px, and the live Access,
   health, and host-separation probes. Evidence:
   `docs/trials/2026-08-27-service-m3-dashboard.md`.
+  The 2026-09-01 alpha amendment replaces invite-only provisioning with
+  Cloudflare Access OTP self-signup. Each verified account receives 100 page
+  credits once. Admission reserves available pages exactly, Modal enforces the
+  per-job reservation before OCR, and users can send one pending manual credit
+  request from Usage. Stripe, paid checkout, subscriptions, and monetary
+  balances remain out until demand is proven.
   Progressive page polling, enrichment spend control, payments, organizations,
   and a second worker provider remain deliberately out of v1.
 - **PDF Inspector 1.17 is ADOPTED and qualified (PR #121)**: provenance now

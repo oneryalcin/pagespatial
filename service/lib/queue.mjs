@@ -134,7 +134,7 @@ export class ParseService {
     }
   }
 
-  async submit({ pdfPath, sourceUri, enrichment = 'off', source = 'path' }) {
+  async submit({ pdfPath, sourceUri, enrichment = 'off', source = 'path', maxPages = null }) {
     if (enrichment !== 'off' && enrichment !== 'batch') {
       const error = new Error(`enrichment must be "off" or "batch", got '${enrichment}'.`);
       error.statusCode = 400;
@@ -163,8 +163,16 @@ export class ParseService {
     // Page cap check sits immediately after the probe, before any job
     // state or page enqueue exists: a refused document leaves nothing
     // behind (Modal design 2026-08-23 §7.1).
-    if (this.maxPagesPerJob > 0 && identity.pageCount > this.maxPagesPerJob) {
-      const error = new Error(`Document has ${identity.pageCount} pages; this service accepts at most ${this.maxPagesPerJob} pages per job (SERVICE_MAX_PAGES_PER_JOB).`);
+    if (maxPages != null && (!Number.isSafeInteger(maxPages) || maxPages < 1)) {
+      const error = new Error('maxPages must be a positive integer.');
+      error.statusCode = 400;
+      throw error;
+    }
+    const effectiveMaxPages = this.maxPagesPerJob > 0 && maxPages != null
+      ? Math.min(this.maxPagesPerJob, maxPages)
+      : this.maxPagesPerJob > 0 ? this.maxPagesPerJob : maxPages;
+    if (effectiveMaxPages != null && identity.pageCount > effectiveMaxPages) {
+      const error = new Error(`Document has ${identity.pageCount} pages; this request accepts at most ${effectiveMaxPages} pages.`);
       error.statusCode = 400;
       error.code = 'page_limit_exceeded';
       throw error;
