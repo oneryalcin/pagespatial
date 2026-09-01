@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-01",
+  "app": "pagespatial-parse-m6-dev",
+  "adapterRevision": "58cbcfa1999a-dirty",
+  "imagePinRevision": "ee110672752b",
+  "modalClient": "1.5.3",
+  "resources": {
+    "cpu": 4,
+    "memoryMiB": 8192,
+    "maxContainers": 1
+  },
+  "freshContainerCalls": [
+    {"kind": "population", "snapshotPrepareMs": 64180, "postRestoreHealthMs": 49, "parseMs": 2186, "clientWallSeconds": 78.2},
+    {"kind": "population", "snapshotPrepareMs": 118182, "postRestoreHealthMs": 60, "parseMs": 2609, "clientWallSeconds": 269.9},
+    {"kind": "population", "snapshotPrepareMs": 78147, "postRestoreHealthMs": 15, "parseMs": 2190, "clientWallSeconds": 106.8},
+    {"kind": "snapshot_hit", "snapshotPrepareMs": 78147, "postRestoreHealthMs": 35, "parseMs": 2199, "clientWallSeconds": 26.1}
+  ],
+  "r2Qualification": {
+    "inputBytes": 142510,
+    "pageCount": 3,
+    "criticalTokensCompared": 402,
+    "rawLinesCompared": 724,
+    "nullTolerance": {"criticalTokens": 0, "rawLines": 0},
+    "directVsPointerPass": true,
+    "pointerRepeatPass": true,
+    "digestMismatchFailedWithoutPublication": true,
+    "prefixListRecoveredBoth": true,
+    "aclDenials": {
+      "inputPutInput": "AccessDenied",
+      "resultsGetInput": "AccessDenied",
+      "resultsPutInput": "AccessDenied",
+      "inputGetResults": "AccessDenied",
+      "inputPutResults": "AccessDenied"
+    },
+    "sampledPeakBytes": 4704448512,
+    "memoryPressure": false,
+    "oomEventsDelta": 0,
+    "oomKillEventsDelta": 0,
+    "objectsRetained": false
+  }
+}

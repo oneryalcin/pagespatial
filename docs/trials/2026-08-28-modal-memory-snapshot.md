@@ -2,6 +2,12 @@
 
 ## Decision
 
+Superseded on 2026-09-01 by the 8 GiB production-shaped qualification in
+`2026-09-01-modal-memory-snapshot-qualification.md`. The reversible
+implementation is now landed with snapshots enabled by default. The original
+24 GiB experiment below remains the historical evidence that selected the
+approach.
+
 Keep the existing Python Modal wrapper, Node service, four Node workers, and
 four long-lived Python OCR sidecars. The experiment justifies a later
 production qualification, but memory snapshots remain disabled and the
@@ -111,8 +117,8 @@ topology survives snapshot restoration.
 
 ## Production gate
 
-Deferred by owner decision on 2026-09-01. A later change may add the reversible
-flag and run the existing Modal qualification with snapshots enabled, including
-a real document and pointer-mode R2 transport. Until that separate gate passes,
-the deployed production app and committed production adapter keep snapshots
-off. Do not create a second backend or rewrite the service.
+Passed on 2026-09-01. The later gate added the reversible flag and ran the
+existing Modal qualification with snapshots enabled, including a real document,
+pointer-mode R2 transport, exact output comparison, wrong-digest rejection,
+prefix-LIST recovery, and the complete cross-role ACL denial matrix. See the
+superseding trial above. Do not create a second backend or rewrite the service.

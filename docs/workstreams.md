@@ -12,10 +12,10 @@ Onboarding order: [principles](principles.md) →
 
 ## State snapshot (update the date when you touch this)
 
-*As of 2026-09-01, after the PDF Inspector 1.17 and browser-upload fixes
-(PRs #121 and #120).*
+*As of 2026-09-01, after the PDF Inspector 1.17, browser-upload, ParseBench,
+and 8 GiB Modal qualification work (PRs #120–#122).*
 
-- **main baseline**: `15ee1b0` after PR #120. Current record
+- **main baseline**: `58cbcfa` after PR #122. Current record
   versions remain schema 0.6.0 and enrichment-0.2.0.
 - **Internal Modal parse is ADOPTED**: the CPU/OpenVINO warm-`Cls` adapter
   passed its 12/12 qualification for controlled internal, parse-only jobs.
@@ -24,12 +24,15 @@ Onboarding order: [principles](principles.md) →
   its 64 MiB boundary; PR #108 separately qualified R2 pointer publication
   with a 128 MiB cap.
   Enrichment and direct public Modal ingress remain off. The current deployed
-  adapter has `min_containers=0`, `buffer_containers=0`, 24 GiB memory, and
-  memory snapshots disabled; observed ordinary cold readiness spans roughly
-  70–102 seconds. An experiment restored the existing Node/Python process tree
-  from memory snapshots with a 7.1-second median client cold call, but the
-  implementation is deliberately not landed or production-qualified. A later
-  real-R2 snapshot gate is deferred by owner decision. A separate two-call-per-
+  adapter has `min_containers=0`, `buffer_containers=0`, and 8 GiB memory.
+  Ordinary cold readiness spans roughly 70–102 seconds. The reversible memory-
+  snapshot implementation is production-shaped and qualified: the existing
+  Node/Python process tree restored successfully at 8 GiB, a fresh snapshot-hit
+  one-page call took 26.1 seconds client wall, and the real R2 pointer/ACL gate
+  passed with exact 0/0 output tolerance. Snapshots are per Modal CPU worker
+  type: a redeploy reopens the expensive population window, which measured
+  78.2–269.9 seconds in this bounded run. These are observations, not an SLA.
+  A separate two-call-per-
   arm 100-page trial completed 600/600 pages with no retry or OOM at 12, 16,
   and 24 GiB; 12 GiB used the least allocated memory-time in that trial. An
   owner-directed 8 GiB continuation then completed another 200/200 pages with
@@ -40,7 +43,8 @@ Onboarding order: [principles](principles.md) →
   is a lower bound, not a kernel high-water mark. The allocation becomes live
   only when the merged revision is deployed to the production Modal app. Trials:
   `docs/trials/2026-08-23-modal-qualification.md`,
-  `docs/trials/2026-08-28-modal-memory-snapshot.md`, and
+  `docs/trials/2026-08-28-modal-memory-snapshot.md`,
+  `docs/trials/2026-09-01-modal-memory-snapshot-qualification.md`, and
   `docs/trials/2026-09-01-modal-memory-allocation.md`.
 - **GPU optimization workstream CLOSED without adoption (PR #104)**:
   M2 selected producer starvation; M3 showed thousands of small recognizer

@@ -115,6 +115,17 @@ app = modal.App(APP_NAME)
 # decorator arguments, so the container branch pins the default.
 ALLOWED_MAX_CONTAINERS = (1, 4, 16)
 ALLOWED_MEMORY_MIB = (8192, 12288, 16384, 24576)
+
+
+def _snapshot_enabled(value: str) -> bool:
+    """Parse the deploy-time snapshot switch without a truthy-string trap."""
+    if value not in {"0", "1"}:
+        raise RuntimeError(
+            "PAGESPATIAL_ENABLE_MEMORY_SNAPSHOT must be '0' or '1'; "
+            f"refusing {value!r}")
+    return value == "1"
+
+
 if modal.is_local():
     _raw_max_containers = os.environ.get("PAGESPATIAL_MAX_CONTAINERS", "1")
     if _raw_max_containers not in {str(n) for n in ALLOWED_MAX_CONTAINERS}:
@@ -129,10 +140,14 @@ if modal.is_local():
             "PAGESPATIAL_MEMORY_MIB must be one of "
             f"{ALLOWED_MEMORY_MIB}; refusing {_raw_memory_mib!r}")
     MEMORY_MIB = int(_raw_memory_mib)
+    ENABLE_MEMORY_SNAPSHOT = _snapshot_enabled(os.environ.get(
+        "PAGESPATIAL_ENABLE_MEMORY_SNAPSHOT", "1"))
 else:
     MAX_CONTAINERS = 1
     MEMORY_MIB = int(os.environ.get(
         "PAGESPATIAL_CONFIGURED_MEMORY_MIB", str(DEFAULT_MEMORY_MIB)))
+    ENABLE_MEMORY_SNAPSHOT = _snapshot_enabled(os.environ.get(
+        "PAGESPATIAL_MEMORY_SNAPSHOT_ENABLED", "1"))
 
 RESOURCES["memory_mib"] = MEMORY_MIB
 
@@ -195,6 +210,8 @@ if modal.is_local():
         "PAGESPATIAL_IMAGE_PIN_REV": _image_pin_revision(),
         "PAGESPATIAL_APP_NAME": APP_NAME,
         "PAGESPATIAL_CONFIGURED_MEMORY_MIB": str(MEMORY_MIB),
+        "PAGESPATIAL_MEMORY_SNAPSHOT_ENABLED": (
+            "1" if ENABLE_MEMORY_SNAPSHOT else "0"),
     }
     if _enable_test_failures:
         _baked_env["PAGESPATIAL_ENABLE_TEST_FAILURES"] = "1"
@@ -773,10 +790,11 @@ def _minimal_pdf(page_count: int) -> bytes:
     min_containers=0,
     buffer_containers=0,
     max_containers=MAX_CONTAINERS,  # allowlisted 1/4/16 per M3 trial arm — never unbounded
+    enable_memory_snapshot=ENABLE_MEMORY_SNAPSHOT,
     # Input concurrency is 1 by default for a Modal Cls (no @modal.concurrent).
 )
 class ParseContainer:
-    @modal.enter()
+    @modal.enter(snap=ENABLE_MEMORY_SNAPSHOT)
     def start_service(self):
         self.cold = True
         self.budget = JobBudget()
@@ -792,6 +810,7 @@ class ParseContainer:
             "adapter_revision": os.environ.get("PAGESPATIAL_GIT_REV", "unknown"),
             "image_pin_revision": os.environ.get("PAGESPATIAL_IMAGE_PIN_REV", "unknown"),
             "resources": RESOURCES,
+            "memory_snapshot": ENABLE_MEMORY_SNAPSHOT,
         }
         self.method_context = {}
         # Private ephemeral scratch (§7.4): no Volume, no shared state.
@@ -824,13 +843,44 @@ class ParseContainer:
         )
         self._wait_health(deadline_s=STARTUP_TIMEOUT_S - 60)
         self.service_ready_ms = int((time.monotonic() - t0) * 1000)
+        self.snapshot_prepare_ms = self.service_ready_ms
         # `service_started` is the CANONICAL carrier of cold readiness:
         # after a rejected first call the next result reports
         # service_ready_ms=0, so aggregation must read readiness from this
         # log event, never from results (§12; PR #89 closure).
+        if ENABLE_MEMORY_SNAPSHOT:
+            self._log_event("snapshot_prepared", node_pid=self.node.pid,
+                            snapshot_prepare_ms=self.snapshot_prepare_ms,
+                            memory=self._memory_report())
+        else:
+            self._log_event("service_started", node_pid=self.node.pid,
+                            container_cold=True,
+                            service_ready_ms=self.service_ready_ms,
+                            memory=self._memory_report())
+
+    @modal.enter(snap=False)
+    def after_snapshot_restore(self):
+        """Revalidate restored native children and start fresh measurements.
+
+        The snapshot contains the warmed Node process, OCR sidecars, and their
+        open log file. It deliberately does not contain an R2 client or a job.
+        Modal also invokes this hook on the container that creates a snapshot,
+        so the same health gate applies to both paths.
+        """
+        if not ENABLE_MEMORY_SNAPSHOT:
+            return
+        self.cold = True
+        self.memory_container_sample_peak_bytes = None
+        self.memory_method_sample_peak_bytes = None
+        self.memory_events_at_container_start = _read_memory_events()
+        self.memory_events_at_method_start = self.memory_events_at_container_start
+        t0 = time.monotonic()
+        self._wait_health(deadline_s=60)
+        self.service_ready_ms = int((time.monotonic() - t0) * 1000)
         self._log_event("service_started", node_pid=self.node.pid,
                         container_cold=True,
                         service_ready_ms=self.service_ready_ms,
+                        snapshot_prepare_ms=self.snapshot_prepare_ms,
                         memory=self._memory_report())
 
     def _sample_memory(self) -> int | None:
