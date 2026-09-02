@@ -108,7 +108,9 @@ kernel high-water mark. A pressure report does not alter a valid parse result.
 No Docker `CMD`/`USER` assumption: Modal ignores both, so `@enter` starts
 `node service/server.mjs` explicitly, bound to `127.0.0.1:8571`, with a
 fresh private `SERVICE_DATA_DIR` under `/tmp`, the measured topology
-(4 workers x 1 sidecar thread), `SERVICE_MAX_PAGES_PER_JOB=200`, no
+(4 workers x 4 OpenVINO threads per sidecar; `PAGESPATIAL_SIDECAR_THREADS`
+allowlists 1/2/4, see `docs/trials/2026-09-02-ocr-sidecar-thread-sweep.md`),
+`SERVICE_MAX_PAGES_PER_JOB=200`, no
 `GEMINI_API_KEY`, and `SERVICE_ALLOW_PDF_PATH` unset.
 
 Callers use the Modal Python client:

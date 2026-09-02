@@ -63,8 +63,11 @@ credits, and the current board reconciliation (PRs #120–#127).*
   a causal gain under 74.8% host drift. CPU/OpenVINO remains the deployment
   default. No H100 sweep, split-serving rewrite, M4 kernel analysis, or
   automatic M5 is justified. Issue #126 records a bounded thread,
-  instrumentation, and shadow-coverage experiment plan; it is parked and
-  authorizes no production recognition-policy change. Trial:
+  instrumentation, and shadow-coverage experiment plan; the owner un-parked
+  it on 2026-09-02 and step 1 is done (sidecar ran 10 OpenVINO threads while
+  reporting 1; 4 is now the attested default; 1 thread refuted;
+  `docs/trials/2026-09-02-ocr-sidecar-thread-sweep.md`). Steps 2–5 authorize
+  no production recognition-policy change. Trial:
   `docs/trials/2026-08-25-gpu-bottleneck-instrumentation.md`; issue #97 stays
   as the historical GPU record.
 - **Standard/Flex pull-worker architecture PARKED in #105**: it remains a
@@ -451,7 +454,7 @@ current scorer; decides instrument-fix vs detector-project).
 | HTTP admission and idempotency | #87 | **core public-path scope absorbed by control-plane M2**: presigned intake removes API body buffering; exact admission, `429`, and durable idempotency are live. Queue metrics and progressive page polling remain deliberately out of v1; the legacy trusted-network service still has its original local-buffering limits. | — | service/api, service | demonstrated need for metrics or progressive polling |
 | Service dependency slimming | #83 | **open, bounded**: express real runtime dependencies and stop copying the full dev toolchain into the image. | — | package manifests, Dockerfile | nothing |
 | GPU bottleneck follow-up | #97 | **parked**: instrumentation and B1/B4/B8 treatments did not earn a GPU deployment change. Resume only for a new measured hypothesis. | — | evaluation only | concrete throughput/cost trigger |
-| OCR inference efficiency follow-up | #126 | **parked**: measured model-output volume and a possible OpenVINO thread mismatch justify a bounded experiment, not a production change. The plan requires in-band thread attestation, transfer/host timing, output hashes, and shadow-only native-coverage diagnostics before any recognition skip is considered. | — | evaluation/instrumentation only | owner explicitly unparks a bounded experiment |
+| OCR inference efficiency follow-up | #126 | **active, step 1 done** (un-parked 2026-09-02): thread mismatch confirmed in-band (10 hot threads/sidecar while reporting 1); 4 threads adopted as the attested default; 1 thread refuted; median gain inside host noise. Steps 2–5 (instrumentation, shadow coverage, GPU top-1 only if transfer is material, secondary waste) still require transfer/host timing, output hashes, and shadow-only diagnostics before any recognition skip is considered. | `perf/ocr-thread-sweep` | evaluation/instrumentation only | step 2 instrumentation shadow PR |
 | pdf-inspector WASM in browser (markdown parity) | #25 | **shipped in PRs #121/#122**: native and WASM packages are pinned to 1.17.0; the public browser-local demo uses PDF Inspector WASM for Markdown and uploads no document bytes. The original issue remains open only for any broader corpus-parity follow-up. | — | site/demo, package.json | broader parity work requires a measured need |
 | Cross-family second opinion | PR #19 | **shipped** | session | — | — |
 | Pictorial threshold + residue-severity data check | #14 | parked, gold-gated | — | tuning, ink.ts | #1 |

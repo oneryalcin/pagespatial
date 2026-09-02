@@ -61,10 +61,24 @@ def verify_pins(models_dir: Path) -> dict:
     return pins
 
 
+def _os_thread_count():
+    try:
+        return len(os.listdir("/proc/self/task"))
+    except OSError:
+        return None
+
+
 def main() -> None:
     models_dir = Path(os.environ["SIDECAR_MODELS_DIR"])
     threads = int(os.environ.get("SIDECAR_THREADS", "1"))
     check_only = "--check" in sys.argv
+
+    # SIDECAR_THREADS is the ONLY thread knob. `cpu_threads=` below never
+    # reaches the OpenVINO/ONNX HPI runners: PaddleX sizes those pools from
+    # PADDLE_PDX_CPU_NUM_THREADS (default 10) at pipeline construction
+    # (paddlex/inference/models/runners/hpi/config.py). Left unset, four
+    # sidecars on four cores ran 40 inference threads (issue #126).
+    os.environ["PADDLE_PDX_CPU_NUM_THREADS"] = str(threads)
 
     t0 = time.monotonic()
     pins = verify_pins(models_dir)
@@ -123,6 +137,11 @@ def main() -> None:
         "osCpuCount": os.cpu_count(),
         "threads": threads,
         "threadKwargApplied": thread_kwarg_applied,
+        # In-band attestation for the thread setting (issue #126 step 1):
+        # the env PaddleX read, and this process's live OS thread count
+        # after engine construction (Linux only; null elsewhere).
+        "pdxCpuNumThreadsEnv": os.environ.get("PADDLE_PDX_CPU_NUM_THREADS"),
+        "osThreadCount": _os_thread_count(),
         "hpiRequested": hpi_requested,
         "useHpip": probe_use_hpip(),
         "modelPins": pins,
