@@ -22,7 +22,12 @@ import {
 
 const acceptAttempt = (database, input) =>
   acceptAttemptRaw(database, {
-    status: 'completed', resultCreatedAt: new Date('2026-08-26T12:00:00Z'), ...input,
+    status: 'completed',
+    resultCreatedAt: new Date('2026-08-26T12:00:00Z'),
+    compactResultUri: 'r2://compact',
+    compactResultDigest: 'd'.repeat(64),
+    compactResultBytes: 123,
+    ...input,
   });
 
 let db;
@@ -204,6 +209,28 @@ test('acceptance refuses an invalid R2 LastModified timestamp', async () => {
       resultDigest: 'b'.repeat(64), pages: 1, resultCreatedAt: 'not-a-date',
     }),
     /resultCreatedAt must be a valid R2 LastModified timestamp/,
+  );
+});
+
+test('acceptance refuses success without a complete compact companion', async () => {
+  const jobId = await newJob();
+  const a = await newAttempt(jobId);
+  await assert.rejects(
+    acceptAttemptRaw(db, {
+      jobId, attemptId: a, status: 'completed', resultUri: 'r2://result',
+      resultDigest: 'b'.repeat(64), pages: 1,
+      resultCreatedAt: new Date('2026-08-20T03:04:05Z'),
+    }),
+    /valid compact result companion is required/,
+  );
+  assert.equal((await attempt(a)).state, 'dispatching');
+});
+
+test('database forbids a partial compact companion', async () => {
+  const jobId = await newJob();
+  await assert.rejects(
+    db.query('UPDATE jobs SET compact_result_uri = $2 WHERE id = $1', [jobId, 'r2://compact']),
+    /jobs_compact_result_complete/,
   );
 });
 

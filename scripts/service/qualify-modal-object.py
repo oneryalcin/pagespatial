@@ -251,9 +251,11 @@ def main() -> None:
                 raise RuntimeError("pointer execution returned the wrong page count")
             pointers.append(pointer)
             created_keys.append(pointer["result_key"])
+            created_keys.append(pointer["compact_result_key"])
         pointer_a, pointer_b = pointers
 
         object_results = []
+        compact_results = []
         for pointer in pointers:
             key = pointer["result_key"]
             expected_uri = f"r2://{results_bucket}/{key}"
@@ -263,6 +265,8 @@ def main() -> None:
             stored = client.get_object(Bucket=results_bucket, Key=key)["Body"].read()
             if hashlib.sha256(stored).hexdigest() != pointer["result_digest"]:
                 raise RuntimeError(f"stored result digest mismatch for {key}")
+            if len(stored) != pointer["result_bytes"]:
+                raise RuntimeError(f"stored result byte count mismatch for {key}")
             envelope = json.loads(stored)
             expected_fields = {
                 "schema_version", "job_id", "attempt_id", "execution_id",
@@ -280,14 +284,51 @@ def main() -> None:
                 raise RuntimeError(f"public result page count mismatch for {key}")
             object_results.append(public_to_comparator(envelope))
 
+            compact_key = pointer["compact_result_key"]
+            compact_uri = f"r2://{results_bucket}/{compact_key}"
+            if pointer.get("compact_result_uri") != compact_uri:
+                raise RuntimeError(
+                    f"pointer named {pointer.get('compact_result_uri')}; expected {compact_uri}")
+            compact = client.get_object(
+                Bucket=results_bucket, Key=compact_key)["Body"].read()
+            if hashlib.sha256(compact).hexdigest() != pointer["compact_result_digest"]:
+                raise RuntimeError(f"stored compact digest mismatch for {compact_key}")
+            if len(compact) != pointer["compact_result_bytes"]:
+                raise RuntimeError(f"stored compact byte count mismatch for {compact_key}")
+            compact_envelope = json.loads(compact)
+            compact_fields = {
+                "schema_version", "representation", "job_id", "attempt_id",
+                "input_sha256", "page_count", "pages",
+            }
+            if set(compact_envelope) != compact_fields:
+                raise RuntimeError(
+                    f"compact result fields differ for {compact_key}: "
+                    f"{sorted(compact_envelope)}")
+            if (compact_envelope["schema_version"] != "pagespatial-compact-v1"
+                    or compact_envelope["representation"] != "compact"
+                    or compact_envelope["job_id"] != job_id
+                    or compact_envelope["attempt_id"] != attempt_id
+                    or compact_envelope["input_sha256"] != digest
+                    or compact_envelope["page_count"] != expected_pages):
+                raise RuntimeError(f"compact result identity mismatch for {compact_key}")
+            compact_results.append(compact)
+
         if pointer_a["result_key"] == pointer_b["result_key"]:
             raise RuntimeError("two executions reused one result key")
         listed = {
             item["Key"] for item in client.list_objects_v2(
                 Bucket=results_bucket, Prefix=f"{result_prefix}/").get("Contents", [])
         }
-        if not {pointer_a["result_key"], pointer_b["result_key"]}.issubset(listed):
+        expected_listed = {
+            pointer_a["result_key"], pointer_b["result_key"],
+            pointer_a["compact_result_key"], pointer_b["compact_result_key"],
+        }
+        if not expected_listed.issubset(listed):
             raise RuntimeError("result prefix LIST did not recover both executions")
+        if compact_results[0] != compact_results[1]:
+            raise RuntimeError("duplicate executions produced different compact bytes")
+        if pointer_a["compact_result_digest"] != pointer_b["compact_result_digest"]:
+            raise RuntimeError("duplicate executions produced different compact digests")
 
         mismatch = remote.parse_object.remote({
             **object_payload,
@@ -323,6 +364,8 @@ def main() -> None:
             "pointer_b": pointer_b,
             "digest_mismatch_failed": mismatch_failed,
             "r2_list_recovered_both": True,
+            "compact_duplicate_bytes_exact": True,
+            "compact_duplicate_digest_exact": True,
             "credential_boundary": {
                 "input_put_input": "AccessDenied",
                 "results_get_input": "AccessDenied",

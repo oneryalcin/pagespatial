@@ -43,6 +43,7 @@ import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { ParseService } from './lib/queue.mjs';
+import { buildPublicResultArtifacts } from './lib/public-result.mjs';
 import { reconstructSvg } from '../dist/index.js';
 import { DEFAULT_PYTHON_CMD, verifyModelPins } from './adapters/ppocr-sidecar.mjs';
 import { spawn } from 'node:child_process';
@@ -195,6 +196,15 @@ const json = (res, status, body) => {
   res.end(payload);
 };
 
+const jsonBytes = (res, bytes) => {
+  res.writeHead(200, {
+    'content-type': 'application/json',
+    'content-length': bytes.byteLength,
+    'cache-control': 'no-store',
+  });
+  res.end(bytes);
+};
+
 const MAX_BODY_BYTES = 100 * 1024 * 1024;
 
 // Over-cap bodies: reject WITHOUT destroying the socket — the handler must
@@ -296,6 +306,44 @@ const server = createServer(async (req, res) => {
         return json(res, 422, {
           code: 'invalid_pdf', error: `Could not open PDF: ${error.message}`,
         });
+      }
+    }
+
+    if (req.method === 'POST' && parts[0] === 'v1' && parts[1] === 'jobs'
+        && parts[3] === 'public-result' && parts.length === 5) {
+      const representation = parts[4];
+      if (representation !== 'evidence' && representation !== 'compact') {
+        return json(res, 404, { error: 'Unknown result representation.' });
+      }
+      let input;
+      try {
+        const body = await readBody(req);
+        input = JSON.parse(body.toString('utf8'));
+      } catch {
+        return json(res, 400, { error: 'Publication identity is not valid JSON.' });
+      }
+      if (!input || typeof input !== 'object' || Array.isArray(input)
+          || Object.keys(input).sort().join(',') !== 'attempt_id,execution_id,input_sha256,job_id') {
+        return json(res, 400, { error: 'Publication identity has invalid fields.' });
+      }
+      const job = service.jobStatus(parts[2]);
+      if (!job) return json(res, 404, { error: 'Unknown job.' });
+      if (job.status !== 'completed') return json(res, 409, { error: 'Result is not ready.' });
+      if (job.sha256 !== input.input_sha256) {
+        return json(res, 400, { error: 'Publication identity does not match the parsed input.' });
+      }
+      try {
+        const artifacts = buildPublicResultArtifacts({
+          jobId: input.job_id,
+          attemptId: input.attempt_id,
+          executionId: input.execution_id,
+          inputSha256: input.input_sha256,
+          pages: job.pages,
+        });
+        return jsonBytes(res, representation === 'evidence'
+          ? artifacts.evidenceBytes : artifacts.compactBytes);
+      } catch (error) {
+        return json(res, 400, { error: `Result cannot be published: ${error.message}` });
       }
     }
 

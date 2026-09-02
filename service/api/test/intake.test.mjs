@@ -271,6 +271,9 @@ test('result grant signs only the accepted object before retention expiry', asyn
     status: 'completed',
     resultUri: `r2://results/results/${created.row.id}/${attemptId}/e.json`,
     resultDigest: 'b'.repeat(64),
+    compactResultUri: `r2://results/results/${created.row.id}/${attemptId}/e.compact.json`,
+    compactResultDigest: 'c'.repeat(64),
+    compactResultBytes: 123,
     pages: 1,
     resultCreatedAt: new Date(),
   });

@@ -48,7 +48,11 @@ import { assertFailureCode } from './failure-codes.mjs';
  */
 export async function acceptAttempt(
   db,
-  { jobId, attemptId, status, resultUri, resultDigest, pages, resultCreatedAt },
+  {
+    jobId, attemptId, status, resultUri, resultDigest,
+    compactResultUri, compactResultDigest, compactResultBytes,
+    pages, resultCreatedAt, requiresCompact = true,
+  },
 ) {
   if (status !== 'completed') {
     throw new TypeError('status must equal completed before an attempt can be accepted');
@@ -59,10 +63,18 @@ export async function acceptAttempt(
   if (Number.isNaN(createdAt.getTime())) {
     throw new TypeError('resultCreatedAt must be a valid R2 LastModified timestamp');
   }
+  if (requiresCompact && (typeof compactResultUri !== 'string' || !compactResultUri
+      || !/^[0-9a-f]{64}$/.test(compactResultDigest)
+      || !Number.isSafeInteger(compactResultBytes) || compactResultBytes < 1
+      || compactResultBytes > 128 * 1024 * 1024)) {
+    throw new TypeError('a valid compact result companion is required');
+  }
   const { rows } = await db.query(
     `WITH owned AS (
        UPDATE job_attempts a
           SET state = 'succeeded', result_uri = $3, result_digest = $4,
+              compact_result_uri = $8, compact_result_digest = $9,
+              compact_result_bytes = $10::bigint,
               pages = $5::integer, completed_at = now()
          FROM jobs source_job
         WHERE a.id = $2 AND a.job_id = $1 AND a.completed_at IS NULL
@@ -72,6 +84,9 @@ export async function acceptAttempt(
           -- not finalized into the dispatch lifecycle.
           AND source_job.state IN ('queued', 'dispatched', 'succeeded', 'failed')
           AND $6::text = 'completed'
+          AND (a.requires_compact = false OR (
+            $8::text IS NOT NULL AND $9::text IS NOT NULL AND $10::bigint IS NOT NULL
+          ))
        RETURNING a.id, a.job_id
      ),
      won AS (
@@ -79,6 +94,9 @@ export async function acceptAttempt(
           SET accepted_attempt_id   = owned.id,
               result_uri            = $3,
               result_digest         = $4,
+              compact_result_uri    = $8,
+              compact_result_digest = $9,
+              compact_result_bytes  = $10::bigint,
               pages_actual          = $5::integer,
               -- $5 is cast on both uses: Postgres otherwise tries to infer
               -- one type for a parameter appearing as both an integer
@@ -101,7 +119,10 @@ export async function acceptAttempt(
      )
      SELECT (SELECT count(*) FROM owned) AS recorded,
             (SELECT count(*) FROM won)   AS won`,
-    [jobId, attemptId, resultUri, resultDigest, pages, status, createdAt.toISOString()],
+    [
+      jobId, attemptId, resultUri, resultDigest, pages, status, createdAt.toISOString(),
+      compactResultUri, compactResultDigest, compactResultBytes,
+    ],
   );
 
   return { recorded: Number(rows[0].recorded) === 1, won: Number(rows[0].won) === 1 };

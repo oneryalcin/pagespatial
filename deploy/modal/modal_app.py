@@ -55,7 +55,6 @@ MAX_RESULT_BYTES = 64 * 1024 * 1024        # serialized output cap — visible R
 MAX_OBJECT_RESULT_BYTES = 128 * 1024 * 1024 # explicit R2 publication cap, separate from Modal gRPC
 MAX_NODE_JOBS_PER_LIFETIME = 100           # created loopback job IDs per warm Node lifetime (§7.3)
 SCHEMA_VERSION = "0.6.0"
-OBJECT_RESULT_SCHEMA_VERSION = 1
 SERVICE_PORT = 8571                        # private: Node binds 127.0.0.1 only
 STARTUP_TIMEOUT_S = 1200                   # explicit (§7.3): > measured cold readiness (~70-88 s engine
                                            # init x 4 workers, sequential warm-up) with generous margin
@@ -374,6 +373,10 @@ class ParseObjectSuccess(TypedDict):
     result_key: str
     result_digest: str
     result_bytes: int
+    compact_result_uri: str
+    compact_result_key: str
+    compact_result_digest: str
+    compact_result_bytes: int
     page_count: int
     status: Literal["completed"]
     timing: ParseObjectTiming
@@ -540,54 +543,6 @@ def validate_input(payload) -> bytes:
 
 def _failure_code(value) -> str:
     return value if value in PUBLIC_FAILURE_CODES else "processing_failed"
-
-
-def public_result_envelope(request: ParseObjectInput, execution_id: str,
-                           parse_result: dict) -> dict:
-    """Project the internal parser result to the closed public object.
-
-    Operational timing, Modal identifiers, revisions, resource data and raw
-    page exceptions never cross this boundary.
-    """
-    if parse_result.get("status") != "completed" or parse_result.get("failure") is not None:
-        raise InputRejected("only a completed parse can be published")
-    page_count = parse_result.get("page_count")
-    pages = parse_result.get("pages")
-    if (not isinstance(page_count, int) or isinstance(page_count, bool)
-            or not 1 <= page_count <= request["page_limit"]
-            or not isinstance(pages, list) or len(pages) != page_count):
-        raise InputRejected("completed parse has an invalid page collection")
-    projected = []
-    for index, page in enumerate(pages, 1):
-        if not isinstance(page, dict) or page.get("pageNumber") != index:
-            raise InputRejected("completed parse pages are not contiguous")
-        if page.get("ok") is True:
-            spatial = page.get("pageSpatial")
-            if not isinstance(spatial, dict) or spatial.get("pageNumber") != index:
-                raise InputRejected("completed parse page identity is invalid")
-            projected.append({
-                "page_number": index, "ok": True, "page_spatial": spatial,
-            })
-        elif page.get("ok") is False:
-            projected.append({
-                "page_number": index,
-                "ok": False,
-                "failure": {
-                    "code": "page_failed",
-                    "message": "Page could not be parsed.",
-                },
-            })
-        else:
-            raise InputRejected("completed parse page has no boolean outcome")
-    return {
-        "schema_version": OBJECT_RESULT_SCHEMA_VERSION,
-        "job_id": request["job_id"],
-        "attempt_id": request["attempt_id"],
-        "execution_id": execution_id,
-        "input_sha256": request["expected_sha256"],
-        "page_count": page_count,
-        "pages": projected,
-    }
 
 
 def parse_object_failure(request: ParseObjectInput, failure_code: str,
@@ -978,17 +933,22 @@ class ParseContainer:
         except Exception as error:  # never mask the original failure path
             self._log_event("stop_fetching_inputs_failed", error=str(error))
 
-    def _http(self, method: str, path: str, body: bytes = None, content_type: str = None,
-              timeout: int = 120):
+    def _http_bytes(self, method: str, path: str, body: bytes = None,
+                    content_type: str = None, timeout: int = 120):
         request = urllib.request.Request(
             f"http://127.0.0.1:{SERVICE_PORT}{path}", data=body, method=method)
         if content_type:
             request.add_header("content-type", content_type)
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
-                return response.status, json.loads(response.read())
+                return response.status, response.read()
         except urllib.error.HTTPError as error:
-            return error.code, json.loads(error.read())
+            return error.code, error.read()
+
+    def _http(self, method: str, path: str, body: bytes = None, content_type: str = None,
+              timeout: int = 120):
+        status, payload = self._http_bytes(method, path, body, content_type, timeout)
+        return status, json.loads(payload)
 
     def _log_event(self, event: str, **fields):
         # Structured, content-free (§11, §12): ids, durations, counts only.
@@ -1097,11 +1057,19 @@ class ParseContainer:
             "enrichment": "off",
             "page_limit": request["page_limit"],
         }
+        execution_id = uuid.uuid4().hex
+        publication_identity = {
+            "job_id": request["job_id"],
+            "attempt_id": request["attempt_id"],
+            "execution_id": execution_id,
+            "input_sha256": request["expected_sha256"],
+        }
         parse_t0 = time.monotonic()
         try:
             parse_result = self._parse_document(
                 parse_payload, method_t0=parse_t0, container_cold=container_cold,
-                service_ready_ms=service_ready_ms, enforce_result_limit=False)
+                service_ready_ms=service_ready_ms, enforce_result_limit=False,
+                publication_identity=publication_identity)
         except InputDigestMismatch as error:
             return parse_object_failure(
                 request, "input_digest_mismatch", str(error), {
@@ -1124,19 +1092,26 @@ class ParseContainer:
                     "memory": parse_result.get("memory", self._memory_report()),
                 })
 
-        execution_id = uuid.uuid4().hex
         result_key = f"{request['result_prefix']}/{execution_id}.json"
-        envelope = public_result_envelope(request, execution_id, parse_result)
-        result_bytes = json.dumps(
-            envelope, sort_keys=True, separators=(",", ":"),
-            ensure_ascii=False).encode("utf-8")
-        if len(result_bytes) > MAX_OBJECT_RESULT_BYTES:
+        compact_result_key = f"{request['result_prefix']}/{execution_id}.compact.json"
+        publication = parse_result.pop("_publication", None)
+        if not isinstance(publication, dict):
+            raise RuntimeError("Node service returned no publication artifacts")
+        result_bytes = publication.get("evidence")
+        compact_result_bytes = publication.get("compact")
+        if not isinstance(result_bytes, bytes) or not isinstance(compact_result_bytes, bytes):
+            raise RuntimeError("Node service publication artifacts are not opaque bytes")
+        if (not 1 <= len(result_bytes) <= MAX_OBJECT_RESULT_BYTES
+                or not 1 <= len(compact_result_bytes) <= MAX_OBJECT_RESULT_BYTES):
             raise ObjectResultTooLarge(
-                f"serialized object result {len(result_bytes)} bytes exceeds "
-                f"{MAX_OBJECT_RESULT_BYTES}")
+                "serialized object result exceeds the publication bound")
         result_digest = hashlib.sha256(result_bytes).hexdigest()
+        compact_result_digest = hashlib.sha256(compact_result_bytes).hexdigest()
 
         upload_t0 = time.monotonic()
+        store.results_client.put_object(
+            Bucket=store.results_bucket, Key=compact_result_key,
+            Body=compact_result_bytes, ContentType="application/json")
         store.results_client.put_object(
             Bucket=store.results_bucket, Key=result_key, Body=result_bytes,
             ContentType="application/json")
@@ -1151,7 +1126,11 @@ class ParseContainer:
             "result_key": result_key,
             "result_digest": result_digest,
             "result_bytes": len(result_bytes),
-            "page_count": envelope["page_count"],
+            "compact_result_uri": f"r2://{store.results_bucket}/{compact_result_key}",
+            "compact_result_key": compact_result_key,
+            "compact_result_digest": compact_result_digest,
+            "compact_result_bytes": len(compact_result_bytes),
+            "page_count": parse_result["page_count"],
             "status": "completed",
             "timing": {
                 "download_ms": download_ms,
@@ -1164,7 +1143,8 @@ class ParseContainer:
 
     def _parse_document(self, payload: dict, *, method_t0: float,
                         container_cold: bool, service_ready_ms: int,
-                        enforce_result_limit: bool) -> dict:
+                        enforce_result_limit: bool,
+                        publication_identity: dict = None) -> dict:
         # Cold/warm attribution is a property of the CONTAINER, not of the
         # input: capture and clear it before validation, or a rejected
         # first call would make the next successful call misreport
@@ -1313,6 +1293,21 @@ class ParseContainer:
             if result["memory"]["pressure"]:
                 self._log_event("memory_pressure", job_id=job_id,
                                 memory=result["memory"])
+            if publication_identity is not None:
+                publication_body = json.dumps(
+                    publication_identity, separators=(",", ":")).encode("utf-8")
+                publication = {}
+                for representation in ("evidence", "compact"):
+                    artifact_status, artifact_bytes = self._http_bytes(
+                        "POST",
+                        f"/v1/jobs/{job_id}/public-result/{representation}",
+                        publication_body, "application/json", timeout=120)
+                    if artifact_status != 200:
+                        raise RuntimeError(
+                            f"Node {representation} publication failed with HTTP "
+                            f"{artifact_status}")
+                    publication[representation] = artifact_bytes
+                result["_publication"] = publication
             return result
         finally:
             # §7.4: job dir + uploaded PDF removed after every terminal

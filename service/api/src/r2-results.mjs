@@ -7,6 +7,7 @@ import {
 } from './deadline.mjs';
 
 const MAX_ATTEMPT_OBJECTS = 16;
+const EVIDENCE_OBJECT = /\/[0-9a-f]{32}\.json$/u;
 
 export class ResultStoreUnavailableError extends Error {}
 
@@ -61,7 +62,9 @@ export function createR2ResultStore({ client, bucket, operationTimeoutMs = 10_00
       }
       continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
     } while (continuationToken);
-    return found.sort((a, b) => a.key.localeCompare(b.key));
+    return found
+      .filter((item) => EVIDENCE_OBJECT.test(item.key))
+      .sort((a, b) => a.key.localeCompare(b.key));
   };
   return {
     bucket,

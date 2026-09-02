@@ -119,11 +119,19 @@ const diagnosticsSchema = z.object({
   requiresEscalation: z.boolean(), escalationReasons: z.array(escalationReasonSchema)
 });
 
-const provenanceSchema = z.object({
+export const provenanceSchema = z.object({
   parserName: z.string(), parserVersion: z.string(), runId: z.string(), createdAt: z.string(),
   nativeAdapter: z.string().optional(), ocrAdapter: z.string().optional(),
   regionRecoveryAdapter: z.string().optional(), renderer: z.string().optional(),
   backend: z.string().optional(), configuration: z.record(z.string(), z.unknown()).optional()
+});
+
+export const pageProjectionSchema = z.object({
+  markdown: z.string(),
+  format: z.literal('pagespatial-markdown-v1'),
+  trust: z.literal('untrusted-document-content'),
+  derived: z.literal(true),
+  markdownSource: z.string().min(1)
 });
 
 const recoveryConfirmationSchema = z.object({
@@ -156,7 +164,7 @@ const pageSpatialBaseSchema = z.object({
     }).strict())
   }).strict().optional(),
   diagnostics: diagnosticsSchema,
-  projection: z.object({ markdown: z.string(), format: z.literal('pagespatial-markdown-v1'), trust: z.literal('untrusted-document-content'), derived: z.literal(true), markdownSource: z.string().min(1) }),
+  projection: pageProjectionSchema,
   provenance: provenanceSchema
 });
 

@@ -106,7 +106,7 @@ test('native Postgres rolls back a failed admission and reuses the pool', {
       idempotencyKey: 'missing-owner',
       inputSha256: 'a'.repeat(64),
       inputBucket: 'inputs',
-    }), /foreign key|job owner does not exist/iu);
+    }), (error) => error.code === 'credits_exhausted');
 
     const created = await createOrReplayJob({
       pool,

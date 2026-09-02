@@ -30,7 +30,12 @@ import { reconcileOnce } from '../src/reconciler.mjs';
 
 const acceptAttempt = (database, input) =>
   acceptAttemptRaw(database, {
-    status: 'completed', resultCreatedAt: new Date('2026-08-26T12:00:00Z'), ...input,
+    status: 'completed',
+    resultCreatedAt: new Date('2026-08-26T12:00:00Z'),
+    compactResultUri: 'r2://compact',
+    compactResultDigest: 'd'.repeat(64),
+    compactResultBytes: 123,
+    ...input,
   });
 
 const URL = process.env.PAGESPATIAL_TEST_DATABASE_URL;

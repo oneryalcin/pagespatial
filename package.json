@@ -35,7 +35,8 @@
       "types": "./dist/node/ppocr-ocr.d.ts",
       "import": "./dist/node/ppocr-ocr.js"
     },
-    "./schema.json": "./schemas/pagespatial.schema.json"
+    "./schema.json": "./schemas/pagespatial.schema.json",
+    "./compact-schema.json": "./schemas/pagespatial-compact.schema.json"
   },
   "files": [
     "dist",
