@@ -105,7 +105,7 @@ uv run --with huggingface_hub python service/sidecar/fetch_models.py \
 
 SERVICE_OCR_ADAPTER=ppocr-sidecar \
 SERVICE_SIDECAR_MODELS_DIR=/path/to/sidecar-models \  # required, explicit
-SERVICE_SIDECAR_THREADS=1 \   # default; latency is flat vs cores (PR #66) — one-thread workers won on the measured allocation
+SERVICE_SIDECAR_THREADS=4 \   # bare-server default is 1; the production image sets 4. The PR #66 "one-thread wins" result was measured under an uncontrolled 10-thread OpenVINO pool (docs/trials/2026-09-02-ocr-sidecar-thread-sweep.md)
 node service/server.mjs
 ```
 

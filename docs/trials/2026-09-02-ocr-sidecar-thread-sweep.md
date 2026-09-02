@@ -45,6 +45,10 @@ throughput. #126 steps 2–5 remain unstarted.
 - Three rounds, arms interleaved 10→1→2→4 per round, each run a fresh process
   and a fresh container. Rounds landed on different Modal hosts; the 100-page
   time of the same arm varied up to 2.3× between rounds.
+- Limitation: arm order was fixed at 10→1→2→4 in every round and Modal
+  host variation was large, so no strong speed or variance claim is made.
+  The conclusions rest on direct attestation, 1 losing in every round, and
+  4 avoiding the attested 10-thread oversubscription.
 - Attestation: `modal container exec` into the live container during the
   100-page call, reading `/proc/<sidecar>/status` thread counts and per-thread
   CPU ticks from `/proc/<sidecar>/task/*/stat`.
@@ -123,9 +127,37 @@ parity exact, pointer repeat exact, every cross-role R2 ACL probe denied,
 digest mismatch rejected, results report `sidecar_threads: 4`. The harness
 had drifted from the `parse_object` contract (missing `page_limit`, added
 with the alpha page-credit reservation) and was fixed in this branch; the
-2026-09-01 snapshot qualification predates that contract change. Output
-parity between the 10-thread and 4-thread configurations was not assessed;
-only same-configuration determinism was.
+2026-09-01 snapshot qualification predates that contract change.
+
+## Output parity: 10 threads vs 4 threads
+
+The 23-document correctness manifest (162 pages) ran through
+`pagespatial-parse-arm10-dev` (unchanged `main`) and `pagespatial-parse-arm4-dev`
+(this branch), each with a same-configuration duplicate, via
+`scripts/evaluation/m3_qualification_modal.py submit --set correctness
+--duplicate`. All 92 calls completed. Captures under
+`.evaluation/modal-qualification/2026-09-02-threads/` (private).
+
+`compare-modal-runs.mjs` 10 vs 4: OCR-score projection exact on all 23
+pairs, OCR-derived projection exact, critical-token delta 0, raw-line delta
+0. Both same-configuration null pairs were exact everywhere.
+
+The comparator's stable deterministic projection reported every page as
+differing. A field-level diff over all 162 pages, excluding only timing,
+RSS, `runId`, and `createdAt`, found exactly three differing leaves:
+
+| Leaf | Pages | Nature |
+|---|---:|---|
+| `provenance.ocrAdapter` descriptor `threads=1` → `threads=4` | 162 | intentional; the old value was untrue |
+| `provenance.configuration.ocrBackend.numThreads` 1 → 4 | 162 | intentional; same |
+| `nativeObservations[].font` label | 747 observations | per-process font counter, already adjudicated as metadata and excluded by the comparator |
+
+No OCR observation, text, score, polygon, native observation, conflict, or
+derived projection differed. OpenVINO thread count does not change the
+recognizer's output on this cohort. The comparator's deterministic
+projection includes the provenance configuration by design, so any run that
+changes a provenance field will report this way; the field-level diff above
+is the evidence that nothing else moved.
 
 ## Reproduce
 
