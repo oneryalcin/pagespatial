@@ -26,9 +26,13 @@ Two claims are settled, one is refuted:
    in every round and had the tightest spread. The unchanged 10-thread
    baseline matched the 4-thread median but swung 2.3× between runs.
 
-The measured gain of 4 over the baseline median is 6% on 100 pages, inside
-host noise. The defensible benefit is variance and truthfulness, not
-throughput. #126 steps 2–5 remain unstarted.
+Adopt four threads for operational control, reduced oversubscription,
+truthful provenance, and the tighter variance observed in three rounds — not
+as a claimed throughput optimization. Thread control, reduced
+oversubscription, and truthful provenance are attested facts. The tighter
+spread is a limited observation across three fixed-order, variable-host
+rounds. The 6% median gain on 100 pages is inside host noise and is not a
+demonstrated throughput gain. #126 steps 2–5 remain unstarted.
 
 ## Setup
 
