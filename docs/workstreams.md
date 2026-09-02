@@ -13,10 +13,10 @@ Onboarding order: [principles](principles.md) →
 ## State snapshot (update the date when you touch this)
 
 *As of 2026-09-02, after the PDF Inspector 1.17, browser upload, ParseBench,
-8 GiB Modal snapshot production activation, and open-alpha self-signup with
-trial credits (PRs #120–#125).*
+8 GiB Modal snapshot production activation, open-alpha self-signup with trial
+credits, and the current board reconciliation (PRs #120–#127).*
 
-- **main baseline at this snapshot's branch point**: `3b79e51` after PR #125.
+- **main baseline at this snapshot's branch point**: `6179a72` after PR #127.
   Current record
   versions remain schema 0.6.0 and enrichment-0.2.0.
 - **Internal Modal parse is ADOPTED**: the CPU/OpenVINO warm-`Cls` adapter

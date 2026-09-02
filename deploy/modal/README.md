@@ -155,7 +155,7 @@ visible `ResultTooLarge` failure — never truncated pages.
 | R2 object result | 128 MiB (visible `ObjectResultTooLarge`, nothing uploaded) |
 | input concurrency per container | 1 |
 | created Node jobs per warm lifetime | 100, then the container stops fetching inputs |
-| `cpu` / `memory` | 4.0 physical cores / 24,576 MiB |
+| `cpu` / `memory` | 4.0 physical cores / 8,192 MiB default; measured allowlist: 12,288 / 16,384 / 24,576 MiB |
 | `startup_timeout` / method `timeout` | 1,200 s / 1,800 s (explicit) |
 | `retries` | 1 |
 | `min_containers` / `buffer_containers` / `max_containers` | 0 / 0 / 1 (default; M3 arms set `PAGESPATIAL_MAX_CONTAINERS` to allowlisted 1/4/16 at deploy time — any other value refuses to deploy) |

@@ -15,8 +15,10 @@ The output is a per-page evidence record — every observation with its text, po
 PageSpatial does **not** boil your document down to Markdown and call it a day. Markdown is one derived view among several; the evidence underneath is never thrown away, so any downstream decision can be re-examined later.
 
 Status: the parser and adapter stack remains experimental as a library. The
-invite-only, parse-only hosted service has passed its live M2 qualification.
-API-key users can start with the [PageSpatial API guide](docs/api-guide.md).
+parse-only hosted service is a public alpha with Cloudflare Access sign-up and
+100 initial page credits. It has passed its live service qualification.
+API-key users can start with the [PageSpatial API guide](docs/api-guide.md),
+and engineers should start with the [current handoff](docs/handoff.md).
 The project's standing commitments live in
 [docs/principles.md](docs/principles.md).
 
@@ -56,13 +58,13 @@ PDF ─┬─ native extraction ─ positioned text and structure ─┐
 Browser/private use                 Server/scale
         TypeScript SDK                      TypeScript orchestration
         shared PDF.js session               PDF Inspector Markdown + PDF.js geometry
-        PP-OCR WebGPU/WASM                  GPU OCR adapter
-        Web Workers                         bounded batching
+        PP-OCR WebGPU/WASM                  PP-OCRv6/OpenVINO sidecars
+        Web Workers                         bounded page workers
                  │                                 │
                  └──────── equivalent output ──────┘
 ```
 
-TypeScript owns the public SDK, canonical schemas, orchestration, deterministic merge, diagnostics, and projections. Rust/WASM may later replace measured CPU bottlenecks. GPU inference remains behind an adapter and can use the most appropriate model runtime.
+TypeScript owns the public SDK, canonical schemas, orchestration, deterministic merge, diagnostics, and projections. The managed service currently uses CPU/OpenVINO OCR. GPU inference was measured but was not adopted; Rust/WASM remains an option only for a measured bottleneck.
 
 ## Included
 
@@ -83,8 +85,11 @@ TypeScript owns the public SDK, canonical schemas, orchestration, deterministic 
 ## Not included yet
 
 - Bundled OCR model binaries. Asset URLs are explicit and caller-hosted.
-- A server GPU adapter implementation.
-- Production persistence, access control, or revision storage.
+- A reusable public server OCR adapter in the library package. The managed
+  service has a private CPU/OpenVINO worker implementation.
+- Persistence, access control, or revision storage in the library package.
+  The managed service supplies PostgreSQL job state, R2 objects, Cloudflare
+  Access, and tenant-scoped API keys.
 - General table reconstruction or complex chart interpretation.
 - Independent gold labels for the private evaluation corpus.
 
@@ -104,7 +109,7 @@ Install only the integration packages you use:
 ```sh
 npm install pdfjs-dist@5.5.207 @paddleocr/paddleocr-js@0.4.2 onnxruntime-web@1.24.3
 # Optional Node native enrichment:
-npm install @firecrawl/pdf-inspector@1.14.2
+npm install @firecrawl/pdf-inspector@1.17.0
 ```
 
 ## Browser parser
