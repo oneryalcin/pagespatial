@@ -266,6 +266,7 @@ Current production app: `pagespatial-parse-internal`.
 | Documents per call | 1 |
 | Node page workers | 4 |
 | OCR sidecars | 4 |
+| OpenVINO threads per sidecar | 4 (allowlisted 1/2/4) |
 | Input limit | 90 MiB |
 | Page limit | 200 |
 | Warm-lifetime limit | 100 jobs |
@@ -440,8 +441,12 @@ specific to the tested PaddleX/TensorRT path.
 
 Issue [#126](https://github.com/oneryalcin/pagespatial/issues/126) records the
 new evidence about recognizer output volume, OpenVINO thread configuration,
-and a shadow-mode experiment plan. It is explicitly parked. Do not start it
-without the owner un-parking it.
+and a shadow-mode experiment plan. The owner un-parked it on 2026-09-02.
+Step 1 (thread sweep) is done: the sidecar had never controlled its OpenVINO
+pool and ran 10 threads per sidecar while reporting 1; 4 threads is now the
+attested default, 1 thread was refuted, and the median gain is inside host
+noise. See the [thread sweep](trials/2026-09-02-ocr-sidecar-thread-sweep.md).
+Steps 2–5 are unstarted and authorize no recognition-policy change.
 
 ## Known product limitations
 
@@ -574,3 +579,4 @@ For browser parser changes, run the browser demo and the relevant corpus gate.
 - [PDF Inspector 1.17 qualification](trials/2026-08-28-pdf-inspector-1-17-parsebench.md)
 - [ParseBench adapter and small cohort](trials/2026-08-28-parsebench-basic-test-cohort.md)
 - [OCR efficiency issue #126](https://github.com/oneryalcin/pagespatial/issues/126)
+- [OCR sidecar thread sweep](trials/2026-09-02-ocr-sidecar-thread-sweep.md)

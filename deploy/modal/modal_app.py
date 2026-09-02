@@ -72,12 +72,14 @@ DEFAULT_MEMORY_MIB = 8192
 MEMORY_LOW_HEADROOM_BYTES = 512 * 1024 * 1024
 MEMORY_PRESSURE_RATIO = 0.90
 SERVICE_WORKERS = 4
-SERVICE_SIDECAR_THREADS = 1
+# 4 OpenVINO threads per sidecar: measured best-or-tied and least variable
+# of {1,2,4,10} (docs/trials/2026-09-02-ocr-sidecar-thread-sweep.md).
+DEFAULT_SIDECAR_THREADS = 4
 RESOURCES = {
     "cpu": CPU_CORES,
     "memory_mib": DEFAULT_MEMORY_MIB,
     "workers": SERVICE_WORKERS,
-    "sidecar_threads": SERVICE_SIDECAR_THREADS,
+    "sidecar_threads": DEFAULT_SIDECAR_THREADS,
 }
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -115,6 +117,9 @@ app = modal.App(APP_NAME)
 # decorator arguments, so the container branch pins the default.
 ALLOWED_MAX_CONTAINERS = (1, 4, 16)
 ALLOWED_MEMORY_MIB = (8192, 12288, 16384, 24576)
+# Issue #126 step 1: OpenVINO threads per sidecar. 4 workers x N threads on
+# 4 physical cores; anything above 4 is oversubscription by construction.
+ALLOWED_SIDECAR_THREADS = (1, 2, 4)
 
 
 def _snapshot_enabled(value: str) -> bool:
@@ -140,16 +145,26 @@ if modal.is_local():
             "PAGESPATIAL_MEMORY_MIB must be one of "
             f"{ALLOWED_MEMORY_MIB}; refusing {_raw_memory_mib!r}")
     MEMORY_MIB = int(_raw_memory_mib)
+    _raw_sidecar_threads = os.environ.get(
+        "PAGESPATIAL_SIDECAR_THREADS", str(DEFAULT_SIDECAR_THREADS))
+    if _raw_sidecar_threads not in {str(n) for n in ALLOWED_SIDECAR_THREADS}:
+        raise RuntimeError(
+            "PAGESPATIAL_SIDECAR_THREADS must be one of "
+            f"{ALLOWED_SIDECAR_THREADS}; refusing {_raw_sidecar_threads!r}")
+    SERVICE_SIDECAR_THREADS = int(_raw_sidecar_threads)
     ENABLE_MEMORY_SNAPSHOT = _snapshot_enabled(os.environ.get(
         "PAGESPATIAL_ENABLE_MEMORY_SNAPSHOT", "1"))
 else:
     MAX_CONTAINERS = 1
     MEMORY_MIB = int(os.environ.get(
         "PAGESPATIAL_CONFIGURED_MEMORY_MIB", str(DEFAULT_MEMORY_MIB)))
+    SERVICE_SIDECAR_THREADS = int(os.environ.get(
+        "PAGESPATIAL_CONFIGURED_SIDECAR_THREADS", str(DEFAULT_SIDECAR_THREADS)))
     ENABLE_MEMORY_SNAPSHOT = _snapshot_enabled(os.environ.get(
         "PAGESPATIAL_MEMORY_SNAPSHOT_ENABLED", "1"))
 
 RESOURCES["memory_mib"] = MEMORY_MIB
+RESOURCES["sidecar_threads"] = SERVICE_SIDECAR_THREADS
 
 REPO_ROOT = Path(__file__).resolve().parents[2] if modal.is_local() else Path("/app")
 
@@ -210,6 +225,7 @@ if modal.is_local():
         "PAGESPATIAL_IMAGE_PIN_REV": _image_pin_revision(),
         "PAGESPATIAL_APP_NAME": APP_NAME,
         "PAGESPATIAL_CONFIGURED_MEMORY_MIB": str(MEMORY_MIB),
+        "PAGESPATIAL_CONFIGURED_SIDECAR_THREADS": str(SERVICE_SIDECAR_THREADS),
         "PAGESPATIAL_MEMORY_SNAPSHOT_ENABLED": (
             "1" if ENABLE_MEMORY_SNAPSHOT else "0"),
     }
@@ -838,7 +854,7 @@ class ParseContainer:
             "HOST": "127.0.0.1",
             "PORT": str(SERVICE_PORT),
             "SERVICE_DATA_DIR": self.data_dir,
-            "SERVICE_WORKERS": str(SERVICE_WORKERS),   # measured topology: 4 workers x 1 thread
+            "SERVICE_WORKERS": str(SERVICE_WORKERS),   # 4 workers x SERVICE_SIDECAR_THREADS
             "SERVICE_SIDECAR_THREADS": str(SERVICE_SIDECAR_THREADS),
             "SERVICE_MAX_PAGES_PER_JOB": str(MAX_PAGES_PER_JOB),
         })

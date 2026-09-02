@@ -191,6 +191,9 @@ def main() -> None:
         "expected_sha256": digest,
         "input_key": input_key,
         "result_prefix": result_prefix,
+        # Contract gained page_limit with the alpha page-credit reservation;
+        # the qualification arm uses the container maximum.
+        "page_limit": 200,
     }
 
     try:

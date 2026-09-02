@@ -408,6 +408,20 @@ class DeployTimeGateTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("import-ok", result.stdout)
 
+    def test_unlisted_sidecar_threads_refuse_at_deploy_time(self):
+        # Issue #126: 4 workers x 10 OpenVINO threads on 4 cores was the
+        # silent default; the knob is an allowlist so it cannot recur.
+        result = self._import_adapter({"PAGESPATIAL_SIDECAR_THREADS": "10"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("PAGESPATIAL_SIDECAR_THREADS must be one of", result.stderr)
+
+    def test_allowlisted_sidecar_threads_deploy(self):
+        for threads in ("1", "2", "4"):
+            with self.subTest(threads=threads):
+                result = self._import_adapter({"PAGESPATIAL_SIDECAR_THREADS": threads})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("import-ok", result.stdout)
+
     def test_memory_snapshot_defaults_on_and_can_be_disabled(self):
         default = self._import_adapter({})
         self.assertEqual(default.returncode, 0, default.stderr)
