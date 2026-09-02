@@ -76,9 +76,33 @@ of four:
 - The qualification removed its temporary R2 objects, and the development app
   was stopped after the run.
 
-This passes the code and object-transport gate. Production activation remains
-blocked until a fresh PostgreSQL dump is copied off-site and verified
-immediately before migration.
+This passed the code and object-transport gate.
+
+## Production activation
+
+Stage A activated at 2026-09-02T16:07:01Z (17:07:01 Europe/London):
+
+- PR #130 merged as `853ae16e51a9c061a875130d0e38f2a48415d21c` after
+  both CI runs passed.
+- The production Modal worker deployed first with that revision, image pin
+  `08928d6a48a6`, 8 GiB memory, and four sidecar threads.
+- Immediately before migration, a 26,781-byte PostgreSQL 18 custom archive was
+  copied from the VPS to a permission-restricted workstation path. Both copies
+  had SHA-256
+  `9faab201cb5926dc5dae3fbe875c2362881828294b1a88a8f630776380be0b85`.
+  A disposable PostgreSQL 18 restore passed with 6 migrations, 8 jobs, and 4
+  users before the production migration ran. The private paths are recorded on
+  PR #130; database contents and credentials are not.
+- API startup applied migration 007. The public health response returned
+  `ready`, with R2 input, R2 results, and Modal all non-degraded.
+- A real one-page production job succeeded with `requires_compact=true` and
+  both accepted pointers present. The public result remained the full evidence
+  envelope. Its temporary API keys were revoked, and its one consumed page
+  credit was replaced.
+
+Do not start Stage B before 2026-09-04T16:07:01Z. At or after that time, first
+verify that every retained success created since activation has a valid compact
+companion. The elapsed clock alone is not the gate.
 
 ## Deferred
 
