@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "pagespatial-compact-v1"
+    },
+    "documentId": {
+      "type": "string"
+    },
+    "revisionId": {
+      "type": "string"
+    },
+    "documentSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "pageId": {
+      "type": "string"
+    },
+    "pageNumber": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "projection": {
+      "type": "object",
+      "properties": {
+        "markdown": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string",
+          "const": "pagespatial-markdown-v1"
+        },
+        "trust": {
+          "type": "string",
+          "const": "untrusted-document-content"
+        },
+        "derived": {
+          "type": "boolean",
+          "const": true
+        },
+        "markdownSource": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "markdown",
+        "format",
+        "trust",
+        "derived",
+        "markdownSource"
+      ],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "parserName": {
+          "type": "string"
+        },
+        "parserVersion": {
+          "type": "string"
+        },
+        "nativeAdapter": {
+          "type": "string"
+        },
+        "ocrAdapter": {
+          "type": "string"
+        },
+        "regionRecoveryAdapter": {
+          "type": "string"
+        },
+        "renderer": {
+          "type": "string"
+        },
+        "backend": {
+          "type": "string"
+        },
+        "configuration": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "parserName",
+        "parserVersion"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "documentId",
+    "revisionId",
+    "documentSha256",
+    "pageId",
+    "pageNumber",
+    "projection",
+    "provenance"
+  ],
+  "additionalProperties": false,
+  "$id": "https://pagespatial.dev/schema/0.1.0/pagespatial-compact.schema.json",
+  "title": "CompactPageSpatial"
+}

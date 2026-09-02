@@ -150,7 +150,7 @@ test('second-opinion rung engages on a would-starve page and lands in the record
   }
 });
 
-test('SVG endpoint serves a reconstruction for canonical records and 404s otherwise', { timeout: 60_000 }, async () => {
+test('completed-job endpoints serve SVG and closed public result bytes', { timeout: 60_000 }, async () => {
   const { fork } = await import('node:child_process');
   const dir = mkdtempSync(join(tmpdir(), 'svc-int-'));
   const dataDir = join(dir, 'data');
@@ -191,6 +191,32 @@ test('SVG endpoint serves a reconstruction for canonical records and 404s otherw
     assert.equal(failed.status, 404);
     const unknown = await fetch(`http://127.0.0.1:${port}/v1/jobs/job_svgtest/pages/9.svg`);
     assert.equal(unknown.status, 404);
+    const publication = {
+      job_id: '11111111-1111-4111-8111-111111111111',
+      attempt_id: '22222222-2222-4222-8222-222222222222',
+      execution_id: 'a'.repeat(32),
+      input_sha256: 'ab'.repeat(32),
+    };
+    const publish = (representation) => fetch(
+      `http://127.0.0.1:${port}/v1/jobs/job_svgtest/public-result/${representation}`,
+      { method: 'POST', body: JSON.stringify(publication) },
+    );
+    const evidenceResponse = await publish('evidence');
+    const compactResponseA = await publish('compact');
+    const compactResponseB = await publish('compact');
+    assert.equal(evidenceResponse.status, 200);
+    assert.equal(compactResponseA.status, 200);
+    assert.equal(evidenceResponse.headers.get('cache-control'), 'no-store');
+    const evidence = await evidenceResponse.json();
+    const compactBytesA = Buffer.from(await compactResponseA.arrayBuffer());
+    const compactBytesB = Buffer.from(await compactResponseB.arrayBuffer());
+    const compact = JSON.parse(compactBytesA.toString('utf8'));
+    assert.equal(evidence.execution_id, publication.execution_id);
+    assert.equal(compact.representation, 'compact');
+    assert.equal(compact.pages[0].page_compact.projection.markdown,
+      record.projection.markdown);
+    assert.equal('nativeObservations' in compact.pages[0].page_compact, false);
+    assert.deepEqual(compactBytesA, compactBytesB);
   } finally {
     child.kill();
     rmSync(dir, { recursive: true, force: true });

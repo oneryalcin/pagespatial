@@ -6,7 +6,8 @@ import {
   deferAttempt, settleExhaustedJobs, sweepJobDeadlines,
 } from './lifecycle.mjs';
 import {
-  InvalidResultError, validateModalFailure, validateModalPointer, validateStoredResult,
+  InvalidResultError, validateModalFailure, validateModalPointer,
+  validateStoredResult, validateStoredResultPair,
 } from './result-contract.mjs';
 
 const DEFAULT_UNKNOWN_WAIT_MS = 10 * 60 * 1000;
@@ -21,6 +22,7 @@ function identity(row, { inputBucket, resultsBucket }) {
     inputKey: row.input_uri.slice(prefix.length),
     inputDigest: row.input_digest,
     maxPages: Number(row.reserved_pages),
+    requiresCompact: row.requires_compact,
     resultsBucket,
   };
 }
@@ -32,16 +34,35 @@ async function acceptStored(db, row, result) {
     status: result.status,
     resultUri: result.resultUri,
     resultDigest: result.resultDigest,
+    compactResultUri: result.compactResultUri,
+    compactResultDigest: result.compactResultDigest,
+    compactResultBytes: result.compactResultBytes,
+    requiresCompact: row.requires_compact,
     resultCreatedAt: result.resultCreatedAt,
     pages: result.pages,
   });
 }
 
 async function readAndValidate(resultStore, candidate, expected, pointer = null) {
-  const stored = await resultStore.readResult({ key: candidate.key });
-  const result = validateStoredResult({ ...stored, pointer, expected });
+  if (!expected.requiresCompact) {
+    const evidence = await resultStore.readResult({ key: candidate.key });
+    const result = validateStoredResult({ ...evidence, pointer, expected });
+    if (result.resultKey !== candidate.key) {
+      throw new TypeError('listed R2 key does not match the stored envelope execution id');
+    }
+    return result;
+  }
+  const compactKey = candidate.key.replace(/\.json$/u, '.compact.json');
+  const [evidence, compact] = await Promise.all([
+    resultStore.readResult({ key: candidate.key }),
+    resultStore.readResult({ key: compactKey }),
+  ]);
+  const result = validateStoredResultPair({ evidence, compact, pointer, expected });
   if (result.resultKey !== candidate.key) {
     throw new TypeError('listed R2 key does not match the stored envelope execution id');
+  }
+  if (result.compactResultKey !== compactKey) {
+    throw new TypeError('compact R2 key does not match the evidence execution id');
   }
   return result;
 }

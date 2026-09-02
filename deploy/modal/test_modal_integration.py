@@ -71,13 +71,16 @@ class _FakeR2:
     def __init__(self):
         self.objects = {INPUT_KEY: PDF}
         self.fail_put = False
+        self.fail_put_at = None
+        self.puts = 0
 
     def get_object(self, *, Bucket, Key):
         data = self.objects[Key]
         return {"ContentLength": len(data), "Body": io.BytesIO(data)}
 
     def put_object(self, *, Bucket, Key, Body, ContentType):
-        if self.fail_put:
+        self.puts += 1
+        if self.fail_put or self.puts == self.fail_put_at:
             raise OSError("injected R2 PUT failure")
         self.objects[Key] = bytes(Body)
         return {"ETag": "fake"}
@@ -100,6 +103,8 @@ class _FakeService:
         }
         self.posts = 0
         self.post_paths = []
+        self.publication_paths = []
+        self.publication_bytes = {}
         fake = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -108,6 +113,9 @@ class _FakeService:
 
             def _json(self, status, body):
                 payload = json.dumps(body).encode()
+                return self._bytes(status, payload)
+
+            def _bytes(self, status, payload):
                 self.send_response(status)
                 self.send_header("content-type", "application/json")
                 self.send_header("content-length", str(len(payload)))
@@ -124,7 +132,53 @@ class _FakeService:
                 return self._json(404, {"error": "unknown"})
 
             def do_POST(self):
-                self.rfile.read(int(self.headers.get("content-length", 0)))
+                raw = self.rfile.read(int(self.headers.get("content-length", 0)))
+                if "/public-result/" in self.path:
+                    identity = json.loads(raw)
+                    representation = self.path.rsplit("/", 1)[-1]
+                    pages = fake.script["job_responses"][-1]["pages"]
+                    safe_pages = []
+                    for page in pages:
+                        if page["ok"]:
+                            if representation == "evidence":
+                                safe_pages.append({
+                                    "page_number": page["pageNumber"], "ok": True,
+                                    "page_spatial": page["pageSpatial"],
+                                })
+                            else:
+                                safe_pages.append({
+                                    "page_number": page["pageNumber"], "ok": True,
+                                    "page_compact": {
+                                        "schemaVersion": "pagespatial-compact-v1",
+                                        "pageNumber": page["pageNumber"],
+                                    },
+                                })
+                        else:
+                            safe_pages.append({
+                                "page_number": page["pageNumber"], "ok": False,
+                                "failure": {
+                                    "code": "page_failed",
+                                    "message": "Page could not be parsed.",
+                                },
+                            })
+                    envelope = {
+                        "schema_version": (1 if representation == "evidence"
+                                           else "pagespatial-compact-v1"),
+                        **({} if representation == "evidence"
+                           else {"representation": "compact"}),
+                        "job_id": identity["job_id"],
+                        "attempt_id": identity["attempt_id"],
+                        **({"execution_id": identity["execution_id"]}
+                           if representation == "evidence" else {}),
+                        "input_sha256": identity["input_sha256"],
+                        "page_count": len(pages),
+                        "pages": safe_pages,
+                    }
+                    payload = json.dumps(
+                        envelope, separators=(",", ":")).encode()
+                    fake.publication_paths.append(self.path)
+                    fake.publication_bytes[(identity["execution_id"], representation)] = payload
+                    return self._bytes(200, payload)
                 fake.posts += 1
                 fake.post_paths.append(self.path)
                 return self._json(fake.script["submit_status"], fake.script["submit_body"])
@@ -215,7 +269,7 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
         self.assertEqual(result["pages_failed"], 1)
         self.assertEqual(result["document_sha256"], SHA)
         self.assertEqual(result["resources"],
-                         {"cpu": 4.0, "memory_mib": 8192, "workers": 4, "sidecar_threads": 1})
+                         {"cpu": 4.0, "memory_mib": 8192, "workers": 4, "sidecar_threads": 4})
         self.assertEqual(result["adapter_revision"], "unknown")  # env not baked under stub
         self.assertIn("image_pin_revision", result)
         self.assertIn("app_name", result)
@@ -267,6 +321,15 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
         })
         self.assertEqual(pointer["result_uri"],
                          f"r2://pagespatial-results-dev/{pointer['result_key']}")
+        compact = self.r2.objects[pointer["compact_result_key"]]
+        self.assertEqual(
+            pointer["compact_result_digest"], hashlib.sha256(compact).hexdigest())
+        self.assertEqual(
+            compact,
+            self.fake.publication_bytes[(pointer["execution_id"], "compact")])
+        self.assertEqual(
+            stored,
+            self.fake.publication_bytes[(pointer["execution_id"], "evidence")])
 
     def test_parse_object_matches_parse_document_on_stable_fields(self):
         direct, _ = self._call(_payload(request_id=ATTEMPT_ID))
@@ -309,6 +372,14 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
         self.assertEqual(self.fake.posts, 1)
         self.assertEqual(set(self.r2.objects), {INPUT_KEY})
 
+    def test_evidence_upload_failure_leaves_only_an_unaccepted_compact_orphan(self):
+        self.r2.fail_put_at = 2
+        with self.assertRaisesRegex(OSError, "injected R2 PUT failure"):
+            self.instance.parse_object(_object_payload())
+        published = set(self.r2.objects) - {INPUT_KEY}
+        self.assertEqual(len(published), 1)
+        self.assertTrue(next(iter(published)).endswith(".compact.json"))
+
     def test_parse_object_bypasses_the_modal_result_size_guard(self):
         saved = modal_app.MAX_RESULT_BYTES
         modal_app.MAX_RESULT_BYTES = 64
@@ -336,6 +407,11 @@ class ParseDocumentIntegrationTest(unittest.TestCase):
         self.assertNotEqual(one["result_key"], two["result_key"])
         self.assertIn(one["result_key"], self.r2.objects)
         self.assertIn(two["result_key"], self.r2.objects)
+        self.assertNotEqual(one["compact_result_key"], two["compact_result_key"])
+        self.assertEqual(
+            self.r2.objects[one["compact_result_key"]],
+            self.r2.objects[two["compact_result_key"]])
+        self.assertEqual(one["compact_result_digest"], two["compact_result_digest"])
 
     # -- visible refusals and bounded failures --------------------------
 

@@ -104,8 +104,9 @@ test('R2 adapter lists deterministically and bounds the downloaded body', async 
       sent.push(command.constructor.name);
       if (command.constructor.name === 'ListObjectsV2Command') {
         return { Contents: [
-          { Key: 'results/j/a/b.json', LastModified: new Date('2026-08-20') },
-          { Key: 'results/j/a/a.json', LastModified: new Date('2026-08-20') },
+          { Key: `results/j/a/${'b'.repeat(32)}.json`, LastModified: new Date('2026-08-20') },
+          { Key: `results/j/a/${'a'.repeat(32)}.compact.json`, LastModified: new Date('2026-08-20') },
+          { Key: `results/j/a/${'a'.repeat(32)}.json`, LastModified: new Date('2026-08-20') },
         ] };
       }
       return {
@@ -118,7 +119,7 @@ test('R2 adapter lists deterministically and bounds the downloaded body', async 
   const store = createR2ResultStore({ client, bucket: 'results' });
   assert.deepEqual(
     (await store.listAttemptResults({ jobId: 'j', attemptId: 'a' })).map((x) => x.key),
-    ['results/j/a/a.json', 'results/j/a/b.json'],
+    [`results/j/a/${'a'.repeat(32)}.json`, `results/j/a/${'b'.repeat(32)}.json`],
   );
   assert.equal(Buffer.from((await store.readResult({ key: 'x' })).bytes).toString(), 'abc');
   assert.deepEqual(sent, ['ListObjectsV2Command', 'GetObjectCommand']);

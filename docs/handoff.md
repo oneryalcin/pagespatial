@@ -169,8 +169,12 @@ credentials.
   once, and duplicate compute is an accepted property.
 - Input key: `inputs/{job_id}.pdf`.
 - Result prefix: `results/{job_id}/{attempt_id}`.
-- Each execution writes an immutable
-  `results/{job_id}/{attempt_id}/{execution_id}.json` object.
+- Each new execution writes an immutable pair:
+  `results/{job_id}/{attempt_id}/{execution_id}.json` for canonical evidence
+  and `{execution_id}.compact.json` for its deterministic compact projection.
+- Pre-migration attempts remain evidence-only and harvestable. The migration
+  stamps every later attempt as pair-required; no new job can succeed with a
+  missing or invalid compact companion.
 - Only the database acceptance fence makes a result authoritative.
 - Cross-job acceptance is blocked in code and by the composite database
   relationship between job and attempt.
@@ -452,7 +456,8 @@ Steps 2–5 are unstarted and authorize no recognition-policy change.
 
 - Public alpha has no payment flow, subscriptions, teams, organizations, SSO
   providers beyond the current Access login method, or automated top-ups.
-- Users download the result JSON. There is no rich evidence/result viewer.
+- Users still download the full evidence JSON. Compact companions exist for
+  new results but are not public in Stage A. There is no result viewer.
 - Cost shown in the dashboard is a stamped placeholder estimate, not an
   invoice or measured per-job cloud bill.
 - Modal can scale to zero, so latency depends on snapshot and image state.
@@ -498,10 +503,13 @@ is whether the product solves a repeated user problem.
 
 ### Likely P1 — make results easier to inspect
 
-The current result is a JSON download. A source-linked evidence viewer is the
-most likely next product improvement, but build it only if alpha feedback shows
-that raw JSON prevents evaluation or adoption. Reuse the canonical evidence
-record; do not create a second result model.
+Alpha feedback confirmed that full evidence JSON is too large and hard to
+understand. Stage A publishes a compact companion while leaving clients
+unchanged. After one complete two-day retention window, verify that every
+retained new success has a companion. Only then make compact the API default
+and build the result viewer and schema guide in a separate PR. Keep full
+evidence explicit and authoritative. Do not call the Markdown reader an
+evidence viewer.
 
 ### P1 safety — malformed-PDF fuzzing
 
@@ -572,6 +580,7 @@ For browser parser changes, run the browser demo and the relevant corpus gate.
 - [Service control-plane design](design/2026-08-26-service-control-plane.md)
 - [Service API contract](design/2026-08-26-service-m2-api-contract.md)
 - [M2 live deployment](trials/2026-08-27-service-m2-live-deployment.md)
+- [Compact result transport](trials/2026-09-02-compact-result-transport.md)
 - [Open-alpha operation](../deploy/control-plane/README.md)
 - [Modal object transport qualification](trials/2026-08-26-service-m1-object-qualification.md)
 - [Modal memory snapshots](trials/2026-09-01-modal-memory-snapshot-qualification.md)

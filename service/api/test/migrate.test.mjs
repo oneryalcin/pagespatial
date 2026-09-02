@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import pg from 'pg';
-import { migrate } from '../src/migrate.mjs';
+import { migrate, migrationFiles } from '../src/migrate.mjs';
 import { reconcileOnce } from '../src/reconciler.mjs';
 
 test('migration refuses a pool because its advisory lock is session-scoped', async () => {
@@ -51,6 +51,39 @@ test('migration lock covers the complete run and releases after failure', async 
     await assert.rejects(migrate(observed), /different checksum/);
     assert.match(queries[0], /pg_advisory_lock/);
     assert.match(queries.at(-1), /pg_advisory_unlock/);
+  } finally {
+    await db.close();
+  }
+});
+
+test('compact migration preserves old attempts and requires pairs for new attempts', async () => {
+  const db = await PGlite.create();
+  try {
+    const migrations = migrationFiles();
+    for (const migration of migrations.slice(0, -1)) await db.exec(migration.sql);
+    const userId = (await db.query(
+      `INSERT INTO users (email, status) VALUES ('legacy@example.test', 'active') RETURNING id`,
+    )).rows[0].id;
+    const jobId = (await db.query(
+      `INSERT INTO jobs (user_id, state, input_uri, input_digest, input_bytes,
+                         unit_price_micros, upload_expires_at)
+       VALUES ($1, 'queued', 'r2://inputs/legacy.pdf', $2, 589, 1000,
+               now() + interval '1 hour') RETURNING id`,
+      [userId, 'a'.repeat(64)],
+    )).rows[0].id;
+    const oldAttempt = (await db.query(
+      'INSERT INTO job_attempts (job_id) VALUES ($1) RETURNING id', [jobId],
+    )).rows[0].id;
+    await db.exec(migrations.at(-1).sql);
+    const oldFlag = (await db.query(
+      'SELECT requires_compact FROM job_attempts WHERE id = $1', [oldAttempt],
+    )).rows[0].requires_compact;
+    const newFlag = (await db.query(
+      'INSERT INTO job_attempts (job_id, replaces_attempt_id) VALUES ($1, $2) RETURNING requires_compact',
+      [jobId, oldAttempt],
+    )).rows[0].requires_compact;
+    assert.equal(oldFlag, false);
+    assert.equal(newFlag, true);
   } finally {
     await db.close();
   }

@@ -3,6 +3,7 @@ import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { PGlite } from '@electric-sql/pglite';
 import { createValidDocument, fixtureIdentity } from '../../../test/fixture.mjs';
+import { COMPACT_PAGE_SCHEMA_VERSION, projectCompactPage } from '../../../dist/index.js';
 import { migrate } from '../src/migrate.mjs';
 import { reconcileAttempt, reconcileOnce } from '../src/reconciler.mjs';
 
@@ -70,26 +71,58 @@ function objectFor(jobRow, attemptId, executionId = 'a'.repeat(32)) {
     result_key: key, result_digest: digest, result_bytes: bytes.byteLength,
     page_count: 1, status: 'completed', timing: {},
   };
-  return { key, bytes, pointer, lastModified: new Date('2026-08-20T12:00:00Z') };
+  const compactEnvelope = {
+    schema_version: COMPACT_PAGE_SCHEMA_VERSION,
+    representation: 'compact',
+    job_id: jobRow.id,
+    attempt_id: attemptId,
+    input_sha256: INPUT_DIGEST,
+    page_count: 1,
+    pages: [{ page_number: 1, ok: true, page_compact: projectCompactPage(pageSpatial) }],
+  };
+  const compactBytes = new Uint8Array(Buffer.from(JSON.stringify(compactEnvelope)));
+  const compactKey = `results/${jobRow.id}/${attemptId}/${executionId}.compact.json`;
+  const compactDigest = createHash('sha256').update(compactBytes).digest('hex');
+  Object.assign(pointer, {
+    compact_result_uri: `r2://${RESULTS_BUCKET}/${compactKey}`,
+    compact_result_key: compactKey,
+    compact_result_digest: compactDigest,
+    compact_result_bytes: compactBytes.byteLength,
+  });
+  const lastModified = new Date('2026-08-20T12:00:00Z');
+  return {
+    key, bytes, pointer, lastModified,
+    compact: { key: compactKey, bytes: compactBytes, lastModified },
+  };
 }
 
 function fakeStore(objects = new Map()) {
+  const expanded = new Map(objects);
+  for (const value of objects.values()) {
+    if (value.compact) expanded.set(value.compact.key, value.compact);
+  }
   return {
     bucket: RESULTS_BUCKET,
-    objects,
+    objects: expanded,
     async listAttemptResults({ jobId, attemptId }) {
       const prefix = `results/${jobId}/${attemptId}/`;
-      return [...objects.entries()]
+      return [...expanded.entries()]
         .filter(([key]) => key.startsWith(prefix))
+        .filter(([key]) => !key.endsWith('.compact.json'))
         .map(([key, value]) => ({ key, lastModified: value.lastModified }))
         .sort((a, b) => a.key.localeCompare(b.key));
     },
     async readResult({ key }) {
-      const found = objects.get(key);
+      const found = expanded.get(key);
       if (!found) throw new Error(`missing ${key}`);
       return { bytes: found.bytes, lastModified: found.lastModified };
     },
   };
+}
+
+function storeResult(store, value) {
+  store.objects.set(value.key, value);
+  store.objects.set(value.compact.key, value.compact);
 }
 
 const modal = (outcomes = new Map()) => ({
@@ -119,6 +152,42 @@ test('completed Modal output is not accepted until its R2 bytes validate', async
   const accepted = await row('jobs', j.id);
   assert.equal(accepted.accepted_attempt_id, a.id);
   assert.equal(new Date(accepted.retention_expires_at).toISOString(), '2026-08-22T12:00:00.000Z');
+});
+
+test('a pre-migration attempt accepts its legacy evidence-only pointer', async () => {
+  const j = await job();
+  const a = await attempt(j.id);
+  await db.query('UPDATE job_attempts SET requires_compact = false WHERE id = $1', [a.id]);
+  const stored = objectFor(j, a.id);
+  for (const field of [
+    'compact_result_uri', 'compact_result_key',
+    'compact_result_digest', 'compact_result_bytes',
+  ]) delete stored.pointer[field];
+  const store = fakeStore(new Map([[stored.key, stored]]));
+  store.objects.delete(stored.compact.key);
+  const calls = modal(new Map([[a.modal_call_id, { kind: 'completed', output: stored.pointer }]]));
+  const outcome = await reconcileAttempt({
+    db, modalCalls: calls, resultStore: store,
+    inputBucket: INPUT_BUCKET, attemptId: a.id,
+  });
+  assert.deepEqual(outcome, { kind: 'completed', recorded: true, won: true });
+  const accepted = await row('jobs', j.id);
+  assert.equal(accepted.compact_result_uri, null);
+});
+
+test('a pre-migration attempt recovers from an evidence-only R2 object', async () => {
+  const j = await job();
+  const a = await attempt(j.id);
+  await db.query('UPDATE job_attempts SET requires_compact = false WHERE id = $1', [a.id]);
+  const stored = objectFor(j, a.id);
+  const store = fakeStore(new Map([[stored.key, stored]]));
+  store.objects.delete(stored.compact.key);
+  const calls = modal(new Map([[a.modal_call_id, { kind: 'failed', error: 'old worker lost output' }]]));
+  const outcome = await reconcileAttempt({
+    db, modalCalls: calls, resultStore: store,
+    inputBucket: INPUT_BUCKET, attemptId: a.id,
+  });
+  assert.deepEqual(outcome, { kind: 'recovered', recorded: true, won: true });
 });
 
 test('a returned status=failed value is rejected and fails only after R2 is checked', async () => {
@@ -218,6 +287,38 @@ test('a completed Modal pointer plus an R2 transport failure stays retryable', a
   assert.equal((await row('job_attempts', a.id)).state, 'dispatched');
 });
 
+test('a completed Modal pointer with a missing compact companion stays retryable', async () => {
+  const j = await job();
+  const a = await attempt(j.id);
+  const object = objectFor(j, a.id);
+  const store = fakeStore(new Map([[object.key, object]]));
+  store.objects.delete(object.compact.key);
+  const calls = modal(new Map([[a.modal_call_id, { kind: 'completed', output: object.pointer }]]));
+  await assert.rejects(
+    reconcileAttempt({
+      db, modalCalls: calls, resultStore: store,
+      inputBucket: INPUT_BUCKET, attemptId: a.id,
+    }),
+    /missing/,
+  );
+  assert.equal((await row('job_attempts', a.id)).state, 'dispatched');
+});
+
+test('an invalid compact companion cannot be accepted', async () => {
+  const j = await job();
+  const a = await attempt(j.id);
+  const object = objectFor(j, a.id);
+  object.compact.bytes = new Uint8Array(Buffer.from('{}'));
+  const store = fakeStore(new Map([[object.key, object]]));
+  const calls = modal(new Map([[a.modal_call_id, { kind: 'completed', output: object.pointer }]]));
+  const outcome = await reconcileAttempt({
+    db, modalCalls: calls, resultStore: store,
+    inputBucket: INPUT_BUCKET, attemptId: a.id,
+  });
+  assert.equal(outcome.kind, 'failed');
+  assert.equal((await row('jobs', j.id)).state, 'failed');
+});
+
 test('an unknown attempt creates and dispatches at most one replacement', async () => {
   const j = await job();
   const a = await attempt(j.id, 'dispatch_unknown');
@@ -292,7 +393,7 @@ test('crash-window replacement wins and the original late result cannot displace
   const replacementId = replacementOutcome.attemptId;
   const replacement = await row('job_attempts', replacementId);
   const winner = objectFor(j, replacementId, 'b'.repeat(32));
-  store.objects.set(winner.key, winner);
+  storeResult(store, winner);
   calls.inspect = async () => ({ kind: 'completed', output: winner.pointer });
   const won = await reconcileAttempt({
     db, modalCalls: calls, resultStore: store, inputBucket: INPUT_BUCKET,
@@ -301,7 +402,7 @@ test('crash-window replacement wins and the original late result cannot displace
   assert.equal(won.won, true);
 
   const late = objectFor(j, original.id, 'c'.repeat(32));
-  store.objects.set(late.key, late);
+  storeResult(store, late);
   const lost = await reconcileAttempt({
     db, modalCalls: calls, resultStore: store, inputBucket: INPUT_BUCKET,
     attemptId: original.id, unknownWaitMs: 0,
@@ -312,7 +413,10 @@ test('crash-window replacement wins and the original late result cannot displace
   assert.equal(final.accepted_attempt_id, replacementId);
   assert.equal((await row('job_attempts', original.id)).state, 'succeeded');
   assert.equal((await row('job_attempts', replacement.id)).state, 'succeeded');
-  assert.deepEqual([...store.objects.keys()].sort(), [late.key, winner.key].sort());
+  assert.deepEqual(
+    [...store.objects.keys()].sort(),
+    [late.key, late.compact.key, winner.key, winner.compact.key].sort(),
+  );
 });
 
 test('a paid original result can rescue the job after its replacement fails', async () => {
@@ -337,7 +441,7 @@ test('a paid original result can rescue the job after its replacement fails', as
   assert.equal((await row('jobs', j.id)).state, 'dispatched');
 
   const paidResult = objectFor(j, original.id, 'f'.repeat(32));
-  store.objects.set(paidResult.key, paidResult);
+  storeResult(store, paidResult);
   const rescued = await reconcileAttempt({
     db, modalCalls: calls, resultStore: store, inputBucket: INPUT_BUCKET,
     attemptId: original.id, unknownWaitMs: 0,
