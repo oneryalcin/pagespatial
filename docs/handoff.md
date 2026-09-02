@@ -1,324 +1,576 @@
 # PageSpatial engineering handoff
 
-Date: 2026-08-19
+Date: 2026-09-02
+Repository: `github.com/oneryalcin/pagespatial`
+Baseline: `main` at `6179a72` after PR #127
 
 ## Purpose
 
-PageSpatial is an experimental PDF ingestion library. It creates a durable evidence record for each page from native PDF extraction and visual OCR. It does not treat Markdown, inferred tables, chart mappings, or search chunks as source evidence.
+This is the current operational map for the next engineer. It states what is
+live, what is measured, what is only proposed, and what must not be inferred.
+It does not replace API references, trial records, or architecture decisions;
+it links to them.
 
-This document tells the next engineer what exists, why the current design was chosen, what was tested, what remains unproven, and what to do next. API examples and detailed contracts stay in the linked files rather than being copied here.
+PageSpatial has two related products:
 
-The project's standing commitments live in [principles](principles.md) — read it first; when a proposed change conflicts with a principle, the principle wins until deliberately revisited. The two most often at risk of drift: the library feeds an index and its value is per-chunk trust metadata, not text; and humans belong to the evaluation loop only — escalation is a routing signal for automated tiers, never a production review queue.
+1. An open-source TypeScript library that turns PDFs into evidence-backed,
+   schema-valid records in browsers and Node.
+2. A managed public-alpha service with Cloudflare Access, a small dashboard,
+   an API, PostgreSQL, R2 object storage, and Modal CPU workers.
 
-**Current work map**: [workstreams](workstreams.md) — the living board of
-active/free/blocked streams with owners; edit it when you pick up or ship a
-stream. Note this handoff is a point-in-time document (2026-08-19); the
-2026-08-20 wave (CMap root-cause fix, unread-ink recovery, residue honesty,
-Flash escalated tier, escalation-economics ladder, cross-family second
-opinion) is documented in docs/trials/2026-08-20-*.md and reflected in the
-workstreams snapshot.
+Do not mix their guarantees. The library can run without the managed service.
+The managed service uses the library but also owns authentication, tenancy,
+credits, job state, dispatch, storage, retention, and operations.
 
-Start with:
+## Read this in order
 
-1. [README](../README.md) — supported package surfaces and usage.
-2. [Architecture](architecture.md) — boundaries, ownership, coordinates, and execution planes.
-3. [Evaluation rubric](evaluation-rubric.md) — production gates and measurement rules.
-4. [Development corpus guide](evaluation-corpus.md) — private corpus and reproducible runner.
-5. [Security](../SECURITY.md) — untrusted content, local assets, and caller responsibilities.
+1. [Principles](principles.md) — standing commitments. These win until a
+   deliberate, recorded decision changes them.
+2. This handoff — current system and operating state.
+3. [Workstreams](workstreams.md) — living board and current measurements.
+4. [README](../README.md) — library surfaces and examples.
+5. [Architecture](architecture.md) — parser boundaries and evidence model.
+6. [Service control-plane design](design/2026-08-26-service-control-plane.md)
+   and [API contract](design/2026-08-26-service-m2-api-contract.md).
+7. Linked trial records for the evidence behind a claim.
 
-## Current status
+If documents disagree, use the newest dated correction or trial and the
+current workstream board. Preserve the older record as history; do not silently
+rewrite an earlier measurement.
 
-The repository contains a working TypeScript parser, browser adapters, a Node native adapter, strict runtime validation, and a development-only evaluation harness.
+## Current product surfaces
 
-Current facts:
+### Public site and browser demo
+
+- `https://pagespatial.dev` and `https://www.pagespatial.dev` are hosted on
+  Cloudflare Pages.
+- The public demo parses at most four pages in the browser.
+- The demo sends no PDF bytes to PageSpatial, R2, or Modal.
+- It uses PDF.js and browser PP-OCR, preferring WebGPU with sticky WASM
+  fallback.
+- It is a product demonstration, not the managed service's compute path.
+
+### Managed alpha
+
+- `https://app.pagespatial.dev` is the dashboard behind Cloudflare Access.
+- `https://api.pagespatial.dev` is the API behind bearer API-key auth.
+- Public self-sign-up is enabled through Cloudflare Access one-time PIN.
+- A new account receives 100 page credits exactly once.
+- Users can submit a PDF in the dashboard or use the API.
+- No payment, subscription, organization, team, or automatic credit-purchase
+  flow exists. Credit top-ups are manually reviewed during alpha.
+- Public enrichment is disabled. The current public profile is parse-only v1.
+
+### Library
 
 - Package version: `0.1.0`.
-- Status: experimental; not production-qualified.
-- Distribution: private repository; no public npm release has been qualified.
-- Node support: Node 25 or newer.
-- CI command: `npm run check`.
-- Current CI: 101 tests, typecheck, build, schema freshness, package-boundary checks, and Vite filesystem-containment checks pass.
-- Browser native path: one shared PDF.js session.
-- Browser OCR path: PP-OCRv6 Tiny using WebGPU when verified, with sticky WASM fallback.
-- Node native path: PDF Inspector for preferred Markdown and unambiguous metadata; PDF.js for native text and geometry.
-- Persistence, authorization, retrieval, answer generation, and remote model escalation are outside this package.
-- Evidence Search integration is deliberately deferred. See [migration plan](evidence-search-migration.md).
+- The package is still experimental and is not a qualified public npm release.
+- `PageSpatialDocument` is the canonical evidence record.
+- Markdown, tables, hierarchy, chart relations, search chunks, and prompts are
+  derived views. They are not source evidence.
 
-The authoritative record is `PageSpatialDocument`. Its TypeScript contract is in [`src/types.ts`](../src/types.ts), runtime validation is in [`src/schema.ts`](../src/schema.ts), and the generated portable schema is [`schemas/pagespatial.schema.json`](../schemas/pagespatial.schema.json).
+## Deployed topology
 
-## The design that should remain stable
+```text
+pagespatial.dev / www.pagespatial.dev
+  Cloudflare Pages
+  -> public browser-local demo (max 4 pages, no PDF upload)
 
-### 1. Native extraction and OCR both run
+browser
+  -> Cloudflare Access one-time PIN
+  -> app.pagespatial.dev -----------------------------+
+                                                       |
+API-key client                                         |
+  -> api.pagespatial.dev ------------------------------+
+                                                       v
+                                             Cloudflare Tunnel
+                                                       |
+                                                       v
+VPS: 51.195.149.152
+  deploy/control-plane/compose.yaml
+  +-- api container
+  |    +-- dashboard and API
+  |    +-- dispatcher every 5 seconds
+  |    +-- reconciler every 60 seconds
+  |    +-- migrations before listen
+  +-- PostgreSQL 18
+  +-- cloudflared
+       no public host ports
 
-Native PDF text and OCR are complementary. Native extraction supplies selectable text and document metadata. OCR recovers scans, chart labels, diagram text, and content missing from the PDF text layer.
+api container
+  +-- R2 input and result buckets
+  +-- Modal JavaScript client
+       -> pagespatial-parse-internal
+          -> one document per Modal container call
+          -> Node parse service
+          -> four Node page workers
+          -> four Python PP-OCRv6/OpenVINO sidecars
+```
 
-Do not choose one source and discard the other. Raw native and OCR observations remain separate even after association. Matches, conflicts, reading order, chart relations, and Markdown are derived records that reference their source observation IDs.
+The root [`Dockerfile`](../Dockerfile) is the qualified Modal parse-worker
+image. It is not the control-plane image. The control plane has its own image
+at [`deploy/control-plane/Dockerfile`](../deploy/control-plane/Dockerfile).
 
-### 2. PDF.js owns geometry
+## Stable parser invariants
 
-Rendered top-left pixels are the canonical display coordinate system. PDF.js supplies text-item transforms, `page.view` bounds, and the renderer's six-value viewport matrix. All four source-box corners are transformed.
+These are load-bearing. Do not weaken them to improve a metric.
 
-PDF Inspector scalar rectangles are not a valid geometry source for general rotated pages because they omit per-item orientation. Keep PDF Inspector for Markdown and metadata only. Geometry code and invariants are in:
+1. Native PDF extraction and OCR are independent witnesses. Keep their raw
+   observations separate after matching.
+2. PDF.js owns geometry. Transform all four source-box corners with the exact
+   renderer viewport matrix. PDF Inspector is not the geometry authority.
+3. Invalid geometry fails closed. Do not make it pass by clipping it to the
+   page.
+4. Markdown is derived, untrusted document content. Sanitize it before HTML
+   rendering and delimit it in model prompts.
+5. Derived records cite stable source observation IDs.
+6. Diagnostics use closed typed vocabularies. Do not classify raw exception
+   messages into public states.
+7. Browser WebGPU can fall back to WASM, but the fallback is sticky for the
+   parser lifetime and is explicit in diagnostics.
+8. Human review belongs to evaluation and gold adjudication. Production
+   escalation is an automated routing signal, not a human queue.
 
-- [`src/geometry.ts`](../src/geometry.ts)
-- [`src/pdfjs-text.ts`](../src/pdfjs-text.ts)
+Core contracts are in:
+
+- [`src/types.ts`](../src/types.ts)
+- [`src/schema.ts`](../src/schema.ts)
+- [`src/adapters.ts`](../src/adapters.ts)
 - [`src/page-parser.ts`](../src/page-parser.ts)
-- [`src/node/pdf-inspector.ts`](../src/node/pdf-inspector.ts)
+- [`src/geometry.ts`](../src/geometry.ts)
+- [`schemas/pagespatial.schema.json`](../schemas/pagespatial.schema.json)
 
-Never make invalid geometry pass by clipping it to the page. Reject non-finite, singular, mismatched, or out-of-bounds geometry.
+## Managed job lifecycle
 
-### 3. Markdown is a derived, untrusted view
+```text
+create job
+  -> authenticate tenant
+  -> apply idempotency key
+  -> reserve page allowance and credits
+  -> return a presigned input PUT
 
-PDF Inspector is the preferred Node Markdown source. The adapter uses deduplicated PDF.js Markdown when Inspector output is blank or when coincident PDF text overlays would duplicate visible content.
+browser/client PUTs PDF directly to R2
+  -> finalize
+  -> HEAD input object and validate deadline/size/digest
+  -> queued
+  -> dispatcher creates an attempt and spawns Modal
+  -> reconciler polls Modal and inspects R2
+  -> validate pointer, stored bytes, digest, identity, and public envelope
+  -> atomically accept the first valid attempt
+  -> succeeded or failed
+```
 
-The projection is marked `trust: "untrusted-document-content"`. Sanitize it before HTML rendering. Delimit it as untrusted evidence in model prompts. Document text must never change tool authority or system instructions.
+The API process never buffers a customer PDF. The worker has no database
+credentials.
 
-### 4. Adapters are explicit objects
+### Dispatch and acceptance invariants
 
-The core contracts are [`NativePageAdapter`, `PageRenderer`, and `OcrAdapter`](../src/adapters.ts). Composition uses normal TypeScript imports. There is no plugin registry, discovery protocol, or dependency-injection container.
+- PostgreSQL commit and Modal spawn cannot be atomic. Dispatch is at least
+  once, and duplicate compute is an accepted property.
+- Input key: `inputs/{job_id}.pdf`.
+- Result prefix: `results/{job_id}/{attempt_id}`.
+- Each execution writes an immutable
+  `results/{job_id}/{attempt_id}/{execution_id}.json` object.
+- Only the database acceptance fence makes a result authoritative.
+- Cross-job acceptance is blocked in code and by the composite database
+  relationship between job and attempt.
+- A late successful attempt is recorded truthfully but cannot displace the
+  accepted winner.
+- An original `dispatch_unknown` attempt remains harvestable after a
+  replacement starts. Failing it early can discard compute already paid for.
+- At most one replacement attempt exists.
+- Modal SDK output and R2 are both consulted before a permanent failure. The
+  JavaScript Modal SDK does not expose a distinct expired-output error.
+- Every non-terminal state has a bounded path to a terminal state. The job
+  processing deadline is 24 hours.
+- A reconciler failure on one attempt cannot block the rest of a pass.
 
-This is intentional. A browser or server can replace one adapter without changing the evidence schema or merge logic.
+The implementation is in [`service/api/src`](../service/api/src), especially
+`dispatcher.mjs`, `reconciler.mjs`, `accept.mjs`, `lifecycle.mjs`, and
+`r2-results.mjs`.
 
-### 5. TypeScript stays in control
+## Authentication, tenancy, and credits
 
-TypeScript owns orchestration, schemas, deterministic matching, diagnostics, and projections. Do not introduce Rust or another data plane until profiling identifies a stable CPU or memory bottleneck. A replacement must consume and emit the same schema and pass the same conformance tests.
+### Dashboard
 
-## Implemented runtime paths
+- Cloudflare Access is the identity provider and login surface.
+- The origin trusts only `Cf-Access-Jwt-Assertion`, verified against the Access
+  JWKS, issuer, audience, algorithm, and `type: app`.
+- The email convenience header is not trusted.
+- Dashboard mutations require an exact same-origin `Origin` header.
+- Missing, malformed, foreign, and suspended identities fail closed.
 
-### Browser
+### API
 
-[`createBrowserParser()`](../src/browser/preset.ts) composes:
+- API keys contain generated entropy and are stored as SHA-256 hashes with a
+  display prefix. Plaintext is shown once.
+- Bearer scheme matching is case-insensitive.
+- Authentication failures return `401` and `WWW-Authenticate: Bearer`.
+- Tenant-owned resources return `404` for both missing and foreign IDs.
 
-- a shared PDF.js session and native extractor;
-- a bounded PDF.js canvas renderer;
-- one lazy PP-OCRv6 Tiny engine;
-- verified WebGPU or WASM execution;
-- serialized OCR prediction;
-- cancellation, deterministic cleanup, and progressive `onPage` callbacks.
+### Open alpha
 
-The OCR adapter verifies the actual detector and recognizer providers. It does not infer success from `navigator.gpu`. A WebGPU failure causes one retry on WASM, after which WASM remains sticky for the document.
+Production settings are:
 
-OCR assets are exact and caller-hosted. The hashes and sizes are in [`assets/ppocrv6-tiny.manifest.json`](../assets/ppocrv6-tiny.manifest.json). Private-document deployments should keep `localOnly: true` and serve assets from the same origin.
+```text
+PAGESPATIAL_ALLOW_SELF_SIGNUP=1
+PAGESPATIAL_TRIAL_PAGE_CREDITS=100
+```
 
-### Node/server
+The first successful Access login creates the account and grants the trial
+credit exactly once. Credits are reserved at admission so concurrent jobs
+cannot overspend the allowance. The dashboard exposes available, used,
+reserved, and granted pages.
 
-[`createPdfInspectorNativeAdapter()`](../src/node/pdf-inspector.ts) performs one cached, whole-document PDF Inspector extraction per Node PDF session. PDF.js still produces page-native observations and their complete transforms.
+The global active-job fuse is 100. It was derived from the measured
+single-container throughput, 200-page maximum, 24-hour deadline, and a 50%
+safety margin. Do not scale this limit from an assumed linear Modal fleet; that
+linearity was not measured.
 
-This path improves page Markdown, but its whole-document Inspector pass can delay the first completed page. That delay has not yet been isolated on long documents. Measure it before changing the execution model.
+## Object storage and retention
 
-There is no server GPU OCR adapter yet. The existing `OcrAdapter` boundary is the intended extension point.
+The live topology uses separate input and result buckets and four credential
+roles:
 
-## What was tried and what we learned
-
-| Trial | Result | Decision |
+| Role | Input bucket | Result bucket |
 | --- | --- | --- |
-| Shared PDF.js session plus PP-OCR on a mixed three-page PDF | WebGPU processed all pages in 2.639 seconds, recovered chart-only `FY2021` and `527`, and made zero external requests | Keep as the browser composition; details in [official browser adapter trial](trials/2026-08-19-official-browser-adapters.md) |
-| AnyDoc plus PDF Inspector | AnyDoc delegates PDF work to PDF Inspector, so using both would parse the same document twice without stronger page evidence | Integrate PDF Inspector directly on Node; do not add AnyDoc as a second PDF pass |
-| PDF Inspector rectangles as positioned native geometry | Failed on real quarter-turn pages because item orientation was lost | Rejected; PDF.js transforms are the geometry authority |
-| First 162-page development run | OCR completed every page, but 12 rotated pages and two coincident-overlay pages failed closed | Kept as historical evidence in [dev-v5 baseline](trials/2026-08-19-development-corpus-baseline.md) |
-| Geometry-normalized 162-page rerun | All 162 pages produced schema-valid PageSpatial records; no page was forced through by clipping | Adopted; details in [dev-v6 follow-up](trials/2026-08-19-geometry-normalization-follow-up.md) |
-| Dense financial table comparison | An initial 47.54% figure was invalid because it scored PDF font fragments as complete values. Correct reconstruction recovered all 39 independently checked values in both Inspector and OCR | Keep fragment reconstruction; score value preservation and table relationships separately. See [dense table trial](trials/2026-08-19-dense-financial-table-recovery.md) |
-| PDF Inspector Markdown on the dense table | All values were present, but one section label and one total were attached to the wrong row | Markdown is useful but cannot be treated as correct table structure |
-| Heuristic audit: scale/locale hardening rerun (dev-v7) | Identical parser-controlled numbers to dev-v6 after moving pixel constants to point-space and fixing locale-dependent lowercasing | Adopted; constants live in `src/tuning.ts`. See [audit and redesign trial](trials/2026-08-19-heuristic-audit-and-critical-ink-redesign.md) |
-| Critical-token "same ink" redesign (dev-v8) | 10 old conflicts were presentation heals; 215 new conflicts surfaced, including real OCR misreads the unit-whitelist regex missed | Adopted; conflict counts before/after are not comparable. Same trial report |
-| Gold pilot: 30 human-verified pages vs dev-v8 | Headline numbers later partially retracted (measurement defects); the CJK/chart gap, the false-confidence page, and the conflict split survived with corrected magnitudes | Retracted in part; see the banner in [gold pilot trial](trials/2026-08-19-gold-pilot-first-accuracy.md) |
-| Four-review adversarial pass over the audit/gold branch (dev-v9) | Chart detector is 25% recall / 96% precision, not dead; gold auto-accept was circular; word-glue made tokens segmentation-dependent; 36 of 663 conflicts were glue artifacts; blocking escalations were 14/14 confirmed real | Adopted: two-channel tokens, tiered gold metrics, hash-bound evaluator, schema 0.2.0. See [adversarial review fixes](trials/2026-08-19-adversarial-review-fixes.md) and issue #8 |
-| Coverage-starvation diagnostic (dev-v10) | 36 majority-single-witness pages flagged (scans, CJK chart pages, slide decks); the known false-confidence page fires; on gold, 8 of 9 uncorroborated-only pages carry tokens both engines missed and clean-but-missing pages fell to zero | Adopted as blocking reason `uncorroborated-ocr`; details in [coverage-starvation trial](trials/2026-08-19-coverage-starvation-diagnostic.md) |
+| API input | read/write | denied |
+| API result | denied | read |
+| Modal input | read | denied |
+| Modal result | denied | read/write |
 
-The browser trial also retained three tooling failures: Paddle worker prebundling, ORT `?import` handling, and a stale Vite process. These are solved in the current smoke harness and documented in the trial. They were integration failures, not accuracy results.
+Startup checks reject identical buckets or reused access-key identities, but
+they cannot prove provider ACLs. The live denial matrix caught a real
+over-permissioned result credential. Rerun the matrix after every credential
+rotation.
 
-## Current empirical evidence
+- Input and result objects are retained for up to two days by R2 lifecycle
+  rules. R2 deletion is asynchronous, not an exact timestamp guarantee.
+- Upload/finalize must complete within one hour of job creation.
+- A queued job has a 24-hour processing deadline.
+- Result access expires two days after the accepted object's R2
+  `LastModified`, not after reconciliation time.
+- Result download grants last at most five minutes.
 
-The current reference aggregate is [`evaluation/baselines/dev-v10-coverage-starvation-2026-08-19.summary.json`](../evaluation/baselines/dev-v10-coverage-starvation-2026-08-19.summary.json). Superseded aggregates ([dev-v6](../evaluation/baselines/dev-v6-2026-08-19.summary.json), [dev-v7](../evaluation/baselines/dev-v7-scale-locale-2026-08-19.summary.json), [dev-v8](../evaluation/baselines/dev-v8-critical-ink-2026-08-19.summary.json), [dev-v9](../evaluation/baselines/dev-v9-two-channel-tokens-2026-08-19.summary.json)) are retained as history; the [audit trial](trials/2026-08-19-heuristic-audit-and-critical-ink-redesign.md) and the [adversarial review fixes trial](trials/2026-08-19-adversarial-review-fixes.md) explain the lineage.
+## Modal worker
 
-dev-v10 records (23 PDFs, 162 pages, schema 0.3.0, two-channel critical tokens, coverage-starvation diagnostic):
+Current production app: `pagespatial-parse-internal`.
 
-- 162 OCR-completed, 162 schema-valid, 0 failed closed;
-- 17,051 native observations; 14,797 OCR observations; 11,072 source matches;
-- 627 critical conflicts; 124 pages requiring escalation (36 flagged `uncorroborated-ocr`, 22 of them previously silent single-witness pages).
+| Setting | Production value |
+| --- | --- |
+| CPU | 4 physical cores |
+| Memory | 8,192 MiB |
+| `min_containers` | 0 |
+| `buffer_containers` | 0 |
+| `max_containers` | 1 |
+| Documents per call | 1 |
+| Node page workers | 4 |
+| OCR sidecars | 4 |
+| Input limit | 90 MiB |
+| Page limit | 200 |
+| Warm-lifetime limit | 100 jobs |
+| Direct result limit | 64 MiB |
+| R2 pointer result limit | 128 MiB |
+| Memory snapshots | enabled |
 
-Gold evidence (30 labelled pages, tiered): human-verified union recall 64% on mixed pages; on the EN/JA sibling pages the human tier (tokens the native layer missed, mostly chart-embedded) is missed-by-both 3% in English vs 75% in Japanese; conflict-blocking escalations 14/14 confirmed real by adjudication, while uncorroborated-only blocking pages (a disjoint subset with no adjudicable conflict) run 8/9 under the weaker missed-gold criterion against a 43% base rate; conflict adjudications OCR-right 23 / native-right 17 / both-wrong 6; chart detector 25% recall at 96% precision. Text-free aggregates: [`evaluation/gold/`](../evaluation/gold/).
+`max_containers` is allowlisted to `{1, 4, 16}`. Memory is allowlisted to
+`{8192, 12288, 16384, 24576}` MiB. Changing either value is an explicit
+operational decision, not free-form configuration.
 
-The median native/OCR association coverage was 85.2%; the mean was 68.6%. This is matcher coverage, not parser accuracy or OCR recall. Conflict counts are comparable only within one token-definition era (dev-v8/dev-v9 differ from dev-v6, and from each other by the two-channel change).
+Deploy with:
 
-The public aggregate authenticates the private invocation, 23 document summaries, and 162 immutable page attempts by content hash. Runtime PDFs, OCR output, and logs are private and are not committed or packed.
+```bash
+PAGESPATIAL_MODAL_APP_NAME=pagespatial-parse-internal \
+PAGESPATIAL_MAX_CONTAINERS=1 \
+PAGESPATIAL_MEMORY_MIB=8192 \
+PAGESPATIAL_ENABLE_MEMORY_SNAPSHOT=1 \
+modal deploy deploy/modal/modal_app.py
+```
 
-## Private corpus and reproducibility
+Measured facts:
 
-The authoritative corpus definition is [`evaluation/corpus.v1.json`](../evaluation/corpus.v1.json). It references the private Hugging Face dataset `oneryalcin/enterprise-document-landfill` at pinned revision `e3ee38f067588644b11574ccc566843ca45f6d33`.
+- A production snapshot-hit one-page call became ready in 7.7 seconds and
+  parsed in 2.5 seconds.
+- A new deploy or rebuilt image still measured 83.8–102.3 seconds before
+  service readiness. This is not a latency SLA.
+- Two 100-page 8 GiB runs completed 200/200 pages. Sampled peak RSS was
+  5.92–6.01 GiB, leaving about 2 GiB of observed headroom.
+- RSS sampling is a lower bound, not a kernel high-water mark. Keep the memory
+  telemetry in result metadata and logs.
+- PDF Inspector 1.17.0 is adopted and qualified on the live R2/Modal path.
 
-The manifest contains:
+The Python Modal deployment SDK and the control-plane JavaScript client are
+different dependencies. The current deployment SDK is 1.5.3; the control
+plane pins `modal@0.9.0`.
 
-- 23 development PDFs with 162 nominated pages;
-- 13 candidate holdout PDFs with 89 nominated pages;
-- family-level split protection;
-- exact paths, hashes, page counts, and page-class labels.
+See [Modal deployment](../deploy/modal/README.md), the
+[snapshot trial](trials/2026-09-01-modal-memory-snapshot-qualification.md),
+and the [8 GiB trial](trials/2026-09-01-modal-memory-allocation.md).
 
-The provided commands can materialize only the development split. Do not add a holdout flag to the current runner.
+## Control-plane operation
 
-Default local workflow:
+The VPS Compose project lives under [`deploy/control-plane`](../deploy/control-plane).
+It contains `api`, `postgres:18.6-bookworm`, and `cloudflared`. It publishes no
+host ports. The API container uses a read-only root filesystem, drops Linux
+capabilities, and enables `no-new-privileges`.
 
-```sh
-npm ci
-npm run check
+```bash
+cp deploy/control-plane/.env.example deploy/control-plane/.env
+chmod 600 deploy/control-plane/.env
+docker compose -f deploy/control-plane/compose.yaml build api
+docker compose -f deploy/control-plane/compose.yaml up -d
+docker compose -f deploy/control-plane/compose.yaml ps
+```
+
+The API applies migrations before it listens. The dispatcher runs every five
+seconds. The reconciler runs every 60 seconds with a 45-second pass deadline.
+
+Useful operations:
+
+```bash
+# Public health. The Modal field can represent a cached handle, not a fresh
+# reachability test.
+curl -fsS https://api.pagespatial.dev/health
+
+# Configure browser uploads on the input bucket.
+wrangler r2 bucket cors set "$R2_INPUT_BUCKET" \
+  --file deploy/control-plane/r2-input-cors.json
+
+# Grant alpha credits after manual review.
+docker compose -f deploy/control-plane/compose.yaml exec api \
+  npm run grant-credits -- user@example.com 100 "alpha top-up"
+```
+
+Never print or commit `.env`, R2 secrets, Modal tokens, Access credentials,
+presigned URLs, API keys, or database passwords. Safe logs use allowlisted
+tokens and deliberately omit exception messages and stacks.
+
+## PostgreSQL: deliberate alpha compromise
+
+PostgreSQL 18 runs on the VPS in a named Compose volume. This is an owner
+decision for proof-of-value cost control, not the original managed-PostgreSQL
+design.
+
+What is proven:
+
+- Schema migrations and concurrency tests run against native PostgreSQL.
+- A manual off-site dump and byte-exact restore was demonstrated once.
+
+What is not proven:
+
+- There is no high availability.
+- There is no scheduled off-site backup.
+- There is no current RPO or RTO.
+- VPS or volume loss can lose the job ledger and account state.
+
+The accepted trigger is usage: move PostgreSQL to a managed service when real
+usage justifies the recurring cost. Do not re-litigate this on architectural
+preference alone. Also do not describe the current box as stateless or claim
+vendor PITR.
+
+## Parser and evaluation state
+
+### Server parser
+
+- TypeScript owns schema, orchestration, matching, diagnostics, and
+  projections.
+- PDF Inspector supplies preferred Markdown and unambiguous metadata.
+- PDF.js supplies native text and geometry.
+- Python PP-OCRv6/OpenVINO sidecars provide server OCR.
+- The current sidecar reference baseline is
+  `dev-v13-sidecar-2026-08-23`: 162/162 pages completed with zero failures.
+
+### Browser parser
+
+- PDF.js provides native extraction and rendering.
+- PP-OCR uses WebGPU when verified, with sticky WASM fallback.
+- Browser `dev-v12` and server `dev-v13` are different execution eras. Compare
+  them only on independently adjudicated gold, not on raw route counts.
+
+### Development corpus
+
+The private corpus is hash-verified and materialized outside git. Reports are
+committed only after the full expected tuple set succeeds. A failed or partial
+run must not overwrite the last good aggregate.
+
+```bash
 npm run eval:corpus:check
 npm run eval:corpus:dry-run
-hf auth whoami
 npm run eval:corpus:materialize
 npm run eval:ocr-assets
-npm run eval:baseline -- --backend webgpu --run-id <new-run-id>
-npm run eval:baseline:summary -- \
-  --run-root .evaluation/runs/<new-run-id> \
-  --output evaluation/baselines/<new-run-id>.summary.json
+npm run eval:baseline -- --backend webgpu
+npm run eval:baseline:summary
 ```
 
-For data outside the checkout, pass the same `--data-root <private-path>` to materialization and baseline commands, and prepare assets with:
+Do not run `npm run build` while corpus evaluation is active; both use `dist/`.
+`.evaluation/` is private and gitignored. `pdftoppm` and `tesseract` must be on
+`PATH` for the local runner.
 
-```sh
-npm run prepare:ocr-assets -- --output <private-path>/ocr-assets
-```
+## Important measurements and non-conclusions
 
-The accepted dev-v6 private run used `/private/tmp/pagespatial-evaluation-data`. That path is machine-local and temporary; it is not a durable handoff artifact. Regenerate the run from the pinned dataset when private attempts are unavailable.
+### ParseBench
 
-Use a fixed `--backend wasm` or `--backend webgpu` for reproducible resume. `--backend auto` intentionally disables resume because the actual provider can change. Use `--browser-executable` or `PAGESPATIAL_CHROME_EXECUTABLE` when Chrome is not at the macOS default path.
+The pinned Basic small-cohort run measured:
 
-## Known gaps
+| Dimension | Score |
+| --- | ---: |
+| Content | 88.05 |
+| Table | 41.22 |
+| Semantic Formatting | 36.53 |
+| Visual Grounding | 11.78 |
+| Chart treatment | 0/23 |
 
-These are real gaps, not implied future features:
+This is evidence for where quality work should focus. It is not a universal
+benchmark claim.
 
-1. Gold labels exist only for a 30-page pilot ([gold pilot trial](trials/2026-08-19-gold-pilot-first-accuracy.md)); the remaining 132 development pages are unlabelled and the pilot used one annotator without adjudication.
-2. Geometry precision/recall, reading order, table structure, retrieval quality, and answer grounding remain unmeasured. Token recall, conflict composition, chart-relation recall, and one false-confidence instance are now measured at pilot scale only.
-3. The current relation detector is deliberately narrow: single-series year/category/value candidates only.
-4. General table reconstruction is not implemented.
-5. A server GPU OCR adapter and server throughput benchmark are not implemented.
-6. Full-document latency and time to first searchable page have not been measured for 50-page and 250-page workloads.
-7. PDF Inspector performs a whole-document pass before its page result is available.
-8. Browser and Node output equivalence is covered by fixtures, not a large independently labelled equivalence set.
-9. No production persistence, revision store, ACL enforcement, deletion propagation, or tenant boundary exists in this library.
-10. The package is not integrated into Evidence Search.
-11. Vertical CJK writing mode is unvalidated: PDF.js swaps width/height roles for vertical fonts, so `pdfJsTextItemPointBox` would produce transposed, undersized boxes. No vertical-text page exists in the development corpus yet.
+A bounded Gemini 3.7 Flash chart treatment passed 12/23 cases. One page was
+0/8. This is promising research, not an adopted production tier.
 
-## Next work, in order
+### Retrieval
 
-### P0 — Create independent development gold
+Trust metadata did not improve flat ranking in the measured harness.
+Trust-free duplicate removal improved hit@5 by 13 points. The remaining trust
+hypothesis belongs in answer verification and citation, not ranking.
 
-Do this before changing thresholds or adding broader inference.
+### OCR performance
 
-1. Define a versioned gold schema for:
-   - visible critical tokens and their page boxes;
-   - reading-order edges or ranks;
-   - table cells, rows, columns, headers, and spans where present;
-   - chart relation tuples such as `(series, category, value, unit)`;
-   - page or region `needs escalation` labels;
-   - material-error severity.
-2. Keep private page text and labels outside the npm package. Commit the schema, manifest hashes, evaluator code, and text-free aggregate only. A private dataset revision is the preferred durable store.
-3. Start with a stratified development pilot covering native pages, image-only scans, mixed pages, rotations/crop shifts, columns, dense tables, charts, multilingual pages, and both escalated and accepted pages.
-4. Use an annotator who did not implement the parser. Record adjudication for disagreements.
-5. Implement the metrics in [evaluation rubric](evaluation-rubric.md), sliced by page class and aggregate.
-6. Treat a material false acceptance as a hard failure. Do not hide it in a weighted score.
+GPU work did not produce a deployable winner. Do not repeat a universal claim
+that recognition batching is closed as a throughput lever. The prior result is
+specific to the tested PaddleX/TensorRT path.
 
-Acceptance for P0:
+Issue [#126](https://github.com/oneryalcin/pagespatial/issues/126) records the
+new evidence about recognizer output volume, OpenVINO thread configuration,
+and a shadow-mode experiment plan. It is explicitly parked. Do not start it
+without the owner un-parking it.
 
-- every labelled item is bound to source hash, page, coordinates, corpus revision, label version, and annotator/adjudication state;
-- evaluator outputs are reproducible and content-hashed;
-- missing metrics remain `not_evaluated`;
-- the candidate holdout is not accessed or tuned against.
+## Known product limitations
 
-### P1 — Triage current conflicts with gold
+- Public alpha has no payment flow, subscriptions, teams, organizations, SSO
+  providers beyond the current Access login method, or automated top-ups.
+- Users download the result JSON. There is no rich evidence/result viewer.
+- Cost shown in the dashboard is a stamped placeholder estimate, not an
+  invoice or measured per-job cloud bill.
+- Modal can scale to zero, so latency depends on snapshot and image state.
+- `max_containers=1` bounds spend but also bounds production throughput.
+- A dispatch outcome can remain honestly uncertain until the 24-hour job
+  deadline when neither a Modal call ID nor an R2 result exists.
+- Inputs and results expire after about two days.
+- The current PostgreSQL topology is a single point of failure.
+- The library and service remain alpha-quality. Do not promise an SLA from the
+  current measurements.
 
-Use the new labels to classify the 449 critical conflicts and 98 escalated pages into:
+## Deliberately parked or rejected work
 
-- OCR error;
-- native-text error;
-- incorrect association;
-- correct disagreement caused by hidden or duplicated source content;
-- genuinely ambiguous layout;
-- unnecessary escalation.
+- No provider-neutral worker-control protocol until a second compute provider
+  is earned. The old pull-worker design added a second queue and could not
+  wake a scale-to-zero Modal worker.
+- No AWS Spot/Flex tier until measured demand and cost justify it.
+- No Kubernetes, Redis, SQS, SPA framework, ORM, or generic plugin container.
+- No Rust/C++ OCR rewrite without a profile proving the process boundary is a
+  material bottleneck.
+- No GPU production path from the existing trials.
+- No production OCR skipping from native-coverage heuristics without
+  adjudicated shadow evidence.
+- No Stripe integration before manual alpha credit requests become a real
+  operating burden.
 
-Fix only repeated, general failure classes. Add a retained regression before changing code. Do not lower escalation thresholds merely to reduce the count.
+## What the next engineer should do
 
-### P1 — Measure long-document performance
+### P0 — validate the product with real users
 
-Run cold and warm tests on approximately 10-, 50-, and 250-page documents. Record:
+Invite three to five external alpha users. For each user, record only the
+decision-relevant funnel:
 
-- time to first schema-valid/searchable page;
-- PDF Inspector startup time;
-- render, OCR, merge, and projection time;
-- total document time and pages per second;
-- peak browser, CPU, GPU, and server memory;
-- actual backend, batch sizes, render scale, and concurrent workload.
+1. Access sign-up completed.
+2. First PDF submitted.
+3. Job reached a terminal state.
+4. Result was useful or not useful, with a concrete reason.
+5. User returned for a second document or did not.
 
-First measure the whole-document Inspector delay. If it violates the product budget, test PDF.js plus OCR as the progressive first-page path and Inspector as later enrichment. Such enrichment needs explicit record revision semantics; do not silently mutate a canonical page in place.
+Fix blockers that prevent this loop. Do not add architecture before observing
+the failures. The highest current risk is no longer component correctness; it
+is whether the product solves a repeated user problem.
 
-### P1 — Implement and benchmark a server GPU OCR adapter
+### Likely P1 — make results easier to inspect
 
-Target the existing `OcrAdapter` contract. An L4-class deployment is a reasonable first benchmark, but the backend is not part of the public schema.
+The current result is a JSON download. A source-linked evidence viewer is the
+most likely next product improvement, but build it only if alpha feedback shows
+that raw JSON prevents evaluation or adoption. Reuse the canonical evidence
+record; do not create a second result model.
 
-Requirements:
+### P1 safety — malformed-PDF fuzzing
 
-- preserve PP-OCR text, confidence, polygons, page identity, and backend provenance;
-- use bounded page batching and memory limits;
-- produce schema-equivalent PageSpatial records;
-- pass the same gold and conformance tests as browser WebGPU/WASM;
-- compare throughput, first-page latency, peak GPU memory, and cost per page;
-- keep browser-local parsing available for privacy-sensitive workflows.
+Issue [#37](https://github.com/oneryalcin/pagespatial/issues/37) remains useful
+before wider untrusted traffic. Keep the harness bounded and preserve exact
+failing seeds.
 
-Do not move deterministic merge or diagnostic logic onto the GPU.
+### P2 maintenance — dependency boundaries
 
-### P2 — Freeze and run a release holdout
+Issue [#83](https://github.com/oneryalcin/pagespatial/issues/83) tracks runtime
+dependency slimming. Keep library, control-plane, browser-demo, and worker
+dependencies separate. Do not move service-only dependencies into the root
+library runtime set.
 
-Only after the gold schema, evaluator, and numeric release profile are stable:
+The authoritative priority board is [workstreams](workstreams.md). If this
+section and the board disagree, update this handoff or follow the newer board.
 
-1. freeze holdout labels and hashes;
-2. document the release profile and thresholds;
-3. run the holdout once for the candidate release;
-4. retain every failure and routing decision;
-5. promote only if each safety gate passes independently.
+## First-day checklist
 
-### P2 — Integrate with Evidence Search
-
-Follow [the migration sequence](evidence-search-migration.md) behind a feature flag. Keep the existing ingestion path as rollback until PageSpatial passes the sealed release profile. Application UI, retrieval, Gemini/OpenRouter calls, and annotations remain in Evidence Search.
-
-## Change rules
-
-For every parser or adapter change:
-
-1. Add a focused regression using retained or generated evidence.
-2. Run `npm run check`.
-3. Run the applicable real browser smoke with verified assets.
-4. Rerun affected development slices; rerun the complete development baseline for changes to schema, geometry, matching, diagnostics, OCR configuration, or adapter semantics.
-5. Generate an authenticated text-free aggregate from a clean implementation commit.
-6. State clearly whether a number is gold accuracy, cross-engine corroboration, association coverage, or schema conformance.
-7. Preserve historical failed aggregates and trial reports. Do not overwrite them.
-
-Do not:
-
-- delete raw observations after matching;
-- treat Markdown or derived relations as source evidence;
-- trust PDF Inspector rectangles for rotated geometry;
-- add AnyDoc as a second PDF parse without new measured evidence;
-- use implicit CDN assets or silently report a requested OCR backend as actual;
-- render document Markdown as trusted HTML;
-- send private pages to a remote model without explicit authorization;
-- tune against the candidate holdout;
-- introduce Rust, a registry, or a general framework without a measured bottleneck.
-
-## Handoff completion checklist
-
-The next engineer should be able to confirm the repository state with:
-
-```sh
-node --version        # must satisfy package.json: >=25
+```bash
+git status --short --branch
+git log -1 --oneline
+node --version
 npm ci
 npm run check
-git status --short    # should be empty after verification
 ```
 
-Then confirm access separately:
+Then:
 
-```sh
-hf auth whoami
-npm run eval:corpus:dry-run
-```
+1. Read the principles and current workstream snapshot.
+2. Read the latest trial for the subsystem you will change.
+3. Reproduce one existing acceptance test before changing behavior.
+4. Create a branch from current `main`.
+5. Keep the patch narrow. Add a test that names the production failure it
+   prevents.
 
-If these pass, begin with P0 independent development gold. Do not begin with a new model, Rust rewrite, Evidence Search integration, or holdout run.
+For changes to the live service, also run the native PostgreSQL suite. For
+changes to `modal_app.py`, object transport, result envelopes, R2 credentials,
+or Modal dependencies, rerun the live R2/Modal parity and ACL qualification.
+For browser parser changes, run the browser demo and the relevant corpus gate.
+
+## Change discipline
+
+- Distinguish code committed locally, code pushed to GitHub, merged code, and
+  deployed code. They are four different states.
+- Preserve unrelated worktree changes and stage explicit paths.
+- Keep SQL transition preconditions in the database as well as code when the
+  invariant must survive bypass of an application helper.
+- A returned object is not success. Validate status, identity, digest, shape,
+  and source state before every transition.
+- A failed external read is not proof that an object is absent or invalid.
+- Use immutable per-execution result keys and database fencing.
+- Test crash windows in the order that can expose the zombie result: crash,
+  dispatch replacement, let replacement succeed, then let the original land.
+- Do not claim parity, availability, ACL separation, or cold-start behavior
+  from types or unit tests alone. Use the corresponding live gate.
+- Update the workstream board when a stream changes state. Update this handoff
+  when the deployed topology, source-of-truth order, stable invariants, or next
+  engineer priority changes.
+
+## Evidence index
+
+- [Principles](principles.md)
+- [Workstreams](workstreams.md)
+- [Evaluation rubric](evaluation-rubric.md)
+- [Development corpus guide](evaluation-corpus.md)
+- [Security](../SECURITY.md)
+- [Service control-plane design](design/2026-08-26-service-control-plane.md)
+- [Service API contract](design/2026-08-26-service-m2-api-contract.md)
+- [M2 live deployment](trials/2026-08-27-service-m2-live-deployment.md)
+- [Open-alpha operation](../deploy/control-plane/README.md)
+- [Modal object transport qualification](trials/2026-08-26-service-m1-object-qualification.md)
+- [Modal memory snapshots](trials/2026-09-01-modal-memory-snapshot-qualification.md)
+- [Modal 8 GiB qualification](trials/2026-09-01-modal-memory-allocation.md)
+- [PDF Inspector 1.17 qualification](trials/2026-08-28-pdf-inspector-1-17-parsebench.md)
+- [ParseBench adapter and small cohort](trials/2026-08-28-parsebench-basic-test-cohort.md)
+- [OCR efficiency issue #126](https://github.com/oneryalcin/pagespatial/issues/126)
