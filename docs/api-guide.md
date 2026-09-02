@@ -132,18 +132,34 @@ currently executing it. The API does not publish an ETA or an invented
 
 ### 5. Download the result
 
+The omitted result view returns the compact derived representation. This is an
+alpha breaking change from the earlier evidence default. Request
+`?view=evidence` when you need observations, geometry, conflicts, diagnostics,
+or complete provenance.
+
 ```bash
 RESULT_GRANT=$(curl --fail-with-body --silent --show-error \
   "$API_BASE/v1/jobs/$JOB_ID/result" \
   --header "Authorization: Bearer $PAGESPATIAL_API_KEY")
 
 DOWNLOAD_URL=$(echo "$RESULT_GRANT" | jq -r '.result.download_url')
+RESULT_BYTES=$(echo "$RESULT_GRANT" | jq -r '.result.bytes')
+RESULT_SHA256=$(echo "$RESULT_GRANT" | jq -r '.result.digest')
 
 curl --fail-with-body --silent --show-error \
   "$DOWNLOAD_URL" \
-  --output "pagespatial-$JOB_ID.json"
+  --output "pagespatial-$JOB_ID.compact.json"
 
-jq '{page_count, outcomes: [.pages[].ok]}' "pagespatial-$JOB_ID.json"
+jq '{page_count, outcomes: [.pages[].ok]}' "pagespatial-$JOB_ID.compact.json"
+```
+
+Verify that the downloaded byte count and SHA-256 equal `RESULT_BYTES` and
+`RESULT_SHA256` before parsing. To obtain canonical evidence instead, request:
+
+```bash
+curl --fail-with-body --silent --show-error \
+  "$API_BASE/v1/jobs/$JOB_ID/result?view=evidence" \
+  --header "Authorization: Bearer $PAGESPATIAL_API_KEY"
 ```
 
 Do not send the PageSpatial API key to the download URL. A download grant
@@ -189,21 +205,21 @@ not an invoice or a measured per-job cloud bill.
 
 ## Result format
 
-The downloaded JSON has this envelope:
+The default compact JSON has this closed envelope:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": "pagespatial-compact-v1",
+  "representation": "compact",
   "job_id": "...",
   "attempt_id": "...",
-  "execution_id": "...",
   "input_sha256": "...",
   "page_count": 2,
   "pages": [
     {
       "page_number": 1,
       "ok": true,
-      "page_spatial": {}
+      "page_compact": {}
     },
     {
       "page_number": 2,
@@ -217,10 +233,13 @@ The downloaded JSON has this envelope:
 }
 ```
 
-Treat `attempt_id` and `execution_id` as opaque fencing identities. Successful
-`page_spatial` values follow
-[`schemas/pagespatial.schema.json`](../schemas/pagespatial.schema.json).
-Page failures remain in page order and do not remove successful siblings.
+Treat `attempt_id` as an opaque fencing identity. Successful `page_compact`
+values follow
+[`schemas/pagespatial-compact.schema.json`](../schemas/pagespatial-compact.schema.json).
+Page failures remain in page order and do not remove successful siblings. The
+[result envelope guide](result-envelope-guide.md) defines both representations,
+their compatibility rules, and TypeScript and Python examples. Compact is not
+evidence; `view=evidence` remains the authoritative full record.
 
 ## Limits and retention
 

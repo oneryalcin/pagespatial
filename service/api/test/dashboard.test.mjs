@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { test, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { inspect } from 'node:util';
 import { PGlite } from '@electric-sql/pglite';
 import { errors } from 'jose';
@@ -57,6 +58,7 @@ beforeEach(async () => {
     },
     resultStore: {
       bucket: 'results',
+      downloadOrigin: 'https://results.test',
       async createDownloadGrant({ key }) {
         return { download_url: `https://download.test/${key}?signature=secret` };
       },
@@ -150,19 +152,30 @@ async function seedJob({
   if (state !== 'succeeded') return row;
   const attempt = (await db.query(
     `INSERT INTO job_attempts (
-       job_id, modal_call_id, state, result_uri, result_digest, pages,
+       job_id, modal_call_id, state, result_uri, result_digest,
+       compact_result_uri, compact_result_digest, compact_result_bytes, pages,
        dispatched_at, completed_at
      ) VALUES ($1::uuid, 'call-' || $1::text, 'succeeded',
        'r2://results/results/' || $1::text || '/attempt/result.json',
-       repeat('b', 64), $2, now() - interval '8 minutes', now() - interval '1 minute')
-     RETURNING id, result_uri, result_digest`,
+       repeat('b', 64),
+       'r2://results/results/' || $1::text || '/attempt/result.compact.json',
+       repeat('c', 64), 123, $2,
+       now() - interval '8 minutes', now() - interval '1 minute')
+     RETURNING id, result_uri, result_digest,
+               compact_result_uri, compact_result_digest, compact_result_bytes`,
     [row.id, pages],
   )).rows[0];
   return (await db.query(
     `UPDATE jobs SET state = 'succeeded', accepted_attempt_id = $2,
-                     result_uri = $3, result_digest = $4
+                     result_uri = $3, result_digest = $4,
+                     compact_result_uri = $5, compact_result_digest = $6,
+                     compact_result_bytes = $7
       WHERE id = $1 RETURNING *`,
-    [row.id, attempt.id, attempt.result_uri, attempt.result_digest],
+    [
+      row.id, attempt.id, attempt.result_uri, attempt.result_digest,
+      attempt.compact_result_uri, attempt.compact_result_digest,
+      attempt.compact_result_bytes,
+    ],
   )).rows[0];
 }
 
@@ -255,7 +268,9 @@ test('dashboard job detail keeps internals private and grants only retained owne
   const detail = await request(`/jobs/${succeeded.id}`, { headers: access });
   assert.equal(detail.status, 200);
   assert.match(detail.body, new RegExp(succeeded.id, 'u'));
-  assert.match(detail.body, /Download JSON result/u);
+  assert.match(detail.body, /Read compact result/u);
+  assert.match(detail.body, /Download compact JSON/u);
+  assert.match(detail.body, /Download full evidence JSON/u);
   assert.match(detail.body, /Submitted.*UTC/us);
   assert.match(detail.body, /Input SHA-256/u);
   assert.doesNotMatch(detail.body, /modal_call_id|accepted_attempt_id|r2:\/\//u);
@@ -274,6 +289,75 @@ test('dashboard job detail keeps internals private and grants only retained owne
   )).rows[0];
   const foreignJob = await seedJob({ owner: foreign.id });
   assert.equal((await request(`/jobs/${foreignJob.id}`, { headers: access })).status, 404);
+});
+
+test('dashboard result viewer uses compact only and keeps evidence an explicit download', async () => {
+  const succeeded = await seedJob({ state: 'succeeded', pages: 3, cost: 3000 });
+  const detail = await request(`/jobs/${succeeded.id}`, { headers: access });
+  assert.match(detail.body, new RegExp(`/jobs/${succeeded.id}/result-view`, 'u'));
+  assert.match(detail.body, new RegExp(`/jobs/${succeeded.id}/result\\?view=compact`, 'u'));
+  assert.match(detail.body, new RegExp(`/jobs/${succeeded.id}/result\\?view=evidence`, 'u'));
+
+  const viewer = await request(`/jobs/${succeeded.id}/result-view`, { headers: access });
+  assert.equal(viewer.status, 200);
+  assert.match(viewer.headers['cache-control'], /no-store/u);
+  assert.equal(viewer.headers['referrer-policy'], 'no-referrer');
+  assert.match(viewer.headers['content-security-policy'], /script-src 'self'/u);
+  assert.match(viewer.headers['content-security-policy'], /connect-src 'self' https:\/\/results\.test/u);
+  assert.match(viewer.body, /Compact result/u);
+  assert.match(viewer.body, /data-compact-url=/u);
+  assert.match(viewer.body, /data-result-viewer[^>]*hidden/u);
+  assert.match(viewer.body, /result-viewer\.js/u);
+  assert.match(viewer.body, /JavaScript is unavailable/u);
+  assert.doesNotMatch(viewer.body, /signature=secret|download\.test/u);
+
+  const viewerScript = await request('/assets/result-viewer.js', { headers: access });
+  assert.equal(viewerScript.status, 200);
+  assert.match(viewerScript.body, /markdownit/u);
+  assert.match(viewerScript.body, /DOMPurify/u);
+  assert.match(viewerScript.body, /pagespatial:result-ready/u);
+  assert.doesNotMatch(viewerScript.body, /https:\/\/cdn\.|unpkg|jsdelivr/iu);
+
+  const compact = await request(`/jobs/${succeeded.id}/result?view=compact`, { headers: access });
+  assert.equal(compact.status, 303);
+  assert.match(compact.headers.location, /\.compact\.json/u);
+  const evidence = await request(`/jobs/${succeeded.id}/result?view=evidence`, { headers: access });
+  assert.equal(evidence.status, 303);
+  assert.match(evidence.headers.location, /result\.json/u);
+
+  assert.equal((await request(
+    `/jobs/${succeeded.id}/result-view?view=evidence`, { headers: access },
+  )).status, 400);
+  const queued = await seedJob({ state: 'queued' });
+  assert.equal((await request(`/jobs/${queued.id}/result-view`, { headers: access })).status, 409);
+  const failed = await seedJob({ state: 'failed', failureCode: 'processing_failed' });
+  assert.equal((await request(`/jobs/${failed.id}/result-view`, { headers: access })).status, 409);
+  const expired = await seedJob({ state: 'succeeded', pages: 1, retained: false });
+  await db.query(
+    `UPDATE jobs SET compact_result_uri = NULL, compact_result_digest = NULL,
+                     compact_result_bytes = NULL WHERE id = $1`,
+    [expired.id],
+  );
+  assert.equal((await request(`/jobs/${expired.id}/result-view`, { headers: access })).status, 410);
+  const foreign = (await db.query(
+    "INSERT INTO users (email, status) VALUES ('foreign-viewer@example.test','active') RETURNING id",
+  )).rows[0];
+  const foreignJob = await seedJob({ owner: foreign.id });
+  assert.equal((await request(`/jobs/${foreignJob.id}/result-view`, { headers: access })).status, 404);
+});
+
+test('result bucket CORS permits only dashboard reads', () => {
+  const policy = JSON.parse(readFileSync(
+    new URL('../../../deploy/control-plane/r2-results-cors.json', import.meta.url),
+    'utf8',
+  ));
+  assert.deepEqual(policy, { rules: [{
+    allowed: {
+      origins: ['https://app.pagespatial.dev'],
+      methods: ['GET'],
+    },
+    maxAgeSeconds: 300,
+  }] });
 });
 
 test('dashboard browser upload reuses the job plane without exposing credentials', async () => {
@@ -368,6 +452,8 @@ test('dashboard has a no-JavaScript guide, fixed pagination, and strict filters'
   assert.equal(guide.status, 200);
   assert.match(guide.body, /sha256sum document\.pdf/u);
   assert.match(guide.body, /api\.pagespatial\.dev/u);
+  assert.match(guide.body, /Result representations/u);
+  assert.match(guide.body, /view=evidence/u);
   assert.doesNotMatch(guide.body, /<script/iu);
 
   const styles = await request('/dashboard.css', { headers: access });

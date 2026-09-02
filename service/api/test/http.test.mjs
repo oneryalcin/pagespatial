@@ -4,6 +4,7 @@ import { test, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { inspect } from 'node:util';
 import { PGlite } from '@electric-sql/pglite';
+import { acceptAttempt } from '../src/accept.mjs';
 import { authenticateApiKey, issueApiKey } from '../src/api-keys.mjs';
 import { createApiHandler } from '../src/http.mjs';
 import { migrate } from '../src/migrate.mjs';
@@ -63,7 +64,17 @@ beforeEach(async () => {
       },
       async head() { return { bytes: 589, contentType: 'application/pdf' }; },
     },
-    resultStore: { bucket: 'results' },
+    resultStore: {
+      bucket: 'results',
+      downloadOrigin: 'https://results.test',
+      async createDownloadGrant({ key, expiresAt, knownBytes }) {
+        return {
+          download_url: `https://results.test/${key}`,
+          expires_at: new Date(expiresAt).toISOString(),
+          bytes: knownBytes ?? 456,
+        };
+      },
+    },
     apiHost: '127.0.0.1',
     appHost: 'app.test',
     appOrigin: 'https://app.test',
@@ -160,6 +171,52 @@ test('HTTP rejects extra fields with the one error envelope', async () => {
       request_id: '11111111-1111-4111-8111-111111111111',
     },
   });
+});
+
+test('HTTP result view defaults to compact and strictly allowlists the selector', async () => {
+  const created = await fetch(`${base}/v1/jobs`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      'content-type': 'application/json',
+      'idempotency-key': 'result-view',
+    },
+    body: JSON.stringify({ input_sha256: SHA }),
+  });
+  const job = (await created.json()).job;
+  await db.query("UPDATE jobs SET state = 'queued', queued_at = now() WHERE id = $1", [job.id]);
+  const attemptId = (await db.query(
+    'INSERT INTO job_attempts (job_id) VALUES ($1) RETURNING id', [job.id],
+  )).rows[0].id;
+  await acceptAttempt(db, {
+    jobId: job.id,
+    attemptId,
+    status: 'completed',
+    resultUri: `r2://results/results/${job.id}/${attemptId}/e.json`,
+    resultDigest: 'b'.repeat(64),
+    compactResultUri: `r2://results/results/${job.id}/${attemptId}/e.compact.json`,
+    compactResultDigest: 'c'.repeat(64),
+    compactResultBytes: 123,
+    pages: 1,
+    resultCreatedAt: new Date(),
+  });
+
+  const get = (query = '') => fetch(`${base}/v1/jobs/${job.id}/result${query}`, {
+    headers: { authorization: `Bearer ${apiKey}` },
+  });
+  const implicit = await get();
+  assert.equal(implicit.status, 200);
+  assert.equal((await implicit.json()).result.representation, 'compact');
+  assert.equal((await (await get('?view=compact')).json()).result.representation, 'compact');
+  const evidence = (await (await get('?view=evidence')).json()).result;
+  assert.equal(evidence.representation, 'evidence');
+  assert.equal(evidence.bytes, 456);
+
+  for (const query of ['?view=other', '?view=compact&view=evidence', '?extra=1']) {
+    const response = await get(query);
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error.code, 'invalid_request');
+  }
 });
 
 test('HTTP admission failure includes Retry-After', async () => {

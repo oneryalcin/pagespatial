@@ -505,12 +505,14 @@ is whether the product solves a repeated user problem.
 
 Alpha feedback confirmed that full evidence JSON is too large and hard to
 understand. Stage A has published a compact companion for new executions since
-2026-09-02T16:07:01Z while leaving clients unchanged. Do not start Stage B
-before 2026-09-04T16:07:01Z. At or after that time, verify that every retained
-success created since activation has a valid companion; elapsed time alone is
-not sufficient. Only then make compact the API default and build the result
-viewer and schema guide in a separate PR. Keep full evidence explicit and
-authoritative. Do not call the Markdown reader an evidence viewer.
+2026-09-02T16:07:01Z while leaving clients unchanged. A Stage B candidate is
+built on `feat/compact-result-viewer`: compact-default selection, a compact-only
+result viewer, exact result CORS policy, and the schema guide. It is not
+deployed. Do not merge or deploy it before 2026-09-04T16:07:01Z. At or after
+that time, verify that every retained success created since activation has a
+valid companion; elapsed time alone is not sufficient. Keep full evidence
+explicit and authoritative. Do not call the Markdown reader an evidence
+viewer.
 
 ### P1 safety — malformed-PDF fuzzing
 

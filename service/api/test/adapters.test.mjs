@@ -7,7 +7,9 @@ import { InvalidResultError, RESULT_LIMIT_BYTES } from '../src/result-contract.m
 import {
   createR2ResultStore, ResultStoreUnavailableError, r2ClientFromConfig,
 } from '../src/r2-results.mjs';
-import { createInputObjectStore, s3ClientFromConfig } from '../src/object-stores.mjs';
+import {
+  createInputObjectStore, createResultDownloadStore, s3ClientFromConfig,
+} from '../src/object-stores.mjs';
 import { validateR2Isolation } from '../src/runtime.mjs';
 
 test('Modal adapter hydrates the method once and returns a persisted call id', async () => {
@@ -154,6 +156,30 @@ test('R2 upload grants stay on the origin permitted by dashboard CSP', async () 
     new URL(grant.url).pathname,
     '/pagespatial-inputs/inputs/00000000-0000-4000-8000-000000000001.pdf',
   );
+});
+
+test('result grants report a known compact size and HEAD evidence only when needed', async () => {
+  const sent = [];
+  const store = createResultDownloadStore({
+    client: {
+      async send(command) {
+        sent.push(command.constructor.name);
+        return { ContentLength: 456 };
+      },
+    },
+    bucket: 'results',
+    sign: async (_client, command) => `https://results.test/${command.input.Key}`,
+  });
+  const expiresAt = new Date('2026-09-03T00:00:00Z');
+  const now = new Date('2026-09-02T23:55:00Z');
+  assert.equal((await store.createDownloadGrant({
+    key: 'compact.json', expiresAt, now, knownBytes: 123,
+  })).bytes, 123);
+  assert.deepEqual(sent, []);
+  assert.equal((await store.createDownloadGrant({
+    key: 'evidence.json', expiresAt, now,
+  })).bytes, 456);
+  assert.deepEqual(sent, ['HeadObjectCommand']);
 });
 
 test('API runtime refuses collapsed R2 bucket or credential boundaries', () => {
