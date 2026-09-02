@@ -61,9 +61,24 @@ dominated size; Markdown did not.
 
 ## Live qualification
 
-The isolated Modal/R2 qualification must prove full-result parity, exact
-compact bytes and digest across duplicate calls, split-role ACL denial, and
-wrong-digest rejection before Stage A can deploy to production.
+PASS on the isolated `pagespatial-parse-arm4-dev` app at commit
+`1109d00099ec4c3c9aafcf67d8a8469e3ac5baeb`, with the production thread setting
+of four:
+
+- Direct versus object transport and duplicate object transport matched at
+  zero tolerance across 402 critical tokens and 724 raw lines.
+- Duplicate compact objects were byte-identical and digest-identical.
+- Both 3-page runs produced 828,159 evidence bytes and 54,066 compact bytes, a
+  15.3x reduction for this qualification document.
+- The wrong-digest result was rejected, and bounded R2 listing recovered both
+  objects.
+- All five forbidden cross-role R2 operations returned `AccessDenied`.
+- The qualification removed its temporary R2 objects, and the development app
+  was stopped after the run.
+
+This passes the code and object-transport gate. Production activation remains
+blocked until a fresh PostgreSQL dump is copied off-site and verified
+immediately before migration.
 
 ## Deferred
 
