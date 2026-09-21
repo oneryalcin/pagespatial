@@ -6,7 +6,7 @@ import { logFailure } from './safe-log.mjs';
 import {
   createOrReplayJob, finalizeJob, jobView, ownedJob, resultGrant,
 } from './jobs.mjs';
-import { exactObject, jsonBody } from './request-json.mjs';
+import { exactObject, jsonBody, resultView } from './request-json.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
@@ -119,6 +119,7 @@ export function createApiHandler({
           && parts[1] === 'jobs' && parts[3] === 'result') {
         const grant = await resultGrant({
           db, resultStore, userId: identity.userId, jobId: jobId(parts),
+          view: resultView(url),
         });
         return sendJson(res, 200, { result: grant }, requestId, { 'cache-control': 'no-store' });
       }

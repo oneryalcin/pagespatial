@@ -123,6 +123,7 @@ export async function startRuntime({ env = process.env, log = console } = {}) {
   const resultStore = createR2ResultStore({ client: resultClient, bucket: resultsBucket });
   const resultDownloads = createResultDownloadStore({
     client: resultClient, bucket: resultsBucket,
+    downloadOrigin: new URL(resultsEndpoint).origin,
   });
   const modalCalls = createModalCalls({
     appName: required(env, 'PAGESPATIAL_MODAL_APP_NAME'),

@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { TextDecoder } from 'node:util';
 import { ApiError } from './api-errors.mjs';
 import { requestMoreCredits } from './credits.mjs';
@@ -9,18 +11,29 @@ import {
 import { loadJobsPage, loadUsagePage, parseJobsQuery } from './dashboard-data.mjs';
 import {
   createdKeyPage, errorPage, guidePage, jobDetailPage, jobsPage,
-  keysPage, newJobPage, revokeKeyPage, usagePage,
+  keysPage, newJobPage, resultViewerPage, revokeKeyPage, usagePage,
 } from './dashboard-views.mjs';
 import {
-  createOrReplayJob, finalizeJob, jobView, ownedJob, resultGrant,
+  createOrReplayJob, finalizeJob, jobView, ownedJob, resultDescriptor, resultGrant,
 } from './jobs.mjs';
-import { exactObject, jsonBody } from './request-json.mjs';
+import { exactObject, jsonBody, resultView } from './request-json.mjs';
 import { logFailure } from './safe-log.mjs';
 
 const MAX_FORM_BYTES = 4 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const CSP = "default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 const DASHBOARD_CSS = readFileSync(new URL('./dashboard.css', import.meta.url));
+const require = createRequire(import.meta.url);
+const RESULT_VIEWER_JS = Buffer.concat([
+  readFileSync(join(
+    dirname(require.resolve('markdown-it/package.json')),
+    'dist/browser/markdown-it.umd.min.js',
+  )),
+  Buffer.from('\n'),
+  readFileSync(require.resolve('dompurify/dist/purify.min.js')),
+  Buffer.from('\n'),
+  readFileSync(new URL('./result-viewer.js', import.meta.url)),
+]);
 const DASHBOARD_ASSETS = new Map([
   ['/assets/pagespatial-logo.png', ['image/png', readFileSync(new URL('./assets/pagespatial-logo.png', import.meta.url))]],
   ['/assets/fonts/instrument-sans-400.ttf', ['font/ttf', readFileSync(new URL('./assets/fonts/instrument-sans-400.ttf', import.meta.url))]],
@@ -30,6 +43,7 @@ const DASHBOARD_ASSETS = new Map([
   ['/assets/fonts/ibm-plex-mono-400.ttf', ['font/ttf', readFileSync(new URL('./assets/fonts/ibm-plex-mono-400.ttf', import.meta.url))]],
   ['/assets/fonts/ibm-plex-mono-500.ttf', ['font/ttf', readFileSync(new URL('./assets/fonts/ibm-plex-mono-500.ttf', import.meta.url))]],
   ['/assets/dashboard-upload.js', ['text/javascript; charset=utf-8', readFileSync(new URL('./dashboard-upload.js', import.meta.url))]],
+  ['/assets/result-viewer.js', ['text/javascript; charset=utf-8', RESULT_VIEWER_JS]],
 ]);
 
 function send(res, status, contentType, bytes, requestId, headers = {}) {
@@ -38,6 +52,7 @@ function send(res, status, contentType, bytes, requestId, headers = {}) {
     'content-length': bytes.byteLength,
     'cache-control': 'no-store',
     'content-security-policy': CSP,
+    'referrer-policy': 'no-referrer',
     'x-request-id': requestId,
     ...headers,
   });
@@ -100,6 +115,7 @@ function dashboardOperation(method, path) {
   if (method === 'POST' && path === '/jobs') return 'job_browser_submit';
   if (method === 'POST' && /^\/jobs\/[^/]+\/finalize$/u.test(path)) return 'job_browser_finalize';
   if (method === 'GET' && /^\/jobs\/[^/]+\/result$/u.test(path)) return 'job_result';
+  if (method === 'GET' && /^\/jobs\/[^/]+\/result-view$/u.test(path)) return 'job_result_view';
   if (method === 'GET' && /^\/jobs\/[^/]+$/u.test(path)) return 'job_detail';
   if (method === 'GET' && path === '/usage') return 'usage_view';
   if (method === 'POST' && path === '/credits/request') return 'credits_request';
@@ -142,6 +158,12 @@ export function createDashboardHandler({
     throw new TypeError('dashboard requires an https inputUploadOrigin');
   }
   const uploadCsp = `${CSP}; script-src 'self'; connect-src 'self' ${inputUploadOrigin}`;
+  const resultDownloadOrigin = resultStore?.downloadOrigin;
+  if (typeof resultDownloadOrigin !== 'string'
+      || !resultDownloadOrigin.startsWith('https://')) {
+    throw new TypeError('dashboard requires an https result download origin');
+  }
+  const resultCsp = `${CSP}; script-src 'self'; connect-src 'self' ${resultDownloadOrigin}`;
 
   return async function dashboard(req, res, requestId) {
     let operation = 'dashboard_unknown';
@@ -201,9 +223,22 @@ export function createDashboardHandler({
       if (req.method === 'GET' && /^\/jobs\/[^/]+\/result$/u.test(path)) {
         const jobId = matchUuid(path, /^\/jobs\/([^/]+)\/result$/u);
         const grant = await resultGrant({
-          db, resultStore, userId: identity.userId, jobId, now: now(),
+          db, resultStore, userId: identity.userId, jobId, view: resultView(url), now: now(),
         });
         return sendHtml(res, 303, '', requestId, { location: grant.download_url });
+      }
+      if (req.method === 'GET' && /^\/jobs\/[^/]+\/result-view$/u.test(path)) {
+        if ([...url.searchParams].length > 0) {
+          throw new ApiError(400, 'invalid_request', 'Result viewer accepts no query parameters.');
+        }
+        const jobId = matchUuid(path, /^\/jobs\/([^/]+)\/result-view$/u);
+        const descriptor = await resultDescriptor({
+          db, resultStore, userId: identity.userId, jobId, view: 'compact', now: now(),
+        });
+        return sendHtml(
+          res, 200, resultViewerPage({ identity, descriptor }), requestId,
+          { 'content-security-policy': resultCsp },
+        );
       }
       if (req.method === 'GET' && /^\/jobs\/[^/]+$/u.test(path)) {
         const jobId = matchUuid(path, /^\/jobs\/([^/]+)$/u);

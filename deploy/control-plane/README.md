@@ -76,6 +76,17 @@ wrangler r2 bucket cors set "$R2_INPUT_BUCKET" \
   --file deploy/control-plane/r2-input-cors.json
 ```
 
+The result viewer also needs the exact result-bucket read policy. Apply it to
+the result bucket only when Stage B is approved for deployment:
+
+```sh
+wrangler r2 bucket cors set "$R2_RESULTS_BUCKET" \
+  --file deploy/control-plane/r2-results-cors.json
+```
+
+Do not apply either policy to the other bucket and do not replace the exact
+dashboard origin with `*`.
+
 The policy permits `PUT` from `https://app.pagespatial.dev` with only the
 `Content-Type` request header. It does not make the bucket or its objects
 public; the presigned URL remains the upload authorization.

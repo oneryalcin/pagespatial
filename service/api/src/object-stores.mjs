@@ -64,16 +64,37 @@ export function createInputObjectStore({
   };
 }
 
-export function createResultDownloadStore({ client, bucket, sign = getSignedUrl }) {
+export function createResultDownloadStore({
+  client, bucket, downloadOrigin, sign = getSignedUrl, operationTimeoutMs = 10_000,
+}) {
   if (!client?.send || typeof bucket !== 'string' || !bucket) {
     throw new TypeError('result download store requires an S3 client and bucket');
   }
   return {
     bucket,
-    async createDownloadGrant({ key, expiresAt, now = new Date() }) {
+    downloadOrigin,
+    async createDownloadGrant({ key, expiresAt, knownBytes, now = new Date() }) {
       const expiresIn = Math.min(secondsUntil(expiresAt, now), 5 * 60);
+      let bytes = knownBytes;
+      if (bytes == null) {
+        try {
+          const head = await sendWithDeadline(
+            client, new HeadObjectCommand({ Bucket: bucket, Key: key }),
+            operationTimeoutMs, 'R2 result head',
+          );
+          bytes = head.ContentLength;
+        } catch (error) {
+          throw new ObjectStoreUnavailableError('result object could not be inspected', {
+            cause: error,
+          });
+        }
+      }
+      if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > 128 * 1024 * 1024) {
+        throw new ObjectStoreUnavailableError('result object size is invalid');
+      }
       return {
         schema_version: 1,
+        bytes,
         download_url: await sign(
           client, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn },
         ),

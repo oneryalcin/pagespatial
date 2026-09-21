@@ -179,6 +179,32 @@ tbody tr:not(.date-group):hover { background: rgba(60,52,38,.045); }
 .result-panel { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px 24px; }
 .result-panel h2, .result-panel p { margin-bottom: 4px; }
 .result-panel .small-note { grid-column: 1 / -1; }
+.result-actions { display: flex; align-items: center; gap: 14px; }
+.result-viewer-page { max-width: 980px; margin: 0 auto; }
+.viewer-shell { min-height: 240px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.viewer-status { padding: 18px 22px; color: var(--muted); }
+.viewer-status--error { color: var(--failure-text); }
+.viewer-pagination { position: sticky; z-index: 2; top: 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: rgba(255,253,247,.96); }
+.viewer-pagination button { min-height: 34px; padding: 6px 14px; background: transparent; color: var(--link); }
+.viewer-pagination button:first-child { justify-self: start; }
+.viewer-pagination button:last-child { justify-self: end; }
+.viewer-pagination button:disabled { cursor: default; opacity: .42; }
+.viewer-pagination span { color: var(--secondary); font: 12px "IBM Plex Mono", Menlo, monospace; }
+.viewer-page { max-width: 760px; min-height: 320px; margin: 0 auto; padding: 34px 42px; font-size: 15px; line-height: 1.65; }
+.viewer-page h2 { margin: 1.4em 0 .55em; font: 600 24px/1.22 "Newsreader", Georgia, serif; }
+.viewer-page h2:first-child { margin-top: 0; }
+.viewer-page h3 { margin: 1.35em 0 .5em; font-size: 17px; }
+.viewer-page pre { overflow-x: auto; padding: 14px; border-radius: 6px; background: var(--canvas); font-size: 12px; }
+.viewer-page code { overflow-wrap: anywhere; }
+.viewer-page blockquote { margin-inline: 0; padding-left: 18px; border-left: 3px solid var(--border-strong); color: var(--secondary); }
+.viewer-page table { display: block; overflow-x: auto; border: 1px solid var(--border); }
+.viewer-page th, .viewer-page td { padding: 7px 10px; border: 1px solid var(--divider); }
+.viewer-provenance { padding: 18px 22px; border-top: 1px solid var(--border); background: var(--canvas); }
+.viewer-provenance h2 { margin-bottom: 10px; }
+.viewer-provenance dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 20px; margin: 0; }
+.viewer-provenance dl > div { min-width: 0; }
+.viewer-provenance dt { color: var(--muted); font-size: 11px; }
+.viewer-provenance dd { margin: 1px 0 0; overflow-wrap: anywhere; font: 12px "IBM Plex Mono", Menlo, monospace; }
 .notice--warning { border-left: 3px solid var(--queued-dot); }
 .notice--failure { border-left: 3px solid var(--failure-dot); }
 .small-note { color: var(--muted); font-size: 12px; }
@@ -221,6 +247,7 @@ tbody tr:not(.date-group):hover { background: rgba(60,52,38,.045); }
   .page-header { align-items: flex-start; }
   .page-header > a { display: none; }
   .page-actions { width: 100%; align-items: stretch; flex-direction: column; }
+  .page-actions > a { display: flex; min-height: 44px; align-items: center; }
   .page-header--actions { flex-direction: column; }
   .page-actions .button { min-height: 44px; }
   .upload-form { padding: 16px; }
@@ -250,7 +277,14 @@ tbody tr:not(.date-group):hover { background: rgba(60,52,38,.045); }
   .definition-list dt, .definition-list dd { padding: 0; border: 0 !important; }
   .definition-list dd { margin-top: 4px; }
   .result-panel { display: block; }
+  .result-actions { align-items: stretch; flex-direction: column; margin-top: 14px; }
   .result-panel .button { width: 100%; min-height: 44px; margin-top: 12px; }
+  .viewer-pagination { padding-inline: 10px; }
+  .viewer-pagination button { min-height: 44px; padding-inline: 10px; }
+  .viewer-pagination span { font-size: 10.5px; }
+  .viewer-page { min-height: 260px; padding: 26px 20px; font-size: 14px; }
+  .viewer-provenance { padding: 16px 20px; }
+  .viewer-provenance dl { grid-template-columns: 1fr; }
   .key-create button { min-height: 44px; }
   .button-row { align-items: stretch; flex-direction: column; }
   .button-row .button { min-height: 44px; }

@@ -1,0 +1,15 @@
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": [
+          "https://app.pagespatial.dev"
+        ],
+        "methods": [
+          "GET"
+        ]
+      },
+      "maxAgeSeconds": 300
+    }
+  ]
+}

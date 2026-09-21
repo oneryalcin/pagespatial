@@ -259,7 +259,7 @@ test('invalid upload becomes a typed terminal job without exposing detail', asyn
   assert.doesNotMatch(JSON.stringify(view), /private parser secret/u);
 });
 
-test('result grant signs only the accepted object before retention expiry', async () => {
+test('result grant defaults to compact and selects only the requested accepted object', async () => {
   const created = await submit();
   await db.query("UPDATE jobs SET state = 'queued', queued_at = now() WHERE id = $1", [created.row.id]);
   const attemptId = (await db.query(
@@ -279,15 +279,42 @@ test('result grant signs only the accepted object before retention expiry', asyn
   });
   assert.deepEqual(accepted, { recorded: true, won: true });
   const seen = [];
-  const grant = await resultGrant({
-    db, userId, jobId: created.row.id,
-    resultStore: {
-      bucket: 'results',
-      async createDownloadGrant(value) { seen.push(value); return { download_url: 'signed' }; },
+  const resultStore = {
+    bucket: 'results',
+    async createDownloadGrant(value) {
+      seen.push(value);
+      return { download_url: `signed:${value.key}`, expires_at: value.expiresAt.toISOString() };
     },
+  };
+  const compact = await resultGrant({
+    db, userId, jobId: created.row.id,
+    resultStore,
   });
-  assert.equal(grant.download_url, 'signed');
-  assert.equal(seen[0].key, `results/${created.row.id}/${attemptId}/e.json`);
+  assert.equal(compact.representation, 'compact');
+  assert.equal(compact.representation_version, 'pagespatial-compact-v1');
+  assert.equal(compact.digest, 'c'.repeat(64));
+  assert.equal(compact.bytes, 123);
+  assert.equal(seen[0].key, `results/${created.row.id}/${attemptId}/e.compact.json`);
+
+  const evidence = await resultGrant({
+    db, userId, jobId: created.row.id, resultStore, view: 'evidence',
+  });
+  assert.equal(evidence.representation, 'evidence');
+  assert.equal(evidence.representation_version, 1);
+  assert.equal(evidence.digest, 'b'.repeat(64));
+  assert.equal(seen[1].key, `results/${created.row.id}/${attemptId}/e.json`);
+
+  await assert.rejects(
+    resultGrant({ db, userId, jobId: created.row.id, resultStore, view: 'other' }),
+    (error) => error.status === 400 && error.code === 'invalid_request',
+  );
+  const foreign = (await db.query(
+    "INSERT INTO users (email, status) VALUES ('foreign-result@example.test','active') RETURNING id",
+  )).rows[0];
+  await assert.rejects(
+    resultGrant({ db, userId: foreign.id, jobId: created.row.id, resultStore, view: 'other' }),
+    (error) => error.status === 404 && error.code === 'not_found',
+  );
 });
 
 test('database rejects failed rows without a machine-readable code', async () => {

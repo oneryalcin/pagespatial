@@ -228,23 +228,60 @@ export async function finalizeJob({ db, inputStore, userId, jobId, now = new Dat
   return finalized(row);
 }
 
-export async function resultGrant({ db, resultStore, userId, jobId, now = new Date() }) {
+export async function resultDescriptor({
+  db, resultStore, userId, jobId, view = 'compact', now = new Date(),
+}) {
   const row = await ownedJob(db, { userId, jobId });
+  if (!['compact', 'evidence'].includes(view)) {
+    throw new ApiError(400, 'invalid_request', 'view must equal compact or evidence.');
+  }
   if (row.state === 'failed') throw new ApiError(409, 'job_failed', 'Job failed.');
   if (row.state !== 'succeeded') throw new ApiError(409, 'result_not_ready', 'Result is not ready.');
-  if (!row.accepted_attempt_id || !row.result_uri || !row.result_digest) {
-    throw new ApiError(503, 'service_unavailable', 'Result is temporarily unavailable.');
-  }
   if (!row.retention_expires_at || new Date(row.retention_expires_at) <= now) {
     throw new ApiError(410, 'result_expired', 'Result has expired.');
   }
-  const prefix = `r2://${resultStore.bucket}/`;
-  if (typeof row.result_uri !== 'string' || !row.result_uri.startsWith(prefix)) {
+  if (!row.accepted_attempt_id || !row.result_uri || !row.result_digest
+      || (view === 'compact' && (!row.compact_result_uri
+        || !row.compact_result_digest || !row.compact_result_bytes))) {
     throw new ApiError(503, 'service_unavailable', 'Result is temporarily unavailable.');
   }
-  return resultStore.createDownloadGrant({
-    key: row.result_uri.slice(prefix.length), expiresAt: row.retention_expires_at, now,
+  const prefix = `r2://${resultStore.bucket}/`;
+  const uri = view === 'compact' ? row.compact_result_uri : row.result_uri;
+  const digest = view === 'compact' ? row.compact_result_digest : row.result_digest;
+  const knownBytes = view === 'compact' ? Number(row.compact_result_bytes) : null;
+  if (typeof uri !== 'string' || !uri.startsWith(prefix)) {
+    throw new ApiError(503, 'service_unavailable', 'Result is temporarily unavailable.');
+  }
+  return {
+    row,
+    representation: view,
+    representation_version: view === 'compact' ? 'pagespatial-compact-v1' : 1,
+    digest,
+    bytes: knownBytes,
+    key: uri.slice(prefix.length),
+    retention_expires_at: row.retention_expires_at,
+  };
+}
+
+export async function resultGrant({
+  db, resultStore, userId, jobId, view = 'compact', now = new Date(),
+}) {
+  const descriptor = await resultDescriptor({
+    db, resultStore, userId, jobId, view, now,
   });
+  const grant = await resultStore.createDownloadGrant({
+    key: descriptor.key,
+    expiresAt: descriptor.retention_expires_at,
+    now,
+    knownBytes: descriptor.bytes,
+  });
+  return {
+    representation: descriptor.representation,
+    representation_version: descriptor.representation_version,
+    digest: descriptor.digest,
+    bytes: descriptor.bytes || grant.bytes,
+    ...grant,
+  };
 }
 
 export const ADMISSION_LIMITS = Object.freeze({

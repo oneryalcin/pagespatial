@@ -17,8 +17,10 @@ PageSpatial does **not** boil your document down to Markdown and call it a day. 
 Status: the parser and adapter stack remains experimental as a library. The
 parse-only hosted service is a public alpha with Cloudflare Access sign-up and
 100 initial page credits. It has passed its live service qualification.
-API-key users can start with the [PageSpatial API guide](docs/api-guide.md),
-and engineers should start with the [current handoff](docs/handoff.md).
+API-key users can start with the [PageSpatial API guide](docs/api-guide.md)
+and use the [result envelope guide](docs/result-envelope-guide.md) to choose
+between compact derived output and the canonical evidence record. Engineers
+should start with the [current handoff](docs/handoff.md).
 The project's standing commitments live in
 [docs/principles.md](docs/principles.md).
 

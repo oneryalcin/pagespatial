@@ -694,3 +694,20 @@ The dashboard should help us observe, not prematurely answer:
 - Is two-day result retention adequate?
 
 Those answers should determine M4. They should not be guessed into M3.
+
+## 22. Accepted Stage B amendment — compact result reader
+
+Alpha users confirmed that raw evidence JSON is too large and difficult to
+understand. Stage B therefore adds one authenticated result reader after the
+compact-transport retention gate passes. This is a narrow amendment to the
+earlier viewer non-goal:
+
+- Call it the result viewer, not an evidence viewer.
+- Fetch only the compact derived representation for ordinary reading.
+- Render one selected page at a time from the one compact object.
+- Keep compact and full evidence as separate explicit downloads.
+- Treat all document strings as untrusted and sanitize rendered Markdown.
+- Keep the full evidence object authoritative.
+
+This amendment does not add spatial overlays, source-PDF rendering, search,
+annotations, callbacks, or a second evidence model.

@@ -31,3 +31,12 @@ export function exactObject(value, keys) {
   }
   return value;
 }
+
+export function resultView(url) {
+  const values = url.searchParams.getAll('view');
+  const keys = [...url.searchParams.keys()];
+  if (keys.some((key) => key !== 'view') || values.length > 1) {
+    throw invalidRequest('Only one view query parameter is allowed.');
+  }
+  return values[0] ?? 'compact';
+}
