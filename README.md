@@ -109,7 +109,7 @@ npm run check
 Install only the integration packages you use:
 
 ```sh
-npm install pdfjs-dist@5.5.207 @paddleocr/paddleocr-js@0.4.2 onnxruntime-web@1.24.3
+npm install pdfjs-dist@6.3.289 @paddleocr/paddleocr-js@0.4.2 onnxruntime-web@1.30.0
 # Optional Node native enrichment:
 npm install @firecrawl/pdf-inspector@1.17.0
 ```

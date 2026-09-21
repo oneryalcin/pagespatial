@@ -63,7 +63,7 @@ export async function parseDemoPdf(file: File, callbacks: ParseCallbacks): Promi
     let inspectorFallback = false;
     const native: NativePageAdapter<PdfJsSession> = {
       name: 'pdfjs-geometry+pdf-inspector-wasm',
-      version: '5.5.207+1.17.0',
+      version: '6.3.289+1.17.0',
       async extractPage(source, pageNumber, options) {
         const result = await pdfJsNativeAdapter.extractPage(source, pageNumber, options);
         const markdown = markdownByPage.get(pageNumber);

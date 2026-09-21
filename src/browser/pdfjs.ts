@@ -92,11 +92,11 @@ export async function openPdfJsSession(input: PdfInput, options: PdfJsSessionOpt
 
   const maxPages = options.maxPages ?? DEFAULT_MAX_PAGES;
   if (!Number.isSafeInteger(maxPages) || maxPages < 1) {
-    await pdf.destroy();
+    await loadingTask.destroy();
     throw new Error('maxPages must be a positive safe integer.');
   }
   if (pdf.numPages > maxPages) {
-    await pdf.destroy();
+    await loadingTask.destroy();
     throw new Error(`PDF has ${pdf.numPages} pages; limit is ${maxPages}.`);
   }
 
@@ -139,7 +139,7 @@ export async function openPdfJsSession(input: PdfInput, options: PdfJsSessionOpt
       if (disposePromise) return disposePromise;
       disposed = true;
       pagePromises.clear();
-      disposePromise = pdf.destroy();
+      disposePromise = loadingTask.destroy();
       return disposePromise;
     }
   };
@@ -149,7 +149,7 @@ export async function openPdfJsSession(input: PdfInput, options: PdfJsSessionOpt
 
 export const pdfJsNativeAdapter: NativePageAdapter<PdfJsSession> = {
   name: 'pdfjs-native',
-  version: '5.5.207',
+  version: '6.3.289',
   async extractPage(source, pageNumber, options) {
     abortIfNeeded(options?.signal);
     const page = await source.data.getPage(pageNumber, options?.signal);
@@ -197,7 +197,7 @@ export function createPdfJsCanvasRenderer(options: {
   if (!Number.isSafeInteger(maxCanvasPixels) || maxCanvasPixels < 1) throw new Error('maxCanvasPixels must be a positive safe integer.');
   return {
     name: 'pdfjs-canvas',
-    version: '5.5.207',
+    version: '6.3.289',
     async render(source, pageNumber, renderOptions): Promise<RenderedPage<PdfJsCanvas>> {
       abortIfNeeded(renderOptions?.signal);
       const page = await source.data.getPage(pageNumber, renderOptions?.signal);

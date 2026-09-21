@@ -165,9 +165,9 @@
                 "type": "number"
               }
             ],
+            "items": false,
             "minItems": 4,
-            "maxItems": 4,
-            "items": false
+            "maxItems": 4
           },
           "corroboration": {
             "type": "string",
