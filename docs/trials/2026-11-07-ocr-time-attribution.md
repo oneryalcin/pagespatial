@@ -2,14 +2,15 @@
 
 **Date opened:** 2026-11-07
 
-**Status:** attribution closed; Tiny-recognizer candidate open
+**Status:** closed. The Tiny-recognizer candidate was **rejected** on Linux; see
+[ocr-arms-linux](2026-11-07-ocr-arms-linux.md)
 
 **Decision:** The OCR stage is almost all recognizer model execution, one call
-per text line. The only large untested lever is swapping the Small recognizer
-for **Tiny while keeping the Small detector**. In a local first look it made
-pages 2.5x faster and recovered the same gold tokens except for currency and
-apostrophe glyphs. It needs the existing merged-output safety gate on Linux
-before it can be adopted.
+per text line. Every model-side lever has now been tried and rejected,
+including the Tiny recognizer, which looked equal in the local first look
+below but produced wrong values under the ceremony scorer on Linux. The
+surviving lever is calling the recognizer less: selective OCR with a font
+audit ([design](../design/2026-11-07-selective-ocr.md)).
 
 ## Where the time goes
 
@@ -45,9 +46,9 @@ stage.
 | Recognizer batching on CPU | slower than batch 1 | rejected (2026-08 GPU/CPU trials) |
 | Thread count | inside host noise | settled at 4 ([sweep](2026-09-02-ocr-sidecar-thread-sweep.md)) |
 | Indra OCR | 30–50x, misses chart text | not a drop-in ([trial](2026-11-07-indra-ocr-evaluation.md)) |
-| **Tiny recognizer, Small detector** | 2.5x per page locally | **candidate, below** |
+| Tiny recognizer, Small detector | 2.6–2.9x per page on Linux | **rejected**: wrong values (`$ 1,455,057` → `51,455,057`), gold 939 vs 980 ([arms](2026-11-07-ocr-arms-linux.md)) |
 | Skip recognition on lines the native layer already covers | large on digital pages | design change: OCR no longer reads the whole page independently |
-| int8 recognizer | unknown | untested; needs calibration crops and an x86 host |
+| int8 recognizer (naive NNCF PTQ) | 0.5x (slower), text changes | rejected ([arms](2026-11-07-ocr-arms-linux.md)) |
 
 ## Tiny recognizer first look
 
