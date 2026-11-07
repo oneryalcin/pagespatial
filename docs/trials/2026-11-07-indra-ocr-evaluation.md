@@ -89,11 +89,11 @@ engines often put `$` on its own line.
 
 ## Why Indra is fast
 
-Its main Latin recognizer is tiny and its vocabulary is small. PP-OCRv6
-small's recognizer ends in an 18,710-class head, which was 43% of parameters
-and 18–30% of single-thread CPU recognition time when it was profiled on
-2026-09-01, and its output volume dominated GPU device-to-host traffic. Indra
-is external evidence that a Latin-scoped vocabulary is the main CPU lever.
+Its main Latin recognizer is tiny (~1.25M parameters vs PP-OCRv6 small's
+5.27M) and it has its own detector. Vocabulary size is **not** the main
+factor: pruning PP's 18,710-class head to 1,750 classes gained only
+1.04–1.15x on the recognizer
+([2026-11-07-rec-vocab-pruning-spike.md](2026-11-07-rec-vocab-pruning-spike.md)).
 
 ## Re-open conditions
 
@@ -111,5 +111,5 @@ regions and low-coverage pages, only if all of these hold:
 
 ## Follow-up
 
-Spike PP-OCRv6 small recognizer vocabulary pruning (Latin-scoped head), the
-lever Indra's design points at, without changing the detector.
+Vocabulary pruning spike: rejected at 1.04–1.15x, see
+[2026-11-07-rec-vocab-pruning-spike.md](2026-11-07-rec-vocab-pruning-spike.md).
