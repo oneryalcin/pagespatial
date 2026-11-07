@@ -128,7 +128,10 @@ records where OCR exists for every line, plus the broken-CMap fixtures
 Every dev failure is a systematic **OCR** misread, not a text-layer fault:
 Polish `ą`→`q` (17/21, Asseco), and Japanese kanji read in simplified-Chinese
 form (値→值, 増→增, Monotaro). Such failures cost only speed, because the font
-falls back to full recognition. A Japanese/Chinese variant-equivalence
+falls back to full recognition. Limit: a letter that occurs fewer than k=2
+times in a font's document text can never fail the audit, so rare glyphs
+are unaudited by construction. The live mode should OCR any box that
+contains such a letter. A Japanese/Chinese variant-equivalence
 table would recover most of them.
 
 Net effect (`net_skip`): after the audit, about **25% (dev-v12) to 31%

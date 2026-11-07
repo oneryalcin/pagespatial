@@ -2,9 +2,9 @@
 
 **Date opened:** 2026-11-07
 
-**Status:** closed
+**Status:** arms closed; int8 inconclusive
 
-**Decision:** **REJECT every Tiny and capped-detector arm. Small/Small stays the
+**Decision:** **REJECT every Tiny and capped-detector arm** (int8: inconclusive, below). Small/Small stays the
 server witness.** Small det + Tiny rec is 2.6–2.9x faster per page, but on
 the adoption-ceremony scorer it loses critical tokens significantly
 (gold 939 vs 980; McNemar p = 0.001 against the browser reference), and some
@@ -25,7 +25,9 @@ anywhere on the page.
   ran the arms in reverse order.
 - Pages: the 90-page adoption-ceremony sample (`.evaluation/hpi-ceremony`,
   production render scale 1.6).
-- Scoring: [`score-candidate-witness.mjs`](../../scripts/evaluation/score-candidate-witness.mjs)
+- Scoring (text-free aggregates committed in
+  [`evidence/2026-11-07-ocr-arms-scores/`](evidence/2026-11-07-ocr-arms-scores/)):
+  [`score-candidate-witness.mjs`](../../scripts/evaluation/score-candidate-witness.mjs)
   against the dev-v12 browser reference and gold, as in the
   [adoption ceremony](2026-08-22-sidecar-adoption-ceremony.md). The control
   arm reproduces the ceremony's committed numbers exactly (gold 980,
@@ -64,7 +66,7 @@ not:
 detector stays. This matches Indra's failure mode: a smaller detector input
 loses small text.
 
-## int8 recognizer: rejected (naive post-training quantization)
+## int8 recognizer: inconclusive (harness preprocessing was wrong)
 
 [`scripts/evaluation/rec_int8_modal.py`](../../scripts/evaluation/rec_int8_modal.py):
 NNCF `MIXED` post-training quantization of each recognizer with 300 real line
@@ -77,13 +79,18 @@ disjoint crops. OpenVINO 2026.4.1, Modal `cpu=4` x86 with AVX-512 VNNI,
 | Small | 22.6 | 48.2 (0.47x) | 28.5% | 0.178 | 341 / 543 |
 | Tiny | 10.8 | 21.1 (0.51x) | 80.2% | 0.051 | 79 / 556 |
 
-int8 is about **2x slower** and changes the text heavily. Caveat: crops were
-resized to height 48 without PaddleX's padding or width bucketing, so the
-fp32 readings are already somewhat off, and variable-width inputs probably
-kept OpenVINO off its fast int8 kernels. A fair int8 test would need
-PaddleX-exact preprocessing, static width buckets and per-bucket
-compilation. That is a larger project with an uncertain payoff, so it is
-deprioritised.
+**These numbers do not measure int8.** The harness's own fp32 baseline is
+broken: on the same legistar line it decodes "The ftull text of the
+Tolomelegisla", while PaddleX's Tiny reads "The full text of the
+followinglegisla" in the arms run above. Crops were resized to height 48
+without PaddleX's padding or width bucketing, so the accuracy comparison is
+against a broken baseline. The 2x slowdown is plausibly an artifact of
+variable-width inputs keeping OpenVINO off its VNNI int8 kernels.
+
+Verdict: naive post-training quantization fails in this harness. A proper
+test (PaddleX-exact preprocessing, static width buckets, per-bucket
+compilation, scored with the ceremony scorer) has **not been done**. It is
+the one remaining model-side lever with real x86 upside.
 
 ## Remaining levers
 
