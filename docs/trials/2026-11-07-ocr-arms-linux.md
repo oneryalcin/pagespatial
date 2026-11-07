@@ -2,9 +2,9 @@
 
 **Date opened:** 2026-11-07
 
-**Status:** arms closed; int8 inconclusive
+**Status:** closed
 
-**Decision:** **REJECT every Tiny and capped-detector arm** (int8: inconclusive, below). Small/Small stays the
+**Decision:** **REJECT every Tiny and capped-detector arm, and int8** (below). Small/Small stays the
 server witness.** Small det + Tiny rec is 2.6–2.9x faster per page, but on
 the adoption-ceremony scorer it loses critical tokens significantly
 (gold 939 vs 980; McNemar p = 0.001 against the browser reference), and some
@@ -66,31 +66,40 @@ not:
 detector stays. This matches Indra's failure mode: a smaller detector input
 loses small text.
 
-## int8 recognizer: inconclusive (harness preprocessing was wrong)
+## int8 recognizer: rejected at the pre-set gate
 
-[`scripts/evaluation/rec_int8_modal.py`](../../scripts/evaluation/rec_int8_modal.py):
-NNCF `MIXED` post-training quantization of each recognizer with 300 real line
-crops (from the ceremony pages and recorded line boxes), evaluated on 1,000
-disjoint crops. OpenVINO 2026.4.1, Modal `cpu=4` x86 with AVX-512 VNNI,
-4 threads, greedy CTC decode.
+[`scripts/evaluation/rec_int8_modal.py`](../../scripts/evaluation/rec_int8_modal.py)
+v2: NNCF post-training quantization of the Small recognizer (`MIXED`
+preset), calibrated on 300 real line crops and evaluated on 2,000 disjoint
+ones. Modal `cpu=4` x86, OpenVINO 2026.4.1, 4 threads.
 
-| Recognizer | fp32 ms/crop | int8 ms/crop | int8 text identical to fp32 | int8 CER vs fp32 | digit lines changed |
-|---|---:|---:|---:|---:|---:|
-| Small | 22.6 | 48.2 (0.47x) | 28.5% | 0.178 | 341 / 543 |
-| Tiny | 10.8 | 21.1 (0.51x) | 80.2% | 0.051 | 79 / 556 |
+The preprocessing is PaddleX-exact (`OCRReisizeNormImg`: height 48, aspect
+kept, right zero-pad to max(320, 48·w/h)), with padded widths rounded up to
+fixed buckets so fp32 and int8 are both compiled with static shapes. The
+harness is **validated**: fp32 decoding equals PaddleX's own ceremony text on
+96% of lines. The rest differ only because crops are axis-aligned rather than
+minimum-area rectangles.
 
-**These numbers do not measure int8.** The harness's own fp32 baseline is
-broken: on the same legistar line it decodes "The ftull text of the
-Tolomelegisla", while PaddleX's Tiny reads "The full text of the
-followinglegisla" in the arms run above. Crops were resized to height 48
-without PaddleX's padding or width bucketing, so the accuracy comparison is
-against a broken baseline. The 2x slowdown is plausibly an artifact of
-variable-width inputs keeping OpenVINO off its VNNI int8 kernels.
+Gate, set before the second run: ≥1.2x faster, and ≤1% of digit lines
+changed from fp32.
 
-Verdict: naive post-training quantization fails in this harness. A proper
-test (PaddleX-exact preprocessing, static width buckets, per-bucket
-compilation, scored with the ceremony scorer) has **not been done**. It is
-the one remaining model-side lever with real x86 upside.
+| Quantization | fp32 ms | int8 ms | speed-up | int8 = fp32 | digit lines changed | digit lines = PaddleX (fp32 → int8) |
+|---|---:|---:|---:|---:|---:|---|
+| default | 21.0 | 16.5 | 1.27x | 19% | 811 / 1,079 | 1,053 → 267 |
+| `model_type=TRANSFORMER` | 18.8 | 14.2 | **1.32x** | 90% | **66 / 1,079 (6.1%)** | 1,053 → 1,004 |
+
+Default int8 destroys the SVTR attention blocks. Transformer-aware
+quantization repairs most of that but still changes 6% of digit lines, which
+fails the precision gate. The ceiling is also modest: about 1.3x on the
+recognizer, so roughly 1.2x on OCR. Neither host reported AVX-512 VNNI or AMX
+for this run (a v1 host did), so Modal CPU generations vary.
+
+Untested: NNCF accuracy-controlled quantization, which keeps the most
+sensitive layers in fp32. It would trade some of the 1.3x for accuracy and
+still faces the ≤1% digit gate.
+
+v1 of this harness (earlier the same day) resized crops without padding. Its
+fp32 baseline decoded garbage, so its "2x slower" number is void.
 
 ## Remaining levers
 

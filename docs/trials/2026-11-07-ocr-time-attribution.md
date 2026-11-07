@@ -9,9 +9,9 @@
 per text line. Every model-side lever tried so far was rejected, including the Tiny
 recognizer, which looked equal in the local first look
 below but produced wrong values under the ceremony scorer on Linux. The
-surviving levers are calling the recognizer less (selective OCR with a font
-audit, [design](../design/2026-11-07-selective-ocr.md)) and a proper int8
-test, which has not been done yet.
+surviving lever is calling the recognizer less: selective OCR with a font
+audit ([design](../design/2026-11-07-selective-ocr.md)). int8 was tested
+properly and failed the digit-precision gate.
 
 ## Where the time goes
 
@@ -49,7 +49,7 @@ stage.
 | Indra OCR | 30–50x, misses chart text | not a drop-in ([trial](2026-11-07-indra-ocr-evaluation.md)) |
 | Tiny recognizer, Small detector | 2.6–2.9x per page on Linux | **rejected**: wrong values (`$ 1,455,057` → `51,455,057`), gold 939 vs 980 ([arms](2026-11-07-ocr-arms-linux.md)) |
 | Skip recognition on lines the native layer already covers | large on digital pages | design change: OCR no longer reads the whole page independently |
-| int8 recognizer | naive PTQ failed in a harness with wrong preprocessing | **inconclusive**: proper test (PaddleX-exact preprocessing, static width buckets) not done ([arms](2026-11-07-ocr-arms-linux.md)) |
+| int8 recognizer (NNCF, transformer-aware) | 1.32x recognizer | rejected: 6.1% of digit lines change ([arms](2026-11-07-ocr-arms-linux.md)) |
 
 ## Tiny recognizer first look
 

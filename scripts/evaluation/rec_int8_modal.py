@@ -1,18 +1,22 @@
-"""int8 post-training quantization of the PP-OCRv6 recognizers on Modal (x86, OpenVINO).
+"""int8 post-training quantization of the PP-OCRv6 Small recognizer on Modal (x86, OpenVINO).
 
 Trial: docs/trials/2026-11-07-ocr-arms-linux.md
 
-Real line crops come from the adoption-ceremony pages and the line boxes the
-ceremony run recorded (candidate-results.json). Calibration and evaluation
-crops are disjoint. Per recognizer: fp32 vs NNCF int8, ms per crop at 4
-threads, and greedy-CTC text agreement (exact-match rate, character error
-rate of int8 against fp32).
+v2. v1 resized crops without PaddleX's padding, and its fp32 baseline decoded
+garbage. This version uses PaddleX-exact OCRReisizeNormImg preprocessing:
+height 48, aspect ratio kept, right zero-pad to max(320, 48*w/h), cap 3200.
+Padded widths are rounded up to a fixed bucket, so every model (fp32 and
+int8) is compiled with static shapes per bucket. Validated locally: fp32
+decode equals PaddleX's own text on 96% of 400 lines (the rest differ
+because these crops are axis-aligned rather than minimum-area rectangles).
+
+Line boxes and PaddleX reference texts come from the adoption-ceremony run
+(candidate-results.json). Calibration and evaluation lines are disjoint.
 
   uvx modal run scripts/evaluation/rec_int8_modal.py \
       --pages-dir $PWD/.evaluation/hpi-ceremony \
       --small-tar $PWD/.evaluation/ocr-assets-small/models/PP-OCRv6_small_rec_onnx_infer.tar \
-      --tiny-tar $PWD/.evaluation/ocr-assets/models/PP-OCRv6_tiny_rec_onnx_infer.tar \
-      --out $PWD/.evaluation/ocr-arms/int8.json
+      --out $PWD/.evaluation/ocr-arms/int8-v2.json [--mode transformer]
 """
 import json
 from pathlib import Path
@@ -26,25 +30,33 @@ image = (
     .pip_install("openvino==2026.4.1", "nncf", "opencv-python-headless", "numpy", "pyyaml", "onnx")
 )
 
-H = 48
+H, MIN_W, MAX_W = 48, 320, 3200
+BUCKETS = (320, 480, 640, 800, 960, 1280, 1600, 2400, 3200)
 
 
-def crop_line(img, box):
+def prep(c):
+    """PaddleX OCRReisizeNormImg.resize, then zero-pad up to the next width bucket."""
+    import math
+
     import cv2
     import numpy as np
-    x0, y0, x1, y1 = [int(round(v)) for v in box]
-    c = img[max(0, y0):y1, max(0, x0):x1]
-    if c.size == 0 or c.shape[0] < 4 or c.shape[1] < 4:
-        return None
-    w = max(8, int(round(c.shape[1] * H / c.shape[0])))
-    w = min(w, 3200)
-    c = cv2.resize(c, (w, H)).astype(np.float32) / 255.0
-    c = (c - 0.5) / 0.5
-    return c.transpose(2, 0, 1)[None]  # [1,3,48,W]
+
+    h, w = c.shape[:2]
+    img_w = int(H * max(MIN_W / H, w / h))
+    if img_w > MAX_W:
+        r, rw, img_w = cv2.resize(c, (MAX_W, H)), MAX_W, MAX_W
+    else:
+        rw = min(img_w, int(math.ceil(H * w / h)))
+        r = cv2.resize(c, (rw, H))
+    img_w = next(b for b in BUCKETS if b >= img_w)
+    x = np.zeros((3, H, img_w), np.float32)
+    x[:, :, :rw] = (r.astype(np.float32).transpose(2, 0, 1) / 255 - 0.5) / 0.5
+    return x[None]
 
 
 @app.function(image=image, cpu=4.0, memory=8192, timeout=3 * 3600)
-def run(models: dict, pages: list, boxes: dict) -> dict:
+def run(tar_bytes: bytes, pages: list, lines: dict, mode: str = "default") -> dict:
+    import difflib
     import io
     import random
     import tarfile
@@ -56,90 +68,98 @@ def run(models: dict, pages: list, boxes: dict) -> dict:
     import openvino as ov
     import yaml
 
-    rng = random.Random(0)
-    crops = []
+    samples = []  # (input, paddlex text)
     for name, png in pages:
         img = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
-        for b in boxes.get(name, []):
-            c = crop_line(img, b)
-            if c is not None:
-                crops.append(c)
-    rng.shuffle(crops)
-    calib, evals = crops[:300], crops[300:1300]
+        for box, text in lines.get(name, []):
+            x0, y0, x1, y1 = [int(round(v)) for v in box]
+            c = img[max(0, y0):y1, max(0, x0):x1]
+            if c.size and c.shape[0] >= 2 and c.shape[1] >= 2:
+                samples.append((prep(c), text))
+    random.Random(0).shuffle(samples)
+    calib, evals = samples[:300], samples[300:2300]
+
+    tf = tarfile.open(fileobj=io.BytesIO(tar_bytes))
+    onnx_path = "/tmp/rec.onnx"
+    Path(onnx_path).write_bytes(tf.extractfile(next(m for m in tf.getmembers() if m.name.endswith(".onnx"))).read())
+    yml = yaml.safe_load(tf.extractfile(next(m for m in tf.getmembers() if m.name.endswith(".yml"))))
+    chars = ["<blank>"] + yml["PostProcess"]["character_dict"] + [" "]
+
     core = ov.Core()
-    out = {"crops": len(crops), "calib": len(calib), "eval": len(evals)}
-    for key, tar_bytes in models.items():
-        tf = tarfile.open(fileobj=io.BytesIO(tar_bytes))
-        onnx_member = next(m for m in tf.getmembers() if m.name.endswith(".onnx"))
-        yml_member = next(m for m in tf.getmembers() if m.name.endswith(".yml"))
-        onnx_path = f"/tmp/{key}.onnx"
-        Path(onnx_path).write_bytes(tf.extractfile(onnx_member).read())
-        chars = ["<blank>"] + yaml.safe_load(tf.extractfile(yml_member))["PostProcess"]["character_dict"] + [" "]
-        fp32 = core.read_model(onnx_path)
-        int8 = nncf.quantize(fp32, nncf.Dataset(calib), subset_size=len(calib),
-                             preset=nncf.QuantizationPreset.MIXED)
-        compiled = {name: core.compile_model(m, "CPU", {"INFERENCE_NUM_THREADS": 4})
-                    for name, m in (("fp32", fp32), ("int8", int8))}
+    fp32 = core.read_model(onnx_path)
+    kw = dict(subset_size=len(calib), preset=nncf.QuantizationPreset.MIXED)
+    if mode == "transformer":  # SVTR blocks: keep LayerNorm/Softmax/GELU paths out of int8
+        kw["model_type"] = nncf.ModelType.TRANSFORMER
+    int8 = nncf.quantize(fp32, nncf.Dataset([x for x, _ in calib]), **kw)
 
-        def decode(probs):
-            ids = probs[0].argmax(-1)
-            s, prev = [], 0
-            for i in ids:
-                if i != prev and i != 0:
-                    s.append(chars[i] if i < len(chars) else "?")
-                prev = i
-            return "".join(s)
+    def compiled_per_bucket(model):
+        out = {}
+        for b in sorted({x.shape[3] for x, _ in evals}):
+            m = model.clone()
+            m.reshape({m.inputs[0].any_name: [1, 3, H, b]})
+            out[b] = core.compile_model(m, "CPU", {"INFERENCE_NUM_THREADS": 4})
+        return out
 
-        texts, times = {}, {}
-        for name, c in compiled.items():
-            for x in evals[:20]:
-                c(x)
-            ts, tx = [], []
-            for x in evals:
-                t = time.perf_counter(); r = c(x)[0]; ts.append(time.perf_counter() - t)
-                tx.append(decode(r))
-            texts[name], times[name] = tx, ts
+    def ctc(probs):
+        ids, s, prev = probs[0].argmax(-1), [], 0
+        for i in ids:
+            if i != prev and i != 0:
+                s.append(chars[i] if i < len(chars) else "")
+            prev = i
+        return "".join(s)
 
-        def cer(a, b):
-            import difflib
-            sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
-            edits = sum(max(i2 - i1, j2 - j1) for tag, i1, i2, j1, j2 in sm.get_opcodes() if tag != "equal")
-            return edits / max(1, len(a))
+    res = {}
+    for name, model in (("fp32", fp32), ("int8", int8)):
+        comp = compiled_per_bucket(model)
+        for x, _ in evals[:30]:
+            comp[x.shape[3]](x)
+        ts, texts = [], []
+        for x, _ in evals:
+            t = time.perf_counter(); r = comp[x.shape[3]](x)[0]; ts.append(time.perf_counter() - t)
+            texts.append(ctc(r))
+        res[name] = (ts, texts)
 
-        exact = sum(a == b for a, b in zip(texts["fp32"], texts["int8"])) / len(evals)
-        digit_lines = [(a, b) for a, b in zip(texts["fp32"], texts["int8"]) if any(ch.isdigit() for ch in a)]
-        out[key] = {
-            "fp32_ms_mean": round(1000 * float(np.mean(times["fp32"])), 2),
-            "int8_ms_mean": round(1000 * float(np.mean(times["int8"])), 2),
-            "speedup": round(float(np.mean(times["fp32"]) / np.mean(times["int8"])), 2),
-            "exact_match_int8_vs_fp32": round(exact, 4),
-            "cer_int8_vs_fp32": round(float(np.mean([cer(a, b) for a, b in zip(texts["fp32"], texts["int8"])])), 5),
-            "digit_lines": len(digit_lines),
-            "digit_lines_changed": sum(a != b for a, b in digit_lines),
-            "examples_changed": [(a, b) for a, b in zip(texts["fp32"], texts["int8"]) if a != b][:15],
-        }
-    import platform
-    out["cpu"] = platform.processor() or platform.machine()
+    def cer(a, b):
+        sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
+        return sum(max(i2 - i1, j2 - j1) for tag, i1, i2, j1, j2 in sm.get_opcodes() if tag != "equal") / max(1, len(a))
+
+    ref = [t for _, t in evals]
+    f, i = res["fp32"][1], res["int8"][1]
+    digit = [k for k, t in enumerate(ref) if any(ch.isdigit() for ch in t)]
+    out = {
+        "eval_lines": len(evals), "calib_lines": len(calib),
+        "fp32_ms_mean": round(1000 * float(np.mean(res["fp32"][0])), 2),
+        "int8_ms_mean": round(1000 * float(np.mean(res["int8"][0])), 2),
+        "speedup": round(float(np.mean(res["fp32"][0]) / np.mean(res["int8"][0])), 2),
+        "fp32_exact_vs_paddlex": round(sum(a == b for a, b in zip(f, ref)) / len(ref), 4),
+        "int8_exact_vs_paddlex": round(sum(a == b for a, b in zip(i, ref)) / len(ref), 4),
+        "int8_exact_vs_fp32": round(sum(a == b for a, b in zip(i, f)) / len(ref), 4),
+        "int8_cer_vs_fp32": round(float(np.mean([cer(a, b) for a, b in zip(f, i)])), 5),
+        "digit_lines": len(digit),
+        "digit_lines_int8_differs_from_fp32": sum(f[k] != i[k] for k in digit),
+        "digit_lines_fp32_matches_paddlex": sum(f[k] == ref[k] for k in digit),
+        "digit_lines_int8_matches_paddlex": sum(i[k] == ref[k] for k in digit),
+    }
     try:
-        out["cpuinfo"] = next(l for l in open("/proc/cpuinfo") if l.startswith("model name")).split(":")[1].strip()
-        out["avx512_vnni"] = "avx512_vnni" in open("/proc/cpuinfo").read()
+        info = open("/proc/cpuinfo").read()
+        out["cpu_model"] = next(l for l in info.splitlines() if l.startswith("model name")).split(":")[1].strip()
+        out["avx512_vnni"] = "avx512_vnni" in info
+        out["amx"] = "amx_int8" in info
     except Exception:
         pass
+    out["examples_int8_vs_fp32"] = [(a, b) for a, b in zip(f, i) if a != b][:20]
     return out
 
 
 @app.local_entrypoint()
-def main(pages_dir: str, small_tar: str, tiny_tar: str, out: str):
+def main(pages_dir: str, small_tar: str, out: str, mode: str = "default"):
     pd = Path(pages_dir)
     manifest = json.loads((pd / "manifest.json").read_text())
     ceremony = json.loads((pd / "candidate-results.json").read_text())
-    boxes = {p["page"]: [l["box"] for l in p["lines"] if l.get("box")] for p in ceremony["perPage"]}
+    lines = {p["page"]: [(l["box"], l["text"]) for l in p["lines"] if l.get("box")] for p in ceremony["perPage"]}
     pages = [(e["page"], (pd / e["png"]).read_bytes()) for e in manifest]
-    models = {"small": Path(small_tar).read_bytes(), "tiny": Path(tiny_tar).read_bytes()}
-    result = run.remote(models, pages, boxes)
+    result = run.remote(Path(small_tar).read_bytes(), pages, lines, mode)
+    result["mode"] = mode
     Path(out).parent.mkdir(parents=True, exist_ok=True)
     Path(out).write_text(json.dumps(result, indent=1, ensure_ascii=False))
-    for k in ("small", "tiny"):
-        r = result[k]
-        print(k, {x: r[x] for x in r if x != "examples_changed"})
-    print("cpu:", result.get("cpuinfo"), "vnni:", result.get("avx512_vnni"))
+    print({k: v for k, v in result.items() if k != "examples_int8_vs_fp32"})
