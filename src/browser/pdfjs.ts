@@ -149,7 +149,7 @@ export async function openPdfJsSession(input: PdfInput, options: PdfJsSessionOpt
 
 export const pdfJsNativeAdapter: NativePageAdapter<PdfJsSession> = {
   name: 'pdfjs-native',
-  version: '6.3.289',
+  version: '6.5.438',
   async extractPage(source, pageNumber, options) {
     abortIfNeeded(options?.signal);
     const page = await source.data.getPage(pageNumber, options?.signal);
@@ -197,7 +197,7 @@ export function createPdfJsCanvasRenderer(options: {
   if (!Number.isSafeInteger(maxCanvasPixels) || maxCanvasPixels < 1) throw new Error('maxCanvasPixels must be a positive safe integer.');
   return {
     name: 'pdfjs-canvas',
-    version: '6.3.289',
+    version: '6.5.438',
     async render(source, pageNumber, renderOptions): Promise<RenderedPage<PdfJsCanvas>> {
       abortIfNeeded(renderOptions?.signal);
       const page = await source.data.getPage(pageNumber, renderOptions?.signal);
