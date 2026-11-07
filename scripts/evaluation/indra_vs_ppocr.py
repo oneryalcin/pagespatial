@@ -34,7 +34,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-ENGINES = ("indra", "paddle")
+ENGINES = tuple(os.environ.get("ENGINES", "indra,paddle").split(","))
 PAGES_PER_PDF = 3
 DPI = 200
 
@@ -93,11 +93,13 @@ def make_engine(engine: str, threads: int):
     from paddleocr import PaddleOCR
 
     m = Path(os.environ["MODELS"])
+    # paddle-tinyrec: same Small detector, Tiny recognizer (downloaded by name).
+    rec = "PP-OCRv6_tiny_rec" if engine == "paddle-tinyrec" else "PP-OCRv6_small_rec"
     eng = PaddleOCR(
         text_detection_model_name="PP-OCRv6_small_det",
         text_detection_model_dir=str(m / "PP-OCRv6_small_det"),
-        text_recognition_model_name="PP-OCRv6_small_rec",
-        text_recognition_model_dir=str(m / "PP-OCRv6_small_rec"),
+        text_recognition_model_name=rec,
+        text_recognition_model_dir=str(m / rec) if (m / rec).is_dir() else None,
         use_doc_orientation_classify=False,
         use_doc_unwarping=False,
         use_textline_orientation=False,
@@ -173,14 +175,15 @@ def score_gold(out: Path) -> dict:
                 summary[key] = {"pages": len(pages), "tokens": len(toks), "found": found,
                                 "rate": round(found / len(toks), 3), "mean_ms": round(sum(ms) / len(ms))}
                 print(key, summary[key])
+    cand = next(e for e in ENGINES if e != "paddle")  # candidate vs the production witness
     misses = {}
     for p in sorted(gold):
-        ti, tp = loose(res["indra"][p]["text"]), loose(res["paddle"][p]["text"])
-        m = [t for t in gold[p] if loose(t) and loose(t) not in ti and loose(t) in tp]
+        tc, tp = loose(res[cand][p]["text"]), loose(res["paddle"][p]["text"])
+        m = [t for t in gold[p] if loose(t) and loose(t) not in tc and loose(t) in tp]
         if m:
             misses[p] = m
-            print("indra-only miss", p, m[:8], len(m))
-    return {"summary": summary, "indra_only_misses": misses}
+            print(f"{cand}-only miss", p, m[:8], len(m))
+    return {"summary": summary, f"{cand}_only_misses": misses}
 
 
 if __name__ == "__main__":
