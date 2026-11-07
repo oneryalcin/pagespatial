@@ -1,4 +1,5 @@
 import { buildCorroborationPool, poolCorroborates } from './corroborate.js';
+import { auditNativeGlyphs } from './glyph-audit.js';
 import { countConfirmedRegions, countRecoveredObservations, regionEligibleForResidue } from './ink.js';
 import { REFERENCE_RENDER_SCALE, UNCORROBORATED_OCR_MAXIMUM_COVERAGE, UNCORROBORATED_OCR_MINIMUM_COUNT } from './tuning.js';
 import type {
@@ -179,6 +180,24 @@ export function buildDiagnostics(input: {
       // Fraction of structured regions still unread; pictorial regions are
       // not recoverable by design and stay out of the denominator.
       share: structuredCount ? residue.length / structuredCount : 0
+    });
+  }
+
+  // Native glyph mismatch: OCR systematically reads a native font's letters
+  // as other letters (a corrupted ToUnicode map, or a systematic OCR misread;
+  // the evidence alone cannot tell which). Advisory: the record says which
+  // native observations are contradicted; strongly contradicted fonts are
+  // withheld from the projection (src/projection.ts).
+  const glyphMismatchIds = [...new Set(
+    auditNativeGlyphs(input.nativeObservations, input.ocrObservations).flatMap((mismatch) => mismatch.nativeIds)
+  )];
+  if (glyphMismatchIds.length) {
+    escalationReasons.push({
+      type: 'native-glyph-mismatch',
+      severity: 'advisory',
+      sourceIds: glyphMismatchIds,
+      count: glyphMismatchIds.length,
+      share: input.nativeObservations.length ? glyphMismatchIds.length / input.nativeObservations.length : 0
     });
   }
 

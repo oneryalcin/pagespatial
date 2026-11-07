@@ -43,7 +43,7 @@ from parse_bench.schemas.product import ProductType
 
 PIPELINE_NAME = "pagespatial_basic"
 PROVIDER_NAME = "pagespatial"
-SCHEMA_VERSION = "0.6.0"
+SCHEMA_VERSION = "0.7.0"
 DEFAULT_MODAL_APP = "pagespatial-parse-m5-dev"
 _NATIVE_REFERENCE = re.compile(r"^## Native structure reference\s*$", re.MULTILINE)
 

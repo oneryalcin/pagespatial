@@ -16,7 +16,7 @@ const RENDER_DPI = 150; // the runner's measured render resolution
 const FAKE_SHA = '0'.repeat(64);
 function syntheticPage({ pageId, reasons = [], conflicts = [], ocrObservations = [], unreadInkRegions, sha = FAKE_SHA }) {
   return {
-    schemaVersion: '0.6.0',
+    schemaVersion: '0.7.0',
     documentId: 'synthetic-doc',
     revisionId: `sha256:${sha}`,
     documentSha256: sha,

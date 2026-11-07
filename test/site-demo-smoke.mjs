@@ -29,7 +29,7 @@ try {
     reconstruction: document.querySelector('#demo-reconstruction')?.getAttribute('src'),
     error: document.querySelector('#demo-error:not([hidden])')?.textContent
   }));
-  if (state.error || state.pages !== 3 || !state.markdown?.includes('<!-- Page 1 -->') || !state.json?.includes('"schemaVersion": "0.6.0"') || !state.reconstruction?.startsWith('blob:') || unexpected.length) {
+  if (state.error || state.pages !== 3 || !state.markdown?.includes('<!-- Page 1 -->') || !state.json?.includes('"schemaVersion": "0.7.0"') || !state.reconstruction?.startsWith('blob:') || unexpected.length) {
     throw new Error(`Site demo smoke failed: ${JSON.stringify({ state, unexpected, browserLog })}`);
   }
   console.log(JSON.stringify({ state: { ...state, markdown: '<present>', json: '<present>' }, unexpectedRequests: unexpected.length, browserLog }, null, 2));
