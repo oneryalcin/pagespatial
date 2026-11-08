@@ -92,9 +92,9 @@
                     "type": "number"
                   }
                 ],
+                "items": false,
                 "minItems": 4,
-                "maxItems": 4,
-                "items": false
+                "maxItems": 4
               },
               "pointWidth": {
                 "type": "number",
@@ -129,9 +129,9 @@
                     "type": "number"
                   }
                 ],
+                "items": false,
                 "minItems": 6,
-                "maxItems": 6,
-                "items": false
+                "maxItems": 6
               }
             },
             "required": [
@@ -173,9 +173,9 @@
                       "type": "number"
                     }
                   ],
+                  "items": false,
                   "minItems": 4,
-                  "maxItems": 4,
-                  "items": false
+                  "maxItems": 4
                 },
                 "polygon": {
                   "minItems": 3,
@@ -190,9 +190,9 @@
                         "type": "number"
                       }
                     ],
+                    "items": false,
                     "minItems": 2,
-                    "maxItems": 2,
-                    "items": false
+                    "maxItems": 2
                   }
                 },
                 "adapterId": {
@@ -214,9 +214,9 @@
                       "type": "number"
                     }
                   ],
+                  "items": false,
                   "minItems": 4,
-                  "maxItems": 4,
-                  "items": false
+                  "maxItems": 4
                 },
                 "mcid": {
                   "anyOf": [
@@ -231,13 +231,9 @@
                   ]
                 },
                 "structureRole": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "null"
-                    }
+                  "type": [
+                    "string",
+                    "null"
                   ]
                 },
                 "geometryMethod": {
@@ -306,9 +302,9 @@
                       "type": "number"
                     }
                   ],
+                  "items": false,
                   "minItems": 4,
-                  "maxItems": 4,
-                  "items": false
+                  "maxItems": 4
                 },
                 "polygon": {
                   "minItems": 3,
@@ -323,9 +319,9 @@
                         "type": "number"
                       }
                     ],
+                    "items": false,
                     "minItems": 2,
-                    "maxItems": 2,
-                    "items": false
+                    "maxItems": 2
                   }
                 },
                 "adapterId": {
@@ -392,9 +388,9 @@
                       "type": "number"
                     }
                   ],
+                  "items": false,
                   "minItems": 4,
-                  "maxItems": 4,
-                  "items": false
+                  "maxItems": 4
                 }
               },
               "required": [
@@ -568,18 +564,14 @@
                       "type": "number"
                     }
                   ],
+                  "items": false,
                   "minItems": 4,
-                  "maxItems": 4,
-                  "items": false
+                  "maxItems": 4
                 },
                 "confidence": {
-                  "anyOf": [
-                    {
-                      "type": "number"
-                    },
-                    {
-                      "type": "null"
-                    }
+                  "type": [
+                    "number",
+                    "null"
                   ]
                 }
               },
@@ -642,9 +634,9 @@
                       "type": "number"
                     }
                   ],
+                  "items": false,
                   "minItems": 4,
-                  "maxItems": 4,
-                  "items": false
+                  "maxItems": 4
                 },
                 "components": {
                   "type": "array",
@@ -676,9 +668,9 @@
                             "type": "number"
                           }
                         ],
+                        "items": false,
                         "minItems": 4,
-                        "maxItems": 4,
-                        "items": false
+                        "maxItems": 4
                       }
                     },
                     "required": [
@@ -741,9 +733,9 @@
                       "type": "number"
                     }
                   ],
+                  "items": false,
                   "minItems": 4,
-                  "maxItems": 4,
-                  "items": false
+                  "maxItems": 4
                 },
                 "kind": {
                   "type": "string",
@@ -788,9 +780,9 @@
                             "type": "number"
                           }
                         ],
+                        "items": false,
                         "minItems": 4,
-                        "maxItems": 4,
-                        "items": false
+                        "maxItems": 4
                       },
                       "text": {
                         "type": "string",
@@ -844,9 +836,9 @@
                           "type": "number"
                         }
                       ],
+                      "items": false,
                       "minItems": 4,
-                      "maxItems": 4,
-                      "items": false
+                      "maxItems": 4
                     },
                     "text": {
                       "type": "string",

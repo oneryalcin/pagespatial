@@ -69,11 +69,11 @@ export async function openNodePdfSession(input: Uint8Array | ArrayBuffer, option
   }
   const maxPages = options.maxPages ?? DEFAULT_MAX_PAGES;
   if (!Number.isSafeInteger(maxPages) || maxPages < 1) {
-    await pdf.destroy();
+    await loadingTask.destroy();
     throw new Error('maxPages must be a positive safe integer.');
   }
   if (pdf.numPages > maxPages) {
-    await pdf.destroy();
+    await loadingTask.destroy();
     throw new Error(`PDF has ${pdf.numPages} pages; limit is ${maxPages}.`);
   }
   const hash = createHash('sha256').update(bytes).digest('hex');
@@ -115,7 +115,7 @@ export async function openNodePdfSession(input: Uint8Array | ArrayBuffer, option
       if (disposing) return disposing;
       disposed = true;
       pages.clear();
-      disposing = pdf.destroy();
+      disposing = loadingTask.destroy();
       return disposing;
     }
   };

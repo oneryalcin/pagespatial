@@ -98,7 +98,7 @@ const assetManifestHash = await sha256File(assetManifestPath);
 const profile = {
   id: 'pdf-inspector-ppocrv6-selected-pages-v1',
   nativeAdapter: pdfInspectorNativeAdapterIdentity,
-  renderer: 'pdfjs-dist@5.5.207',
+  renderer: 'pdfjs-dist@6.5.438',
   ocrAdapter: '@paddleocr/paddleocr-js@0.4.2',
   ocrVariant,
   regionRecovery,
@@ -494,7 +494,7 @@ try {
             unreadInkRegions: browserPage.unreadInkRegions ?? [],
             runId,
             nativeAdapter: pdfInspectorNativeAdapterIdentity,
-            renderer: 'pdfjs-dist@5.5.207',
+            renderer: 'pdfjs-dist@6.5.438',
             ocrAdapter: '@paddleocr/paddleocr-js@0.4.2',
             createdAt,
             configuration: profile
@@ -523,7 +523,7 @@ try {
                 secondOpinion,
                 runId,
                 nativeAdapter: pdfInspectorNativeAdapterIdentity,
-                renderer: 'pdfjs-dist@5.5.207',
+                renderer: 'pdfjs-dist@6.5.438',
                 ocrAdapter: '@paddleocr/paddleocr-js@0.4.2',
                 createdAt,
                 configuration: profile

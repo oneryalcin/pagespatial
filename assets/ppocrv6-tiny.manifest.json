@@ -2,23 +2,23 @@
   "schemaVersion": 1,
   "packages": {
     "@paddleocr/paddleocr-js": "0.4.2",
-    "onnxruntime-web": "1.24.3",
-    "pdfjs-dist": "5.5.207"
+    "onnxruntime-web": "1.30.0",
+    "pdfjs-dist": "6.5.438"
   },
   "artifacts": [
     {
       "kind": "runtime",
       "path": "ort/ort-wasm-simd-threaded.jsep.mjs",
       "source": "node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs",
-      "bytes": 46595,
-      "sha256": "9a99acd12acc495184c9ea4d458ac9424f8180aacfbc7b8371ed64f9351e4a81"
+      "bytes": 46851,
+      "sha256": "709853412fd1ffc34247af1e73569227b5b79629c5ca3f59cc39cf7e500e4947"
     },
     {
       "kind": "runtime",
       "path": "ort/ort-wasm-simd-threaded.jsep.wasm",
       "source": "node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm",
-      "bytes": 25014754,
-      "sha256": "2e0a3d0e3f6b7c13ecfaba38c13691fd19c9ed470e72f9d7d8416ca59ab6dbcd"
+      "bytes": 28312028,
+      "sha256": "3ad23231b5bd6d9dda55a7f84606315e0bf35b6750c28ee993c987c54cacab0f"
     },
     {
       "kind": "model",
