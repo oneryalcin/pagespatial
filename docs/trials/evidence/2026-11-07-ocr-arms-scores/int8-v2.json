@@ -1,0 +1,18 @@
+{
+ "eval_lines": 2000,
+ "calib_lines": 300,
+ "fp32_ms_mean": 20.99,
+ "int8_ms_mean": 16.53,
+ "speedup": 1.27,
+ "fp32_exact_vs_paddlex": 0.9605,
+ "int8_exact_vs_paddlex": 0.189,
+ "int8_exact_vs_fp32": 0.1895,
+ "int8_cer_vs_fp32": 0.26604,
+ "digit_lines": 1079,
+ "digit_lines_int8_differs_from_fp32": 811,
+ "digit_lines_fp32_matches_paddlex": 1053,
+ "digit_lines_int8_matches_paddlex": 267,
+ "cpu_model": "unknown",
+ "avx512_vnni": false,
+ "amx": false
+}

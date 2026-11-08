@@ -1,0 +1,2238 @@
+{
+ "method": "candidate-witness-score-v2",
+ "config": {
+  "name": "smalldet960_smallrec",
+  "det": "PP-OCRv6_small_det",
+  "rec": "PP-OCRv6_small_rec",
+  "det_limit": {
+   "text_det_limit_type": "max",
+   "text_det_limit_side_len": 960
+  },
+  "cores": 4,
+  "threads": 4,
+  "reverse": false
+ },
+ "versions": {
+  "paddleocr": "3.7.0",
+  "paddlepaddle": "3.2.1"
+ },
+ "deviceTruth": {
+  "osCpuCount": 20,
+  "backendLogLines": [],
+  "pdxCpuNumThreads": "4"
+ },
+ "pages": 90,
+ "timings": {
+  "initS": 1.21,
+  "firstPageMs": null,
+  "warmMsP50": 1588,
+  "warmMsP95": 4888,
+  "warmMsMean": 1769
+ },
+ "criticalTokenAgreement": {
+  "browserTokensMatchedByCandidate": "3944/4662",
+  "candidateTokensMatchedByBrowser": "3944/4428"
+ },
+ "boxAgreement": {
+  "note": "best-match on exact-normalized-text, not consume-once — diagnostic only, same caveat as witness-equivalence",
+  "exactTextMatches": 5950,
+  "medianOfPageMedianIou": 0.873,
+  "pagesWithMedianIouBelow08": [
+   "public-comps:monotaro:2025-fy:003#60",
+   "public-comps:monotaro:2025-fy:003#61",
+   "public-comps:monotaro:2025-fy:003#64",
+   "public-comps:monotaro:2025-fy:004#10",
+   "public-comps:monotaro:2025-fy:004#60",
+   "public-comps:monotaro:2025-fy:004#61",
+   "world-bank:P170734:document:34222345#6",
+   "world-bank:P170734:document:34222345#7",
+   "world-bank:P178566:document:34223652#3"
+  ]
+ },
+ "calibration": {
+  "note": "mass below 0.5 is the operational number: it feeds starvation denominators, low-confidence lists, and cross-engine engagement (src/diagnostics.ts)",
+  "candidateScores": {
+   "count": 6982,
+   "quantiles": {
+    "p05": 0.9145,
+    "p25": 0.9901,
+    "p50": 0.9992,
+    "p75": 0.9999,
+    "p95": 1
+   },
+   "massBelowFloor": 0.0046
+  },
+  "browserConfidences": {
+   "count": 7908,
+   "quantiles": {
+    "p05": 0.9064,
+    "p25": 0.9865,
+    "p50": 0.999,
+    "p75": 0.9999,
+    "p95": 1
+   },
+   "massBelowFloor": 0.0053
+  },
+  "pairedDeltasOnMatches": {
+   "note": "pairs inherit the box-IoU loop’s best-match (non-consume-once) pairing — same diagnostic-only caveat",
+   "count": 5950,
+   "quantiles": {
+    "p05": -0.0213,
+    "p25": -0.0012,
+    "p50": 0,
+    "p75": 0.0001,
+    "p95": 0.0148
+   },
+   "mean": -0.0018
+  }
+ },
+ "goldRecall": {
+  "pages": 63,
+  "goldTokens": 1223,
+  "browser": 972,
+  "candidate": 922,
+  "candidateOnly": 44,
+  "browserOnly": 94,
+  "bothMiss": 207
+ },
+ "goldDiscordance": {
+  "candidateOnly": 44,
+  "browserOnly": 94,
+  "mcNemarExactTwoSidedP": 0,
+  "candidateShareOfDiscordantsCI95": [
+   0.242,
+   0.404
+  ],
+  "trueDifferenceTokensCI95": [
+   -71,
+   -27
+  ],
+  "note": "Conditional on 138 discordant tokens of 1223: the data are consistent with a true candidate-minus-browser difference between -71 and -27 tokens at 95%."
+ },
+ "perPage": [
+  {
+   "page": "legistar:seattle:1794:v0:attachment:3283#1",
+   "ms": 821.2043050000091,
+   "browserObservations": 49,
+   "candidateLines": 45,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 7,
+    "matched": 6
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 7,
+    "matched": 6
+   },
+   "exactTextMatches": 33,
+   "medianIou": 0.837,
+   "meanPairedConfidenceDelta": -0.0004,
+   "goldRecall": {
+    "goldTokens": 10,
+    "browser": 10,
+    "candidate": 9,
+    "bothHit": 9,
+    "candidateOnly": 0,
+    "browserOnly": 1,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "legistar:seattle:1794:v0:attachment:3283#14",
+   "ms": 1878.5463380000067,
+   "browserObservations": 52,
+   "candidateLines": 52,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 36,
+    "matched": 36
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 36,
+    "matched": 36
+   },
+   "exactTextMatches": 52,
+   "medianIou": 0.891,
+   "meanPairedConfidenceDelta": -0.001,
+   "goldRecall": {
+    "goldTokens": 34,
+    "browser": 34,
+    "candidate": 34,
+    "bothHit": 34,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "legistar:seattle:1794:v0:attachment:3283#27",
+   "ms": 1345.4753660000024,
+   "browserObservations": 70,
+   "candidateLines": 62,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 30,
+    "matched": 17
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 23,
+    "matched": 17
+   },
+   "exactTextMatches": 16,
+   "medianIou": 0.856,
+   "meanPairedConfidenceDelta": -0.0196,
+   "goldRecall": {
+    "goldTokens": 34,
+    "browser": 27,
+    "candidate": 21,
+    "bothHit": 17,
+    "candidateOnly": 4,
+    "browserOnly": 10,
+    "bothMiss": 3
+   }
+  },
+  {
+   "page": "legistar:seattle:1859:v0:attachment:3318#1",
+   "ms": 1244.0591919999947,
+   "browserObservations": 61,
+   "candidateLines": 63,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 17,
+    "matched": 17
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 19,
+    "matched": 17
+   },
+   "exactTextMatches": 58,
+   "medianIou": 0.878,
+   "meanPairedConfidenceDelta": 0.0012,
+   "goldRecall": {
+    "goldTokens": 17,
+    "browser": 14,
+    "candidate": 16,
+    "bothHit": 14,
+    "candidateOnly": 2,
+    "browserOnly": 0,
+    "bothMiss": 1
+   }
+  },
+  {
+   "page": "legistar:seattle:1859:v0:attachment:3318#14",
+   "ms": 773.7939520000054,
+   "browserObservations": 18,
+   "candidateLines": 19,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 12,
+    "matched": 10
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 11,
+    "matched": 10
+   },
+   "exactTextMatches": 15,
+   "medianIou": 0.92,
+   "meanPairedConfidenceDelta": -0.0006,
+   "goldRecall": {
+    "goldTokens": 11,
+    "browser": 11,
+    "candidate": 10,
+    "bothHit": 10,
+    "candidateOnly": 0,
+    "browserOnly": 1,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "legistar:seattle:1859:v0:attachment:3318#7",
+   "ms": 1182.0987360000004,
+   "browserObservations": 56,
+   "candidateLines": 59,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 41,
+    "matched": 41
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 42,
+    "matched": 41
+   },
+   "exactTextMatches": 47,
+   "medianIou": 0.889,
+   "meanPairedConfidenceDelta": 0.0023,
+   "goldRecall": {
+    "goldTokens": 47,
+    "browser": 41,
+    "candidate": 41,
+    "bothHit": 41,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 6
+   }
+  },
+  {
+   "page": "legistar:seattle:2159:v0:attachment:3326#1",
+   "ms": 1510.9461199999998,
+   "browserObservations": 68,
+   "candidateLines": 69,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 22,
+    "matched": 22
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 22,
+    "matched": 22
+   },
+   "exactTextMatches": 61,
+   "medianIou": 0.86,
+   "meanPairedConfidenceDelta": 0.0016,
+   "goldRecall": {
+    "goldTokens": 23,
+    "browser": 22,
+    "candidate": 22,
+    "bothHit": 22,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 1
+   }
+  },
+  {
+   "page": "legistar:seattle:2159:v0:attachment:3326#12",
+   "ms": 1255.6145039999933,
+   "browserObservations": 90,
+   "candidateLines": 90,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 52,
+    "matched": 52
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 52,
+    "matched": 52
+   },
+   "exactTextMatches": 90,
+   "medianIou": 0.883,
+   "meanPairedConfidenceDelta": 0.0003,
+   "goldRecall": {
+    "goldTokens": 44,
+    "browser": 39,
+    "candidate": 39,
+    "bothHit": 39,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 5
+   }
+  },
+  {
+   "page": "legistar:seattle:2159:v0:attachment:3326#24",
+   "ms": 1759.9391260000061,
+   "browserObservations": 120,
+   "candidateLines": 120,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 84,
+    "matched": 83
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 84,
+    "matched": 83
+   },
+   "exactTextMatches": 116,
+   "medianIou": 0.822,
+   "meanPairedConfidenceDelta": -0.0002,
+   "goldRecall": {
+    "goldTokens": 82,
+    "browser": 82,
+    "candidate": 81,
+    "bothHit": 81,
+    "candidateOnly": 0,
+    "browserOnly": 1,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "legistar:seattle:2438:v0:attachment:6113#1",
+   "ms": 1377.606084000007,
+   "browserObservations": 69,
+   "candidateLines": 71,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 15,
+    "matched": 15
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 15,
+    "matched": 15
+   },
+   "exactTextMatches": 66,
+   "medianIou": 0.851,
+   "meanPairedConfidenceDelta": 0,
+   "goldRecall": {
+    "goldTokens": 17,
+    "browser": 15,
+    "candidate": 15,
+    "bothHit": 15,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 2
+   }
+  },
+  {
+   "page": "legistar:seattle:2438:v0:attachment:6113#10",
+   "ms": 1842.8626689999987,
+   "browserObservations": 50,
+   "candidateLines": 50,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 33,
+    "matched": 31
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 32,
+    "matched": 31
+   },
+   "exactTextMatches": 49,
+   "medianIou": 0.901,
+   "meanPairedConfidenceDelta": 0.0006,
+   "goldRecall": {
+    "goldTokens": 31,
+    "browser": 31,
+    "candidate": 29,
+    "bothHit": 29,
+    "candidateOnly": 0,
+    "browserOnly": 2,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "legistar:seattle:2438:v0:attachment:6113#20",
+   "ms": 1610.0449150000031,
+   "browserObservations": 79,
+   "candidateLines": 74,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 23,
+    "matched": 21
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 22,
+    "matched": 21
+   },
+   "exactTextMatches": 53,
+   "medianIou": 0.9,
+   "meanPairedConfidenceDelta": -0.0307,
+   "goldRecall": {
+    "goldTokens": 20,
+    "browser": 19,
+    "candidate": 18,
+    "bothHit": 17,
+    "candidateOnly": 1,
+    "browserOnly": 2,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "osf:file:607883db0c818200885135da:v1#10",
+   "ms": 947.0830110000179,
+   "browserObservations": 27,
+   "candidateLines": 27,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 7,
+    "matched": 7
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 7,
+    "matched": 7
+   },
+   "exactTextMatches": 26,
+   "medianIou": 0.913,
+   "meanPairedConfidenceDelta": -0.0016,
+   "goldRecall": {
+    "goldTokens": 7,
+    "browser": 4,
+    "candidate": 4,
+    "bothHit": 4,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 3
+   }
+  },
+  {
+   "page": "osf:file:64a59e4ea2a2f4140943711a:v1#1",
+   "ms": 1588.4375649999924,
+   "browserObservations": 102,
+   "candidateLines": 102,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 27,
+    "matched": 27
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 27,
+    "matched": 27
+   },
+   "exactTextMatches": 102,
+   "medianIou": 0.892,
+   "meanPairedConfidenceDelta": -0.001,
+   "goldRecall": null
+  },
+  {
+   "page": "osf:file:64a59e4ea2a2f4140943711a:v1#143",
+   "ms": 1569.146361999998,
+   "browserObservations": 32,
+   "candidateLines": 32,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 29,
+    "matched": 29
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 29,
+    "matched": 29
+   },
+   "exactTextMatches": 31,
+   "medianIou": 0.899,
+   "meanPairedConfidenceDelta": 0.0009,
+   "goldRecall": {
+    "goldTokens": 2,
+    "browser": 1,
+    "candidate": 1,
+    "bothHit": 1,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 1
+   }
+  },
+  {
+   "page": "osf:file:64a59e4ea2a2f4140943711a:v1#144",
+   "ms": 855.0273159999904,
+   "browserObservations": 17,
+   "candidateLines": 17,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 16,
+    "matched": 16
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 16,
+    "matched": 16
+   },
+   "exactTextMatches": 16,
+   "medianIou": 0.892,
+   "meanPairedConfidenceDelta": -0.0008,
+   "goldRecall": {
+    "goldTokens": 2,
+    "browser": 0,
+    "candidate": 0,
+    "bothHit": 0,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 2
+   }
+  },
+  {
+   "page": "osf:file:64a59e4ea2a2f4140943711a:v1#2",
+   "ms": 1784.8203259999877,
+   "browserObservations": 96,
+   "candidateLines": 96,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 30,
+    "matched": 30
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 30,
+    "matched": 30
+   },
+   "exactTextMatches": 95,
+   "medianIou": 0.895,
+   "meanPairedConfidenceDelta": 0.0013,
+   "goldRecall": {
+    "goldTokens": 25,
+    "browser": 25,
+    "candidate": 25,
+    "bothHit": 25,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "osf:file:670e77f61b29952574a5e7a2:v1#1",
+   "ms": 398.52449100001763,
+   "browserObservations": 8,
+   "candidateLines": 8,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 2,
+    "matched": 2
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 2,
+    "matched": 2
+   },
+   "exactTextMatches": 8,
+   "medianIou": 0.91,
+   "meanPairedConfidenceDelta": -0.0042,
+   "goldRecall": null
+  },
+  {
+   "page": "osf:file:670e77f61b29952574a5e7a2:v1#148",
+   "ms": 258.6695440000142,
+   "browserObservations": 9,
+   "candidateLines": 9,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 0,
+    "matched": 0
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 0,
+    "matched": 0
+   },
+   "exactTextMatches": 8,
+   "medianIou": 0.895,
+   "meanPairedConfidenceDelta": 0,
+   "goldRecall": null
+  },
+  {
+   "page": "osf:file:670e77f61b29952574a5e7a2:v1#2",
+   "ms": 516.8851610000047,
+   "browserObservations": 16,
+   "candidateLines": 15,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 0,
+    "matched": 0
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 0,
+    "matched": 0
+   },
+   "exactTextMatches": 14,
+   "medianIou": 0.884,
+   "meanPairedConfidenceDelta": -0.0007,
+   "goldRecall": null
+  },
+  {
+   "page": "osf:file:670e77f61b29952574a5e7a2:v1#74",
+   "ms": 459.13199599999643,
+   "browserObservations": 17,
+   "candidateLines": 17,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 4,
+    "matched": 4
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 4,
+    "matched": 4
+   },
+   "exactTextMatches": 13,
+   "medianIou": 0.927,
+   "meanPairedConfidenceDelta": -0.0041,
+   "goldRecall": {
+    "goldTokens": 4,
+    "browser": 4,
+    "candidate": 4,
+    "bothHit": 4,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "osf:file:6826158a05236079589c42c3:v1#1",
+   "ms": 1938.0253530000005,
+   "browserObservations": 53,
+   "candidateLines": 53,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 52,
+    "matched": 52
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 52,
+    "matched": 52
+   },
+   "exactTextMatches": 50,
+   "medianIou": 0.898,
+   "meanPairedConfidenceDelta": -0.0006,
+   "goldRecall": {
+    "goldTokens": 3,
+    "browser": 3,
+    "candidate": 3,
+    "bothHit": 3,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "osf:file:6826158a05236079589c42c3:v1#27",
+   "ms": 555.4134559999966,
+   "browserObservations": 7,
+   "candidateLines": 7,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 3,
+    "matched": 3
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 3,
+    "matched": 3
+   },
+   "exactTextMatches": 7,
+   "medianIou": 0.896,
+   "meanPairedConfidenceDelta": -0.0019,
+   "goldRecall": null
+  },
+  {
+   "page": "osf:file:6826162a05236079589c42d8:v1#1",
+   "ms": 1575.0177630000053,
+   "browserObservations": 47,
+   "candidateLines": 48,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 47,
+    "matched": 47
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 48,
+    "matched": 47
+   },
+   "exactTextMatches": 46,
+   "medianIou": 0.887,
+   "meanPairedConfidenceDelta": -0.0014,
+   "goldRecall": {
+    "goldTokens": 3,
+    "browser": 3,
+    "candidate": 3,
+    "bothHit": 3,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "osf:file:6826162a05236079589c42d8:v1#27",
+   "ms": 518.5668299999975,
+   "browserObservations": 7,
+   "candidateLines": 7,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 3,
+    "matched": 3
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 3,
+    "matched": 3
+   },
+   "exactTextMatches": 7,
+   "medianIou": 0.896,
+   "meanPairedConfidenceDelta": -0.002,
+   "goldRecall": null
+  },
+  {
+   "page": "osf:file:686ffb54a56d843965a6c614:v1#1",
+   "ms": 1209.029400999981,
+   "browserObservations": 17,
+   "candidateLines": 17,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 3,
+    "matched": 3
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 3,
+    "matched": 3
+   },
+   "exactTextMatches": 17,
+   "medianIou": 0.893,
+   "meanPairedConfidenceDelta": 0.0022,
+   "goldRecall": null
+  },
+  {
+   "page": "osf:file:686ffb54a56d843965a6c614:v1#22",
+   "ms": 1713.2752400000015,
+   "browserObservations": 27,
+   "candidateLines": 31,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 8,
+    "matched": 8
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 10,
+    "matched": 8
+   },
+   "exactTextMatches": 27,
+   "medianIou": 0.878,
+   "meanPairedConfidenceDelta": -0.0005,
+   "goldRecall": null
+  },
+  {
+   "page": "osf:file:686ffb54a56d843965a6c614:v1#43",
+   "ms": 227.00876100000755,
+   "browserObservations": 6,
+   "candidateLines": 5,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "exactTextMatches": 5,
+   "medianIou": 0.88,
+   "meanPairedConfidenceDelta": 0.0061,
+   "goldRecall": null
+  },
+  {
+   "page": "osf:file:686ffb54a56d843965a6c614:v1#44",
+   "ms": 491.8622970000115,
+   "browserObservations": 8,
+   "candidateLines": 9,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 8,
+    "matched": 8
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 8,
+    "matched": 8
+   },
+   "exactTextMatches": 8,
+   "medianIou": 0.941,
+   "meanPairedConfidenceDelta": 0.0004,
+   "goldRecall": null
+  },
+  {
+   "page": "osf:file:6a74c836f0cba432843c7153:v1#1",
+   "ms": 512.2721600000091,
+   "browserObservations": 9,
+   "candidateLines": 9,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 2,
+    "matched": 2
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 2,
+    "matched": 2
+   },
+   "exactTextMatches": 9,
+   "medianIou": 0.865,
+   "meanPairedConfidenceDelta": 0.0001,
+   "goldRecall": null
+  },
+  {
+   "page": "osf:file:6a74c836f0cba432843c7153:v1#18",
+   "ms": 1997.3562960000208,
+   "browserObservations": 24,
+   "candidateLines": 24,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "exactTextMatches": 23,
+   "medianIou": 0.899,
+   "meanPairedConfidenceDelta": -0.0006,
+   "goldRecall": null
+  },
+  {
+   "page": "osf:file:6a74c836f0cba432843c7153:v1#36",
+   "ms": 530.1287599999966,
+   "browserObservations": 5,
+   "candidateLines": 5,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 7,
+    "matched": 7
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 7,
+    "matched": 7
+   },
+   "exactTextMatches": 5,
+   "medianIou": 0.909,
+   "meanPairedConfidenceDelta": 0,
+   "goldRecall": null
+  },
+  {
+   "page": "pa-sers:2024-09-24:llr-vii:consultant-memo#1",
+   "ms": 2049.888065999994,
+   "browserObservations": 35,
+   "candidateLines": 35,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 4,
+    "matched": 4
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 4,
+    "matched": 4
+   },
+   "exactTextMatches": 33,
+   "medianIou": 0.823,
+   "meanPairedConfidenceDelta": -0.0023,
+   "goldRecall": {
+    "goldTokens": 3,
+    "browser": 3,
+    "candidate": 3,
+    "bothHit": 3,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "pa-sers:2024-09-24:llr-vii:consultant-memo#2",
+   "ms": 4124.235585999997,
+   "browserObservations": 40,
+   "candidateLines": 40,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 2,
+    "matched": 2
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 2,
+    "matched": 2
+   },
+   "exactTextMatches": 38,
+   "medianIou": 0.821,
+   "meanPairedConfidenceDelta": 0.0009,
+   "goldRecall": null
+  },
+  {
+   "page": "pa-sers:2024-09-24:llr-vii:manager-presentation#1",
+   "ms": 470.5920620000086,
+   "browserObservations": 7,
+   "candidateLines": 7,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 3,
+    "matched": 3
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 3,
+    "matched": 3
+   },
+   "exactTextMatches": 4,
+   "medianIou": 0.947,
+   "meanPairedConfidenceDelta": -0.0014,
+   "goldRecall": {
+    "goldTokens": 3,
+    "browser": 2,
+    "candidate": 2,
+    "bothHit": 2,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 1
+   }
+  },
+  {
+   "page": "pa-sers:2024-09-24:llr-vii:manager-presentation#4",
+   "ms": 1755.8848589999911,
+   "browserObservations": 57,
+   "candidateLines": 57,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 37,
+    "matched": 37
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 37,
+    "matched": 37
+   },
+   "exactTextMatches": 37,
+   "medianIou": 0.905,
+   "meanPairedConfidenceDelta": 0.0036,
+   "goldRecall": {
+    "goldTokens": 29,
+    "browser": 28,
+    "candidate": 28,
+    "bothHit": 28,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 1
+   }
+  },
+  {
+   "page": "pa-sers:2024-09-24:llr-vii:manager-presentation#5",
+   "ms": 1441.9899669999836,
+   "browserObservations": 19,
+   "candidateLines": 19,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 8,
+    "matched": 8
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 8,
+    "matched": 8
+   },
+   "exactTextMatches": 12,
+   "medianIou": 0.899,
+   "meanPairedConfidenceDelta": 0.0021,
+   "goldRecall": {
+    "goldTokens": 8,
+    "browser": 8,
+    "candidate": 8,
+    "bothHit": 8,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "pa-sers:2024-09-24:llr-vii:manager-presentation#6",
+   "ms": 1366.2912479999818,
+   "browserObservations": 27,
+   "candidateLines": 27,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 13,
+    "matched": 13
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 13,
+    "matched": 13
+   },
+   "exactTextMatches": 22,
+   "medianIou": 0.892,
+   "meanPairedConfidenceDelta": -0.0032,
+   "goldRecall": {
+    "goldTokens": 13,
+    "browser": 10,
+    "candidate": 10,
+    "bothHit": 10,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 3
+   }
+  },
+  {
+   "page": "pa-sers:2024-09-24:llr-vii:manager-presentation#7",
+   "ms": 1667.3907450000343,
+   "browserObservations": 58,
+   "candidateLines": 57,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 25,
+    "matched": 25
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 25,
+    "matched": 25
+   },
+   "exactTextMatches": 43,
+   "medianIou": 0.871,
+   "meanPairedConfidenceDelta": -0.0021,
+   "goldRecall": {
+    "goldTokens": 15,
+    "browser": 15,
+    "candidate": 15,
+    "bothHit": 15,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "pa-sers:2024-09-24:llr-vii:manager-presentation#8",
+   "ms": 1247.4513309999793,
+   "browserObservations": 40,
+   "candidateLines": 38,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 13,
+    "matched": 13
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 14,
+    "matched": 13
+   },
+   "exactTextMatches": 27,
+   "medianIou": 0.842,
+   "meanPairedConfidenceDelta": -0.0029,
+   "goldRecall": {
+    "goldTokens": 4,
+    "browser": 4,
+    "candidate": 4,
+    "bothHit": 4,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "pa-sers:2024-09-24:llr-vii:manager-presentation#9",
+   "ms": 1153.9909609999768,
+   "browserObservations": 13,
+   "candidateLines": 13,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 9,
+    "matched": 9
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 9,
+    "matched": 9
+   },
+   "exactTextMatches": 6,
+   "medianIou": 0.911,
+   "meanPairedConfidenceDelta": -0.0014,
+   "goldRecall": {
+    "goldTokens": 8,
+    "browser": 8,
+    "candidate": 8,
+    "bothHit": 8,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "pa-sers:2024-09-24:llr-vii:staff-memo#1",
+   "ms": 2965.1546389999908,
+   "browserObservations": 101,
+   "candidateLines": 92,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 49,
+    "matched": 44
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 50,
+    "matched": 44
+   },
+   "exactTextMatches": 81,
+   "medianIou": 0.879,
+   "meanPairedConfidenceDelta": -0.0007,
+   "goldRecall": {
+    "goldTokens": 5,
+    "browser": 5,
+    "candidate": 5,
+    "bothHit": 5,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c#1",
+   "ms": 140.941478000002,
+   "browserObservations": 2,
+   "candidateLines": 2,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "exactTextMatches": 2,
+   "medianIou": 0.917,
+   "meanPairedConfidenceDelta": -0.0023,
+   "goldRecall": {
+    "goldTokens": 1,
+    "browser": 1,
+    "candidate": 1,
+    "bothHit": 1,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c#10",
+   "ms": 3978.38877800001,
+   "browserObservations": 32,
+   "candidateLines": 32,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "exactTextMatches": 24,
+   "medianIou": 0.846,
+   "meanPairedConfidenceDelta": -0.0006,
+   "goldRecall": null
+  },
+  {
+   "page": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c#2",
+   "ms": 1602.4065209999776,
+   "browserObservations": 101,
+   "candidateLines": 98,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 6,
+    "matched": 5
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 6,
+    "matched": 5
+   },
+   "exactTextMatches": 92,
+   "medianIou": 0.87,
+   "meanPairedConfidenceDelta": 0.0005,
+   "goldRecall": {
+    "goldTokens": 5,
+    "browser": 5,
+    "candidate": 5,
+    "bothHit": 5,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c#3",
+   "ms": 706.3036400000442,
+   "browserObservations": 53,
+   "candidateLines": 53,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 36,
+    "matched": 36
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 36,
+    "matched": 36
+   },
+   "exactTextMatches": 53,
+   "medianIou": 0.873,
+   "meanPairedConfidenceDelta": 0.0022,
+   "goldRecall": {
+    "goldTokens": 36,
+    "browser": 35,
+    "candidate": 35,
+    "bothHit": 35,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 1
+   }
+  },
+  {
+   "page": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c#7",
+   "ms": 905.6962409999869,
+   "browserObservations": 65,
+   "candidateLines": 65,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "exactTextMatches": 65,
+   "medianIou": 0.87,
+   "meanPairedConfidenceDelta": 0.0002,
+   "goldRecall": null
+  },
+  {
+   "page": "public-comps:ares:2026-q1:002#3",
+   "ms": 5115.754030999995,
+   "browserObservations": 46,
+   "candidateLines": 46,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 13,
+    "matched": 13
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 13,
+    "matched": 13
+   },
+   "exactTextMatches": 36,
+   "medianIou": 0.821,
+   "meanPairedConfidenceDelta": 0.0014,
+   "goldRecall": {
+    "goldTokens": 2,
+    "browser": 2,
+    "candidate": 2,
+    "bothHit": 2,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "public-comps:ares:2026-q1:002#4",
+   "ms": 1314.4750799999656,
+   "browserObservations": 11,
+   "candidateLines": 11,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 3,
+    "matched": 3
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 3,
+    "matched": 3
+   },
+   "exactTextMatches": 10,
+   "medianIou": 0.814,
+   "meanPairedConfidenceDelta": 0.0061,
+   "goldRecall": null
+  },
+  {
+   "page": "public-comps:ares:2026-q1:002#50",
+   "ms": 2417.001307000021,
+   "browserObservations": 189,
+   "candidateLines": 188,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 123,
+    "matched": 121
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 123,
+    "matched": 121
+   },
+   "exactTextMatches": 171,
+   "medianIou": 0.833,
+   "meanPairedConfidenceDelta": -0.0008,
+   "goldRecall": {
+    "goldTokens": 8,
+    "browser": 7,
+    "candidate": 5,
+    "bothHit": 5,
+    "candidateOnly": 0,
+    "browserOnly": 2,
+    "bothMiss": 1
+   }
+  },
+  {
+   "page": "public-comps:ares:2026-q1:002#51",
+   "ms": 1447.2801869999898,
+   "browserObservations": 71,
+   "candidateLines": 70,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 46,
+    "matched": 41
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 45,
+    "matched": 41
+   },
+   "exactTextMatches": 66,
+   "medianIou": 0.832,
+   "meanPairedConfidenceDelta": 0.003,
+   "goldRecall": {
+    "goldTokens": 36,
+    "browser": 30,
+    "candidate": 27,
+    "bothHit": 26,
+    "candidateOnly": 1,
+    "browserOnly": 4,
+    "bothMiss": 5
+   }
+  },
+  {
+   "page": "public-comps:ares:2026-q1:002#52",
+   "ms": 1766.156409999951,
+   "browserObservations": 69,
+   "candidateLines": 68,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 50,
+    "matched": 42
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 49,
+    "matched": 42
+   },
+   "exactTextMatches": 59,
+   "medianIou": 0.852,
+   "meanPairedConfidenceDelta": -0.0012,
+   "goldRecall": {
+    "goldTokens": 42,
+    "browser": 34,
+    "candidate": 33,
+    "bothHit": 30,
+    "candidateOnly": 3,
+    "browserOnly": 4,
+    "bothMiss": 5
+   }
+  },
+  {
+   "page": "public-comps:ares:2026-q1:002#63",
+   "ms": 1189.0250849999688,
+   "browserObservations": 82,
+   "candidateLines": 81,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 54,
+    "matched": 52
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 55,
+    "matched": 52
+   },
+   "exactTextMatches": 75,
+   "medianIou": 0.821,
+   "meanPairedConfidenceDelta": -0.0074,
+   "goldRecall": {
+    "goldTokens": 24,
+    "browser": 17,
+    "candidate": 18,
+    "bothHit": 16,
+    "candidateOnly": 2,
+    "browserOnly": 1,
+    "bothMiss": 5
+   }
+  },
+  {
+   "page": "public-comps:ares:2026-q1:002#65",
+   "ms": 1837.709947999997,
+   "browserObservations": 81,
+   "candidateLines": 81,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 56,
+    "matched": 56
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 56,
+    "matched": 56
+   },
+   "exactTextMatches": 77,
+   "medianIou": 0.866,
+   "meanPairedConfidenceDelta": -0.0097,
+   "goldRecall": null
+  },
+  {
+   "page": "public-comps:ares:2026-q1:002#67",
+   "ms": 2345.4163650000055,
+   "browserObservations": 211,
+   "candidateLines": 209,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 135,
+    "matched": 133
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 135,
+    "matched": 133
+   },
+   "exactTextMatches": 187,
+   "medianIou": 0.815,
+   "meanPairedConfidenceDelta": -0.0041,
+   "goldRecall": {
+    "goldTokens": 40,
+    "browser": 7,
+    "candidate": 8,
+    "bothHit": 7,
+    "candidateOnly": 1,
+    "browserOnly": 0,
+    "bothMiss": 32
+   }
+  },
+  {
+   "page": "public-comps:ares:2026-q1:002#8",
+   "ms": 2552.2505860000138,
+   "browserObservations": 44,
+   "candidateLines": 44,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 2,
+    "matched": 2
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 2,
+    "matched": 2
+   },
+   "exactTextMatches": 28,
+   "medianIou": 0.837,
+   "meanPairedConfidenceDelta": 0.0031,
+   "goldRecall": null
+  },
+  {
+   "page": "public-comps:asseco-poland:2025-fy:001#13",
+   "ms": 183.82642100004887,
+   "browserObservations": 5,
+   "candidateLines": 5,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 0,
+    "matched": 0
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 0,
+    "matched": 0
+   },
+   "exactTextMatches": 4,
+   "medianIou": 0.918,
+   "meanPairedConfidenceDelta": 0.0065,
+   "goldRecall": null
+  },
+  {
+   "page": "public-comps:asseco-poland:2025-fy:001#14",
+   "ms": 1770.5590990000246,
+   "browserObservations": 38,
+   "candidateLines": 38,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 14,
+    "matched": 14
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 15,
+    "matched": 14
+   },
+   "exactTextMatches": 35,
+   "medianIou": 0.86,
+   "meanPairedConfidenceDelta": 0.0048,
+   "goldRecall": {
+    "goldTokens": 11,
+    "browser": 11,
+    "candidate": 11,
+    "bothHit": 11,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "public-comps:asseco-poland:2025-fy:001#149",
+   "ms": 164.7103130000005,
+   "browserObservations": 3,
+   "candidateLines": 3,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 0,
+    "matched": 0
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 0,
+    "matched": 0
+   },
+   "exactTextMatches": 3,
+   "medianIou": 0.842,
+   "meanPairedConfidenceDelta": 0.0128,
+   "goldRecall": null
+  },
+  {
+   "page": "public-comps:asseco-poland:2025-fy:001#15",
+   "ms": 2780.28090600003,
+   "browserObservations": 35,
+   "candidateLines": 35,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 26,
+    "matched": 25
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 26,
+    "matched": 25
+   },
+   "exactTextMatches": 29,
+   "medianIou": 0.895,
+   "meanPairedConfidenceDelta": 0.0007,
+   "goldRecall": {
+    "goldTokens": 23,
+    "browser": 23,
+    "candidate": 22,
+    "bothHit": 22,
+    "candidateOnly": 0,
+    "browserOnly": 1,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "public-comps:asseco-poland:2025-fy:001#78",
+   "ms": 4469.794763000038,
+   "browserObservations": 55,
+   "candidateLines": 55,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 48,
+    "matched": 48
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 48,
+    "matched": 48
+   },
+   "exactTextMatches": 51,
+   "medianIou": 0.866,
+   "meanPairedConfidenceDelta": 0.0008,
+   "goldRecall": {
+    "goldTokens": 6,
+    "browser": 6,
+    "candidate": 6,
+    "bothHit": 6,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "public-comps:blackstone:2026-q1:002#12",
+   "ms": 4888.10842700002,
+   "browserObservations": 459,
+   "candidateLines": 448,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 444,
+    "matched": 386
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 439,
+    "matched": 386
+   },
+   "exactTextMatches": 390,
+   "medianIou": 0.832,
+   "meanPairedConfidenceDelta": -0.001,
+   "goldRecall": {
+    "goldTokens": 45,
+    "browser": 0,
+    "candidate": 0,
+    "bothHit": 0,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 45
+   }
+  },
+  {
+   "page": "public-comps:blackstone:2026-q1:002#14",
+   "ms": 5210.752239000044,
+   "browserObservations": 500,
+   "candidateLines": 510,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 483,
+    "matched": 426
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 483,
+    "matched": 426
+   },
+   "exactTextMatches": 434,
+   "medianIou": 0.802,
+   "meanPairedConfidenceDelta": -0.0013,
+   "goldRecall": {
+    "goldTokens": 106,
+    "browser": 67,
+    "candidate": 69,
+    "bothHit": 48,
+    "candidateOnly": 21,
+    "browserOnly": 19,
+    "bothMiss": 18
+   }
+  },
+  {
+   "page": "public-comps:blackstone:2026-q1:002#15",
+   "ms": 2644.5747279999523,
+   "browserObservations": 179,
+   "candidateLines": 210,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 156,
+    "matched": 133
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 156,
+    "matched": 133
+   },
+   "exactTextMatches": 163,
+   "medianIou": 0.888,
+   "meanPairedConfidenceDelta": -0.0002,
+   "goldRecall": {
+    "goldTokens": 40,
+    "browser": 12,
+    "candidate": 11,
+    "bothHit": 5,
+    "candidateOnly": 6,
+    "browserOnly": 7,
+    "bothMiss": 22
+   }
+  },
+  {
+   "page": "public-comps:blackstone:2026-q1:002#16",
+   "ms": 3011.273474999996,
+   "browserObservations": 33,
+   "candidateLines": 42,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 2,
+    "matched": 1
+   },
+   "exactTextMatches": 22,
+   "medianIou": 0.901,
+   "meanPairedConfidenceDelta": 0.001,
+   "goldRecall": null
+  },
+  {
+   "page": "public-comps:blackstone:2026-q1:002#17",
+   "ms": 3158.477118999997,
+   "browserObservations": 234,
+   "candidateLines": 252,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 169,
+    "matched": 143
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 169,
+    "matched": 143
+   },
+   "exactTextMatches": 208,
+   "medianIou": 0.88,
+   "meanPairedConfidenceDelta": 0.0011,
+   "goldRecall": {
+    "goldTokens": 40,
+    "browser": 33,
+    "candidate": 7,
+    "bothHit": 7,
+    "candidateOnly": 0,
+    "browserOnly": 26,
+    "bothMiss": 7
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:003#10",
+   "ms": 2355.39907499998,
+   "browserObservations": 64,
+   "candidateLines": 66,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 7,
+    "matched": 6
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 14,
+    "matched": 6
+   },
+   "exactTextMatches": 46,
+   "medianIou": 0.852,
+   "meanPairedConfidenceDelta": -0.0092,
+   "goldRecall": {
+    "goldTokens": 2,
+    "browser": 0,
+    "candidate": 0,
+    "bothHit": 0,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 2
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:003#11",
+   "ms": 1552.1923430000015,
+   "browserObservations": 60,
+   "candidateLines": 61,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 10,
+    "matched": 8
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 10,
+    "matched": 8
+   },
+   "exactTextMatches": 50,
+   "medianIou": 0.871,
+   "meanPairedConfidenceDelta": 0.0022,
+   "goldRecall": {
+    "goldTokens": 5,
+    "browser": 4,
+    "candidate": 3,
+    "bothHit": 3,
+    "candidateOnly": 0,
+    "browserOnly": 1,
+    "bothMiss": 1
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:003#12",
+   "ms": 276.3855009999929,
+   "browserObservations": 9,
+   "candidateLines": 8,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "exactTextMatches": 7,
+   "medianIou": 0.868,
+   "meanPairedConfidenceDelta": -0.0011,
+   "goldRecall": {
+    "goldTokens": 1,
+    "browser": 1,
+    "candidate": 1,
+    "bothHit": 1,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:003#30",
+   "ms": 2700.0202890000082,
+   "browserObservations": 106,
+   "candidateLines": 103,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 52,
+    "matched": 48
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 52,
+    "matched": 48
+   },
+   "exactTextMatches": 86,
+   "medianIou": 0.83,
+   "meanPairedConfidenceDelta": -0.003,
+   "goldRecall": {
+    "goldTokens": 61,
+    "browser": 42,
+    "candidate": 38,
+    "bothHit": 37,
+    "candidateOnly": 1,
+    "browserOnly": 5,
+    "bothMiss": 18
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:003#60",
+   "ms": 5314.84281500002,
+   "browserObservations": 461,
+   "candidateLines": 463,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 402,
+    "matched": 402
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 404,
+    "matched": 402
+   },
+   "exactTextMatches": 443,
+   "medianIou": 0.646,
+   "meanPairedConfidenceDelta": -0.0037,
+   "goldRecall": {
+    "goldTokens": 1,
+    "browser": 1,
+    "candidate": 1,
+    "bothHit": 1,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:003#61",
+   "ms": 2497.988956000029,
+   "browserObservations": 237,
+   "candidateLines": 221,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 175,
+    "matched": 167
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 169,
+    "matched": 167
+   },
+   "exactTextMatches": 201,
+   "medianIou": 0.787,
+   "meanPairedConfidenceDelta": -0.0014,
+   "goldRecall": {
+    "goldTokens": 106,
+    "browser": 103,
+    "candidate": 102,
+    "bothHit": 100,
+    "candidateOnly": 2,
+    "browserOnly": 3,
+    "bothMiss": 1
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:003#62",
+   "ms": 883.6628770000061,
+   "browserObservations": 34,
+   "candidateLines": 32,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 17,
+    "matched": 17
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 17,
+    "matched": 17
+   },
+   "exactTextMatches": 22,
+   "medianIou": 0.893,
+   "meanPairedConfidenceDelta": 0.0047,
+   "goldRecall": {
+    "goldTokens": 13,
+    "browser": 2,
+    "candidate": 2,
+    "bothHit": 2,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 11
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:003#63",
+   "ms": 1808.0549880000945,
+   "browserObservations": 114,
+   "candidateLines": 114,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 57,
+    "matched": 57
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 57,
+    "matched": 57
+   },
+   "exactTextMatches": 103,
+   "medianIou": 0.871,
+   "meanPairedConfidenceDelta": 0.0029,
+   "goldRecall": {
+    "goldTokens": 13,
+    "browser": 11,
+    "candidate": 11,
+    "bothHit": 11,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 2
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:003#64",
+   "ms": 154.7709730000406,
+   "browserObservations": 3,
+   "candidateLines": 3,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 2,
+    "matched": 2
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 2,
+    "matched": 2
+   },
+   "exactTextMatches": 2,
+   "medianIou": 0.77,
+   "meanPairedConfidenceDelta": -0.01,
+   "goldRecall": {
+    "goldTokens": 1,
+    "browser": 1,
+    "candidate": 1,
+    "bothHit": 1,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:004#10",
+   "ms": 3403.8526240000238,
+   "browserObservations": 86,
+   "candidateLines": 87,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 9,
+    "matched": 7
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 9,
+    "matched": 7
+   },
+   "exactTextMatches": 78,
+   "medianIou": 0.799,
+   "meanPairedConfidenceDelta": -0.0001,
+   "goldRecall": {
+    "goldTokens": 2,
+    "browser": 2,
+    "candidate": 2,
+    "bothHit": 2,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:004#11",
+   "ms": 2310.226121000028,
+   "browserObservations": 80,
+   "candidateLines": 80,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 4,
+    "matched": 4
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 4,
+    "matched": 4
+   },
+   "exactTextMatches": 79,
+   "medianIou": 0.856,
+   "meanPairedConfidenceDelta": -0.0009,
+   "goldRecall": {
+    "goldTokens": 2,
+    "browser": 1,
+    "candidate": 1,
+    "bothHit": 1,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 1
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:004#12",
+   "ms": 422.38874800000303,
+   "browserObservations": 10,
+   "candidateLines": 9,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "exactTextMatches": 8,
+   "medianIou": 0.912,
+   "meanPairedConfidenceDelta": 0.0103,
+   "goldRecall": {
+    "goldTokens": 1,
+    "browser": 1,
+    "candidate": 1,
+    "bothHit": 1,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:004#30",
+   "ms": 3498.1051590000334,
+   "browserObservations": 124,
+   "candidateLines": 111,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 50,
+    "matched": 43
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 43,
+    "matched": 43
+   },
+   "exactTextMatches": 102,
+   "medianIou": 0.825,
+   "meanPairedConfidenceDelta": 0.0012,
+   "goldRecall": {
+    "goldTokens": 13,
+    "browser": 12,
+    "candidate": 9,
+    "bothHit": 9,
+    "candidateOnly": 0,
+    "browserOnly": 3,
+    "bothMiss": 1
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:004#60",
+   "ms": 5531.265284000028,
+   "browserObservations": 472,
+   "candidateLines": 452,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 396,
+    "matched": 386
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 394,
+    "matched": 386
+   },
+   "exactTextMatches": 442,
+   "medianIou": 0.664,
+   "meanPairedConfidenceDelta": -0.0054,
+   "goldRecall": null
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:004#61",
+   "ms": 2876.827554999977,
+   "browserObservations": 234,
+   "candidateLines": 222,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 176,
+    "matched": 169
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 171,
+    "matched": 169
+   },
+   "exactTextMatches": 215,
+   "medianIou": 0.775,
+   "meanPairedConfidenceDelta": -0.0013,
+   "goldRecall": {
+    "goldTokens": 1,
+    "browser": 1,
+    "candidate": 1,
+    "bothHit": 1,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:004#62",
+   "ms": 1333.6095729999897,
+   "browserObservations": 41,
+   "candidateLines": 40,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 16,
+    "matched": 16
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 16,
+    "matched": 16
+   },
+   "exactTextMatches": 37,
+   "medianIou": 0.886,
+   "meanPairedConfidenceDelta": 0.0001,
+   "goldRecall": {
+    "goldTokens": 14,
+    "browser": 14,
+    "candidate": 14,
+    "bothHit": 14,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:004#63",
+   "ms": 2447.8931280000324,
+   "browserObservations": 135,
+   "candidateLines": 134,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 48,
+    "matched": 48
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 48,
+    "matched": 48
+   },
+   "exactTextMatches": 129,
+   "medianIou": 0.846,
+   "meanPairedConfidenceDelta": 0.0008,
+   "goldRecall": {
+    "goldTokens": 3,
+    "browser": 3,
+    "candidate": 3,
+    "bothHit": 3,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "public-comps:monotaro:2025-fy:004#64",
+   "ms": 225.74261600004775,
+   "browserObservations": 3,
+   "candidateLines": 3,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 1,
+    "matched": 1
+   },
+   "exactTextMatches": 3,
+   "medianIou": 0.886,
+   "meanPairedConfidenceDelta": -0.0031,
+   "goldRecall": {
+    "goldTokens": 1,
+    "browser": 1,
+    "candidate": 1,
+    "bothHit": 1,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "world-bank:P170734:document:34222345#2",
+   "ms": 156.26028600001973,
+   "browserObservations": 2,
+   "candidateLines": 2,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 0,
+    "matched": 0
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 0,
+    "matched": 0
+   },
+   "exactTextMatches": 2,
+   "medianIou": 0.913,
+   "meanPairedConfidenceDelta": 0.0034,
+   "goldRecall": null
+  },
+  {
+   "page": "world-bank:P170734:document:34222345#6",
+   "ms": 1872.5994810000657,
+   "browserObservations": 384,
+   "candidateLines": 80,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 147,
+    "matched": 20
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 70,
+    "matched": 20
+   },
+   "exactTextMatches": 22,
+   "medianIou": 0.787,
+   "meanPairedConfidenceDelta": -0.0126,
+   "goldRecall": null
+  },
+  {
+   "page": "world-bank:P170734:document:34222345#7",
+   "ms": 1942.8129020000142,
+   "browserObservations": 365,
+   "candidateLines": 189,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 235,
+    "matched": 45
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 185,
+    "matched": 45
+   },
+   "exactTextMatches": 41,
+   "medianIou": 0.714,
+   "meanPairedConfidenceDelta": -0.0218,
+   "goldRecall": null
+  },
+  {
+   "page": "world-bank:P178566:document:34223652#1",
+   "ms": 3275.248231999967,
+   "browserObservations": 37,
+   "candidateLines": 37,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 13,
+    "matched": 13
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 13,
+    "matched": 13
+   },
+   "exactTextMatches": 31,
+   "medianIou": 0.899,
+   "meanPairedConfidenceDelta": -0.0003,
+   "goldRecall": {
+    "goldTokens": 12,
+    "browser": 12,
+    "candidate": 12,
+    "bothHit": 12,
+    "candidateOnly": 0,
+    "browserOnly": 0,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "world-bank:P178566:document:34223652#3",
+   "ms": 1757.861987999945,
+   "browserObservations": 458,
+   "candidateLines": 96,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 177,
+    "matched": 36
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 91,
+    "matched": 36
+   },
+   "exactTextMatches": 29,
+   "medianIou": 0.755,
+   "meanPairedConfidenceDelta": -0.0112,
+   "goldRecall": {
+    "goldTokens": 2,
+    "browser": 2,
+    "candidate": 1,
+    "bothHit": 1,
+    "candidateOnly": 0,
+    "browserOnly": 1,
+    "bothMiss": 0
+   }
+  },
+  {
+   "page": "world-bank:P178566:document:34223652#4",
+   "ms": 560.17628099994,
+   "browserObservations": 78,
+   "candidateLines": 26,
+   "browserTokensMatchedByCandidate": {
+    "tokens": 13,
+    "matched": 5
+   },
+   "candidateTokensMatchedByBrowser": {
+    "tokens": 9,
+    "matched": 5
+   },
+   "exactTextMatches": 12,
+   "medianIou": 0.857,
+   "meanPairedConfidenceDelta": -0.0266,
+   "goldRecall": null
+  }
+ ]
+}

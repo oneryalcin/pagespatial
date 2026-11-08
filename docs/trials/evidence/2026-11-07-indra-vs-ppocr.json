@@ -1,0 +1,145 @@
+{
+ "trial": "docs/trials/2026-11-07-indra-ocr-evaluation.md",
+ "date": "2026-11-07",
+ "host": "Apple M1 Pro (8P+2E), macOS, 4 threads per engine, pages sequential, warm-up excluded",
+ "engines": {
+  "indra": "indra-ocr 1.1.2, HF models v1.1.0, mode=ocr",
+  "paddle": "paddleocr 3.7.0 + paddlepaddle 3.2.1, PP-OCRv6_small det+rec, paddle-default (no HPI/OpenVINO on macOS), sidecar construction"
+ },
+ "harness": "scripts/evaluation/indra_vs_ppocr.py",
+ "native_layer_proxy": {
+  "images": "19 pages, first <=3 pages of 7 PDFs in .evaluation/m1-subset-pdfs, 200 dpi",
+  "result": {
+   "indra": {
+    "pages": 19,
+    "mean_ms": 267,
+    "word_recall": 0.987,
+    "word_precision": 0.99
+   },
+   "paddle": {
+    "pages": 19,
+    "mean_ms": 12162,
+    "word_recall": 0.992,
+    "word_precision": 0.993
+   }
+  }
+ },
+ "gold_token_proxy": {
+  "images": "60 gold review images (.evaluation/gold/*/images), 753 human-confirmed tokens; gold tokens were PP proposals so PP is a ceiling",
+  "summary": {
+   "image-only/strict/indra": {
+    "pages": 7,
+    "tokens": 137,
+    "found": 128,
+    "rate": 0.934,
+    "mean_ms": 197
+   },
+   "image-only/strict/paddle": {
+    "pages": 7,
+    "tokens": 137,
+    "found": 133,
+    "rate": 0.971,
+    "mean_ms": 7495
+   },
+   "image-only/no_currency/indra": {
+    "pages": 7,
+    "tokens": 137,
+    "found": 128,
+    "rate": 0.934,
+    "mean_ms": 197
+   },
+   "image-only/no_currency/paddle": {
+    "pages": 7,
+    "tokens": 137,
+    "found": 133,
+    "rate": 0.971,
+    "mean_ms": 7495
+   },
+   "other/strict/indra": {
+    "pages": 53,
+    "tokens": 616,
+    "found": 458,
+    "rate": 0.744,
+    "mean_ms": 240
+   },
+   "other/strict/paddle": {
+    "pages": 53,
+    "tokens": 616,
+    "found": 576,
+    "rate": 0.935,
+    "mean_ms": 10033
+   },
+   "other/no_currency/indra": {
+    "pages": 53,
+    "tokens": 571,
+    "found": 524,
+    "rate": 0.918,
+    "mean_ms": 240
+   },
+   "other/no_currency/paddle": {
+    "pages": 53,
+    "tokens": 571,
+    "found": 560,
+    "rate": 0.981,
+    "mean_ms": 10033
+   }
+  },
+  "indra_only_misses": {
+   "batch3-v1__legistar_seattle_2438_v0_attachment_6113-p20": [
+    "November 3, 2015",
+    "5th",
+    "124799",
+    "21.28.040.B",
+    "21.76.040.A",
+    "21.33.040",
+    "21.76.040.A"
+   ],
+   "batch3-v1__pa-sers_2024-09-24_llr-vii_manager-presentation-p7": [
+    "'23",
+    "27%"
+   ],
+   "batch3-v1__public-comps_ares_2026-q1_002-p51": [
+    "$23.2",
+    "$29.0",
+    "$34.5",
+    "$180.2",
+    "$132.7",
+    "$20.3",
+    "$28.9",
+    "$28.5",
+    "$157.6",
+    "$99.8"
+   ],
+   "batch3-v1__public-comps_ares_2026-q1_002-p52": [
+    "7%",
+    "21%",
+    "19%",
+    "7%",
+    "5%",
+    "41%",
+    "8%",
+    "24%",
+    "14%",
+    "6%",
+    "4%",
+    "44%",
+    "$4.7",
+    "$5.0",
+    "$3.4"
+   ],
+   "batch4-v1__public-comps_ares_2026-q1_002-p50": [
+    "$101.7",
+    "$143.0",
+    "$99.2",
+    "$111.6"
+   ],
+   "batch4-v1__public-comps_ares_2026-q1_002-p67": [
+    "$74.0",
+    "$88.4",
+    "$260.2",
+    "$75.7",
+    "$65.2"
+   ]
+  }
+ }
+}
