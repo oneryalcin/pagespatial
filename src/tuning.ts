@@ -116,6 +116,33 @@ export const ASSOCIATION_MIN_TEXT_SIMILARITY = 0.72;
 export const ASSOCIATION_MIN_GEOMETRY_OVERLAP = 0.12;
 
 /**
+ * Native glyph audit (docs/trials/2026-11-07-broken-cmap-prose-fixture.md).
+ * A native letter is contradicted when OCR reads it as the same other letter
+ * at least MIN_SUBSTITUTIONS times and in at least MIN_RATE of its aligned
+ * occurrences. Broken ToUnicode maps are systematic; OCR noise mostly is not.
+ * Only native observations at least MIN_COVERAGE covered by OCR boxes are
+ * aligned.
+ */
+export const GLYPH_AUDIT_MIN_COVERAGE = 0.6;
+export const GLYPH_AUDIT_MIN_SUBSTITUTIONS = 2;
+export const GLYPH_AUDIT_MIN_RATE = 0.5;
+/**
+ * A font whose contradicted-letter share of aligned letter occurrences reaches
+ * this is withheld from the markdown projection. Measured: an e/o-swapped
+ * CMap reaches 0.206; the worst real-corpus OCR-side mismatch (kanji read in
+ * simplified form) 0.056; Polish ą→q about 0.01. Below it the mismatch is
+ * flagged but the native text is kept, because the evidence cannot tell a
+ * broken map from a systematic OCR misread.
+ */
+export const GLYPH_AUDIT_WITHHOLD_SHARE = 0.1;
+/**
+ * Withholding also needs this many aligned letters in the font on the page: a
+ * share estimated from a handful of letters is noise (a 19-letter heading font
+ * reached 0.105 on two misreads of one glyph; the broken fixture font has 831).
+ */
+export const GLYPH_AUDIT_WITHHOLD_MIN_LETTERS = 100;
+
+/**
  * Looser gates for the conflict check: a weakly similar but colocated pair is
  * still evidence of the same visible region, and disagreement there must
  * surface as a conflict instead of silently failing to match.

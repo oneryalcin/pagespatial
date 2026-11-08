@@ -30,7 +30,7 @@ import modal
 
 
 DEFAULT_PAGE_COUNTS = (1, 4, 20, 100)
-SCHEMA_VERSION = "0.6.0"
+SCHEMA_VERSION = "0.7.0"
 
 
 def percentile(values: list[float], quantile: float) -> float | None:

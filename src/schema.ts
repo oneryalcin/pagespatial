@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { assertPageGeometry, pointBounds, pointBoxToRenderedBox, renderedPixelsPerPoint } from './geometry.js';
 import { crossEngineEngagedIds } from './diagnostics.js';
+import { auditNativeGlyphs } from './glyph-audit.js';
 import { countConfirmedRegions, countRecoveredObservations, regionEligibleForResidue } from './ink.js';
 
 const boxSchema = z.tuple([z.number(), z.number(), z.number(), z.number()]);
@@ -97,7 +98,7 @@ const relationSchema = z.object({
 });
 
 const escalationReasonSchema = z.object({
-  type: z.enum(['critical-token-conflict', 'critical-token-omission', 'ambiguous-derived-relation', 'low-ocr-confidence', 'uncorroborated-ocr', 'unread-ink-region']),
+  type: z.enum(['critical-token-conflict', 'critical-token-omission', 'ambiguous-derived-relation', 'low-ocr-confidence', 'uncorroborated-ocr', 'unread-ink-region', 'native-glyph-mismatch']),
   severity: z.enum(['blocking', 'advisory']),
   sourceIds: z.array(z.string()), count: z.number().int().nonnegative(),
   share: z.number().min(0).max(1)
@@ -149,7 +150,7 @@ const unreadInkRegionSchema = z.object({
 });
 
 const pageSpatialBaseSchema = z.object({
-  schemaVersion: z.literal('0.6.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
+  schemaVersion: z.literal('0.7.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
   pageId: z.string(), pageNumber: z.number().int().positive(), geometry: pageGeometrySchema,
   nativeObservations: z.array(nativeObservationSchema), ocrObservations: z.array(ocrObservationSchema),
   nativeLines: z.array(nativeLineSchema), sourceMatches: z.array(sourceMatchSchema), conflicts: z.array(conflictSchema),
@@ -469,6 +470,17 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
     share: structuredRegionCount ? residueRegions.length / structuredRegionCount : 0,
     sourceIds: []
   });
+  // Re-derived from the observations with the same pure function diagnostics
+  // uses: a record cannot hide a glyph mismatch by dropping the reason.
+  const glyphMismatchIds = [...new Set(
+    auditNativeGlyphs(page.nativeObservations, page.ocrObservations).flatMap((mismatch) => mismatch.nativeIds)
+  )];
+  expectedReasons.set('native-glyph-mismatch', {
+    severity: 'advisory',
+    count: glyphMismatchIds.length,
+    share: page.nativeObservations.length ? glyphMismatchIds.length / page.nativeObservations.length : 0,
+    sourceIds: glyphMismatchIds
+  });
   for (const [type, expected] of expectedReasons) {
     const actual = page.diagnostics.escalationReasons.filter((reason) => reason.type === type);
     if (expected.count === 0 && actual.length) {
@@ -489,7 +501,7 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
 });
 
 const pageSpatialDocumentBaseSchema = z.object({
-  schemaVersion: z.literal('0.6.0'),
+  schemaVersion: z.literal('0.7.0'),
   document: documentIdentitySchema,
   pages: z.array(pageSpatialSchema),
   diagnostics: z.object({

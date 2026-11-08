@@ -1,7 +1,7 @@
 # parse-service
 
 Remote parsing on the PageSpatial library (issue #22): submit a PDF, get a
-job ticket, poll progressive schema-0.6.0 page records. No indexing, no
+job ticket, poll progressive schema-0.7.0 page records. No indexing, no
 browser. Exists to measure per-stage cost; see
 `docs/trials/2026-08-22-parse-service-skeleton.md` for current numbers.
 

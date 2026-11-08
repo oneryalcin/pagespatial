@@ -27,7 +27,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const APP = process.env.MODAL_APP_NAME ?? 'pagespatial-parse-internal';
 const CLS = process.env.MODAL_CLS_NAME ?? 'ParseContainer';
 const METHOD = process.env.MODAL_METHOD_NAME ?? 'parse_document';
-const SCHEMA_VERSION = '0.6.0'; // must equal modal_app.py SCHEMA_VERSION
+const SCHEMA_VERSION = '0.7.0'; // must equal modal_app.py SCHEMA_VERSION
 
 const [, , phase, statePath = './smoke-state.json'] = process.argv;
 const fail = (message) => { console.error(`FAIL: ${message}`); process.exit(1); };

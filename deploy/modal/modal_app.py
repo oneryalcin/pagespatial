@@ -54,7 +54,7 @@ MAX_PAGES_PER_JOB = 200                    # enforced service-side (SERVICE_MAX_
 MAX_RESULT_BYTES = 64 * 1024 * 1024        # serialized output cap — visible ResultTooLarge, never truncation
 MAX_OBJECT_RESULT_BYTES = 128 * 1024 * 1024 # explicit R2 publication cap, separate from Modal gRPC
 MAX_NODE_JOBS_PER_LIFETIME = 100           # created loopback job IDs per warm Node lifetime (§7.3)
-SCHEMA_VERSION = "0.6.0"
+SCHEMA_VERSION = "0.7.0"
 SERVICE_PORT = 8571                        # private: Node binds 127.0.0.1 only
 STARTUP_TIMEOUT_S = 1200                   # explicit (§7.3): > measured cold readiness (~70-88 s engine
                                            # init x 4 workers, sequential warm-up) with generous margin

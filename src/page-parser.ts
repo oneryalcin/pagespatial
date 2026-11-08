@@ -3,6 +3,7 @@ import { assertBoxWithin, assertPageGeometry, pointBounds, pointBoxToRenderedBox
 import { createObservationId, createPageId } from './ids.js';
 import { associateNativeAndOcr, type AssociationOptions } from './merge.js';
 import { projectMarkdown } from './projection.js';
+import { auditNativeGlyphs } from './glyph-audit.js';
 import { buildSpatialRows } from './reading-order.js';
 import { inferSimpleYearValueRelations } from './relations.js';
 import { documentIdentitySchema, pageSpatialSchema } from './schema.js';
@@ -212,7 +213,11 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
     pixelsPerPoint,
     options: input.diagnostics
   });
+  const withheldFonts = auditNativeGlyphs(nativeObservations, ocrObservations).filter((mismatch) => mismatch.withhold);
   const projection = projectMarkdown({
+    withheldNative: withheldFonts.length
+      ? { ids: withheldFonts.flatMap((mismatch) => mismatch.fontNativeIds), fonts: withheldFonts.map((mismatch) => mismatch.font) }
+      : undefined,
     pageNumber: input.pageNumber,
     nativeObservations,
     nativeLines: association.nativeLines,
@@ -226,7 +231,7 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
   });
 
   const page: PageSpatial = {
-    schemaVersion: '0.6.0',
+    schemaVersion: '0.7.0',
     documentId: input.document.documentId,
     revisionId: input.document.revisionId,
     documentSha256: input.document.sha256,

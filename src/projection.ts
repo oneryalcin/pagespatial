@@ -23,8 +23,16 @@ export function projectMarkdown(input: {
   nativeMarkdown?: string;
   nativeMarkdownSource?: string;
   pixelsPerPoint?: number;
+  /**
+   * Native observations whose font OCR strongly contradicts letter by letter
+   * (src/glyph-audit.ts). Their text stays in the record but out of the
+   * projection, so a consumer indexing the markdown never indexes it.
+   */
+  withheldNative?: { ids: readonly string[]; fonts: readonly string[] };
 }): PageProjection {
-  const nativeLines = input.nativeLines ?? buildNativeLines(input.nativeObservations, input.pixelsPerPoint);
+  const withheld = new Set(input.withheldNative?.ids ?? []);
+  const nativeLines = (input.nativeLines ?? buildNativeLines(input.nativeObservations, input.pixelsPerPoint))
+    .filter((line) => !line.sourceIds.some((id) => withheld.has(id)));
   const matchedOcr = new Set(input.sourceMatches.map((match) => match.ocrId));
   const recoveredRows = input.spatialRows.filter((row) => row.sourceIds.some((id) => !matchedOcr.has(id)));
   const sections: string[] = [`# Page ${input.pageNumber}`];
@@ -52,7 +60,13 @@ export function projectMarkdown(input: {
     sections.push(table.join('\n'));
   }
 
-  const usesAdapterMarkdown = Boolean(input.nativeMarkdown?.trim());
+  // Adapter markdown is one opaque string and cannot be filtered per line, so
+  // a page with withheld native text falls back to the native lines.
+  const usesAdapterMarkdown = Boolean(input.nativeMarkdown?.trim()) && !withheld.size;
+  if (withheld.size) {
+    sections.push('## Withheld native text');
+    sections.push(`Native text in font(s) ${input.withheldNative!.fonts.join(', ')} is withheld: OCR systematically reads its letters as different letters, so the PDF text layer for that font is not trusted (diagnostics: native-glyph-mismatch).`);
+  }
   if (usesAdapterMarkdown) {
     sections.push('## Native structure reference');
     sections.push(input.nativeMarkdown!.trim());

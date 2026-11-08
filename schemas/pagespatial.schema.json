@@ -4,7 +4,7 @@
   "properties": {
     "schemaVersion": {
       "type": "string",
-      "const": "0.6.0"
+      "const": "0.7.0"
     },
     "document": {
       "type": "object",
@@ -45,7 +45,7 @@
         "properties": {
           "schemaVersion": {
             "type": "string",
-            "const": "0.6.0"
+            "const": "0.7.0"
           },
           "documentId": {
             "type": "string"
@@ -966,7 +966,8 @@
                         "ambiguous-derived-relation",
                         "low-ocr-confidence",
                         "uncorroborated-ocr",
-                        "unread-ink-region"
+                        "unread-ink-region",
+                        "native-glyph-mismatch"
                       ]
                     },
                     "severity": {

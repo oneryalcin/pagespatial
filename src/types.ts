@@ -153,7 +153,8 @@ export type EscalationReasonType =
   | 'ambiguous-derived-relation'
   | 'low-ocr-confidence'
   | 'uncorroborated-ocr'
-  | 'unread-ink-region';
+  | 'unread-ink-region'
+  | 'native-glyph-mismatch';
 
 /**
  * Derived from the reason type, never from a threshold: contradictory
@@ -290,7 +291,7 @@ export interface SecondOpinionPass {
 }
 
 export interface PageSpatial {
-  schemaVersion: '0.6.0';
+  schemaVersion: '0.7.0';
   documentId: string;
   revisionId: string;
   documentSha256: string;
@@ -343,7 +344,7 @@ export interface DocumentDiagnostics {
 }
 
 export interface PageSpatialDocument {
-  schemaVersion: '0.6.0';
+  schemaVersion: '0.7.0';
   document: DocumentIdentity;
   pages: PageSpatial[];
   diagnostics: DocumentDiagnostics;
