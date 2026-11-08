@@ -39,6 +39,25 @@ test('a table row merging values printed on different lines is not projected', (
   assert.equal(projection.markdownSource, 'pagespatial-native-lines');
 });
 
+test('a year in a wrapped row label does not count against the row', () => {
+  // Asseco Poland FY2025 p71: the label's second line "1 stycznia 2025" sits on
+  // its own native line, apart from the values.
+  const lines = ['Wartość netto środków trwałych na dzień', '1 stycznia 2025', '401,2 361,3 94,6 46,2 17,6 920,9']
+    .map((text, index) => ({ id: `a${index}:line:${index}`, pageNumber: 1, text, sourceIds: [`a${index}`], box: [95, 870 + 12 * index, 1013, 880 + 12 * index] }));
+  const projection = projectMarkdown({
+    pageNumber: 1,
+    nativeObservations: lines.map((line) => ({ id: line.sourceIds[0], text: line.text, box: line.box })),
+    nativeLines: lines,
+    ocrObservations: [],
+    sourceMatches: [],
+    spatialRows: [],
+    derivedRelations: [],
+    nativeMarkdown: '|Wartość netto środków trwałych na dzień 1 stycznia 2025||401,2|361,3|94,6|46,2|17,6|920,9|',
+    nativeMarkdownSource: 'pdf-inspector'
+  });
+  assert.equal(projection.markdownSource, 'pdf-inspector');
+});
+
 test('a table whose rows each match one printed line keeps its structure', () => {
   const projection = project(`${header}\n|LLR 4|2014|$50.0|26.5%|2.6x|2.1x|\n|LLR 5|2018|$75.0|20.3|2.1x|0.6x|\n||||$205.0|19.2%|2.2x|1.5x|`);
   assert.equal(projection.markdownSource, 'pdf-inspector');
