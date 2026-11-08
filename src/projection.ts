@@ -1,5 +1,6 @@
 import type { DerivedRelation, NativeLine, NativeObservation, OcrObservation, PageProjection, SourceMatch, SpatialRow } from './types.js';
 import { buildNativeLines } from './reading-order.js';
+import { misboundTableRows } from './table-rows.js';
 
 function evidenceComment(input: {
   pageNumber: number;
@@ -61,11 +62,19 @@ export function projectMarkdown(input: {
   }
 
   // Adapter markdown is one opaque string and cannot be filtered per line, so
-  // a page with withheld native text falls back to the native lines.
-  const usesAdapterMarkdown = Boolean(input.nativeMarkdown?.trim()) && !withheld.size;
+  // a page with withheld native text, or with a table row that merges values
+  // printed on different lines, falls back to the native lines.
+  const misbound = input.nativeMarkdown?.trim() && !withheld.size
+    ? misboundTableRows(input.nativeMarkdown, nativeLines)
+    : [];
+  const usesAdapterMarkdown = Boolean(input.nativeMarkdown?.trim()) && !withheld.size && !misbound.length;
   if (withheld.size) {
     sections.push('## Withheld native text');
     sections.push(`Native text in font(s) ${input.withheldNative!.fonts.join(', ')} is withheld: OCR systematically reads its letters as different letters, so the PDF text layer for that font is not trusted (diagnostics: native-glyph-mismatch).`);
+  }
+  if (misbound.length) {
+    sections.push('## Native table structure omitted');
+    sections.push(`The extracted table structure puts values printed on different lines into the same row (${misbound.length} row(s)), which would attach values to the wrong labels. Native lines are shown instead; each keeps one printed line intact.`);
   }
   if (usesAdapterMarkdown) {
     sections.push('## Native structure reference');
