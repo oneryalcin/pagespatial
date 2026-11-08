@@ -62,3 +62,41 @@ test('a table whose rows each match one printed line keeps its structure', () =>
   const projection = project(`${header}\n|LLR 4|2014|$50.0|26.5%|2.6x|2.1x|\n|LLR 5|2018|$75.0|20.3|2.1x|0.6x|\n||||$205.0|19.2%|2.2x|1.5x|`);
   assert.equal(projection.markdownSource, 'pdf-inspector');
 });
+
+function projectWith(nativeTexts, nativeMarkdown) {
+  const lines = nativeTexts.map((text, index) => ({ id: `w${index}:line:${index}`, pageNumber: 1, text, sourceIds: [`w${index}`], box: [25, 100 + 10 * index, 1200, 108 + 10 * index] }));
+  return projectMarkdown({
+    pageNumber: 1,
+    nativeObservations: lines.map((line) => ({ id: line.sourceIds[0], text: line.text, box: line.box })),
+    nativeLines: lines,
+    ocrObservations: [],
+    sourceMatches: [],
+    spatialRows: [],
+    derivedRelations: [],
+    nativeMarkdown,
+    nativeMarkdownSource: 'pdf-inspector'
+  });
+}
+
+// World Bank P178566 procurement plan p3: the PDF text is intact; pdf-inspector
+// interleaves the letters of two tiny-font header lines.
+const procurementHeader = [
+  'Activity Reference No. / Loan / Credit No. Component Review Type Method Market Approach Procurement Process',
+  'Description Prequalification High SEA/SH Risk Procurement Document Type Estimated Amount Actual Amount Status'
+];
+
+test('adapter markdown made of letters interleaved from neighbouring lines is not projected', () => {
+  const projection = projectWith(procurementHeader,
+    '|ActivitD|yeRsecfreipre tinocne No. /|Loan / Credit N o.|Component|Review Type|Method|Market Approac h|Procurement Pro cess|\n|---|---|---|---|---|---|---|---|\n|CDoW nsAtO ru/F ctSiR on|P/o NfCKBe/0 rs1a/2U0p2g3ra|IDA / 71560|Prequalification|High SEA/SH|Risk|Estimated|Amount|');
+  assert.equal(projection.markdownSource, 'pagespatial-native-lines');
+});
+
+// Ares 2026 Q1 10-Q p48: a narrative page pdf-inspector turned into one table,
+// paragraphs inside a cell.
+const narrative = 'The following discussion and analysis should be read in conjunction with the unaudited condensed consolidated financial statements of Ares Management Corporation and the related notes included in this Quarterly Report on Form 10-Q and the audited financial statements and the related notes included in the 2025 Annual Report on Form 10-K of Ares Management Corporation.';
+
+test('a table cell holding a paragraph is not projected', () => {
+  const projection = projectWith([narrative, 'Trends Affecting Our Business'],
+    `|Trends Affecting Our Business|${narrative}|\n|---|---|`);
+  assert.equal(projection.markdownSource, 'pagespatial-native-lines');
+});

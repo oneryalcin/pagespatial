@@ -1,6 +1,17 @@
 import type { DerivedRelation, NativeLine, NativeObservation, OcrObservation, PageProjection, SourceMatch, SpatialRow } from './types.js';
 import { buildNativeLines } from './reading-order.js';
-import { misboundTableRows } from './table-rows.js';
+import { adapterMarkdownDefects, type AdapterMarkdownDefect } from './adapter-markdown.js';
+
+function describeDefect(defect: AdapterMarkdownDefect): string {
+  switch (defect.type) {
+    case 'misbound-row':
+      return `${defect.count} table row(s) put values printed on different lines into one row, attaching values to the wrong labels.`;
+    case 'words-not-in-native':
+      return `${Math.round(defect.share * 100)}% of its words do not occur in the PDF text (letters of neighbouring lines interleaved).`;
+    case 'prose-in-cell':
+      return `A table cell holds ${defect.words} words: running text was swallowed into a table.`;
+  }
+}
 
 function evidenceComment(input: {
   pageNumber: number;
@@ -62,19 +73,19 @@ export function projectMarkdown(input: {
   }
 
   // Adapter markdown is one opaque string and cannot be filtered per line, so
-  // a page with withheld native text, or with a table row that merges values
-  // printed on different lines, falls back to the native lines.
-  const misbound = input.nativeMarkdown?.trim() && !withheld.size
-    ? misboundTableRows(input.nativeMarkdown, nativeLines)
+  // a page with withheld native text, or whose adapter markdown misrepresents
+  // the native text (src/adapter-markdown.ts), falls back to the native lines.
+  const defects = input.nativeMarkdown?.trim() && !withheld.size
+    ? adapterMarkdownDefects(input.nativeMarkdown, input.nativeObservations, nativeLines)
     : [];
-  const usesAdapterMarkdown = Boolean(input.nativeMarkdown?.trim()) && !withheld.size && !misbound.length;
+  const usesAdapterMarkdown = Boolean(input.nativeMarkdown?.trim()) && !withheld.size && !defects.length;
   if (withheld.size) {
     sections.push('## Withheld native text');
     sections.push(`Native text in font(s) ${input.withheldNative!.fonts.join(', ')} is withheld: OCR systematically reads its letters as different letters, so the PDF text layer for that font is not trusted (diagnostics: native-glyph-mismatch).`);
   }
-  if (misbound.length) {
+  if (defects.length) {
     sections.push('## Native table structure omitted');
-    sections.push(`The extracted table structure puts values printed on different lines into the same row (${misbound.length} row(s)), which would attach values to the wrong labels. Native lines are shown instead; each keeps one printed line intact.`);
+    sections.push(`The extracted structure misrepresents this page, so native lines are shown instead; each keeps one printed line intact. ${defects.map(describeDefect).join(' ')}`);
   }
   if (usesAdapterMarkdown) {
     sections.push('## Native structure reference');

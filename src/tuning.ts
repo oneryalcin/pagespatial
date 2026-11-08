@@ -187,3 +187,21 @@ export const RELATION_ASSIGN_RADIUS_RATIO = 0.48;
 export const RELATION_CONFIDENCE_BASE = 0.55;
 export const RELATION_CONFIDENCE_MARGIN_BONUS = 0.3;
 export const RELATION_CONFIDENCE_CAP = 0.85;
+
+/**
+ * Adapter markdown whose words are missing from the native text layer beyond
+ * this share is not a reading of this page's text (pdf-inspector interleaving
+ * two tiny-font lines letter by letter: World Bank procurement plans, 17–48%
+ * missing; every other stored page under ~5%). Latin/Cyrillic/Greek words of
+ * three or more letters only: scripts written without spaces do not split into
+ * comparable words.
+ */
+export const ADAPTER_MARKDOWN_MAX_MISSING_WORD_SHARE = 0.1;
+/** The missing-word share needs at least this many words to mean anything. */
+export const ADAPTER_MARKDOWN_MIN_WORDS = 20;
+/**
+ * A table cell longer than this is a paragraph swallowed into a table (Ares
+ * 10-Q narrative pages: 47–377 words); legitimate long cells on the stored
+ * corpus stay at or under 43 (procurement descriptions, survey questions).
+ */
+export const TABLE_CELL_MAX_WORDS = 45;
