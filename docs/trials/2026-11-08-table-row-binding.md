@@ -24,7 +24,7 @@ an index consumes.
 ## Measurement
 
 Replay over the 162 stored pages (latest record per page across
-`.evaluation/runs`) with `misboundTableRows` (`src/table-rows.ts`): a markdown
+`.evaluation/runs`) with `misboundTableRows` (`src/adapter-markdown.ts`): a markdown
 table row is misbound when its value cells (cells without a word of two or
 more letters) hold two or more numbers (two or more digits) found in the
 native text, and no native line holds all of them.
@@ -64,3 +64,34 @@ a row does not mix printed lines. Single-digit numbers are ignored. Tables
 that are prose merged into cells (e.g. Ares p48, a 10-Q narrative page) mostly
 pass, because their numbers sit in wordy cells; that is a different defect,
 not caught here.
+
+## Follow-up: two more adapter markdown defects
+
+Two more failure modes of the pdf-inspector markdown, found while reviewing
+the flagged rows, now trigger the same fallback (`adapterMarkdownDefects`).
+
+**Words not in the native text.** On World Bank procurement plans the PDF
+text layer is intact (`Activity Reference No. / Description`), but
+pdf-inspector interleaves the letters of two tiny-font lines
+(`ActivitD|yeRsecfreipre tinocne`). This is not a broken CMap, so the
+letter-by-letter audit does not fire. Share of adapter-markdown words (Latin,
+Cyrillic or Greek, 3+ letters) absent from the native text: the four World Bank
+pages 17–48%, every other page under ~5% (a Japanese page reached 13% before
+scripts without spaces were excluded). Cut-off: 10%.
+
+**Prose in a table cell.** On narrative 10-Q pages (Ares p48) pdf-inspector
+turns the whole page into one table: paragraphs in one cell, wrapped tail
+lines pulled into the first column. Numbers are not misplaced, so the row
+check passes it. Longest cell per page: prose-merged pages 47–377 words,
+legitimate long cells (procurement descriptions, survey questions) at most 43.
+Cut-off: 45 words.
+
+| check | pages |
+|---|---:|
+| misbound row | 14 |
+| prose in a cell | 11 |
+| words not in native text | 4 |
+| **any (fallback)** | **22 of 56 table pages** |
+
+Both cut-offs were chosen on these 162 pages. The gaps around them are wide,
+but recheck them on a fresh corpus.
