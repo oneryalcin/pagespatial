@@ -1,12 +1,15 @@
-# Pre-study: training or fine-tuning a fast OCR witness
+# Trial: training or fine-tuning a fast OCR witness
 
 **Date:** 2026-11-10
 
-**Status:** open. Nothing trained yet; this records what was checked before
-choosing a route.
+**Status:** open. Fine-tune spike run; routing result is in-sample and
+simulated, not yet built.
 
-**Current decision:** try **fine-tuning the PP-OCRv6 Tiny recognizer** first.
-Indra stays blocked on its licence, not on its accuracy.
+**Current decision:** a fine-tuned Tiny recognizer **cannot replace** Small: it
+misreads small print. **Tiny first, Small on the lines Tiny is unsure of**
+matches Small on every measure on the ceremony sample while sending 23% of
+line width to Small. That is the candidate to verify on fresh pages and then
+build. Indra stays blocked on its licence, not on its accuracy.
 
 ## Context
 
@@ -66,24 +69,106 @@ Checked on one DocLayNet row group (100 pages, all from one 1,714-page
 manual): 87 cells per page, 18% contain digits, cells are lines not words.
 Shards are grouped by document, so sample across shards.
 
-## Plan for the fine-tune spike
+## Fine-tune spike
 
-1. Export line crops from DocLayNet PDFs (and FinTabNet if the licence
-   allows), labelled by the text layer. Drop lines where the Small recognizer
-   and the text layer disagree on letters (broken text layers); keep those
-   disagreeing only on `$`/digits for inspection rather than training on them
-   blind.
-2. Add scan-like augmentation, and Small-labelled crops from real scans
-   outside the evaluation corpus.
-3. Fine-tune Tiny from the published weights.
-4. Gate: [`score-candidate-witness.mjs`](../../scripts/evaluation/score-candidate-witness.mjs)
-   on the 90-page ceremony sample. Pass means gold within the control's
-   interval (980) and no value-changing currency or digit errors. Nothing
-   from `.evaluation` may be in the training set.
+[`rec_finetune_modal.py`](../../scripts/evaluation/rec_finetune_modal.py):
+word-group crops of at most 25 characters cut from DocLayNet PDFs with
+pdfium, labelled by the text layer. A crop is kept only when Small reads
+nearly the same text (similarity ≥ 0.8) on a 2.0-scale render of the same
+box; the label is always the text layer. 4,800 pages from 24 of 72 train
+shards, ~241k crops; 100 pages from 2 validation shards. Training is
+PaddleOCR `tools/train.py` at commit `dab3fe3`, published config, from the
+published weights, lr 1e-4, batch 128, one L4.
 
-## Not known yet
+| Run | Crops | Epochs |
+|---|---|---:|
+| `smoke` | all pages at production scale 1.6 | 1 |
+| `v2` | half the pages at scale 1.6, half at 0.55–1.6 | 4 |
 
-- Whether 1.1M parameters can hold the accuracy at all.
-- How much of Tiny's 47 lost gold tokens came from scans, where text-layer
-  labels do not exist.
-- Indra's speed on Linux (the 8–10x is from its README, not measured here).
+Validation crops (`v2` set, 5,497 crops, production inference path, text-layer
+label as truth):
+
+| | Small | stock Tiny | Tiny `v2` |
+|---|---:|---:|---:|
+| exact | 0.793 | 0.703 | 0.833 |
+| value crops, ignoring spaces (1,994) | 0.857 | 0.756 | 0.856 |
+| value crops ≤ 12 px high (370) | 0.573 | 0.424 | 0.614 |
+
+`tools/eval.py` squashes crops to 320 px wide, so its `acc` is not comparable
+with these numbers.
+
+## Ceremony result: Tiny alone still fails
+
+Same harness as [ocr-arms-linux](2026-11-07-ocr-arms-linux.md), one container,
+all arms on identical detector boxes (7,940 lines). "Number precision" is
+[`native-token-precision.mjs`](../../scripts/evaluation/native-token-precision.mjs):
+the share of an arm's critical tokens that the page's PDF text layer
+corroborates, on the 76 pages that have one. Scores:
+[`evidence/2026-11-10-rec-finetune/`](evidence/2026-11-10-rec-finetune/).
+
+| Recognizer (Small detector) | gold (of 1,223) | McNemar p vs browser | number precision | recall | World Bank misread tokens | mean ms/page |
+|---|---:|---:|---:|---:|---:|---:|
+| Small (production) | 980 | 0.38 | 0.857 | 0.879 | 135 | 2,745 |
+| stock Tiny | 939 | 0.001 | 0.779 | 0.838 | 342 | 875 |
+| Tiny `smoke` | 969 | 0.84 | 0.756 | 0.813 | 462 | 869 |
+| Tiny `v2` | 957 | 0.17 | 0.790 | 0.863 | 316 | 863 |
+
+- Fine-tuning fixes the error that got Tiny rejected: lone `$` read as
+  `S`/`5` (Small does this too) now comes out as `$`.
+- It does not fix small print. The two World Bank documents have lines 7–10 px
+  high; Tiny misreads 2.3x as many number tokens there as Small even after
+  training on small renders (`2022-09-15` → `2022-09-1s`). The `smoke` run,
+  trained only on ~18–22 px text, made this worse than stock.
+- Tiny cannot read Japanese at all (no kana in its dictionary). Polish
+  (Asseco): 10 misread tokens for Small, 11 stock, 10 `v2`.
+- Timings are from one container and are only comparable within this table.
+
+## Routing: Tiny first, Small on unsure lines
+
+[`simulate_recognizer_routing.py`](../../scripts/evaluation/simulate_recognizer_routing.py)
+builds the result a two-pass recognizer would give: Tiny's reading, except
+lines whose Tiny confidence is under a threshold or that contain CJK, which
+take Small's reading.
+
+| Tiny model, threshold | lines to Small | line width to Small | gold | p | number precision | recall |
+|---|---:|---:|---:|---:|---:|---:|
+| Small only | 100% | 100% | 980 | 0.38 | 0.857 | 0.879 |
+| stock, 0.95 | 26.8% | 14.6% | 963 | 0.37 | 0.844 | 0.868 |
+| stock, 0.98 | 43.1% | 42.5% | 975 | 0.81 | 0.855 | 0.877 |
+| `v2`, 0.90 | 16.1% | 10.4% | 976 | 0.73 | 0.849 | 0.874 |
+| **`v2`, 0.95** | **28.5%** | **23.1%** | **982** | 0.29 | **0.857** | **0.880** |
+
+`v2` at 0.95 equals or beats Small on all three measures with 23% of line
+width re-read. The stock model needs 43% and is still slightly behind, so the
+fine-tune earns its place. Recognition cost is roughly proportional to line
+width, and Tiny costs 1/4 to 1/6 of Small per call, so the recognizer stage
+should take about 0.4–0.5 of today's; from this run's page times that is about
+1.4 s per page against 2.7 s. **That speed is an estimate, not a measurement.**
+
+Confident Tiny lines that still differ from Small are mostly Small's errors
+(`S101.7` vs `$101.7`, `(l)` vs `(1)`, `100,000.08` vs `100, 000.00`), but
+some are Tiny's and change a value at high confidence: `1,324,332` →
+`1,324,32` (0.999), `2022-10-04` → `2022-10-0` (0.995), `$180.2` → `180.2`
+(1.0). The aggregate is level with Small; it is not error-free, and neither is
+Small.
+
+## Limits
+
+- The threshold was chosen on the same 90 pages it is scored on, out of
+  about twenty rule and model combinations tried. Expect a fresh sample to be less favourable.
+- Routing is simulated from two full runs. The two-pass sidecar is not built,
+  and its speed is not measured.
+- On scans there is no text layer to catch a confident misread. The scan
+  pages in the sample were not inspected line by line.
+- No Chinese document is in the sample, so forgetting of Chinese was not
+  tested. DocLayNet is mostly English.
+- Labels follow the text layer's typography (curly quotes, en-dashes), which
+  PP-OCR's stock models flatten to ASCII.
+
+## Next
+
+1. Score the 0.95 rule on pages outside the ceremony sample.
+2. Build the two-pass recognizer in the sidecar and measure it with the
+   arms harness.
+3. If both hold, run the adoption ceremony; a new witness starts a new
+   baseline era.
