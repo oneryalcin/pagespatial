@@ -6,6 +6,8 @@ Takes two ocr_arms_modal.py results that share a detector (identical boxes)
 and writes a result where each line is the candidate's reading unless its
 confidence is below --min-score or it contains CJK characters (the Tiny
 dictionary has no kana); those lines take the reference recognizer's reading.
+With --digits-to-reference, every line in which the candidate reads a digit
+also goes to the reference, so the candidate only ever supplies prose.
 The output scores unchanged with score-candidate-witness.mjs and
 native-token-precision.mjs. Timing fields are the candidate's and mean nothing
 for the mix; the share of lines and of line width sent to the reference is
@@ -25,6 +27,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--reference", required=True)
 parser.add_argument("--candidate", required=True)
 parser.add_argument("--min-score", type=float, required=True)
+parser.add_argument("--digits-to-reference", action="store_true")
 parser.add_argument("--out", required=True)
 args = parser.parse_args()
 
@@ -38,11 +41,13 @@ for ref_page, page in zip(reference["perPage"], candidate["perPage"]):
         line_width = line["box"][2] - line["box"][0]
         lines += 1
         width += line_width
-        if (line["score"] or 0) < args.min_score or CJK.search(line["text"]):
+        digits = args.digits_to_reference and any(ch.isdigit() for ch in line["text"])
+        if (line["score"] or 0) < args.min_score or CJK.search(line["text"]) or digits:
             page["lines"][index] = ref_line
             routed += 1
             routed_width += line_width
-candidate["config"]["name"] = f"{candidate['config']['name']}_routed{round(args.min_score * 100)}"
+candidate["config"]["name"] = (f"{candidate['config']['name']}_routed{round(args.min_score * 100)}"
+                               + ("_digits" if args.digits_to_reference else ""))
 json.dump(candidate, open(args.out, "w"))
 print(json.dumps({"name": candidate["config"]["name"], "lines": lines,
                   "linesToReference": round(routed / lines, 4), "widthToReference": round(routed_width / width, 4)}))

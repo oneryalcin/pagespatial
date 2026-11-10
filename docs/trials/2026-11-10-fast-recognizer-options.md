@@ -2,14 +2,17 @@
 
 **Date:** 2026-11-10
 
-**Status:** open. Fine-tune spike run; routing result is in-sample and
+**Status:** open. Fine-tune spike run and checked on fresh pages; routing is
 simulated, not yet built.
 
 **Current decision:** a fine-tuned Tiny recognizer **cannot replace** Small: it
-misreads small print. **Tiny first, Small on the lines Tiny is unsure of**
-matches Small on every measure on the ceremony sample while sending 23% of
-line width to Small. That is the candidate to verify on fresh pages and then
-build. Indra stays blocked on its licence, not on its accuracy.
+misreads small print. Routing by confidence alone (Small re-reads lines under
+0.95) looked equal to Small on the ceremony sample but is **slightly worse on
+fresh pages**, with value-changing errors at high confidence. Routing that
+also sends **every digit-bearing line to Small** equals Small on numbers on
+both samples, at 41–43% of line width re-read, an estimated 1.5x on the page.
+Whether 1.5x is worth a second recognizer in the sidecar is an open product
+decision. Indra stays blocked on its licence, not on its accuracy.
 
 ## Context
 
@@ -152,10 +155,46 @@ some are Tiny's and change a value at high confidence: `1,324,332` →
 (1.0). The aggregate is level with Small; it is not error-free, and neither is
 Small.
 
+## Fresh pages
+
+[`build_fresh_ocr_sample.py`](../../scripts/evaluation/build_fresh_ocr_sample.py):
+153 pages no earlier run had seen, all with a text layer. 102 are unseen
+pages of the corpus documents (OSF 56, Monotaro 16, Ares, Asseco and
+Blackstone 8 each, World Bank 6); 51 are DocLayNet test-split pages, other
+documents than the fine-tune used. No scans: they have no text layer to score
+against. No gold exists for these pages, so the measure is number precision
+and recall against the text layer. The 0.95 rule was fixed before the run.
+
+| Recognizer | line width to Small | number precision | recall |
+|---|---:|---:|---:|
+| Small only | 100% | 0.9588 | 0.9611 |
+| stock Tiny | 0% | 0.8780 | 0.9155 |
+| Tiny `v2` | 0% | 0.8906 | 0.9478 |
+| `v2`, under 0.95 to Small | 20.4% | 0.9545 | 0.9557 |
+| `v2`, under 0.90 **or any digit** to Small | 43.0% | 0.9596 | 0.9602 |
+
+- Confidence alone does not hold. Among lines Tiny kept, it lost 28 numbers
+  that Small read correctly and gained 12 that Small misread (sign test
+  p ≈ 0.02). The losses include dropped digits at confidence 0.998–1.0:
+  `922,446` → `922,46`, `19%` → `1%`, on the ceremony pages `1,324,332` →
+  `1,324,32`. The pattern is one of two adjacent equal or similar digits
+  disappearing. 17 of the net loss is on Blackstone's small-print tables.
+- Sending every line in which Tiny reads a digit to Small removes that: the
+  numbers are then Small's. On the ceremony sample this rule gives gold 978
+  (Small 980, p = 0.53), precision 0.8574 and recall 0.8787 (Small 0.8567 and
+  0.8789) at 41.0% of line width.
+- Estimated cost at 42% of width re-read: recognizer stage about 0.6 of
+  today's, page about 1.85 s against 2.75 s in this run, **1.5x, not
+  measured**. Confidence-only routing would be about 2x but breaks the
+  precision promise on values.
+
 ## Limits
 
-- The threshold was chosen on the same 90 pages it is scored on, out of
-  about twenty rule and model combinations tried. Expect a fresh sample to be less favourable.
+- Rules were chosen on the ceremony sample (about twenty rule and model
+  combinations tried); the digit rule was added after seeing the fresh-page
+  errors and is scored on the same two samples, so it too is unverified on
+  untouched pages. Its number accuracy follows from construction (numbers
+  come from Small) more than from tuning.
 - Routing is simulated from two full runs. The two-pass sidecar is not built,
   and its speed is not measured.
 - On scans there is no text layer to catch a confident misread. The scan
@@ -167,8 +206,13 @@ Small.
 
 ## Next
 
-1. Score the 0.95 rule on pages outside the ceremony sample.
-2. Build the two-pass recognizer in the sidecar and measure it with the
-   arms harness.
-3. If both hold, run the adoption ceremony; a new witness starts a new
+1. Decide whether an estimated 1.5x on the OCR stage justifies a second
+   recognizer and a fine-tuned model to maintain. Selective OCR
+   ([design](../design/2026-11-07-selective-ocr.md), ~1.3x) is independent of
+   it and multiplies with it.
+2. If yes: build the two-pass recognizer in the sidecar, measure it with the
+   arms harness, then run the adoption ceremony. A new witness starts a new
    baseline era.
+3. Untested idea for the dropped-digit errors: give Tiny more horizontal
+   resolution per character (stretch its crops). If that removed them, digit
+   lines could stay on Tiny.

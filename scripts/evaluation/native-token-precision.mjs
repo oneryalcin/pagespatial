@@ -10,6 +10,8 @@
  * Usage:
  *   node scripts/evaluation/native-token-precision.mjs --run-root .evaluation/runs/<run-id> \
  *     [--skip-script cjk] <results-arm.json>...
+ * For pages without run records, --native <native.json> ({page: [text lines]},
+ * from build_fresh_ocr_sample.py) replaces --run-root.
  * Output: text-free counts per arm and per document.
  */
 import { readFileSync, readdirSync } from 'node:fs';
@@ -18,13 +20,15 @@ import { criticalTokens } from '../../dist/text.js';
 import { buildCorroborationPool, poolCorroborates } from '../../dist/corroborate.js';
 
 const args = process.argv.slice(2);
-const runRoot = args[args.indexOf('--run-root') + 1];
+const option = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
+const runRoot = option('--run-root');
+const nativePath = option('--native');
 const skipCjk = args.includes('--skip-script');
-const files = args.filter((value, index) => value.endsWith('.json') && args[index - 1] !== '--run-root');
+const files = args.filter((value, index) => value.endsWith('.json') && !['--run-root', '--native'].includes(args[index - 1]));
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
 
-const native = new Map();
-for (const doc of readdirSync(join(runRoot, 'documents'))) {
+const native = new Map(nativePath ? Object.entries(JSON.parse(readFileSync(nativePath, 'utf8'))) : []);
+for (const doc of runRoot ? readdirSync(join(runRoot, 'documents')) : []) {
   let pages;
   try { pages = readdirSync(join(runRoot, 'documents', doc, 'pages')); } catch { continue; }
   for (const file of pages) {
