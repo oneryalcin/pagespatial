@@ -4,7 +4,7 @@
   "properties": {
     "schemaVersion": {
       "type": "string",
-      "const": "0.7.0"
+      "const": "0.8.0"
     },
     "document": {
       "type": "object",
@@ -45,7 +45,7 @@
         "properties": {
           "schemaVersion": {
             "type": "string",
-            "const": "0.7.0"
+            "const": "0.8.0"
           },
           "documentId": {
             "type": "string"
@@ -861,6 +861,78 @@
             "required": [
               "adapter",
               "readings"
+            ],
+            "additionalProperties": false
+          },
+          "selectiveOcr": {
+            "type": "object",
+            "properties": {
+              "rule": {
+                "type": "string",
+                "const": "native-font-audited-v1"
+              },
+              "skipped": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "box": {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ],
+                      "items": false,
+                      "minItems": 4,
+                      "maxItems": 4
+                    },
+                    "polygon": {
+                      "minItems": 3,
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "prefixItems": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "items": false,
+                        "minItems": 2,
+                        "maxItems": 2
+                      }
+                    },
+                    "nativeIds": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "box",
+                    "nativeIds"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "rule",
+              "skipped"
             ],
             "additionalProperties": false
           },

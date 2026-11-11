@@ -313,7 +313,7 @@ export interface SecondOpinionPass {
 }
 
 export interface PageSpatial {
-  schemaVersion: '0.7.0';
+  schemaVersion: '0.8.0';
   documentId: string;
   revisionId: string;
   documentSha256: string;
@@ -373,7 +373,7 @@ export interface DocumentDiagnostics {
 }
 
 export interface PageSpatialDocument {
-  schemaVersion: '0.7.0';
+  schemaVersion: '0.8.0';
   document: DocumentIdentity;
   pages: PageSpatial[];
   diagnostics: DocumentDiagnostics;

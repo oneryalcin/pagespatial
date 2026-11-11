@@ -30,7 +30,7 @@ test('Node emits closed evidence and deterministic compact bytes', async () => {
     'schema_version', 'job_id', 'attempt_id', 'execution_id',
     'input_sha256', 'page_count', 'pages',
   ]);
-  assert.equal(evidence.pages[0].page_spatial.schemaVersion, '0.7.0');
+  assert.equal(evidence.pages[0].page_spatial.schemaVersion, '0.8.0');
 
   const compact = JSON.parse(one.compactBytes);
   assert.deepEqual(Object.keys(compact), [

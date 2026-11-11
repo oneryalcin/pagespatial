@@ -151,7 +151,7 @@ const unreadInkRegionSchema = z.object({
 });
 
 const pageSpatialBaseSchema = z.object({
-  schemaVersion: z.literal('0.7.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
+  schemaVersion: z.literal('0.8.0'), documentId: z.string(), revisionId: z.string(), documentSha256: z.string().regex(/^[a-f0-9]{64}$/iu),
   pageId: z.string(), pageNumber: z.number().int().positive(), geometry: pageGeometrySchema,
   nativeObservations: z.array(nativeObservationSchema), ocrObservations: z.array(ocrObservationSchema),
   nativeLines: z.array(nativeLineSchema), sourceMatches: z.array(sourceMatchSchema), conflicts: z.array(conflictSchema),
@@ -528,7 +528,7 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
 });
 
 const pageSpatialDocumentBaseSchema = z.object({
-  schemaVersion: z.literal('0.7.0'),
+  schemaVersion: z.literal('0.8.0'),
   document: documentIdentitySchema,
   pages: z.array(pageSpatialSchema),
   diagnostics: z.object({

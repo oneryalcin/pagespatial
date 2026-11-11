@@ -123,7 +123,7 @@ handle = ParseContainer().parse_document.spawn({
     "pdf_bytes": pdf_bytes,        # non-empty, <=90 MiB
     "source_uri": "optional non-secret label",
     "expected_sha256": "…",       # 64 lowercase hex; recomputed and checked
-    "schema_version": "0.7.0",
+    "schema_version": "0.8.0",
     "enrichment": "off",           # anything else is rejected
 })
 result = handle.get()

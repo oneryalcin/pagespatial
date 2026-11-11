@@ -35,6 +35,16 @@ Tasks (run from the repo root):
       # zero surviving processes (PID probe) + restart resume; stub-hook
       # corrupt page -> fails closed, siblings unaffected.
 
+  modal run scripts/evaluation/m1_linux_verification_modal.py::selective_local \
+      --pdfs-dir /abs/.evaluation/m1-subset-pdfs --workers 4 --threads 4 \
+      --out /abs/.evaluation/m1-linux/selective.json
+      # selective OCR (docs/trials/2026-11-11-selective-ocr-build.md): the
+      # corpus through the real service three times in ONE container: full,
+      # selective (SERVICE_OCR_SELECTIVE=1), full again. The second full run
+      # bounds host drift. Returns throughput, OCR-stage timings, how many
+      # detected boxes were skipped, and which pages' escalation reasons
+      # differ between full and selective.
+
 Outputs are count-level only — no corpus text leaves the function.
 """
 
@@ -464,6 +474,60 @@ def throughput(pdfs: list, workers: int, threads: int) -> dict:
     }
 
 
+def _record_counts(pages: list) -> dict:
+    """Count-level view of a run's records, and each page's escalation reason types."""
+    counts = {"records": 0, "ocrObservations": 0, "selectivePages": 0, "skippedBoxes": 0, "conflicts": 0,
+              "secondOpinionPages": 0, "reasons": {}}
+    reasons_by_page = {}
+    for page in pages:
+        record = page.get("pageSpatial")
+        if not record:
+            continue
+        counts["records"] += 1
+        counts["ocrObservations"] += len(record["ocrObservations"])
+        counts["conflicts"] += len(record["conflicts"])
+        counts["secondOpinionPages"] += 1 if record.get("secondOpinion") else 0
+        if record.get("selectiveOcr") is not None:
+            counts["selectivePages"] += 1
+            counts["skippedBoxes"] += len(record["selectiveOcr"]["skipped"])
+        types = sorted(reason["type"] for reason in record["diagnostics"]["escalationReasons"])
+        for kind in types:
+            counts["reasons"][kind] = counts["reasons"].get(kind, 0) + 1
+        reasons_by_page[f"{record['documentSha256'][:12]}#{record['pageNumber']}"] = types
+    return {"counts": counts, "reasonsByPage": reasons_by_page}
+
+
+@app.function(image=image, cpu=4.0, memory=24576, timeout=3 * 3600)
+def selective(pdfs: list, workers: int, threads: int) -> dict:
+    """Full, selective, full again: the same corpus through the real service in one container."""
+    runs = []
+    for index, (mode, env) in enumerate((("full-1", {}), ("selective", {"SERVICE_OCR_SELECTIVE": "1"}), ("full-2", {}))):
+        port = 8581 + index
+        server = _start_server(port, {
+            "SERVICE_WORKERS": str(workers), "SERVICE_SIDECAR_THREADS": str(threads),
+            "SERVICE_DATA_DIR": f"/tmp/psvc-data-{mode}", **env})
+        health = _wait_health(port, 1500)
+        run = _submit_and_drain(port, pdfs)
+        pages_raw = run.pop("_pagesRaw")
+        runs.append({
+            "mode": mode,
+            "readyAfterS": health["readyAfterS"],
+            "run": run,
+            "pagesPerSec": round(run["pagesTotal"] / run["wallS"], 3),
+            "inBandProvenance": _provenance_from(pages_raw),
+            **_record_counts(pages_raw),
+            "drain": _shutdown_and_probe(server),
+        })
+    reasons = {run["mode"]: run.pop("reasonsByPage") for run in runs}
+    differing = [{"page": page, "full": types, "selective": reasons["selective"].get(page)}
+                 for page, types in sorted(reasons["full-1"].items()) if reasons["selective"].get(page) != types]
+    return {
+        "packing": {"containerVCpu": 4, "workers": workers, "threadsPerSidecar": threads, "osCpuCount": os.cpu_count()},
+        "runs": runs,
+        "pagesWhoseEscalationReasonsDiffer": differing,
+    }
+
+
 @app.function(image=image, cpu=2.0, memory=16384, timeout=7200)
 def failure(pdfs: list, corrupt_pdf: bytes) -> dict:
     """Criterion 4: crash containment + drain, inside the container."""
@@ -612,6 +676,19 @@ def throughput_local(pdfs_dir: str, workers: int, threads: int, out: str):
     result = throughput.remote(pdfs, workers, threads)
     _write(out, result)
     print(json.dumps({k: result[k] for k in ("packing", "health", "pagesPerSec", "pagesPerSecPerCore", "drain")}, indent=1))
+
+
+@app.local_entrypoint()
+def selective_local(pdfs_dir: str, workers: int, threads: int, out: str):
+    pdfs = _load_pdfs(pdfs_dir)
+    print(f"{len(pdfs)} documents")
+    result = selective.remote(pdfs, workers, threads)
+    _write(out, result)
+    for run in result["runs"]:
+        print(run["mode"], json.dumps({
+            "pagesPerSec": run["pagesPerSec"], "wallS": run["run"]["wallS"], "pagesOk": run["run"]["pagesOk"],
+            "ocrStageMs": run["run"]["stageTimingsMs"].get("ocr"), "counts": run["counts"]}))
+    print("pages whose escalation reasons differ:", len(result["pagesWhoseEscalationReasonsDiffer"]))
 
 
 @app.local_entrypoint()

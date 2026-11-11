@@ -182,7 +182,7 @@ def main() -> None:
         "request_id": attempt_id,
         "pdf_bytes": pdf,
         "expected_sha256": digest,
-        "schema_version": "0.7.0",
+        "schema_version": "0.8.0",
         "enrichment": "off",
     }
     object_payload = {

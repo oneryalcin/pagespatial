@@ -305,7 +305,7 @@ export function createParser<TSource = unknown, TRaster = unknown>(adapters: Par
           }
         };
         const result: PageSpatialDocument = {
-          schemaVersion: '0.7.0',
+          schemaVersion: '0.8.0',
           document,
           pages: completed,
           diagnostics: documentDiagnostics(completed),

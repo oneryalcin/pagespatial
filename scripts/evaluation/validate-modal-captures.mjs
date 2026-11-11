@@ -1,7 +1,7 @@
 /**
  * §14.4 criterion 2 checker: every successful document contains exactly its
  * probed page count, and each returned page is either a canonical schema
- * 0.7.0 PageSpatial record (zod pageSpatialSchema) or an explicit
+ * 0.8.0 PageSpatial record (zod pageSpatialSchema) or an explicit
  * failed-page record ({ok: false, failure}). Nonzero exit on any violation.
  *
  * Usage:
@@ -55,7 +55,7 @@ for (const entry of loadCaptures(resultsPath)) {
       const check = pageSpatialSchema.safeParse(page.pageSpatial);
       if (!check.success) {
         violations.push({ request_id: result.request_id, page: page.pageNumber, why: `schema: ${check.error.issues[0]?.message}` });
-      } else if (page.pageSpatial.schemaVersion !== '0.7.0') {
+      } else if (page.pageSpatial.schemaVersion !== '0.8.0') {
         violations.push({ request_id: result.request_id, page: page.pageNumber, why: `schemaVersion ${page.pageSpatial.schemaVersion}` });
       } else {
         pagesValid += 1;

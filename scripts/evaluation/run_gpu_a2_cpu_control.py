@@ -18,7 +18,7 @@ from pathlib import Path
 
 import modal
 
-SCHEMA_VERSION = "0.7.0"
+SCHEMA_VERSION = "0.8.0"
 EXPECTED_PAGES = 50
 EXPECTED_CPU_RESOURCES = {
     "cpu": 4.0,
