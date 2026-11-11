@@ -75,30 +75,68 @@ earlier era, and are left out.
 - **Corroborated control.** A seeded sample of 50 human-verified tokens with
   no conflict, from the same pages.
 
+**Composition of the 100** (counted before any model call; no text):
+
+| Conflict reason | Human-confirmed side | Ink number one witness lacks | Both witnesses hold every ink number | Ink has no number |
+| --- | --- | ---: | ---: | ---: |
+| omission | OCR right | 16 | 0 | 4 |
+| omission | text layer right | 1 | 0 | 2 |
+| omission | both wrong | 2 | 0 | 0 |
+| disagreement | OCR right | 5 | 17 | 0 |
+| disagreement | text layer right | 51 | 1 | 0 |
+| disagreement | both wrong | 1 | 0 | 0 |
+| **Total** | | **76** | **18** | **6** |
+
+The 6 items whose ink holds no number cannot be asked about and are dropped
+and counted, leaving 94. Results are also reported by reason, by confirmed
+side, and for the 76 alone.
+
+**Target value.** Each item asks about one number: the first critical token
+of the key ink that at least one witness lacks; if both hold every ink
+number, the first critical token of the key ink. Tokens are those of
+`criticalTokens` (`src/text.ts`).
+
 **Answer key.** The human-confirmed ink reading. The blind audit of this key
-agreed on only 11 of 15 digit-differing rows (debts row 4), so the
-digit-differing keys get one fresh human read from the crop before the run
-(`build-gold-spotcheck.mjs`). Rows the reader cannot call are dropped and
-counted.
+agreed on only 11 of 15 digit-differing rows (debts row 4), so all 100
+digit-differing keys get one fresh, blind human read from the crop before
+any scored call (`build-gold-spotcheck.mjs`). An item is kept only when the
+fresh read picks the same side as the stored key and, for both-wrong rows,
+types ink with the same target. A fresh read that disagrees or is unsure
+drops the item; drops are counted by cause.
 
-**Questions.** One per item, written by a model shown the page image and the
-value's box, told to ask for that value without stating it. It never sees
-either witness's reading. A seeded 30 are checked by hand.
+**Questions.** One per item, written by `gemini-3.7-flash` shown the page
+image, the value's box and the target value from the key, told to ask for
+that value without stating it. It never sees a witness reading as such. A
+question whose digits contain the target's digits is rejected and rewritten
+once, then dropped and counted. A seeded 30 are checked by hand.
 
-**Arms** (same answer model, prompt, temperature 0, closed JSON answer:
-a value, `disputed` with candidates, or `not found`):
+**Arms** (same answer model `gemini-3.7-flash`, same prompt, temperature 0,
+closed JSON answer: a value, `disputed` with candidates, or `not found`).
+All three contexts come from today's `projectMarkdown` over the stored
+record, so they differ in content and not in format:
 
-- **A, text layer only:** native lines.
-- **B, both readings, unlabelled:** the stored observations re-projected with
-  today's `projectMarkdown`. The stored records are from the browser era and
-  hold no adapter Markdown, so this is native lines plus the OCR rows that
-  matched nothing.
-- **C, both readings, labelled:** B with each disputed value marked inline
-  with both readings. C's context format is the prototype for step 3.
+- **A, text layer only:** the projection with no OCR inputs.
+- **B, both readings, unlabelled:** the projection with the stored OCR
+  observations, matches, rows and relations. The stored records are from the
+  browser era and hold no adapter Markdown, so this is native lines plus the
+  OCR rows that matched nothing.
+- **C, both readings, labelled:** B, with a marker appended to the native
+  line and the OCR row of **every** conflict on the page, giving both
+  readings. Markers are built only from the page's `conflicts`, the same way
+  for each, so they do not point at the asked value. C's context format is
+  the prototype for step 3.
 
-**Scoring.** Deterministic, no model judge: guarded-boundary matching on the
-critical-token core, the retrieval harness v4 rule. Each answer is correct,
-wrong (asserts a value that is not the ink), or hedged.
+**Scoring.** Deterministic, no model judge. The answer is a value, so its
+critical tokens are compared with the target under the currency-tolerant
+rule of `scripts/evaluation/lib/recall-match.mjs` (a detached currency
+symbol is forgiven, a contradicting one is not; sign and percent are never
+relaxed). This replaces the boundary-matching wording of an earlier draft,
+which was a rule for finding an answer inside a chunk. Each answer is
+correct, wrong (asserts a value that is not the target), or hedged
+(`disputed` or `not found`).
+
+**Shake-down.** Prompts and plumbing are tried only on the 46 pilot and
+batch 2 conflicts, which are not scored.
 
 **Stop rule.**
 
@@ -109,8 +147,13 @@ net       = prevented − cost
 ```
 
 Continue if `net` is 5 or more. Below that, the trust-record line stops (see
-[If it fails](#if-it-fails)). Arm A is reported to show what the second
-reading adds with no label at all.
+[If it fails](#if-it-fails)). `items` are the scored items left after the
+key read. Arm A is reported to show what the second reading adds with no
+label at all.
+
+The formula does not charge C for hedging on a digit-differing item that B
+answered correctly. The full table of B outcome by C outcome is printed for
+each stratum so that cost is visible; the stop rule is not changed.
 
 **Independence check** (principles §8):
 
@@ -119,7 +162,9 @@ reading adds with no label at all.
    members. The result is a **case series, not a rate**. A null is decisive
    because the set favours the record; a win earns steps 2 and 3, not a claim.
 3. Ordering does not read it: samples are seeded.
-4. Presentation: the question writer sees ink only.
+4. Presentation: the question writer sees the page image and the key's
+   target value, which it needs to know what to ask; it is not told which
+   witness, if any, read that value.
 5. Negatives: every item is scored in every arm; drops are counted.
 
 **Cost.** About 250 questions over three arms; spend cap $10. One to two days.
