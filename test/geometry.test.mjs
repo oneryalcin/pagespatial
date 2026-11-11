@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assertPageGeometry, pointBoxToRenderedBox } from '../dist/index.js';
-import { pdfJsTextItemPointBox } from '../dist/pdfjs-text.js';
+import { pdfJsTextItemPointBox, pdfJsTextObservations } from '../dist/pdfjs-text.js';
 
 // A zero-length axis vector previously fabricated a 1pt height (or an assumed
 // left-to-right direction) instead of failing closed.
@@ -13,6 +13,17 @@ test('singular PDF.js text transforms are rejected, not repaired', () => {
   const rotated = { transform: [0, 12, -12, 0, 100, 200], width: 40, height: 12 };
   const box = pdfJsTextItemPointBox(rotated);
   assert.ok(box[2] > box[0] && box[3] > box[1]);
+});
+
+// A lone combining accent (the hat of x̂ in a formula) is its own text item
+// with zero advance width. Its zero-area box used to fail the whole page.
+test('a zero-width text item is left out instead of failing the page', () => {
+  const item = (str, width) => ({ str, width, height: 10, transform: [10, 0, 0, 10, 100, 700], fontName: 'f1' });
+  const observations = pdfJsTextObservations([item('x', 5), item('\u0302', 0), item('= 2', 14)], 1);
+  assert.deepEqual(observations.map((observation) => [observation.id, observation.text]), [
+    ['pdfjs:1:0', 'x'],
+    ['pdfjs:1:2', '= 2']
+  ]);
 });
 
 test('transforms all four point-box corners with the PDF viewport matrix', () => {

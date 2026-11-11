@@ -73,19 +73,26 @@ export function pdfJsTextObservations(
   pageNumber: number,
   metadata?: (item: TextItem, index: number) => PdfJsTextMetadata | undefined
 ): NativePointObservationInput[] {
-  return items.map((item, index) => {
+  return items.flatMap((item, index) => {
+    const pointBox = pdfJsTextItemPointBox(item);
+    // An item with no width or height (seen: a lone combining accent, whose
+    // glyph advances by zero) marks no area of the page, so it cannot be an
+    // observation: every observation's box has positive area. It is left out
+    // rather than failing the page, and never widened: a substituted extent
+    // would be fabricated evidence. Ids keep the item's own index.
+    if (pointBox[2] <= pointBox[0] || pointBox[3] <= pointBox[1]) return [];
     const itemMetadata = metadata?.(item, index);
-    return {
+    return [{
       id: `pdfjs:${pageNumber}:${index}`,
       pageNumber,
       text: item.str,
-      pointBox: pdfJsTextItemPointBox(item),
+      pointBox,
       mcid: itemMetadata?.mcid ?? null,
       structureRole: itemMetadata?.structureRole ?? null,
       font: itemMetadata?.font ?? item.fontName,
       fontSize: itemMetadata?.fontSize ?? Math.max(1, Math.hypot(item.transform[2]!, item.transform[3]!)),
       ...(itemMetadata?.isBold === undefined ? {} : { isBold: itemMetadata.isBold }),
       ...(itemMetadata?.isItalic === undefined ? {} : { isItalic: itemMetadata.isItalic })
-    };
+    }];
   });
 }
