@@ -1,0 +1,113 @@
+{
+ "note": "selective_ocr_split_modal.py, 90 ceremony pages, Linux x86 OpenVINO HPI, 4 cores, one container, variants interleaved; example texts removed. Milliseconds are totals over the 90 pages.",
+ "stats": {
+  "b6": {
+   "lines": 7940,
+   "splitMismatch": 0,
+   "kept": 4313,
+   "keptTextChanged": 66,
+   "keptDigitsChanged": 9,
+   "maxScoreDelta": 0.27910783886909485,
+   "fullMs": 265240.3908150011,
+   "subsetMs": 108622.06186700019
+  },
+  "b1": {
+   "lines": 7940,
+   "splitMismatch": 0,
+   "kept": 4312,
+   "keptTextChanged": 0,
+   "keptDigitsChanged": 0,
+   "maxScoreDelta": 0,
+   "fullMs": 286530.41123600083,
+   "subsetMs": 102149.02380999994
+  },
+  "samewidth": {
+   "lines": 7940,
+   "splitMismatch": 0,
+   "kept": 4312,
+   "keptTextChanged": 0,
+   "keptDigitsChanged": 0,
+   "maxScoreDelta": 0,
+   "fullMs": 254579.603527,
+   "subsetMs": 88704.01135499956
+  },
+  "detectMs": 24177.295325000552
+ },
+ "gold": {
+  "b6": {
+   "goldRecall": {
+    "pages": 63,
+    "goldTokens": 1223,
+    "browser": 972,
+    "candidate": 980,
+    "candidateOnly": 36,
+    "browserOnly": 28,
+    "bothMiss": 215
+   },
+   "goldDiscordance": {
+    "candidateOnly": 36,
+    "browserOnly": 28,
+    "mcNemarExactTwoSidedP": 0.3817,
+    "candidateShareOfDiscordantsCI95": [
+     0.433,
+     0.686
+    ],
+    "trueDifferenceTokensCI95": [
+     -9,
+     24
+    ],
+    "note": "Conditional on 64 discordant tokens of 1223: the data are consistent with a true candidate-minus-browser difference between -9 and 24 tokens at 95%."
+   }
+  },
+  "b1": {
+   "goldRecall": {
+    "pages": 63,
+    "goldTokens": 1223,
+    "browser": 972,
+    "candidate": 985,
+    "candidateOnly": 37,
+    "browserOnly": 24,
+    "bothMiss": 214
+   },
+   "goldDiscordance": {
+    "candidateOnly": 37,
+    "browserOnly": 24,
+    "mcNemarExactTwoSidedP": 0.1237,
+    "candidateShareOfDiscordantsCI95": [
+     0.473,
+     0.729
+    ],
+    "trueDifferenceTokensCI95": [
+     -3,
+     28
+    ],
+    "note": "Conditional on 61 discordant tokens of 1223: the data are consistent with a true candidate-minus-browser difference between -3 and 28 tokens at 95%."
+   }
+  },
+  "samewidth": {
+   "goldRecall": {
+    "pages": 63,
+    "goldTokens": 1223,
+    "browser": 972,
+    "candidate": 985,
+    "candidateOnly": 37,
+    "browserOnly": 24,
+    "bothMiss": 214
+   },
+   "goldDiscordance": {
+    "candidateOnly": 37,
+    "browserOnly": 24,
+    "mcNemarExactTwoSidedP": 0.1237,
+    "candidateShareOfDiscordantsCI95": [
+     0.473,
+     0.729
+    ],
+    "trueDifferenceTokensCI95": [
+     -3,
+     28
+    ],
+    "note": "Conditional on 61 discordant tokens of 1223: the data are consistent with a true candidate-minus-browser difference between -3 and 28 tokens at 95%."
+   }
+  }
+ }
+}

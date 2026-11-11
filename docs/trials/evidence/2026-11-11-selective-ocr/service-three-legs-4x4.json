@@ -1,0 +1,795 @@
+{
+ "packing": {
+  "containerVCpu": 4,
+  "workers": 4,
+  "threadsPerSidecar": 4,
+  "osCpuCount": 20
+ },
+ "runs": [
+  {
+   "mode": "full-1",
+   "readyAfterS": 72.1,
+   "run": {
+    "wallS": 162.1,
+    "pagesTotal": 162,
+    "pagesOk": 162,
+    "pagesFailed": 0,
+    "failedClasses": [],
+    "attemptsHistogram": {
+     "1": 162
+    },
+    "stageTimingsMs": {
+     "render": {
+      "n": 162,
+      "p50": 308.3,
+      "p95": 621.9
+     },
+     "native": {
+      "n": 162,
+      "p50": 38,
+      "p95": 552.7
+     },
+     "ocr": {
+      "n": 162,
+      "p50": 2119.8,
+      "p95": 6006.4
+     },
+     "assembly": {
+      "n": 162,
+      "p50": 55.9,
+      "p95": 3575.8
+     },
+     "secondOpinion": {
+      "n": 27,
+      "p50": 3023.2,
+      "p95": 10372.6
+     },
+     "ocrColdInit": {
+      "n": 4,
+      "p50": 5128,
+      "p95": 5132
+     }
+    },
+    "wallMsP50": 3691,
+    "wallMsP95": 7597,
+    "jobs": [
+     {
+      "name": "public-comps:monotaro:2025-fy:004",
+      "jobId": "job_b6ef826b50bd",
+      "pageCount": 9,
+      "status": "completed"
+     },
+     {
+      "name": "public-comps:monotaro:2025-fy:003",
+      "jobId": "job_5f5ad993399a",
+      "pageCount": 9,
+      "status": "completed"
+     },
+     {
+      "name": "public-comps:asseco-poland:2025-fy:001",
+      "jobId": "job_e3df16b1b4f4",
+      "pageCount": 27,
+      "status": "completed"
+     },
+     {
+      "name": "public-comps:ares:2026-q1:002",
+      "jobId": "job_29de7cc92778",
+      "pageCount": 31,
+      "status": "completed"
+     },
+     {
+      "name": "public-comps:blackstone:2026-q1:002",
+      "jobId": "job_5064828a4611",
+      "pageCount": 12,
+      "status": "completed"
+     },
+     {
+      "name": "pa-sers:2024-09-24:llr-vii:staff-memo",
+      "jobId": "job_b9f54606b184",
+      "pageCount": 1,
+      "status": "completed"
+     },
+     {
+      "name": "pa-sers:2024-09-24:llr-vii:consultant-memo",
+      "jobId": "job_612a21b959c4",
+      "pageCount": 2,
+      "status": "completed"
+     },
+     {
+      "name": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+      "jobId": "job_d24503992fa5",
+      "pageCount": 11,
+      "status": "completed"
+     },
+     {
+      "name": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+      "jobId": "job_950dc43b6226",
+      "pageCount": 11,
+      "status": "completed"
+     },
+     {
+      "name": "legistar:seattle:2438:v0:attachment:6113",
+      "jobId": "job_708fd2908c16",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "legistar:seattle:1794:v0:attachment:3283",
+      "jobId": "job_c78fb860efca",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "legistar:seattle:2159:v0:attachment:3326",
+      "jobId": "job_e9ed435fb950",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "legistar:seattle:1859:v0:attachment:3318",
+      "jobId": "job_254afe3d711b",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "world-bank:P170734:document:34222345",
+      "jobId": "job_5705944008e1",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "world-bank:P178566:document:34223652",
+      "jobId": "job_277bafb1bd8e",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:64a59e4ea2a2f4140943711a:v1",
+      "jobId": "job_4f2af31d9fa5",
+      "pageCount": 6,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:686ffb54a56d843965a6c614:v1",
+      "jobId": "job_97d4bf4583bc",
+      "pageCount": 6,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:607883db0c818200885135da:v1",
+      "jobId": "job_3726f0452b41",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:6046e27ec7e7e6002f6ae7ee:v1",
+      "jobId": "job_bc98477dc973",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:6a74c836f0cba432843c7153:v1",
+      "jobId": "job_36a05c7be58a",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:670e77f61b29952574a5e7a2:v1",
+      "jobId": "job_18cc82277b8c",
+      "pageCount": 4,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:6826158a05236079589c42c3:v1",
+      "jobId": "job_27f4a3374a10",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:6826162a05236079589c42d8:v1",
+      "jobId": "job_02b96fd2e39c",
+      "pageCount": 3,
+      "status": "completed"
+     }
+    ]
+   },
+   "pagesPerSec": 0.999,
+   "inBandProvenance": {
+    "ocrAdapter": "ppocrv6-small-sidecar@3.7.0#ep=hpi;threads=4",
+    "configurationOcrBackend": {
+     "adapter": "ppocrv6-small-sidecar",
+     "version": "3.7.0",
+     "variant": "small",
+     "executionProvider": "hpi",
+     "numThreads": 4,
+     "platform": "Linux",
+     "hpiRequested": true,
+     "useHpip": true,
+     "modelPins": {
+      "PaddlePaddle/PP-OCRv6_small_det": "106c97591b235f607453300d9fc8c1cad1b25488",
+      "PaddlePaddle/PP-OCRv6_small_rec": "bd619643acac4b9650c040234da8d944476ee3f1"
+     },
+     "engineEvidence": {
+      "source": "log-derived (child stderr)",
+      "line": "\u001b[32mInference backend: openvino\u001b[0m"
+     }
+    },
+    "keys": [
+     "conflicts",
+     "derivedRelations",
+     "diagnostics",
+     "documentId",
+     "documentSha256",
+     "geometry",
+     "nativeLines",
+     "nativeObservations",
+     "ocrObservations",
+     "pageId",
+     "pageNumber",
+     "projection",
+     "provenance",
+     "revisionId",
+     "schemaVersion",
+     "sourceMatches",
+     "spatialRows"
+    ]
+   },
+   "counts": {
+    "records": 162,
+    "ocrObservations": 14839,
+    "selectivePages": 0,
+    "skippedBoxes": 0,
+    "conflicts": 515,
+    "secondOpinionPages": 27,
+    "reasons": {
+     "critical-token-conflict": 63,
+     "critical-token-omission": 38,
+     "low-ocr-confidence": 34,
+     "ambiguous-derived-relation": 6,
+     "native-glyph-mismatch": 9,
+     "uncorroborated-ocr": 5
+    }
+   },
+   "drain": {
+    "serverExited": true,
+    "exitCode": 0,
+    "drainS": 3.3,
+    "survivingProcesses": []
+   }
+  },
+  {
+   "mode": "selective",
+   "readyAfterS": 12.0,
+   "run": {
+    "wallS": 152.0,
+    "pagesTotal": 162,
+    "pagesOk": 162,
+    "pagesFailed": 0,
+    "failedClasses": [],
+    "attemptsHistogram": {
+     "1": 162
+    },
+    "stageTimingsMs": {
+     "render": {
+      "n": 162,
+      "p50": 310.5,
+      "p95": 635.2
+     },
+     "native": {
+      "n": 162,
+      "p50": 37.4,
+      "p95": 541.4
+     },
+     "ocr": {
+      "n": 162,
+      "p50": 1980.8,
+      "p95": 5057.7
+     },
+     "assembly": {
+      "n": 162,
+      "p50": 53,
+      "p95": 3603.6
+     },
+     "secondOpinion": {
+      "n": 27,
+      "p50": 3058.3,
+      "p95": 10048.2
+     },
+     "ocrColdInit": {
+      "n": 4,
+      "p50": 5051,
+      "p95": 5080
+     }
+    },
+    "wallMsP50": 3288,
+    "wallMsP95": 7378,
+    "jobs": [
+     {
+      "name": "public-comps:monotaro:2025-fy:004",
+      "jobId": "job_2aaba2a26f16",
+      "pageCount": 9,
+      "status": "completed"
+     },
+     {
+      "name": "public-comps:monotaro:2025-fy:003",
+      "jobId": "job_5c7bba7cf9b5",
+      "pageCount": 9,
+      "status": "completed"
+     },
+     {
+      "name": "public-comps:asseco-poland:2025-fy:001",
+      "jobId": "job_2b8047e9fa2d",
+      "pageCount": 27,
+      "status": "completed"
+     },
+     {
+      "name": "public-comps:ares:2026-q1:002",
+      "jobId": "job_f9a2582d08f9",
+      "pageCount": 31,
+      "status": "completed"
+     },
+     {
+      "name": "public-comps:blackstone:2026-q1:002",
+      "jobId": "job_92b823d9391c",
+      "pageCount": 12,
+      "status": "completed"
+     },
+     {
+      "name": "pa-sers:2024-09-24:llr-vii:staff-memo",
+      "jobId": "job_c8c093399271",
+      "pageCount": 1,
+      "status": "completed"
+     },
+     {
+      "name": "pa-sers:2024-09-24:llr-vii:consultant-memo",
+      "jobId": "job_a736cb0db7eb",
+      "pageCount": 2,
+      "status": "completed"
+     },
+     {
+      "name": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+      "jobId": "job_4480fa9bd82d",
+      "pageCount": 11,
+      "status": "completed"
+     },
+     {
+      "name": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+      "jobId": "job_c6f7226dd566",
+      "pageCount": 11,
+      "status": "completed"
+     },
+     {
+      "name": "legistar:seattle:2438:v0:attachment:6113",
+      "jobId": "job_a92f049709e6",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "legistar:seattle:1794:v0:attachment:3283",
+      "jobId": "job_a4730537a312",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "legistar:seattle:2159:v0:attachment:3326",
+      "jobId": "job_47ffafbb7e12",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "legistar:seattle:1859:v0:attachment:3318",
+      "jobId": "job_c8113b776224",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "world-bank:P170734:document:34222345",
+      "jobId": "job_54bebd2439ad",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "world-bank:P178566:document:34223652",
+      "jobId": "job_50ccf1dbb1d7",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:64a59e4ea2a2f4140943711a:v1",
+      "jobId": "job_24fc3ff95cac",
+      "pageCount": 6,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:686ffb54a56d843965a6c614:v1",
+      "jobId": "job_d7f17f362b9c",
+      "pageCount": 6,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:607883db0c818200885135da:v1",
+      "jobId": "job_b957b0efbf28",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:6046e27ec7e7e6002f6ae7ee:v1",
+      "jobId": "job_8e682246d096",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:6a74c836f0cba432843c7153:v1",
+      "jobId": "job_c4f442c9a8da",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:670e77f61b29952574a5e7a2:v1",
+      "jobId": "job_5c478a928349",
+      "pageCount": 4,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:6826158a05236079589c42c3:v1",
+      "jobId": "job_614051b6578f",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:6826162a05236079589c42d8:v1",
+      "jobId": "job_bc3eb2a8692e",
+      "pageCount": 3,
+      "status": "completed"
+     }
+    ]
+   },
+   "pagesPerSec": 1.066,
+   "inBandProvenance": {
+    "ocrAdapter": "ppocrv6-small-sidecar@3.7.0#ep=hpi;threads=4;ocr=selective;rec_batch=same-width",
+    "configurationOcrBackend": {
+     "adapter": "ppocrv6-small-sidecar",
+     "version": "3.7.0",
+     "variant": "small",
+     "executionProvider": "hpi",
+     "numThreads": 4,
+     "ocrMode": "selective",
+     "recBatching": "same-width",
+     "platform": "Linux",
+     "hpiRequested": true,
+     "useHpip": true,
+     "modelPins": {
+      "PaddlePaddle/PP-OCRv6_small_det": "106c97591b235f607453300d9fc8c1cad1b25488",
+      "PaddlePaddle/PP-OCRv6_small_rec": "bd619643acac4b9650c040234da8d944476ee3f1"
+     },
+     "engineEvidence": {
+      "source": "log-derived (child stderr)",
+      "line": "\u001b[32mInference backend: openvino\u001b[0m"
+     }
+    },
+    "keys": [
+     "conflicts",
+     "derivedRelations",
+     "diagnostics",
+     "documentId",
+     "documentSha256",
+     "geometry",
+     "nativeLines",
+     "nativeObservations",
+     "ocrObservations",
+     "pageId",
+     "pageNumber",
+     "projection",
+     "provenance",
+     "revisionId",
+     "schemaVersion",
+     "selectiveOcr",
+     "sourceMatches",
+     "spatialRows"
+    ]
+   },
+   "counts": {
+    "records": 162,
+    "ocrObservations": 13677,
+    "selectivePages": 162,
+    "skippedBoxes": 1161,
+    "conflicts": 512,
+    "secondOpinionPages": 27,
+    "reasons": {
+     "critical-token-conflict": 63,
+     "critical-token-omission": 38,
+     "low-ocr-confidence": 33,
+     "ambiguous-derived-relation": 6,
+     "native-glyph-mismatch": 9,
+     "uncorroborated-ocr": 5
+    }
+   },
+   "drain": {
+    "serverExited": true,
+    "exitCode": 0,
+    "drainS": 3.5,
+    "survivingProcesses": []
+   }
+  },
+  {
+   "mode": "full-2",
+   "readyAfterS": 12.0,
+   "run": {
+    "wallS": 162.4,
+    "pagesTotal": 162,
+    "pagesOk": 162,
+    "pagesFailed": 0,
+    "failedClasses": [],
+    "attemptsHistogram": {
+     "1": 162
+    },
+    "stageTimingsMs": {
+     "render": {
+      "n": 162,
+      "p50": 313,
+      "p95": 613.8
+     },
+     "native": {
+      "n": 162,
+      "p50": 36.2,
+      "p95": 555.9
+     },
+     "ocr": {
+      "n": 162,
+      "p50": 2196.4,
+      "p95": 5227.9
+     },
+     "assembly": {
+      "n": 162,
+      "p50": 54.9,
+      "p95": 3690.3
+     },
+     "secondOpinion": {
+      "n": 27,
+      "p50": 3015.3,
+      "p95": 9966.6
+     },
+     "ocrColdInit": {
+      "n": 4,
+      "p50": 5254,
+      "p95": 5270
+     }
+    },
+    "wallMsP50": 3638,
+    "wallMsP95": 7411,
+    "jobs": [
+     {
+      "name": "public-comps:monotaro:2025-fy:004",
+      "jobId": "job_2fefaee6f36c",
+      "pageCount": 9,
+      "status": "completed"
+     },
+     {
+      "name": "public-comps:monotaro:2025-fy:003",
+      "jobId": "job_1114d8092d25",
+      "pageCount": 9,
+      "status": "completed"
+     },
+     {
+      "name": "public-comps:asseco-poland:2025-fy:001",
+      "jobId": "job_aeed3cb3c9cb",
+      "pageCount": 27,
+      "status": "completed"
+     },
+     {
+      "name": "public-comps:ares:2026-q1:002",
+      "jobId": "job_921185755483",
+      "pageCount": 31,
+      "status": "completed"
+     },
+     {
+      "name": "public-comps:blackstone:2026-q1:002",
+      "jobId": "job_b578a285972b",
+      "pageCount": 12,
+      "status": "completed"
+     },
+     {
+      "name": "pa-sers:2024-09-24:llr-vii:staff-memo",
+      "jobId": "job_009b3ca0c59a",
+      "pageCount": 1,
+      "status": "completed"
+     },
+     {
+      "name": "pa-sers:2024-09-24:llr-vii:consultant-memo",
+      "jobId": "job_af405beedb18",
+      "pageCount": 2,
+      "status": "completed"
+     },
+     {
+      "name": "pa-sers:2024-09-24:llr-vii:manager-presentation",
+      "jobId": "job_ca002170b62e",
+      "pageCount": 11,
+      "status": "completed"
+     },
+     {
+      "name": "pa-sers:2026-06-09:skyknight-capital-fund-v-l-p:3:5ffb7a77f66c",
+      "jobId": "job_466f8dde5bc4",
+      "pageCount": 11,
+      "status": "completed"
+     },
+     {
+      "name": "legistar:seattle:2438:v0:attachment:6113",
+      "jobId": "job_dbe93ed8fb8a",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "legistar:seattle:1794:v0:attachment:3283",
+      "jobId": "job_5b3fe4c56092",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "legistar:seattle:2159:v0:attachment:3326",
+      "jobId": "job_275641336470",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "legistar:seattle:1859:v0:attachment:3318",
+      "jobId": "job_13f97363ad07",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "world-bank:P170734:document:34222345",
+      "jobId": "job_92b17e492ce1",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "world-bank:P178566:document:34223652",
+      "jobId": "job_8cf9949067f3",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:64a59e4ea2a2f4140943711a:v1",
+      "jobId": "job_1348ff7d93af",
+      "pageCount": 6,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:686ffb54a56d843965a6c614:v1",
+      "jobId": "job_714b20baf8dd",
+      "pageCount": 6,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:607883db0c818200885135da:v1",
+      "jobId": "job_3041aa8ff46a",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:6046e27ec7e7e6002f6ae7ee:v1",
+      "jobId": "job_71e9059faa7b",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:6a74c836f0cba432843c7153:v1",
+      "jobId": "job_45d96707cbce",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:670e77f61b29952574a5e7a2:v1",
+      "jobId": "job_db39bd8ce386",
+      "pageCount": 4,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:6826158a05236079589c42c3:v1",
+      "jobId": "job_42c37b098ea9",
+      "pageCount": 3,
+      "status": "completed"
+     },
+     {
+      "name": "osf:file:6826162a05236079589c42d8:v1",
+      "jobId": "job_56f0c0020d91",
+      "pageCount": 3,
+      "status": "completed"
+     }
+    ]
+   },
+   "pagesPerSec": 0.998,
+   "inBandProvenance": {
+    "ocrAdapter": "ppocrv6-small-sidecar@3.7.0#ep=hpi;threads=4",
+    "configurationOcrBackend": {
+     "adapter": "ppocrv6-small-sidecar",
+     "version": "3.7.0",
+     "variant": "small",
+     "executionProvider": "hpi",
+     "numThreads": 4,
+     "platform": "Linux",
+     "hpiRequested": true,
+     "useHpip": true,
+     "modelPins": {
+      "PaddlePaddle/PP-OCRv6_small_det": "106c97591b235f607453300d9fc8c1cad1b25488",
+      "PaddlePaddle/PP-OCRv6_small_rec": "bd619643acac4b9650c040234da8d944476ee3f1"
+     },
+     "engineEvidence": {
+      "source": "log-derived (child stderr)",
+      "line": "\u001b[32mInference backend: openvino\u001b[0m"
+     }
+    },
+    "keys": [
+     "conflicts",
+     "derivedRelations",
+     "diagnostics",
+     "documentId",
+     "documentSha256",
+     "geometry",
+     "nativeLines",
+     "nativeObservations",
+     "ocrObservations",
+     "pageId",
+     "pageNumber",
+     "projection",
+     "provenance",
+     "revisionId",
+     "schemaVersion",
+     "sourceMatches",
+     "spatialRows"
+    ]
+   },
+   "counts": {
+    "records": 162,
+    "ocrObservations": 14839,
+    "selectivePages": 0,
+    "skippedBoxes": 0,
+    "conflicts": 515,
+    "secondOpinionPages": 27,
+    "reasons": {
+     "critical-token-conflict": 63,
+     "critical-token-omission": 38,
+     "low-ocr-confidence": 34,
+     "ambiguous-derived-relation": 6,
+     "native-glyph-mismatch": 9,
+     "uncorroborated-ocr": 5
+    }
+   },
+   "drain": {
+    "serverExited": true,
+    "exitCode": 0,
+    "drainS": 3.3,
+    "survivingProcesses": []
+   }
+  }
+ ],
+ "pagesWhoseEscalationReasonsDiffer": [
+  {
+   "page": "02e6151e0037#10",
+   "full": [
+    "critical-token-conflict",
+    "native-glyph-mismatch"
+   ],
+   "selective": [
+    "critical-token-conflict"
+   ]
+  },
+  {
+   "page": "02e6151e0037#12",
+   "full": [
+    "critical-token-conflict"
+   ],
+   "selective": [
+    "critical-token-conflict",
+    "native-glyph-mismatch"
+   ]
+  },
+  {
+   "page": "5034ed53e4ae#5",
+   "full": [
+    "low-ocr-confidence"
+   ],
+   "selective": []
+  }
+ ]
+}

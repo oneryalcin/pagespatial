@@ -1,6 +1,6 @@
 # Design: selective OCR ("auto" mode) without losing precision
 
-**Date:** 2026-11-07 · **Status:** proposal, not built
+**Date:** 2026-11-07 · **Status:** built on a branch on 2026-11-11 and not merged. Measured 1.07x on the dev corpus, against the ~1.3x estimated below; the audit ran per page, not per document. See the [build trial](../trials/2026-11-11-selective-ocr-build.md).
 
 ## Product requirement (owner, 2026-11-07)
 

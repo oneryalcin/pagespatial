@@ -1,0 +1,37 @@
+{
+ "note": "selective-ocr-replay-fresh.mjs on .evaluation/ocr-arms/fresh (full OCR by PP-OCRv6 Small, Linux HPI, 2026-11-10); texts removed",
+ "devDocuments": {
+  "pages": 102,
+  "pagesReadInFull": 7,
+  "boxes": 6342,
+  "skippedBoxes": 750,
+  "skippedShare": {
+   "boxes": 0.118,
+   "width": 0.169
+  }
+ },
+ "otherDocuments": {
+  "pages": 50,
+  "pagesReadInFull": 11,
+  "boxes": 3646,
+  "skippedBoxes": 855,
+  "skippedShare": {
+   "boxes": 0.235,
+   "width": 0.231
+  }
+ },
+ "pagesTheParserRejects": [
+  {
+   "source": "otherDocuments",
+   "error": "Native point box must have positive area."
+  }
+ ],
+ "conflictsInSkippedBoxes": {
+  "devDocuments": 1
+ },
+ "minSimilarity": 0.9,
+ "disagreementsInSkippedBoxes": {
+  "devDocuments": 7,
+  "otherDocuments": 12
+ }
+}
