@@ -389,6 +389,56 @@ if modal:
 
         print(json.dumps(evaluate_run.remote(name, data), indent=1))
 
+    @app.function(image=export_image, cpu=4.0, memory=8192, timeout=2 * 3600, volumes={"/vol": volume})
+    def stretch_run(name: str, pages: list, boxes: dict, factors: list) -> dict:
+        """Read saved detector boxes with the fine-tuned recognizer at several horizontal
+        stretch factors (more CTC time steps per character), and with Small unstretched.
+        Crops are axis-aligned boxes, so compare variants with each other, not with a
+        pipeline run."""
+        import os
+
+        import cv2
+        import numpy as np
+
+        os.environ["PADDLE_PDX_CPU_NUM_THREADS"] = "4"
+        os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
+        from paddleocr import TextRecognition
+
+        readers = {"small": TextRecognition(model_name="PP-OCRv6_small_rec"),
+                   "tiny": TextRecognition(model_name="PP-OCRv6_tiny_rec", model_dir=f"/vol/runs/{name}/inference")}
+        variants = [("small_x100", "small", 1.0)] + [(f"tiny_{name}_x{round(f * 100)}", "tiny", f) for f in factors]
+        out = {variant: [] for variant, _, _ in variants}
+        for page, png in pages:
+            image = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
+            crops = []
+            for x0, y0, x1, y1 in boxes[page]:
+                crop = image[max(int(y0), 0):int(y1) + 1, max(int(x0), 0):int(x1) + 1]
+                crops.append(crop if crop.size else np.full((8, 8, 3), 255, np.uint8))
+            for variant, reader, factor in variants:
+                scaled = crops if factor == 1.0 else [
+                    cv2.resize(c, (max(1, round(c.shape[1] * factor)), c.shape[0]), interpolation=cv2.INTER_CUBIC)
+                    for c in crops]
+                results = readers[reader].predict(scaled, batch_size=32) if scaled else []
+                out[variant].append({"page": page, "ms": 0, "lines": [
+                    {"text": r.json["res"]["rec_text"], "box": box, "score": float(r.json["res"]["rec_score"])}
+                    for r, box in zip(results, boxes[page])]})
+        return out
+
+    @app.local_entrypoint()
+    def stretch(pages_dir: str, boxes_from: str, out_dir: str, name: str = "v2", factors: str = "1,1.25,1.5,2"):
+        """--boxes-from is an ocr_arms_modal.py result; its line boxes are reused."""
+        import json
+        from pathlib import Path
+
+        manifest = json.loads((Path(pages_dir) / "manifest.json").read_text())
+        pages = [(e["page"], (Path(pages_dir) / e["png"]).read_bytes()) for e in manifest]
+        boxes = {p["page"]: [line["box"] for line in p["lines"]] for p in json.loads(Path(boxes_from).read_text())["perPage"]}
+        result = stretch_run.remote(name, pages, boxes, [float(f) for f in factors.split(",")])
+        Path(out_dir).mkdir(parents=True, exist_ok=True)
+        for variant, per_page in result.items():
+            (Path(out_dir) / f"results-{variant}.json").write_text(json.dumps({"config": {"name": variant}, "perPage": per_page}))
+            print(variant, sum(len(p["lines"]) for p in per_page), "lines")
+
     @app.local_entrypoint()
     def export(data: str = "crops-v2", shards: int = 24, validation_shards: int = 2, per_group: int = 20):
         import json

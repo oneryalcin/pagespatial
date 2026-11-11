@@ -177,8 +177,7 @@ and recall against the text layer. The 0.95 rule was fixed before the run.
   that Small read correctly and gained 12 that Small misread (sign test
   p ≈ 0.02). The losses include dropped digits at confidence 0.998–1.0:
   `922,446` → `922,46`, `19%` → `1%`, on the ceremony pages `1,324,332` →
-  `1,324,32`. The pattern is one of two adjacent equal or similar digits
-  disappearing. 17 of the net loss is on Blackstone's small-print tables.
+  `1,324,32`. 17 of the net loss is on Blackstone's small-print tables.
 - Sending every line in which Tiny reads a digit to Small removes that: the
   numbers are then Small's. On the ceremony sample this rule gives gold 978
   (Small 980, p = 0.53), precision 0.8574 and recall 0.8787 (Small 0.8567 and
@@ -187,6 +186,29 @@ and recall against the text layer. The 0.95 rule was fixed before the run.
   today's, page about 1.85 s against 2.75 s in this run, **1.5x, not
   measured**. Confidence-only routing would be about 2x but breaks the
   precision promise on values.
+
+## Stretching Tiny's crops: rejected
+
+Idea: the confident errors might be CTC merging two adjacent digits, so more
+horizontal resolution per character could fix them. `rec_finetune_modal.py::stretch`
+reads the saved detector boxes with Tiny `v2` at several horizontal stretch
+factors and with Small unstretched. Crops here are axis-aligned boxes, so the
+numbers compare only within this table. "Lost / gained" counts numbers, among
+lines Tiny keeps at confidence ≥ 0.95, that Small read correctly and Tiny did
+not, and the reverse.
+
+| Stretch | fresh: lost / gained | fresh: number precision | ceremony: lost / gained | ceremony: number precision |
+|---|---:|---:|---:|---:|
+| 1.0 | 32 / 19 | 0.848 | 50 / 24 | 0.778 |
+| 1.25 | 65 / 17 | 0.803 | 77 / 30 | 0.747 |
+| 1.5 | 135 / 18 | 0.726 | 113 / 24 | 0.671 |
+| 2.0 | 129 / 7 | 0.462 | 143 / 18 | 0.407 |
+
+Every stretch is worse, and more so the larger it is: the model has never
+seen stretched glyphs. The premise was also weak: at 1.0 only 6 of the 32
+lost numbers on fresh pages (8 of 50 on the ceremony pages) are a digit
+disappearing; the rest are substitutions. Fixing this would mean a different
+architecture or retraining, not a preprocessing change.
 
 ## Limits
 
@@ -213,6 +235,3 @@ and recall against the text layer. The 0.95 rule was fixed before the run.
 2. If yes: build the two-pass recognizer in the sidecar, measure it with the
    arms harness, then run the adoption ceremony. A new witness starts a new
    baseline era.
-3. Untested idea for the dropped-digit errors: give Tiny more horizontal
-   resolution per character (stretch its crops). If that removed them, digit
-   lines could stay on Tiny.
