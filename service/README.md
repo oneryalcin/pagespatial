@@ -112,7 +112,7 @@ node service/server.mjs
 Each page-worker owns one Python child (JSONL over stdin/stdout, pages as
 tmpfiles; a page that gets no reply within `recognizeTimeoutMs` — 120 s
 default — kills the child and fails closed). The child launcher defaults
-to `uv run --with paddleocr==3.7.0 --with paddlepaddle==3.2.1 python`;
+to `uv run --python 3.11 --with paddleocr==3.7.0 --with paddlepaddle==3.2.1 python`;
 **for production prefer a prepared venv with a direct interpreter**
 (`SERVICE_SIDECAR_PYTHON="python3"`, or the JSON-array form for paths
 with spaces: `SERVICE_SIDECAR_PYTHON='["/opt/my venv/bin/python3"]'`) —

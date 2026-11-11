@@ -337,3 +337,24 @@ test('real sidecar smoke (loud-skip without local python env + pinned models)', 
   assert.ok(Array.isArray(result.observations));
   await adapter.dispose();
 });
+
+test('a child that dies before its meta line fails at once, with its last words', async () => {
+  // The shape of a launcher that cannot start the engine (uv finding no
+  // wheel for its Python): an error on stderr, a non-zero exit, no meta.
+  // This used to wait out the whole meta timeout (five minutes by default).
+  const fixture = fixturePins();
+  const deadPath = join(fixture.dir, 'dead-child.cjs');
+  writeFileSync(deadPath, "console.error('error: No solution found when resolving dependencies'); process.exit(2);");
+  const adapter = createPpOcrSidecarAdapter({
+    modelsDir: fixture.modelsDir,
+    pinsPath: fixture.pinsPath,
+    pythonCmd: [process.execPath, deadPath],
+    metaTimeoutMs: 60_000
+  });
+  try {
+    await assert.rejects(adapter.warmup(), /exited before its meta line \(code 2\):\nerror: No solution found/u);
+  } finally {
+    await adapter.dispose().catch(() => undefined);
+    rmSync(fixture.dir, { recursive: true, force: true });
+  }
+});

@@ -37,7 +37,9 @@ import { fileURLToPath } from 'node:url';
 const SIDECAR_DIR = dirname(fileURLToPath(import.meta.url)).replace(/adapters$/u, 'sidecar');
 const SIDECAR_SCRIPT = join(SIDECAR_DIR, 'ppocr_sidecar.py');
 const PINS_PATH = join(SIDECAR_DIR, 'model-pins.json');
-export const DEFAULT_PYTHON_CMD = ['uv', 'run', '--with', 'paddleocr==3.7.0', '--with', 'paddlepaddle==3.2.1', 'python'];
+// Python is pinned to the production image's 3.11: uv otherwise picks its own
+// default, and paddlepaddle 3.2.1 has no wheel for Python 3.14.
+export const DEFAULT_PYTHON_CMD = ['uv', 'run', '--python', '3.11', '--with', 'paddleocr==3.7.0', '--with', 'paddlepaddle==3.2.1', 'python'];
 
 /**
  * Node-side pin verification for boot-time fail-closed (the child verifies
@@ -138,7 +140,11 @@ export function createPpOcrSidecarAdapter(config = {}) {
       meta = null;
       rejectPending('OCR sidecar exited.');
     });
+    // This instance's own stderr, kept apart from the shared ring: if it
+    // dies before its meta line, these are the words that say why.
+    const startupStderr = [];
     createInterface({ input: self.stderr }).on('line', (line) => {
+      if (startupStderr.length < 40) startupStderr.push(line);
       if (child !== self) return;
       stderrRing.push(line);
       if (stderrRing.length > STDERR_RING) stderrRing.shift();
@@ -178,6 +184,19 @@ export function createPpOcrSidecarAdapter(config = {}) {
         else entry.resolve(message);
       });
       self.on('error', (error) => { clearTimeout(timer); if (child === self) { child = null; } reject(error); });
+      // A child that dies before its meta line (a launcher that cannot
+      // resolve its packages, a crash on import) will never send one: fail
+      // now with its last words, not after the whole meta timeout. Once meta
+      // has arrived this reject is a no-op.
+      self.once('exit', (code, signal) => {
+        clearTimeout(timer);
+        const fail = () => reject(new Error(
+          `Sidecar exited before its meta line (${signal ? `signal ${signal}` : `code ${code}`})`
+          + (startupStderr.length ? `:\n${startupStderr.slice(-8).join('\n')}` : '.')));
+        // stderr may not have drained yet; wait for it, briefly.
+        const grace = setTimeout(fail, 250);
+        self.stderr.once('end', () => { clearTimeout(grace); fail(); });
+      });
     });
     coldInitMs = Math.round(performanceNow() - started);
   }
