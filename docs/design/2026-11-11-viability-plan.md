@@ -135,6 +135,13 @@ which was a rule for finding an answer inside a chunk. Each answer is
 correct, wrong (asserts a value that is not the target), or hedged
 (`disputed` or `not found`).
 
+An answer that matches only once its spaces are removed also counts as
+correct, and is counted separately. The shake-down showed why: the text
+layer letter-spaces some numbers ("2 0 2 6"), the answer repeats them, and
+6 of arm A's 7 wrong answers there were of that kind. They carry the right
+digits, so calling them wrong would have tilted the second condition
+against the text layer. Added 2026-11-11 before any scored call.
+
 **Shake-down.** Prompts and plumbing are tried only on the 46 pilot and
 batch 2 conflicts, which are not scored.
 
