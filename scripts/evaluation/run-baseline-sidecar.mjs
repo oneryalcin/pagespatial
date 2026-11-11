@@ -34,7 +34,7 @@ import { getDevelopmentDocuments, loadCorpusManifest } from './lib/manifest.mjs'
 import { resumablePage, safeObjectId, sanitizedFailure } from './lib/run-state.mjs';
 import { attemptEnvelopeSchema, documentSummarySchema, runInvocationSchema } from './lib/run-schema.mjs';
 import { assemblyStage, nativeStage, ocrStage, openDocumentContext, renderStage, RENDER_SCALE } from '../../service/lib/stages.mjs';
-import { createPpOcrSidecarAdapter } from '../../service/adapters/ppocr-sidecar.mjs';
+import { createPpOcrSidecarAdapter, DEFAULT_PYTHON_CMD } from '../../service/adapters/ppocr-sidecar.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const valueFlags = new Set(['--data-root', '--models-dir', '--document-id', '--page', '--threads', '--render-scale', '--document-timeout-ms', '--run-id']);
@@ -116,7 +116,7 @@ const sidecarSession = {
   sessionId: `${Date.now()}-${randomBytes(6).toString('hex')}`,
   startedAt: new Date().toISOString(),
   kind: 'sidecar',
-  launcher: 'uv run --with paddleocr==3.7.0 --with paddlepaddle==3.2.1 python',
+  launcher: DEFAULT_PYTHON_CMD.join(' '),
   platform: sidecarMeta.platform,
   paddleocr: sidecarMeta.versions?.paddleocr ?? 'unknown',
   paddlepaddle: sidecarMeta.versions?.paddlepaddle ?? 'unknown',
