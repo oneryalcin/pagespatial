@@ -43,6 +43,18 @@ ARMS = {
 }
 
 
+FINETUNED_PREFIX = "smalldet_tinyrec_ft_"  # + run name on the pagespatial-rec-finetune volume
+finetune_volume = modal.Volume.from_name("pagespatial-rec-finetune", create_if_missing=True)
+
+
+def arm_config(name: str) -> dict:
+    """ARMS, plus Small det with a fine-tuned Tiny rec (scripts/evaluation/rec_finetune_modal.py)."""
+    if name.startswith(FINETUNED_PREFIX):
+        return {"det": "PP-OCRv6_small_det", "rec": "PP-OCRv6_tiny_rec",
+                "rec_dir": f"/vol/runs/{name.removeprefix(FINETUNED_PREFIX)}/inference"}
+    return ARMS[name]
+
+
 def _lines(result) -> list:
     lines = []
     for res in result:
@@ -60,7 +72,7 @@ def _lines(result) -> list:
     return lines
 
 
-@app.function(image=cpu_image, cpu=float(CORES), memory=8192, timeout=6 * 3600)
+@app.function(image=cpu_image, cpu=float(CORES), memory=8192, timeout=6 * 3600, volumes={"/vol": finetune_volume})
 def run_arms(arms: list, pages: list, reverse: bool) -> dict:
     import importlib.metadata
     import logging
@@ -83,10 +95,22 @@ def run_arms(arms: list, pages: list, reverse: bool) -> dict:
 
     engines, init_s = {}, {}
     for name in arms:
-        arm = ARMS[name]
+        arm = arm_config(name)
+        rec_dir = arm.get("rec_dir")
+        if rec_dir:
+            # HPI's OpenVINO backend needs ONNX next to the Paddle files, as the official models ship it.
+            import shutil
+            import subprocess
+
+            local = shutil.copytree(rec_dir, f"/tmp/{name}")
+            converted = subprocess.run(["paddlex", "--paddle2onnx", "--paddle_model_dir", local,
+                                        "--onnx_model_dir", local], capture_output=True, text=True)
+            backend_lines.append(f"paddle2onnx {name}: exit {converted.returncode} {converted.stdout[-200:]}{converted.stderr[-200:]}")
+            rec_dir = local
         t0 = time.monotonic()
         engines[name] = PaddleOCR(
             text_detection_model_name=arm["det"], text_recognition_model_name=arm["rec"],
+            text_recognition_model_dir=rec_dir,
             use_doc_orientation_classify=False, use_doc_unwarping=False,
             use_textline_orientation=False, device="cpu", enable_hpi=True,
             **arm.get("det_limit", {}))
@@ -111,7 +135,7 @@ def run_arms(arms: list, pages: list, reverse: bool) -> dict:
         name: {
             "deviceTruth": {"osCpuCount": os.cpu_count(), "backendLogLines": backend_lines,
                             "pdxCpuNumThreads": os.environ["PADDLE_PDX_CPU_NUM_THREADS"]},
-            "config": {"name": name, **ARMS[name], "cores": CORES, "threads": THREADS, "reverse": reverse},
+            "config": {"name": name, **arm_config(name), "cores": CORES, "threads": THREADS, "reverse": reverse},
             "initS": init_s[name], "firstPageMs": None, "versions": versions,
             "perPage": out[name],
         }
