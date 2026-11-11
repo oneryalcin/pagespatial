@@ -1,0 +1,501 @@
+{
+ "note": "selective-ocr-replay.mjs --renative, per-page font audit, K=2; text removed",
+ "runs": {
+  "dev-v13-sidecar-2026-08-23": {
+   "pages": 162,
+   "boxes": 15132,
+   "skippedShare": {
+    "boxes": 0.083,
+    "width": 0.2,
+    "chars": 0.212
+   },
+   "readWidthShareByReason": {
+    "native-has-numeral": 0.318,
+    "audit-line": 0.201,
+    "no-usable-native-layer": 0.132,
+    "not-native-covered": 0.116,
+    "font-contradicted": 0.022,
+    "letters-unconfirmed": 0.01,
+    "native-suspicious-characters": 0.002
+   },
+   "conflictsInSkippedBoxes": [
+    {
+     "page": "world-bank_P170734_document_34222345/000006.json",
+     "reason": "critical-token-omission"
+    }
+   ],
+   "gold": {
+    "wrongOrEdited": 7,
+    "onReplayedPages": 7,
+    "onlyInSkippedBoxes": 0
+   },
+   "perDocument": {
+    "legistar_seattle_1794_v0_attachment_3283": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "legistar_seattle_1859_v0_attachment_3318": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "legistar_seattle_2159_v0_attachment_3326": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "legistar_seattle_2438_v0_attachment_6113": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "osf_file_6046e27ec7e7e6002f6ae7ee_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.073
+    },
+    "osf_file_607883db0c818200885135da_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.051
+    },
+    "osf_file_64a59e4ea2a2f4140943711a_v1": {
+     "pages": 6,
+     "skippedWidthShare": 0.308
+    },
+    "osf_file_670e77f61b29952574a5e7a2_v1": {
+     "pages": 4,
+     "skippedWidthShare": 0
+    },
+    "osf_file_6826158a05236079589c42c3_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.03
+    },
+    "osf_file_6826162a05236079589c42d8_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.008
+    },
+    "osf_file_686ffb54a56d843965a6c614_v1": {
+     "pages": 6,
+     "skippedWidthShare": 0.295
+    },
+    "osf_file_6a74c836f0cba432843c7153_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.425
+    },
+    "pa-sers_2024-09-24_llr-vii_consultant-memo": {
+     "pages": 2,
+     "skippedWidthShare": 0.452
+    },
+    "pa-sers_2024-09-24_llr-vii_manager-presentation": {
+     "pages": 11,
+     "skippedWidthShare": 0.001
+    },
+    "pa-sers_2024-09-24_llr-vii_staff-memo": {
+     "pages": 1,
+     "skippedWidthShare": 0.188
+    },
+    "pa-sers_2026-06-09_skyknight-capital-fund-v-l-p_3_5ffb7a77f66c": {
+     "pages": 11,
+     "skippedWidthShare": 0.417
+    },
+    "public-comps_ares_2026-q1_002": {
+     "pages": 31,
+     "skippedWidthShare": 0.339
+    },
+    "public-comps_asseco-poland_2025-fy_001": {
+     "pages": 27,
+     "skippedWidthShare": 0.197
+    },
+    "public-comps_blackstone_2026-q1_002": {
+     "pages": 12,
+     "skippedWidthShare": 0.078
+    },
+    "public-comps_monotaro_2025-fy_003": {
+     "pages": 9,
+     "skippedWidthShare": 0.001
+    },
+    "public-comps_monotaro_2025-fy_004": {
+     "pages": 9,
+     "skippedWidthShare": 0.255
+    },
+    "world-bank_P170734_document_34222345": {
+     "pages": 3,
+     "skippedWidthShare": 0.138
+    },
+    "world-bank_P178566_document_34223652": {
+     "pages": 3,
+     "skippedWidthShare": 0.117
+    }
+   }
+  },
+  "dev-v12-cross-family-2026-08-20": {
+   "pages": 162,
+   "boxes": 15112,
+   "skippedShare": {
+    "boxes": 0.074,
+    "width": 0.183,
+    "chars": 0.195
+   },
+   "readWidthShareByReason": {
+    "native-has-numeral": 0.318,
+    "audit-line": 0.196,
+    "no-usable-native-layer": 0.132,
+    "not-native-covered": 0.122,
+    "font-contradicted": 0.026,
+    "letters-unconfirmed": 0.02,
+    "native-suspicious-characters": 0.002
+   },
+   "conflictsInSkippedBoxes": [
+    {
+     "page": "world-bank_P178566_document_34223652/000003.json",
+     "reason": "critical-token-omission"
+    }
+   ],
+   "gold": {
+    "wrongOrEdited": 7,
+    "onReplayedPages": 7,
+    "onlyInSkippedBoxes": 0
+   },
+   "perDocument": {
+    "legistar_seattle_1794_v0_attachment_3283": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "legistar_seattle_1859_v0_attachment_3318": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "legistar_seattle_2159_v0_attachment_3326": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "legistar_seattle_2438_v0_attachment_6113": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "osf_file_6046e27ec7e7e6002f6ae7ee_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.073
+    },
+    "osf_file_607883db0c818200885135da_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.05
+    },
+    "osf_file_64a59e4ea2a2f4140943711a_v1": {
+     "pages": 6,
+     "skippedWidthShare": 0.287
+    },
+    "osf_file_670e77f61b29952574a5e7a2_v1": {
+     "pages": 4,
+     "skippedWidthShare": 0
+    },
+    "osf_file_6826158a05236079589c42c3_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.03
+    },
+    "osf_file_6826162a05236079589c42d8_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.008
+    },
+    "osf_file_686ffb54a56d843965a6c614_v1": {
+     "pages": 6,
+     "skippedWidthShare": 0.28
+    },
+    "osf_file_6a74c836f0cba432843c7153_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.424
+    },
+    "pa-sers_2024-09-24_llr-vii_consultant-memo": {
+     "pages": 2,
+     "skippedWidthShare": 0.452
+    },
+    "pa-sers_2024-09-24_llr-vii_manager-presentation": {
+     "pages": 11,
+     "skippedWidthShare": 0.001
+    },
+    "pa-sers_2024-09-24_llr-vii_staff-memo": {
+     "pages": 1,
+     "skippedWidthShare": 0.111
+    },
+    "pa-sers_2026-06-09_skyknight-capital-fund-v-l-p_3_5ffb7a77f66c": {
+     "pages": 11,
+     "skippedWidthShare": 0.411
+    },
+    "public-comps_ares_2026-q1_002": {
+     "pages": 31,
+     "skippedWidthShare": 0.317
+    },
+    "public-comps_asseco-poland_2025-fy_001": {
+     "pages": 27,
+     "skippedWidthShare": 0.172
+    },
+    "public-comps_blackstone_2026-q1_002": {
+     "pages": 12,
+     "skippedWidthShare": 0.059
+    },
+    "public-comps_monotaro_2025-fy_003": {
+     "pages": 9,
+     "skippedWidthShare": 0.001
+    },
+    "public-comps_monotaro_2025-fy_004": {
+     "pages": 9,
+     "skippedWidthShare": 0.246
+    },
+    "world-bank_P170734_document_34222345": {
+     "pages": 3,
+     "skippedWidthShare": 0.03
+    },
+    "world-bank_P178566_document_34223652": {
+     "pages": 3,
+     "skippedWidthShare": 0.108
+    }
+   }
+  },
+  "dev-v10-coverage-starvation-2026-08-19": {
+   "pages": 162,
+   "boxes": 14797,
+   "skippedShare": {
+    "boxes": 0.066,
+    "width": 0.153,
+    "chars": 0.166
+   },
+   "readWidthShareByReason": {
+    "native-has-numeral": 0.313,
+    "audit-line": 0.196,
+    "no-usable-native-layer": 0.133,
+    "not-native-covered": 0.127,
+    "font-contradicted": 0.063,
+    "letters-unconfirmed": 0.013,
+    "native-suspicious-characters": 0.003
+   },
+   "conflictsInSkippedBoxes": [
+    {
+     "page": "pa-sers_2026-06-09_skyknight-capital-fund-v-l-p_3_5ffb7a77f66c/000011.json",
+     "reason": "critical-token-omission"
+    },
+    {
+     "page": "world-bank_P178566_document_34223652/000003.json",
+     "reason": "critical-token-omission"
+    }
+   ],
+   "gold": {
+    "wrongOrEdited": 7,
+    "onReplayedPages": 7,
+    "onlyInSkippedBoxes": 0
+   },
+   "perDocument": {
+    "legistar_seattle_1794_v0_attachment_3283": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "legistar_seattle_1859_v0_attachment_3318": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "legistar_seattle_2159_v0_attachment_3326": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "legistar_seattle_2438_v0_attachment_6113": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "osf_file_6046e27ec7e7e6002f6ae7ee_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.074
+    },
+    "osf_file_607883db0c818200885135da_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.067
+    },
+    "osf_file_64a59e4ea2a2f4140943711a_v1": {
+     "pages": 6,
+     "skippedWidthShare": 0.241
+    },
+    "osf_file_670e77f61b29952574a5e7a2_v1": {
+     "pages": 4,
+     "skippedWidthShare": 0
+    },
+    "osf_file_6826158a05236079589c42c3_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.03
+    },
+    "osf_file_6826162a05236079589c42d8_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.008
+    },
+    "osf_file_686ffb54a56d843965a6c614_v1": {
+     "pages": 6,
+     "skippedWidthShare": 0.284
+    },
+    "osf_file_6a74c836f0cba432843c7153_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.428
+    },
+    "pa-sers_2024-09-24_llr-vii_consultant-memo": {
+     "pages": 2,
+     "skippedWidthShare": 0.452
+    },
+    "pa-sers_2024-09-24_llr-vii_manager-presentation": {
+     "pages": 11,
+     "skippedWidthShare": 0.002
+    },
+    "pa-sers_2024-09-24_llr-vii_staff-memo": {
+     "pages": 1,
+     "skippedWidthShare": 0.112
+    },
+    "pa-sers_2026-06-09_skyknight-capital-fund-v-l-p_3_5ffb7a77f66c": {
+     "pages": 11,
+     "skippedWidthShare": 0.412
+    },
+    "public-comps_ares_2026-q1_002": {
+     "pages": 31,
+     "skippedWidthShare": 0.316
+    },
+    "public-comps_asseco-poland_2025-fy_001": {
+     "pages": 27,
+     "skippedWidthShare": 0.026
+    },
+    "public-comps_blackstone_2026-q1_002": {
+     "pages": 12,
+     "skippedWidthShare": 0.079
+    },
+    "public-comps_monotaro_2025-fy_003": {
+     "pages": 9,
+     "skippedWidthShare": 0.003
+    },
+    "public-comps_monotaro_2025-fy_004": {
+     "pages": 9,
+     "skippedWidthShare": 0.252
+    },
+    "world-bank_P170734_document_34222345": {
+     "pages": 3,
+     "skippedWidthShare": 0.061
+    },
+    "world-bank_P178566_document_34223652": {
+     "pages": 3,
+     "skippedWidthShare": 0.076
+    }
+   }
+  },
+  "dev-v7-scale-locale-2026-08-19": {
+   "pages": 162,
+   "boxes": 14797,
+   "skippedShare": {
+    "boxes": 0.066,
+    "width": 0.153,
+    "chars": 0.166
+   },
+   "readWidthShareByReason": {
+    "native-has-numeral": 0.313,
+    "audit-line": 0.196,
+    "no-usable-native-layer": 0.133,
+    "not-native-covered": 0.127,
+    "font-contradicted": 0.063,
+    "letters-unconfirmed": 0.013,
+    "native-suspicious-characters": 0.003
+   },
+   "conflictsInSkippedBoxes": [
+    {
+     "page": "pa-sers_2026-06-09_skyknight-capital-fund-v-l-p_3_5ffb7a77f66c/000011.json",
+     "reason": "critical-token-omission"
+    }
+   ],
+   "gold": {
+    "wrongOrEdited": 7,
+    "onReplayedPages": 7,
+    "onlyInSkippedBoxes": 0
+   },
+   "perDocument": {
+    "legistar_seattle_1794_v0_attachment_3283": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "legistar_seattle_1859_v0_attachment_3318": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "legistar_seattle_2159_v0_attachment_3326": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "legistar_seattle_2438_v0_attachment_6113": {
+     "pages": 3,
+     "skippedWidthShare": 0
+    },
+    "osf_file_6046e27ec7e7e6002f6ae7ee_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.074
+    },
+    "osf_file_607883db0c818200885135da_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.067
+    },
+    "osf_file_64a59e4ea2a2f4140943711a_v1": {
+     "pages": 6,
+     "skippedWidthShare": 0.241
+    },
+    "osf_file_670e77f61b29952574a5e7a2_v1": {
+     "pages": 4,
+     "skippedWidthShare": 0
+    },
+    "osf_file_6826158a05236079589c42c3_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.03
+    },
+    "osf_file_6826162a05236079589c42d8_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.008
+    },
+    "osf_file_686ffb54a56d843965a6c614_v1": {
+     "pages": 6,
+     "skippedWidthShare": 0.284
+    },
+    "osf_file_6a74c836f0cba432843c7153_v1": {
+     "pages": 3,
+     "skippedWidthShare": 0.428
+    },
+    "pa-sers_2024-09-24_llr-vii_consultant-memo": {
+     "pages": 2,
+     "skippedWidthShare": 0.452
+    },
+    "pa-sers_2024-09-24_llr-vii_manager-presentation": {
+     "pages": 11,
+     "skippedWidthShare": 0.002
+    },
+    "pa-sers_2024-09-24_llr-vii_staff-memo": {
+     "pages": 1,
+     "skippedWidthShare": 0.112
+    },
+    "pa-sers_2026-06-09_skyknight-capital-fund-v-l-p_3_5ffb7a77f66c": {
+     "pages": 11,
+     "skippedWidthShare": 0.412
+    },
+    "public-comps_ares_2026-q1_002": {
+     "pages": 31,
+     "skippedWidthShare": 0.316
+    },
+    "public-comps_asseco-poland_2025-fy_001": {
+     "pages": 27,
+     "skippedWidthShare": 0.026
+    },
+    "public-comps_blackstone_2026-q1_002": {
+     "pages": 12,
+     "skippedWidthShare": 0.079
+    },
+    "public-comps_monotaro_2025-fy_003": {
+     "pages": 9,
+     "skippedWidthShare": 0.003
+    },
+    "public-comps_monotaro_2025-fy_004": {
+     "pages": 9,
+     "skippedWidthShare": 0.252
+    },
+    "world-bank_P170734_document_34222345": {
+     "pages": 3,
+     "skippedWidthShare": 0.061
+    },
+    "world-bank_P178566_document_34223652": {
+     "pages": 3,
+     "skippedWidthShare": 0.076
+    }
+   }
+  }
+ }
+}

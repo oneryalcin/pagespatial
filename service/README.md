@@ -133,6 +133,17 @@ says so (`ppocrv6-small-sidecar@3.7.0#ep=paddle-default;threads=1`).
 backend-selection line, captured from child stderr and labeled
 log-derived — the C++ layer bypasses Python logging).
 
+**Selective OCR** (`SERVICE_OCR_SELECTIVE=1`, off by default, not adopted):
+the sidecar detects text boxes on every page, and OCR reads only the boxes
+the page's native text cannot stand in for. Numbers, charts, scans and any
+text whose font OCR has not confirmed letter by letter on that page are
+always read. Each unread box is listed in the record's
+`selectiveOcr.skipped` with the native observations standing in, and the
+schema re-derives that the skip was allowed. The descriptor names the mode
+(`...;ocr=selective;rec_batch=same-width`). It is a different witness
+configuration from full OCR; measurements and limits are in
+`docs/trials/2026-11-11-selective-ocr-build.md`.
+
 The **validated fallback** is the server-native WASM adapter (node-worse
 bounded at 0.5% of gold at 95%):
 
