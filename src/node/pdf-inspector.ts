@@ -135,32 +135,35 @@ export function createPdfInspectorNativeAdapter(options: PdfInspectorAdapterOpti
         const candidates = inspectorByText.get(key);
         return pdfTextCounts.get(key) === 1 && candidates?.length === 1 ? candidates[0] : undefined;
       };
-      // An item pdf-inspector could not be matched to (repeated text, or a run
-      // the two extractors split differently) would otherwise carry PDF.js's
-      // font id while its neighbours in the same font carry pdf-inspector's
-      // name, splitting one font's glyph evidence in two. Where every matched
-      // item of a PDF.js font carries the same pdf-inspector name, that name
-      // applies to the font's unmatched items too.
+      // The font label is what the glyph audit and selective OCR pool letter
+      // evidence by, so it must name one font. PDF.js's font id does (one per
+      // font object) but is opaque; pdf-inspector's name is readable but is
+      // only known for items matched by text, and two font objects can share
+      // it. So: where the matched items pair a PDF.js font with one name and
+      // that name with no other PDF.js font, every item of the font carries
+      // the name, matched or not. Where a name covers several PDF.js fonts,
+      // the label is the name qualified by the PDF.js id.
       const namesByPdfJsFont = new Map<string, Set<string>>();
+      const pdfJsFontsByName = new Map<string, Set<string>>();
       for (const item of items) {
         const matched = inspectorMatch(item);
         if (!matched) continue;
         (namesByPdfJsFont.get(item.fontName) ?? namesByPdfJsFont.set(item.fontName, new Set()).get(item.fontName)!).add(matched.font);
+        (pdfJsFontsByName.get(matched.font) ?? pdfJsFontsByName.set(matched.font, new Set()).get(matched.font)!).add(item.fontName);
       }
-      const inferredFont = (item: TextItem): string | undefined => {
+      const fontLabel = (item: TextItem): string => {
         const names = namesByPdfJsFont.get(item.fontName);
-        return names?.size === 1 ? [...names][0] : undefined;
+        if (names?.size !== 1) return item.fontName;
+        const [name] = names;
+        return pdfJsFontsByName.get(name!)!.size === 1 ? name! : `${name} (${item.fontName})`;
       };
       const observations = pdfJsTextObservations(items, pageNumber, (item): PdfJsTextMetadata | undefined => {
         const matched = inspectorMatch(item);
-        if (!matched) {
-          const font = inferredFont(item);
-          return font ? { font } : undefined;
-        }
+        if (!matched) return { font: fontLabel(item) };
         return {
           mcid: matched.mcid ?? null,
           structureRole: matched.mcid === undefined ? null : roleByMcid.get(matched.mcid) ?? null,
-          font: matched.font,
+          font: fontLabel(item),
           fontSize: matched.fontSize,
           isBold: matched.isBold,
           isItalic: matched.isItalic

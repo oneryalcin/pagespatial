@@ -143,6 +143,10 @@ schema re-derives that the skip was allowed. The descriptor names the mode
 (`...;ocr=selective;rec_batch=same-width`). It is a different witness
 configuration from full OCR; measurements and limits are in
 `docs/trials/2026-11-11-selective-ocr-build.md`.
+`SERVICE_OCR_REC_BATCHING=same-width` (also off by default, also a different
+witness configuration) reads every box but batches crops so that a line's
+reading does not depend on which other lines are read with it; selective
+OCR implies it.
 
 The **validated fallback** is the server-native WASM adapter (node-worse
 bounded at 0.5% of gold at 95%):

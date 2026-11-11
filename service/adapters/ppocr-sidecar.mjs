@@ -26,13 +26,18 @@
  * `verifyModelPins()` lets the server fail closed at boot, before any job
  * is accepted.
  *
+ * Same-width batching (`recBatching: 'same-width'`): the page is read through
+ * the child's detect and recognize requests, which batch crops so that a
+ * line reads the same whichever other lines are read with it (see
+ * ppocr_sidecar.py). Every detected box is still read.
+ *
  * Selective OCR (`selective: true`, docs/design/2026-11-07-selective-ocr.md):
- * the child detects text boxes, this adapter decides from the page's native
- * text which ones OCR must read (dist/selective-ocr.js), and the child
- * recognizes only those, batching crops so that a line reads the same
- * whichever other lines are read with it (see ppocr_sidecar.py). That makes
- * it a different witness configuration from full OCR, and the descriptor
- * names it: a record cannot be ambiguous about its witness.
+ * same-width batching, and this adapter decides from the page's native text
+ * which detected boxes OCR must read (dist/selective-ocr.js); the child
+ * recognizes only those.
+ *
+ * Both are different witness configurations from the default, and the
+ * descriptor names them: a record cannot be ambiguous about its witness.
  */
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
@@ -76,12 +81,16 @@ export function verifyModelPins(modelsDir, pinsPath = PINS_PATH) {
 const STDERR_RING = 200;
 
 export function createPpOcrSidecarAdapter(config = {}) {
-  const { modelsDir, threads = 1, pythonCmd = DEFAULT_PYTHON_CMD, pinsPath = PINS_PATH, metaTimeoutMs = 300_000, recognizeTimeoutMs = 120_000, selective = false } = config;
+  const { modelsDir, threads = 1, pythonCmd = DEFAULT_PYTHON_CMD, pinsPath = PINS_PATH, metaTimeoutMs = 300_000, recognizeTimeoutMs = 120_000, selective = false, recBatching } = config;
   if (!modelsDir) {
     throw new Error('ppocr-sidecar requires an explicit modelsDir (SERVICE_SIDECAR_MODELS_DIR) — pinned models are configuration, not magic.');
   }
   const pins = verifyModelPins(modelsDir, pinsPath);
-  const MODE = selective ? ';ocr=selective;rec_batch=same-width' : '';
+  if (recBatching !== undefined && recBatching !== 'same-width') {
+    throw new Error(`Unknown recBatching '${recBatching}'; the only alternative to the pipeline default is 'same-width'.`);
+  }
+  const sameWidth = selective || recBatching === 'same-width';
+  const MODE = selective ? ';ocr=selective;rec_batch=same-width' : sameWidth ? ';rec_batch=same-width' : '';
   const tmpRoot = mkdtempSync(join(tmpdir(), 'psvc-sidecar-'));
 
   let child = null;
@@ -273,7 +282,8 @@ export function createPpOcrSidecarAdapter(config = {}) {
         variant: 'small',
         executionProvider: ep,
         numThreads: threads,
-        ...(selective ? { ocrMode: 'selective', recBatching: 'same-width' } : {}),
+        ...(selective ? { ocrMode: 'selective' } : {}),
+        ...(sameWidth ? { recBatching: 'same-width' } : {}),
         platform: meta.platform,
         hpiRequested: meta.hpiRequested,
         useHpip: meta.useHpip,
@@ -320,7 +330,7 @@ export function createPpOcrSidecarAdapter(config = {}) {
       const path = join(tmpRoot, `${randomUUID()}.png`);
       writeFileSync(path, Buffer.from(page.data));
       try {
-        if (!selective) {
+        if (!sameWidth) {
           const response = await request({ path });
           const observations = (response.lines ?? [])
             .filter((line) => typeof line.text === 'string' && line.text.trim())
@@ -331,6 +341,15 @@ export function createPpOcrSidecarAdapter(config = {}) {
         // Rounded as the record rounds them, so the schema re-derives each
         // skip from exactly the boxes this decision saw.
         const boxes = polygons.map((polygon) => roundBox(envelope(polygon)));
+        if (!selective) {
+          const all = polygons.map((_, index) => index);
+          const lines = all.length ? (await request({ op: 'recognize', path, indices: all })).lines ?? [] : [];
+          const observations = lines
+            .filter((line) => typeof line.text === 'string' && line.text.trim())
+            .sort((left, right) => left.index - right.index)
+            .map((line) => observation(page, line.index, line, polygons[line.index]));
+          return { pageNumber: page.pageNumber, observations, backend: descriptorFor(meta).ep };
+        }
         // No native text supplied (the health warm-up) reads everything.
         const result = await recognizeSelectively({
           boxes,

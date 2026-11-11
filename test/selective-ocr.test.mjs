@@ -224,6 +224,34 @@ test('selective sidecar adapter: reads only the boxes the native text cannot sta
   }
 });
 
+test('same-width sidecar adapter: reads every detected box and says so, with no skip block', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'samewidth-sidecar-'));
+  try {
+    const modelDir = join(dir, 'models', 'PP-OCRv6_small_det');
+    mkdirSync(modelDir, { recursive: true });
+    writeFileSync(join(modelDir, 'inference.pdiparams'), 'weights');
+    const pinsPath = join(dir, 'model-pins.json');
+    writeFileSync(pinsPath, JSON.stringify({ repos: { 'PaddlePaddle/PP-OCRv6_small_det': {
+      revision: 'rev', files: { 'inference.pdiparams': createHash('sha256').update('weights').digest('hex') }
+    } } }));
+    const mockPath = join(dir, 'mock-child.cjs');
+    writeFileSync(mockPath, MOCK_CHILD);
+    const adapter = createPpOcrSidecarAdapter({
+      modelsDir: join(dir, 'models'), pinsPath, pythonCmd: [process.execPath, mockPath], metaTimeoutMs: 5000, recBatching: 'same-width'
+    });
+    try {
+      const page = await adapter.recognize({ pageNumber: 1, geometry: { width: 800, height: 400 }, data: new Uint8Array([1]) });
+      assert.match(adapter.descriptor, /threads=1;rec_batch=same-width$/u);
+      assert.deepEqual(page.observations.map((observation) => observation.text), TEXTS);
+      assert.equal(page.selectiveOcr, undefined);
+    } finally {
+      await adapter.dispose();
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // 80x40 white PNG.
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAFAAAAAoCAAAAABMCyLdAAAAJUlEQVR4nO3MMQEAAAwCIPuX1hDbCQFIn0UoFAqFQqFQKBQKbwaQyXQ1muFazgAAAABJRU5ErkJggg==',
@@ -266,4 +294,19 @@ test('native adapter: every item of one font carries one font label, including r
   });
   assert.equal(native.observations.length, 4);
   assert.equal(new Set(native.observations.map((observation) => observation.font)).size, 1);
+});
+
+test('native adapter: two font objects that share a name get different labels', async () => {
+  // Evidence that OCR confirmed one font's letters must not vouch for another font's text layer.
+  const native = await pdfPage(async (pdf, page, font) => {
+    const twin = await pdf.embedFont(StandardFonts.Helvetica);
+    page.drawText('First font object, a unique line', { x: 72, y: 700, size: 11, font });
+    page.drawText('Second font object, another unique line', { x: 72, y: 680, size: 11, font: twin });
+    page.drawText('repeated', { x: 72, y: 660, size: 11, font });
+    page.drawText('repeated', { x: 72, y: 640, size: 11, font: twin });
+  });
+  const [first, second, firstRepeat, secondRepeat] = native.observations.map((observation) => observation.font);
+  assert.notEqual(first, second);
+  assert.equal(firstRepeat, first);
+  assert.equal(secondRepeat, second);
 });

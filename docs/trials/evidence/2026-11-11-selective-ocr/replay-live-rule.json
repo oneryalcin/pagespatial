@@ -1,17 +1,18 @@
 {
- "note": "selective-ocr-replay.mjs --renative, per-page font audit, K=2; text removed",
+ "note": "selective-ocr-replay.mjs --renative, per-page font audit, two confirmations per letter; text removed",
  "runs": {
   "dev-v13-sidecar-2026-08-23": {
    "pages": 162,
    "boxes": 15132,
+   "conflicts": 454,
    "skippedShare": {
-    "boxes": 0.083,
-    "width": 0.2,
-    "chars": 0.212
+    "boxes": 0.081,
+    "width": 0.196,
+    "chars": 0.209
    },
    "readWidthShareByReason": {
     "native-has-numeral": 0.318,
-    "audit-line": 0.201,
+    "audit-line": 0.205,
     "no-usable-native-layer": 0.132,
     "not-native-covered": 0.116,
     "font-contradicted": 0.022,
@@ -96,7 +97,7 @@
     },
     "public-comps_ares_2026-q1_002": {
      "pages": 31,
-     "skippedWidthShare": 0.339
+     "skippedWidthShare": 0.328
     },
     "public-comps_asseco-poland_2025-fy_001": {
      "pages": 27,
@@ -108,11 +109,11 @@
     },
     "public-comps_monotaro_2025-fy_003": {
      "pages": 9,
-     "skippedWidthShare": 0.001
+     "skippedWidthShare": 0.003
     },
     "public-comps_monotaro_2025-fy_004": {
      "pages": 9,
-     "skippedWidthShare": 0.255
+     "skippedWidthShare": 0.238
     },
     "world-bank_P170734_document_34222345": {
      "pages": 3,
@@ -127,14 +128,15 @@
   "dev-v12-cross-family-2026-08-20": {
    "pages": 162,
    "boxes": 15112,
+   "conflicts": 470,
    "skippedShare": {
-    "boxes": 0.074,
-    "width": 0.183,
-    "chars": 0.195
+    "boxes": 0.072,
+    "width": 0.18,
+    "chars": 0.191
    },
    "readWidthShareByReason": {
     "native-has-numeral": 0.318,
-    "audit-line": 0.196,
+    "audit-line": 0.2,
     "no-usable-native-layer": 0.132,
     "not-native-covered": 0.122,
     "font-contradicted": 0.026,
@@ -219,7 +221,7 @@
     },
     "public-comps_ares_2026-q1_002": {
      "pages": 31,
-     "skippedWidthShare": 0.317
+     "skippedWidthShare": 0.306
     },
     "public-comps_asseco-poland_2025-fy_001": {
      "pages": 27,
@@ -231,11 +233,11 @@
     },
     "public-comps_monotaro_2025-fy_003": {
      "pages": 9,
-     "skippedWidthShare": 0.001
+     "skippedWidthShare": 0.002
     },
     "public-comps_monotaro_2025-fy_004": {
      "pages": 9,
-     "skippedWidthShare": 0.246
+     "skippedWidthShare": 0.23
     },
     "world-bank_P170734_document_34222345": {
      "pages": 3,
@@ -250,14 +252,15 @@
   "dev-v10-coverage-starvation-2026-08-19": {
    "pages": 162,
    "boxes": 14797,
+   "conflicts": 627,
    "skippedShare": {
-    "boxes": 0.066,
-    "width": 0.153,
-    "chars": 0.166
+    "boxes": 0.064,
+    "width": 0.149,
+    "chars": 0.162
    },
    "readWidthShareByReason": {
     "native-has-numeral": 0.313,
-    "audit-line": 0.196,
+    "audit-line": 0.199,
     "no-usable-native-layer": 0.133,
     "not-native-covered": 0.127,
     "font-contradicted": 0.063,
@@ -346,7 +349,7 @@
     },
     "public-comps_ares_2026-q1_002": {
      "pages": 31,
-     "skippedWidthShare": 0.316
+     "skippedWidthShare": 0.305
     },
     "public-comps_asseco-poland_2025-fy_001": {
      "pages": 27,
@@ -362,7 +365,7 @@
     },
     "public-comps_monotaro_2025-fy_004": {
      "pages": 9,
-     "skippedWidthShare": 0.252
+     "skippedWidthShare": 0.235
     },
     "world-bank_P170734_document_34222345": {
      "pages": 3,
@@ -377,14 +380,15 @@
   "dev-v7-scale-locale-2026-08-19": {
    "pages": 162,
    "boxes": 14797,
+   "conflicts": 449,
    "skippedShare": {
-    "boxes": 0.066,
-    "width": 0.153,
-    "chars": 0.166
+    "boxes": 0.064,
+    "width": 0.149,
+    "chars": 0.162
    },
    "readWidthShareByReason": {
     "native-has-numeral": 0.313,
-    "audit-line": 0.196,
+    "audit-line": 0.199,
     "no-usable-native-layer": 0.133,
     "not-native-covered": 0.127,
     "font-contradicted": 0.063,
@@ -469,7 +473,7 @@
     },
     "public-comps_ares_2026-q1_002": {
      "pages": 31,
-     "skippedWidthShare": 0.316
+     "skippedWidthShare": 0.305
     },
     "public-comps_asseco-poland_2025-fy_001": {
      "pages": 27,
@@ -485,7 +489,7 @@
     },
     "public-comps_monotaro_2025-fy_004": {
      "pages": 9,
-     "skippedWidthShare": 0.252
+     "skippedWidthShare": 0.235
     },
     "world-bank_P170734_document_34222345": {
      "pages": 3,

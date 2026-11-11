@@ -153,8 +153,15 @@ if (adapterId === 'ppocr-sidecar') {
   }
   // Selective OCR (docs/design/2026-11-07-selective-ocr.md) is opt-in: it is
   // a different witness configuration, named in every record it produces.
+  // SERVICE_OCR_REC_BATCHING=same-width reads every box but batches crops so
+  // a line's reading does not depend on its batch-mates; selective implies it.
   const selective = process.env.SERVICE_OCR_SELECTIVE === '1';
-  ocr = { modelsDir, threads, pythonCmd, ...(selective ? { selective } : {}) };
+  const recBatching = process.env.SERVICE_OCR_REC_BATCHING;
+  if (recBatching !== undefined && recBatching !== 'same-width') {
+    console.error(`SERVICE_OCR_REC_BATCHING must be 'same-width' when set, got '${recBatching}'.`);
+    process.exit(1);
+  }
+  ocr = { modelsDir, threads, pythonCmd, ...(selective ? { selective } : {}), ...(recBatching ? { recBatching } : {}) };
 } else if (adapterId === 'ppocr-server') {
   const assetsDir = process.env.SERVICE_OCR_ASSETS_DIR;
   if (!assetsDir || !existsSync(assetsDir)) {

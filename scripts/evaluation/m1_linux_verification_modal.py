@@ -39,11 +39,14 @@ Tasks (run from the repo root):
       --pdfs-dir /abs/.evaluation/m1-subset-pdfs --workers 4 --threads 4 \
       --out /abs/.evaluation/m1-linux/selective.json
       # selective OCR (docs/trials/2026-11-11-selective-ocr-build.md): the
-      # corpus through the real service three times in ONE container: full,
-      # selective (SERVICE_OCR_SELECTIVE=1), full again. The second full run
-      # bounds host drift. Returns throughput, OCR-stage timings, how many
-      # detected boxes were skipped, and which pages' escalation reasons
-      # differ between full and selective.
+      # corpus through the real service four times in ONE container: full,
+      # full with same-width recognizer batching
+      # (SERVICE_OCR_REC_BATCHING=same-width), selective
+      # (SERVICE_OCR_SELECTIVE=1, which implies same-width), full again.
+      # The second leg separates the batching change from the skipping; the
+      # last bounds host drift. Returns throughput, OCR-stage timings, how
+      # many detected boxes were skipped, and which pages' escalation
+      # reasons differ between full and selective.
 
 Outputs are count-level only — no corpus text leaves the function.
 """
@@ -499,9 +502,11 @@ def _record_counts(pages: list) -> dict:
 
 @app.function(image=image, cpu=4.0, memory=24576, timeout=3 * 3600)
 def selective(pdfs: list, workers: int, threads: int) -> dict:
-    """Full, selective, full again: the same corpus through the real service in one container."""
+    """Full, same-width, selective, full again: the same corpus through the real service in one container."""
     runs = []
-    for index, (mode, env) in enumerate((("full-1", {}), ("selective", {"SERVICE_OCR_SELECTIVE": "1"}), ("full-2", {}))):
+    legs = (("full-1", {}), ("same-width", {"SERVICE_OCR_REC_BATCHING": "same-width"}),
+            ("selective", {"SERVICE_OCR_SELECTIVE": "1"}), ("full-2", {}))
+    for index, (mode, env) in enumerate(legs):
         port = 8581 + index
         server = _start_server(port, {
             "SERVICE_WORKERS": str(workers), "SERVICE_SIDECAR_THREADS": str(threads),
@@ -519,8 +524,10 @@ def selective(pdfs: list, workers: int, threads: int) -> dict:
             "drain": _shutdown_and_probe(server),
         })
     reasons = {run["mode"]: run.pop("reasonsByPage") for run in runs}
-    differing = [{"page": page, "full": types, "selective": reasons["selective"].get(page)}
-                 for page, types in sorted(reasons["full-1"].items()) if reasons["selective"].get(page) != types]
+    differing = [{"page": page, "full": types, "sameWidth": reasons["same-width"].get(page),
+                  "selective": reasons["selective"].get(page)}
+                 for page, types in sorted(reasons["full-1"].items())
+                 if reasons["selective"].get(page) != types or reasons["same-width"].get(page) != types]
     return {
         "packing": {"containerVCpu": 4, "workers": workers, "threadsPerSidecar": threads, "osCpuCount": os.cpu_count()},
         "runs": runs,
