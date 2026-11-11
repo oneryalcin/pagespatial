@@ -148,8 +148,25 @@ net       = prevented − cost
 
 Continue if `net` is 5 or more. Below that, the trust-record line stops (see
 [If it fails](#if-it-fails)). `items` are the scored items left after the
-key read. Arm A is reported to show what the second reading adds with no
-label at all.
+key read.
+
+**Second condition, against the text layer alone** (added 2026-11-11 before
+any scored call). The rule above compares C only with B, so it could pass
+while a plain text-layer parser answers as well or better; the text layer
+held the right reading in 55 of the 100 conflicts. C must also beat A:
+
+```text
+wrong in C < wrong in A                                   digit-differing stratum
+(correct − wrong) in C ≥ (correct − wrong) in A           all scored items together
+```
+
+A hedge counts as neither. The second line prices a lost correct answer the
+same as a prevented wrong one, as the first rule does; the strata are pooled
+as sampled, not weighted to any population. If C passes the first rule and
+fails this one, labels help only against unlabelled double readings: the
+second reading does not pay on pages that have a text layer, and the
+trust-record line continues only for pages without one (scans and charts),
+if step 2 finds enough errors there.
 
 The formula does not charge C for hedging on a digit-differing item that B
 answered correctly. The full table of B outcome by C outcome is printed for
@@ -287,6 +304,9 @@ usual way, with `score-candidate-witness.mjs`.
 
 - **Step 1 null:** stop the hosted service and the labelled view. Keep the
   library as an Evidence Search component, or shelve it.
+- **Step 1 beats unlabelled readings but not the text layer alone:** the
+  second reading is dropped for pages that have a text layer; only scans
+  and charts remain, subject to step 2.
 - **Step 1 passes, step 2 finds too few errors on born-digital pages:**
   narrow to scans and charts, where there is one witness and the value is in
   reading at all, and re-plan step 4 as the product.
@@ -300,7 +320,7 @@ Work proceeds on the defaults unless changed.
 | # | Decision | Default |
 | --- | --- | --- |
 | 1 | Accept the freeze in step 6 | Yes, from today; PR #145's deploy excluded |
-| 2 | Step 1 stop rule | 5 fewer wrong answers per 100, net of wrongly hedged |
+| 2 | Step 1 stop rule | 5 fewer wrong answers per 100 than unlabelled, net of wrongly hedged; and C must beat the text layer alone, with a lost correct answer priced the same as a prevented wrong one |
 | 3 | Step 1 answer model | The repo's pinned `gemini-3.7-flash`; repeat with a second model only if the result is within 3 of the threshold |
 | 4 | Step 2 model parser and cap | Gemini 3.7 Flash page-to-Markdown; $15 |
 | 5 | Step 2 thresholds | 1 wrong token per 1,000 and half of them flagged |
