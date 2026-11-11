@@ -230,8 +230,13 @@ architecture or retraining, not a preprocessing change.
 
 1. Decide whether an estimated 1.5x on the OCR stage justifies a second
    recognizer and a fine-tuned model to maintain. Selective OCR
-   ([design](../design/2026-11-07-selective-ocr.md), ~1.3x) is independent of
-   it and multiplies with it.
+   ([design](../design/2026-11-07-selective-ocr.md), ~1.3x) can be built
+   without it and should come first. The two do not simply multiply: on
+   pages with a text layer, selective OCR skips the digit-free lines, which
+   are the same lines routing would give to Tiny, and both keep digit lines
+   on Small. Routing adds to selective OCR mainly on scans and on text
+   outside the text layer (charts, images). The combined gain is not
+   measured.
 2. If yes: build the two-pass recognizer in the sidecar, measure it with the
    arms harness, then run the adoption ceremony. A new witness starts a new
    baseline era.
