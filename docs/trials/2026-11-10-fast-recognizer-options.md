@@ -231,7 +231,9 @@ architecture or retraining, not a preprocessing change.
 1. Decide whether an estimated 1.5x on the OCR stage justifies a second
    recognizer and a fine-tuned model to maintain. Selective OCR
    ([design](../design/2026-11-07-selective-ocr.md), ~1.3x) can be built
-   without it and should come first. The two do not simply multiply: on
+   without it and should come first. (It was built on 2026-11-11 and
+   measured 1.07x; see the [build trial](2026-11-11-selective-ocr-build.md).
+   It was not merged.) The two do not simply multiply: on
    pages with a text layer, selective OCR skips the digit-free lines, which
    are the same lines routing would give to Tiny, and both keep digit lines
    on Small. Routing adds to selective OCR mainly on scans and on text

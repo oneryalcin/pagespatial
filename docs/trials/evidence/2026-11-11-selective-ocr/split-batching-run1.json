@@ -1,0 +1,75 @@
+{
+ "note": "selective_ocr_split_modal.py first run (b6, b1), 90 ceremony pages, Linux x86 OpenVINO HPI, 4 cores; example texts removed",
+ "stats": {
+  "1": {
+   "lines": 7928,
+   "splitMismatch": 0,
+   "kept": 4315,
+   "keptTextChanged": 0,
+   "keptDigitsChanged": 0,
+   "maxScoreDelta": 0,
+   "splitMs": 111814.00317500006,
+   "subsetMs": 43414.170004
+  },
+  "6": {
+   "lines": 7928,
+   "splitMismatch": 0,
+   "kept": 4317,
+   "keptTextChanged": 74,
+   "keptDigitsChanged": 15,
+   "maxScoreDelta": 0.4209878742694855,
+   "splitMs": 95042.27459400006,
+   "subsetMs": 38880.44060799972
+  }
+ },
+ "goldRecall": {
+  "b6": {
+   "pages": 63,
+   "goldTokens": 1223,
+   "browser": 972,
+   "candidate": 977,
+   "candidateOnly": 33,
+   "browserOnly": 28,
+   "bothMiss": 218
+  },
+  "b1": {
+   "pages": 63,
+   "goldTokens": 1223,
+   "browser": 972,
+   "candidate": 982,
+   "candidateOnly": 34,
+   "browserOnly": 24,
+   "bothMiss": 217
+  }
+ },
+ "goldDiscordance": {
+  "b6": {
+   "candidateOnly": 33,
+   "browserOnly": 28,
+   "mcNemarExactTwoSidedP": 0.6089,
+   "candidateShareOfDiscordantsCI95": [
+    0.408,
+    0.669
+   ],
+   "trueDifferenceTokensCI95": [
+    -11,
+    21
+   ],
+   "note": "Conditional on 61 discordant tokens of 1223: the data are consistent with a true candidate-minus-browser difference between -11 and 21 tokens at 95%."
+  },
+  "b1": {
+   "candidateOnly": 34,
+   "browserOnly": 24,
+   "mcNemarExactTwoSidedP": 0.237,
+   "candidateShareOfDiscordantsCI95": [
+    0.449,
+    0.714
+   ],
+   "trueDifferenceTokensCI95": [
+    -6,
+    25
+   ],
+   "note": "Conditional on 58 discordant tokens of 1223: the data are consistent with a true candidate-minus-browser difference between -6 and 25 tokens at 95%."
+  }
+ }
+}
