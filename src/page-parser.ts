@@ -18,6 +18,7 @@ import type {
   OcrObservation,
   OcrObservationInput,
   OcrPageResult,
+  SelectiveOcrPass,
   PageGeometry,
   PageSpatial,
   RenderedPage,
@@ -34,6 +35,7 @@ export interface BuildPageSpatialInput {
   nativeMarkdownSource?: string;
   unreadInkRegions?: UnreadInkRegion[];
   secondOpinion?: SecondOpinionPass;
+  selectiveOcr?: SelectiveOcrPass;
   provenance: ExtractionProvenance;
   association?: AssociationOptions;
   diagnostics?: DiagnosticOptions;
@@ -64,7 +66,8 @@ export interface AssemblePageSpatialInput {
   secondOpinion?: SecondOpinionPass;
 }
 
-function normalizeNative(
+/** Native adapter observations as the record holds them: rendered-pixel boxes and canonical ids. */
+export function normalizeNative(
   document: DocumentIdentity,
   pageNumber: number,
   geometry: PageGeometry,
@@ -202,6 +205,10 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
   const derivedRelations = inferSimpleYearValueRelations(pageId, ocrObservations, pixelsPerPoint);
   const unreadInkRegions = input.unreadInkRegions;
   const secondOpinion = input.secondOpinion;
+  const selectiveOcr = input.selectiveOcr && {
+    rule: input.selectiveOcr.rule,
+    skipped: input.selectiveOcr.skipped.map((skip) => ({ ...skip, box: roundBox(skip.box) }))
+  };
   const diagnostics = buildDiagnostics({
     nativeObservations,
     ocrObservations,
@@ -210,6 +217,7 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
     derivedRelations,
     unreadInkRegions,
     secondOpinion,
+    skippedOcrBoxCount: selectiveOcr?.skipped.length,
     pixelsPerPoint,
     options: input.diagnostics
   });
@@ -247,6 +255,7 @@ export function buildPageSpatial(input: BuildPageSpatialInput): PageSpatial {
     derivedRelations,
     unreadInkRegions,
     ...(secondOpinion ? { secondOpinion } : {}),
+    ...(selectiveOcr ? { selectiveOcr } : {}),
     diagnostics,
     projection,
     provenance: input.provenance
@@ -353,6 +362,7 @@ export function assemblePageSpatial(input: AssemblePageSpatialInput): PageSpatia
     nativeMarkdownSource: input.nativePage.markdownSource,
     unreadInkRegions: input.unreadInkRegions,
     secondOpinion: input.secondOpinion,
+    selectiveOcr: input.ocrPage.selectiveOcr,
     provenance,
     association: input.association,
     diagnostics: input.diagnostics

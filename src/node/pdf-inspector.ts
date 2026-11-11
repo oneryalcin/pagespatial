@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api.js';
 import type { NativePageAdapter } from '../adapters.js';
 import { pdfJsPageMarkdown, pdfJsTextObservations, type PdfJsTextMetadata } from '../pdfjs-text.js';
+import { SELECTIVE_OCR_PAGE_IMAGE_SHARE } from '../tuning.js';
 import { openNodePdfSession, type NodePdfSession, type NodePdfSessionOptions } from './pdf-session.js';
 
 interface InspectorTextItem {
@@ -35,6 +36,8 @@ interface InspectorExtraction {
   textItems: InspectorTextItem[];
   structure: InspectorStructure[];
   markdownPages: InspectorPageMarkdown[];
+  /** 1-indexed pages pdf-inspector would send to OCR, with its reasons when it gives any. */
+  ocrReasons: Map<number, string[]>;
 }
 
 interface PackageMetadata {
@@ -77,10 +80,16 @@ export function createPdfInspectorNativeAdapter(options: PdfInspectorAdapterOpti
         Promise.resolve().then(() => inspector.extractTextWithPositions(buffer)),
         Promise.resolve().then(() => inspector.extractStructureElements(buffer))
       ]);
+      const ocrReasons = new Map<number, string[]>(
+        (markdown.pagesNeedingOcr as number[]).map((page) => [page, []]));
+      for (const entry of markdown.ocrReasonsByPage as Array<{ page: number; reasons: string[] }>) {
+        ocrReasons.set(entry.page, entry.reasons);
+      }
       return {
         textItems: textItems as InspectorTextItem[],
         structure: structure as InspectorStructure[],
-        markdownPages: markdown.pages as InspectorPageMarkdown[]
+        markdownPages: markdown.pages as InspectorPageMarkdown[],
+        ocrReasons
       };
     })();
     if (options.cache !== false) cache.set(session, pending);
@@ -121,11 +130,33 @@ export function createPdfInspectorNativeAdapter(options: PdfInspectorAdapterOpti
         const key = textKey(item.str);
         pdfTextCounts.set(key, (pdfTextCounts.get(key) ?? 0) + 1);
       }
-      const observations = pdfJsTextObservations(items, pageNumber, (item): PdfJsTextMetadata | undefined => {
+      const inspectorMatch = (item: TextItem): InspectorTextItem | undefined => {
         const key = textKey(item.str);
         const candidates = inspectorByText.get(key);
-        const matched = pdfTextCounts.get(key) === 1 && candidates?.length === 1 ? candidates[0] : undefined;
-        if (!matched) return undefined;
+        return pdfTextCounts.get(key) === 1 && candidates?.length === 1 ? candidates[0] : undefined;
+      };
+      // An item pdf-inspector could not be matched to (repeated text, or a run
+      // the two extractors split differently) would otherwise carry PDF.js's
+      // font id while its neighbours in the same font carry pdf-inspector's
+      // name, splitting one font's glyph evidence in two. Where every matched
+      // item of a PDF.js font carries the same pdf-inspector name, that name
+      // applies to the font's unmatched items too.
+      const namesByPdfJsFont = new Map<string, Set<string>>();
+      for (const item of items) {
+        const matched = inspectorMatch(item);
+        if (!matched) continue;
+        (namesByPdfJsFont.get(item.fontName) ?? namesByPdfJsFont.set(item.fontName, new Set()).get(item.fontName)!).add(matched.font);
+      }
+      const inferredFont = (item: TextItem): string | undefined => {
+        const names = namesByPdfJsFont.get(item.fontName);
+        return names?.size === 1 ? [...names][0] : undefined;
+      };
+      const observations = pdfJsTextObservations(items, pageNumber, (item): PdfJsTextMetadata | undefined => {
+        const matched = inspectorMatch(item);
+        if (!matched) {
+          const font = inferredFont(item);
+          return font ? { font } : undefined;
+        }
         return {
           mcid: matched.mcid ?? null,
           structureRole: matched.mcid === undefined ? null : roleByMcid.get(matched.mcid) ?? null,
@@ -141,6 +172,18 @@ export function createPdfInspectorNativeAdapter(options: PdfInspectorAdapterOpti
       const useInspector = !hasCoincidentOverlay && Boolean(inspectorMarkdown.trim());
       const markdown = useInspector ? inspectorMarkdown : pdfJsPageMarkdown(items);
       const markdownSource = useInspector ? 'pdf-inspector' : 'pdfjs-deduplicated';
+      // Image items are positioned in points from the page's top-left corner.
+      const pageWidth = viewX1! - viewX0!;
+      const pageHeight = viewY1! - viewY0!;
+      const imageArea = extraction.textItems
+        .filter((item) => item.page === pageNumber && item.itemType === 'Image')
+        .reduce((sum, item) => sum
+          + Math.max(0, Math.min(pageWidth, item.x + item.width) - Math.max(0, item.x))
+          * Math.max(0, Math.min(pageHeight, item.y + item.height) - Math.max(0, item.y)), 0);
+      const inspectorReasons = extraction.ocrReasons.get(pageNumber);
+      const textLayerDistrust = inspectorReasons
+        ? `pdf-inspector:${inspectorReasons.join('+') || 'needs-ocr'}`
+        : imageArea >= SELECTIVE_OCR_PAGE_IMAGE_SHARE * pageWidth * pageHeight ? 'page-image' : undefined;
       return {
         pageNumber,
         geometry: {
@@ -151,7 +194,8 @@ export function createPdfInspectorNativeAdapter(options: PdfInspectorAdapterOpti
         },
         observations,
         markdown,
-        markdownSource
+        markdownSource,
+        ...(textLayerDistrust ? { textLayerDistrust } : {})
       };
     }
   };

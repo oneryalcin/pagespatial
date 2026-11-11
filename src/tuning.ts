@@ -205,3 +205,25 @@ export const ADAPTER_MARKDOWN_MIN_WORDS = 20;
  * corpus stay at or under 43 (procurement descriptions, survey questions).
  */
 export const TABLE_CELL_MAX_WORDS = 45;
+
+/**
+ * Selective OCR (src/selective-ocr.ts, docs/design/2026-11-07-selective-ocr.md).
+ * A detected text box may go unrecognized only on a page with at least this
+ * many native characters, when native boxes cover at least this share of it.
+ * Both values are the ones the replay over four full-OCR runs was tuned and
+ * checked with (scripts/evaluation/selective_ocr_replay.py).
+ */
+export const SELECTIVE_OCR_MIN_NATIVE_CHARS = 200;
+export const SELECTIVE_OCR_MIN_COVERAGE = 0.6;
+/**
+ * Every letter of a skipped box's native text must have been read by OCR as
+ * that same letter at least this many times, in the same font, on the page.
+ * A letter a broken ToUnicode map mistranslates is never confirmed.
+ */
+export const SELECTIVE_OCR_MIN_CONFIRMATIONS = 2;
+/**
+ * A page whose images cover at least this share of it is read in full: a scan
+ * carrying an invisible text layer from an earlier OCR tool looks like native
+ * text, and its errors are random, which the font audit cannot catch.
+ */
+export const SELECTIVE_OCR_PAGE_IMAGE_SHARE = 0.5;

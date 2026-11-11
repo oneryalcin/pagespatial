@@ -20,6 +20,11 @@
  *   node scripts/evaluation/run-baseline-sidecar.mjs \
  *     --data-root .evaluation --models-dir .evaluation/sidecar-models \
  *     --run-id dev-v13-sidecar-2026-08-23 [--document-id <objectId>] [--page N]
+ *
+ * --selective runs the sidecar in selective-OCR mode (docs/design/
+ * 2026-11-07-selective-ocr.md): a different witness configuration, named in
+ * the profile and the adapter descriptor, so never comparable as a baseline
+ * of the full-OCR era.
  */
 import { randomBytes } from 'node:crypto';
 import { lstat, mkdir, open, readFile, realpath, rm } from 'node:fs/promises';
@@ -38,7 +43,7 @@ import { createPpOcrSidecarAdapter } from '../../service/adapters/ppocr-sidecar.
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const valueFlags = new Set(['--data-root', '--models-dir', '--document-id', '--page', '--threads', '--render-scale', '--document-timeout-ms', '--run-id']);
-const booleanFlags = new Set(['--allow-dirty']);
+const booleanFlags = new Set(['--allow-dirty', '--selective']);
 for (let index = 2; index < process.argv.length; index += 1) {
   const name = process.argv[index];
   if (booleanFlags.has(name)) continue;
@@ -105,7 +110,8 @@ const pinsHash = await sha256File(pinsPath);
 
 // One sidecar engine for the whole run, warmed before the profile is
 // frozen so the descriptor's ep/version reflect the child's own testimony.
-const adapter = createPpOcrSidecarAdapter({ modelsDir, threads });
+const selective = process.argv.includes('--selective');
+const adapter = createPpOcrSidecarAdapter({ modelsDir, threads, selective });
 const warmupStarted = performance.now();
 await adapter.warmup();
 const warmupMs = Math.round(performance.now() - warmupStarted);
@@ -128,7 +134,7 @@ const sidecarSession = {
 };
 
 const profile = {
-  id: 'pdf-inspector-ppocrv6-sidecar-service-v1',
+  id: selective ? 'pdf-inspector-ppocrv6-sidecar-selective-v1' : 'pdf-inspector-ppocrv6-sidecar-service-v1',
   nativeAdapter: pdfInspectorNativeAdapterIdentity,
   renderer: 'pdftoppm+pdfjs-geometry',
   ocrAdapter: adapter.descriptor,
@@ -333,7 +339,7 @@ try {
           stage = 'native-extraction';
           const native = await nativeStage(context, pageNumber);
           stage = 'sidecar-ocr';
-          const ocr = await ocrStage(adapter, rendered.value, pageNumber);
+          const ocr = await ocrStage(adapter, rendered.value, pageNumber, context, native.value);
           stage = 'page-assembly';
           const assembled = await assemblyStage(context, pageNumber, adapter, native.value, rendered.value.renderedPage, ocr.value, {
             runId,

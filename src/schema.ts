@@ -3,6 +3,7 @@ import { assertPageGeometry, pointBounds, pointBoxToRenderedBox, renderedPixelsP
 import { crossEngineEngagedIds } from './diagnostics.js';
 import { auditNativeGlyphs } from './glyph-audit.js';
 import { countConfirmedRegions, countRecoveredObservations, regionEligibleForResidue } from './ink.js';
+import { selectiveEvidence, skipVerdict } from './selective-ocr.js';
 
 const boxSchema = z.tuple([z.number(), z.number(), z.number(), z.number()]);
 const pointSchema = z.tuple([z.number(), z.number()]);
@@ -162,6 +163,14 @@ const pageSpatialBaseSchema = z.object({
       box: boxSchema,
       text: z.string().min(1),
       confidence: z.number().min(0).max(1).optional()
+    }).strict())
+  }).strict().optional(),
+  selectiveOcr: z.object({
+    rule: z.literal('native-font-audited-v1'),
+    skipped: z.array(z.object({
+      box: boxSchema,
+      polygon: polygonSchema.optional(),
+      nativeIds: z.array(z.string()).min(1)
     }).strict())
   }).strict().optional(),
   diagnostics: diagnosticsSchema,
@@ -410,10 +419,12 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
   const confidentOcr = page.ocrObservations.filter((observation) =>
     observation.confidence >= page.diagnostics.thresholds.lowOcrConfidence && !observation.recoveryMethod);
   const uncorroboratedOcr = confidentOcr.filter((observation) => !engagedOcrIds.has(observation.id));
-  const engagedCoverage = confidentOcr.length
-    ? (confidentOcr.length - uncorroboratedOcr.length) / confidentOcr.length
+  // Boxes selective OCR left unread count as detected and corroborated (mirrors diagnostics.ts).
+  const detectedCount = confidentOcr.length + (page.selectiveOcr?.skipped.length ?? 0);
+  const engagedCoverage = detectedCount
+    ? (detectedCount - uncorroboratedOcr.length) / detectedCount
     : 1;
-  const starvationFires = confidentOcr.length >= page.diagnostics.thresholds.uncorroboratedOcrMinimumCount
+  const starvationFires = detectedCount >= page.diagnostics.thresholds.uncorroboratedOcrMinimumCount
     && engagedCoverage < page.diagnostics.thresholds.uncorroboratedOcrMaximumCoverage;
   expectedReasons.set('uncorroborated-ocr', {
     severity: 'blocking',
@@ -481,6 +492,22 @@ export const pageSpatialSchema = pageSpatialBaseSchema.superRefine((page, contex
     share: page.nativeObservations.length ? glyphMismatchIds.length / page.nativeObservations.length : 0,
     sourceIds: glyphMismatchIds
   });
+  // A skipped box is a claim that OCR did not need to read it. Re-derived
+  // with the function the live mode decides with, from the observations in
+  // this record: a record cannot declare a skip its evidence does not excuse.
+  if (page.selectiveOcr) {
+    const evidence = selectiveEvidence(page.nativeObservations, page.nativeLines, page.ocrObservations);
+    page.selectiveOcr.skipped.forEach((skip, index) => {
+      const path = ['selectiveOcr', 'skipped', index];
+      validatePageAndBox({ pageNumber: page.pageNumber, box: skip.box, polygon: skip.polygon }, path);
+      const verdict = skipVerdict(skip.box, evidence);
+      if (!verdict.skip) {
+        issue(context, path, `Skipped box is not excused by the page's evidence (${verdict.reason}).`);
+      } else if (JSON.stringify([...verdict.nativeIds].sort()) !== JSON.stringify([...skip.nativeIds].sort())) {
+        issue(context, [...path, 'nativeIds'], 'A skip must name exactly the native observations under its box.');
+      }
+    });
+  }
   for (const [type, expected] of expectedReasons) {
     const actual = page.diagnostics.escalationReasons.filter((reason) => reason.type === type);
     if (expected.count === 0 && actual.length) {

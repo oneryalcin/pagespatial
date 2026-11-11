@@ -5,23 +5,18 @@ One Python child per Node page-worker, speaking JSONL over stdin/stdout:
   response: {"id": 7, "lines": [{"text","poly","score"}], "ms": 123.4}
   errors:   {"id": 7, "error": "..."}       (page fails closed upstream)
 
-The FIRST stdout line is the meta record — versions, platform, thread
-setting, os.cpu_count, model pins, and backend truth:
-  - useHpip: introspected in-band from the pipeline object (the same
-    attributes the adoption ceremony verified).
-  - The engine-selection line (Backend::OPENVINO ...) is emitted by the
-    C++ layer to stderr and CANNOT be captured in-band here; the Node
-    adapter captures this process's stderr and labels that evidence
-    log-derived. Meta carries hpiRequested/useHpip only — never a claim
-    about the engine that this process cannot itself observe.
-
-Models are LOCAL AND PINNED (fetch_models.py): this process verifies the
-pin manifest hashes before loading and refuses to serve on any mismatch —
-a host can never run weights outside the validated lineage.
-
-enable_hpi is requested only on Linux (upstream HPI support); elsewhere the
-pipeline runs paddle-default and meta says so. Provenance is truthful per
-host by construction.
+Selective OCR (docs/design/2026-11-07-selective-ocr.md) splits a page into
+two kinds of request, so the caller can decide which detected boxes to read:
+  {"id": 8, "op": "detect", "path": "/tmp/....png"}
+      -> {"id": 8, "polys": [[[x,y],...],...], "ms": ...}
+  {"id": 9, "op": "recognize", "path": "/tmp/....png", "indices": [0, 3]}
+      -> {"id": 9, "lines": [{"index","text","score"}], "ms": ...}
+They drive the pipeline's own detect, sort, crop and recognize steps, the
+ones predict() runs. Only the recognizer's batching differs: predict() pads
+each batch of 6 to its widest crop, so a line's reading depends on which
+other lines are read with it. Here crops no wider than the recognizer's base
+shape, which all pad to that one width, go in batches of 6, and wider crops
+go one at a time, so no crop's input depends on its batch-mates.
 """
 
 import hashlib
@@ -153,6 +148,54 @@ def main() -> None:
 
     import cv2
 
+    def split_pipeline():
+        """The PaddleX pipeline object owning the detector and recognizer; raises if its shape changed."""
+        pipe = ocr.paddlex_pipeline
+        while not hasattr(pipe, "text_det_model"):
+            pipe = pipe._pipeline
+        for attr in ("get_text_det_params", "text_det_model", "_sort_boxes", "_crop_by_polys", "text_rec_model"):
+            if not hasattr(pipe, attr):
+                raise RuntimeError(f"PaddleX OCR pipeline has no {attr}; detect/recognize cannot be split")
+        return pipe
+
+    held = {"path": None, "crops": []}  # the last detected page's crops, for its recognize requests
+
+    def detect(image, path):
+        # The same steps, in the same order, as the pipeline's predict().
+        pipe = split_pipeline()
+        det = list(pipe.text_det_model([image], **pipe.get_text_det_params()))[0]
+        polys = pipe._sort_boxes(det["dt_polys"])
+        crops = list(pipe._crop_by_polys(image, polys))
+        kept = [(c, p) for c, p in zip(crops, polys) if c.size > 0 and c.shape[0] > 0 and c.shape[1] > 0]
+        held["path"], held["crops"] = path, [c for c, _ in kept]
+        return [[[float(x), float(y)] for x, y in p] for _, p in kept]
+
+    def recognize(path, indices):
+        if held["path"] != path:
+            raise ValueError("recognize without a preceding detect of the same page")
+        crops = held["crops"]
+        if any(not isinstance(i, int) or i < 0 or i >= len(crops) for i in indices) or len(set(indices)) != len(indices):
+            raise ValueError("recognize indices must be distinct detected-box indices")
+        pipe = split_pipeline()
+        rec = pipe.text_rec_model
+        shape = next(op["RecResizeImg"]["image_shape"]
+                     for op in rec.config["PreProcess"]["transform_ops"] if "RecResizeImg" in op)
+        base_ratio = shape[2] / float(shape[1])
+        ratio = lambda i: crops[i].shape[1] / float(crops[i].shape[0])
+        lines = {}
+        original = rec.batch_sampler.batch_size
+        try:
+            for batch_size, group in ((6, [i for i in indices if ratio(i) <= base_ratio]),
+                                      (1, [i for i in indices if ratio(i) > base_ratio])):
+                if not group:
+                    continue
+                group.sort(key=ratio)  # the pipeline's aspect-ratio order
+                for i, out in zip(group, rec([crops[i] for i in group], batch_size=batch_size, return_word_box=False)):
+                    lines[i] = {"index": i, "text": str(out["rec_text"]), "score": float(out["rec_score"])}
+        finally:
+            rec.batch_sampler.batch_size = original  # predict() must keep the batching it was built with
+        return [lines[i] for i in indices]
+
     for raw in sys.stdin:
         raw = raw.strip()
         if not raw:
@@ -163,7 +206,21 @@ def main() -> None:
             print(json.dumps({"kind": "fatal", "error": "bad request framing"}), flush=True)
             sys.exit(1)
         rid = request.get("id")
+        op = request.get("op")
         try:
+            if op in ("detect", "recognize"):
+                t = time.monotonic()
+                if op == "detect":
+                    image = cv2.imread(request["path"], cv2.IMREAD_COLOR)
+                    if image is None:
+                        raise ValueError(f"unreadable image: {request['path']}")
+                    payload = {"polys": detect(image, request["path"])}
+                else:
+                    payload = {"lines": recognize(request["path"], request["indices"])}
+                print(json.dumps({"id": rid, **payload, "ms": round((time.monotonic() - t) * 1000, 1)}), flush=True)
+                continue
+            if op is not None:
+                raise ValueError(f"unknown op: {op}")
             image = cv2.imread(request["path"], cv2.IMREAD_COLOR)
             if image is None:
                 raise ValueError(f"unreadable image: {request['path']}")

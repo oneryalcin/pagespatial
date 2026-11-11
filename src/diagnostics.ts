@@ -69,6 +69,8 @@ export function buildDiagnostics(input: {
   derivedRelations: readonly DerivedRelation[];
   unreadInkRegions?: readonly UnreadInkRegion[];
   secondOpinion?: SecondOpinionPass;
+  /** Detected boxes selective OCR left unread (their native text is font-audited). */
+  skippedOcrBoxCount?: number;
   /** Rendered pixels per PDF point, for geometric residue eligibility. */
   pixelsPerPoint?: number;
   options?: DiagnosticOptions;
@@ -136,8 +138,13 @@ export function buildDiagnostics(input: {
   const confident = input.ocrObservations.filter((observation) =>
     observation.confidence >= lowThreshold && !observation.recoveryMethod);
   const uncorroborated = confident.filter((observation) => !engaged.has(observation.id));
-  const engagedCoverage = confident.length ? (confident.length - uncorroborated.length) / confident.length : 1;
-  if (confident.length >= policy.uncorroboratedOcrMinimumCount
+  // A box selective OCR left unread is one whose native text the font audit
+  // vouches for. Read in full it would have been a confident, matched
+  // observation, so it counts on both sides of the ratio. Without this, a
+  // page of skipped prose and a few chart labels would look starved.
+  const detected = confident.length + (input.skippedOcrBoxCount ?? 0);
+  const engagedCoverage = detected ? (detected - uncorroborated.length) / detected : 1;
+  if (detected >= policy.uncorroboratedOcrMinimumCount
     && engagedCoverage < policy.uncorroboratedOcrMaximumCoverage) {
     escalationReasons.push({
       type: 'uncorroborated-ocr',

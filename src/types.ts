@@ -267,6 +267,28 @@ export interface UnreadInkRegion {
   confirmations: RecoveryConfirmation[];
 }
 
+/**
+ * A text box the detector found and OCR did not read (selective OCR,
+ * src/selective-ocr.ts). The native observations under it stand in. The box
+ * is not trusted silently: the schema re-derives, from the observations in
+ * the record, that the skip was allowed. Native text covers the box, no
+ * native line touching it holds a numeral, and every letter of that native
+ * text was read by OCR as the same letter, in the same font, elsewhere on the
+ * page.
+ */
+export interface OcrSkip {
+  /** The detected box, in rendered pixels. */
+  box: Box;
+  polygon?: Polygon;
+  /** Native observations under the box. */
+  nativeIds: string[];
+}
+
+export interface SelectiveOcrPass {
+  rule: 'native-font-audited-v1';
+  skipped: OcrSkip[];
+}
+
 export interface SecondOpinionReading {
   /** Reading location in rendered pixels (the second engine's own segmentation). */
   box: Box;
@@ -320,6 +342,13 @@ export interface PageSpatial {
    * Absent means the pass never ran.
    */
   secondOpinion?: SecondOpinionPass;
+  /**
+   * Present when OCR ran selectively: the detected boxes it left unread and
+   * the native observations standing in for each. Absent means every
+   * detected box was read. An empty `skipped` is a positive claim: the mode
+   * ran and nothing could be excused.
+   */
+  selectiveOcr?: SelectiveOcrPass;
   diagnostics: PageDiagnostics;
   projection: PageProjection;
   provenance: ExtractionProvenance;
@@ -358,6 +387,13 @@ export interface NativePageResult {
   markdown?: string;
   /** Which extractor produced `markdown` (e.g. 'pdf-inspector', 'pdfjs-deduplicated'). */
   markdownSource?: string;
+  /**
+   * Why this page's text layer cannot stand in for OCR, when the adapter
+   * knows a reason: 'page-image' (a scan, possibly carrying an invisible text
+   * layer from an earlier OCR tool), or the adapter's own verdict. Selective
+   * OCR reads such a page in full.
+   */
+  textLayerDistrust?: string;
 }
 
 export interface NativeDocumentResult {
@@ -378,4 +414,6 @@ export interface OcrPageResult {
   pageNumber: number;
   observations: OcrObservationInput[];
   backend?: string;
+  /** Set when the adapter ran selectively: the detected boxes it did not read. */
+  selectiveOcr?: SelectiveOcrPass;
 }

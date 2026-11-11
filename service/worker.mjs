@@ -81,7 +81,7 @@ async function runPage(task) {
   const native = await nativeStage(context, task.pageNumber);
   stageTimingsMs.native = native.ms;
 
-  const ocr = await ocrStage(adapter, rendered.value, task.pageNumber);
+  const ocr = await ocrStage(adapter, rendered.value, task.pageNumber, context, native.value);
   stageTimingsMs.ocr = ocr.ms;
   if (adapterColdInitMs !== undefined) {
     // Engine init happens once per worker process; reported once so the

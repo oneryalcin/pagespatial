@@ -151,7 +151,10 @@ if (adapterId === 'ppocr-sidecar') {
     console.error(`Sidecar boot check failed — refusing to start: ${error.message}`);
     process.exit(1);
   }
-  ocr = { modelsDir, threads, pythonCmd };
+  // Selective OCR (docs/design/2026-11-07-selective-ocr.md) is opt-in: it is
+  // a different witness configuration, named in every record it produces.
+  const selective = process.env.SERVICE_OCR_SELECTIVE === '1';
+  ocr = { modelsDir, threads, pythonCmd, ...(selective ? { selective } : {}) };
 } else if (adapterId === 'ppocr-server') {
   const assetsDir = process.env.SERVICE_OCR_ASSETS_DIR;
   if (!assetsDir || !existsSync(assetsDir)) {

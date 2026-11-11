@@ -25,6 +25,14 @@
  * every file hash before loading and refuses to serve on mismatch — and
  * `verifyModelPins()` lets the server fail closed at boot, before any job
  * is accepted.
+ *
+ * Selective OCR (`selective: true`, docs/design/2026-11-07-selective-ocr.md):
+ * the child detects text boxes, this adapter decides from the page's native
+ * text which ones OCR must read (dist/selective-ocr.js), and the child
+ * recognizes only those, batching crops so that a line reads the same
+ * whichever other lines are read with it (see ppocr_sidecar.py). That makes
+ * it a different witness configuration from full OCR, and the descriptor
+ * names it: a record cannot be ambiguous about its witness.
  */
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
@@ -33,6 +41,9 @@ import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync, existsSyn
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { roundBox } from '../../dist/geometry.js';
+import { recognizeSelectively } from '../../dist/selective-ocr.js';
 
 const SIDECAR_DIR = dirname(fileURLToPath(import.meta.url)).replace(/adapters$/u, 'sidecar');
 const SIDECAR_SCRIPT = join(SIDECAR_DIR, 'ppocr_sidecar.py');
@@ -65,11 +76,12 @@ export function verifyModelPins(modelsDir, pinsPath = PINS_PATH) {
 const STDERR_RING = 200;
 
 export function createPpOcrSidecarAdapter(config = {}) {
-  const { modelsDir, threads = 1, pythonCmd = DEFAULT_PYTHON_CMD, pinsPath = PINS_PATH, metaTimeoutMs = 300_000, recognizeTimeoutMs = 120_000 } = config;
+  const { modelsDir, threads = 1, pythonCmd = DEFAULT_PYTHON_CMD, pinsPath = PINS_PATH, metaTimeoutMs = 300_000, recognizeTimeoutMs = 120_000, selective = false } = config;
   if (!modelsDir) {
     throw new Error('ppocr-sidecar requires an explicit modelsDir (SERVICE_SIDECAR_MODELS_DIR) — pinned models are configuration, not magic.');
   }
   const pins = verifyModelPins(modelsDir, pinsPath);
+  const MODE = selective ? ';ocr=selective;rec_batch=same-width' : '';
   const tmpRoot = mkdtempSync(join(tmpdir(), 'psvc-sidecar-'));
 
   let child = null;
@@ -189,14 +201,69 @@ export function createPpOcrSidecarAdapter(config = {}) {
     // only claimable where the pipeline itself reports it engaged.
     const ep = currentMeta.useHpip === true ? 'hpi' : 'paddle-default';
     const version = currentMeta.versions?.paddleocr ?? 'unknown';
-    return { ep, version, descriptor: `ppocrv6-small-sidecar@${version}#ep=${ep};threads=${threads}` };
+    return { ep, version, descriptor: `ppocrv6-small-sidecar@${version}#ep=${ep};threads=${threads}${MODE}` };
+  }
+
+  /** One request to the child, answered by id; a missed deadline kills the child and fails the page closed. */
+  function request(payload) {
+    const id = nextId++;
+    return new Promise((resolve, reject) => {
+      // A torn or dropped response line (the C++ layer writes to the raw
+      // fds; unparseable lines are skipped) must not park this promise
+      // forever — that is silent pool starvation. On deadline: fail the
+      // page closed (queue requeues) and kill the child, whose protocol
+      // state is now unknowable.
+      const deadline = setTimeout(() => {
+        pending.delete(id);
+        killChild();
+        reject(new Error(`Sidecar page timed out after ${recognizeTimeoutMs}ms; child killed, page fails closed.`));
+      }, recognizeTimeoutMs);
+      pending.set(id, {
+        resolve: (value) => { clearTimeout(deadline); resolve(value); },
+        reject: (error) => { clearTimeout(deadline); reject(error); }
+      });
+      try {
+        child.stdin.write(`${JSON.stringify({ id, ...payload })}\n`);
+      } catch (error) {
+        clearTimeout(deadline);
+        pending.delete(id);
+        reject(error);
+      }
+    });
+  }
+
+  function envelope(polygon) {
+    const xs = polygon.map((point) => point[0]);
+    const ys = polygon.map((point) => point[1]);
+    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  }
+
+  function observation(page, index, line, polygonInput) {
+    const score = line.score;
+    if (!Number.isFinite(score) || score < 0 || score > 1) {
+      throw new Error(`Sidecar line ${index} has invalid confidence ${score}.`);
+    }
+    const polygon = Array.isArray(polygonInput) ? polygonInput.map((point) => [point[0], point[1]]) : null;
+    if (!polygon || polygon.length < 3) {
+      throw new Error(`Sidecar line ${index} is missing its polygon.`);
+    }
+    return {
+      id: `ppocr-sidecar:${page.pageNumber}:${index}`,
+      pageNumber: page.pageNumber,
+      text: line.text,
+      box: envelope(polygon),
+      polygon,
+      confidence: score,
+      model: 'PP-OCRv6_small'
+    };
   }
 
   return {
     name: 'ppocrv6-small-sidecar',
     get version() { return meta?.versions?.paddleocr ?? 'unpinned'; },
     canonical: true,
-    get descriptor() { return meta ? descriptorFor(meta).descriptor : `ppocrv6-small-sidecar@unstarted#ep=unknown;threads=${threads}`; },
+    get descriptor() { return meta ? descriptorFor(meta).descriptor : `ppocrv6-small-sidecar@unstarted#ep=unknown;threads=${threads}${MODE}`; },
+    selective,
     get backend() {
       if (!meta) return null;
       const { ep, version } = descriptorFor(meta);
@@ -206,6 +273,7 @@ export function createPpOcrSidecarAdapter(config = {}) {
         variant: 'small',
         executionProvider: ep,
         numThreads: threads,
+        ...(selective ? { ocrMode: 'selective', recBatching: 'same-width' } : {}),
         platform: meta.platform,
         hpiRequested: meta.hpiRequested,
         useHpip: meta.useHpip,
@@ -238,61 +306,56 @@ export function createPpOcrSidecarAdapter(config = {}) {
       process.removeListener('exit', onExit);
       rmSync(tmpRoot, { recursive: true, force: true });
     },
-    async recognize(page) {
+    /**
+     * Read one page. With `selective` configured and the page's native text
+     * supplied (`native`: observations and lines in rendered pixels, plus the
+     * native adapter's reason to distrust the layer, if any), only the
+     * detected boxes the native text cannot stand in for are recognized, and
+     * the rest are returned as `selectiveOcr.skipped`.
+     */
+    async recognize(page, native) {
       if (disposed) throw new Error('OCR sidecar disposed.');
       await ensureChild();
       if (disposed) throw new Error('OCR sidecar disposed.');
-      const id = nextId++;
       const path = join(tmpRoot, `${randomUUID()}.png`);
       writeFileSync(path, Buffer.from(page.data));
       try {
-        const response = await new Promise((resolve, reject) => {
-          // A torn or dropped response line (the C++ layer writes to the raw
-          // fds; unparseable lines are skipped) must not park this promise
-          // forever — that is silent pool starvation. On deadline: fail the
-          // page closed (queue requeues) and kill the child, whose protocol
-          // state is now unknowable.
-          const deadline = setTimeout(() => {
-            pending.delete(id);
-            killChild();
-            reject(new Error(`Sidecar page timed out after ${recognizeTimeoutMs}ms; child killed, page fails closed.`));
-          }, recognizeTimeoutMs);
-          pending.set(id, {
-            resolve: (value) => { clearTimeout(deadline); resolve(value); },
-            reject: (error) => { clearTimeout(deadline); reject(error); }
-          });
-          try {
-            child.stdin.write(`${JSON.stringify({ id, path })}\n`);
-          } catch (error) {
-            clearTimeout(deadline);
-            pending.delete(id);
-            reject(error);
-          }
+        if (!selective) {
+          const response = await request({ path });
+          const observations = (response.lines ?? [])
+            .filter((line) => typeof line.text === 'string' && line.text.trim())
+            .map((line, index) => observation(page, index, line, line.poly));
+          return { pageNumber: page.pageNumber, observations, backend: descriptorFor(meta).ep };
+        }
+        const polygons = (await request({ op: 'detect', path })).polys ?? [];
+        // Rounded as the record rounds them, so the schema re-derives each
+        // skip from exactly the boxes this decision saw.
+        const boxes = polygons.map((polygon) => roundBox(envelope(polygon)));
+        // No native text supplied (the health warm-up) reads everything.
+        const result = await recognizeSelectively({
+          boxes,
+          nativeObservations: native?.observations ?? [],
+          nativeLines: native?.lines ?? [],
+          readAll: native ? native.textLayerDistrust : 'no-native-text-supplied',
+          recognize: async (indices) => (await request({ op: 'recognize', path, indices })).lines ?? []
         });
-        const observations = (response.lines ?? [])
+        const observations = result.readings
           .filter((line) => typeof line.text === 'string' && line.text.trim())
-          .map((line, index) => {
-            const score = line.score;
-            if (!Number.isFinite(score) || score < 0 || score > 1) {
-              throw new Error(`Sidecar line ${index} has invalid confidence ${score}.`);
-            }
-            const polygon = Array.isArray(line.poly) ? line.poly.map((point) => [point[0], point[1]]) : null;
-            if (!polygon || polygon.length < 3) {
-              throw new Error(`Sidecar line ${index} is missing its polygon.`);
-            }
-            const xs = polygon.map((point) => point[0]);
-            const ys = polygon.map((point) => point[1]);
-            return {
-              id: `ppocr-sidecar:${page.pageNumber}:${index}`,
-              pageNumber: page.pageNumber,
-              text: line.text,
-              box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
-              polygon,
-              confidence: score,
-              model: 'PP-OCRv6_small'
-            };
-          });
-        return { pageNumber: page.pageNumber, observations, backend: descriptorFor(meta).ep };
+          .sort((left, right) => left.index - right.index)
+          .map((line) => observation(page, line.index, line, polygons[line.index]));
+        return {
+          pageNumber: page.pageNumber,
+          observations,
+          backend: descriptorFor(meta).ep,
+          selectiveOcr: {
+            rule: 'native-font-audited-v1',
+            skipped: result.skipped.map((skip) => ({
+              box: boxes[skip.index],
+              polygon: polygons[skip.index].map((point) => [point[0], point[1]]),
+              nativeIds: skip.nativeIds
+            }))
+          }
+        };
       } finally {
         try { unlinkSync(path); } catch { /* tmpfile already gone */ }
       }

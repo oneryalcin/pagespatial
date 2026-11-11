@@ -20,7 +20,9 @@ import { performance } from 'node:perf_hooks';
 
 import { openNodePdfSession } from '../../dist/node/pdf-session.js';
 import { createPdfInspectorNativeAdapter } from '../../dist/node/pdf-inspector.js';
-import { assemblePageSpatial } from '../../dist/page-parser.js';
+import { assemblePageSpatial, normalizeNative, validateNativePageGeometry } from '../../dist/page-parser.js';
+import { buildNativeLines } from '../../dist/reading-order.js';
+import { renderedPixelsPerPoint } from '../../dist/geometry.js';
 import { pageSpatialSchema } from '../../dist/schema.js';
 
 export const RENDER_SCALE = 1.6;
@@ -103,13 +105,29 @@ export async function nativeStage(context, pageNumber) {
   return timed(() => context.native.extractPage(context.session.source, pageNumber));
 }
 
-export async function ocrStage(adapter, rendered, pageNumber) {
-  return timed(() => adapter.recognize({
-    pageNumber,
-    geometry: rendered.renderedPage.geometry,
-    data: rendered.raster.data,
-    mimeType: rendered.raster.mimeType
-  }));
+/**
+ * A selective adapter (adapter.selective) decides per detected box whether
+ * OCR must read it, from the page's native text. It gets that text as the
+ * record will hold it (rendered-pixel boxes, canonical ids), so the schema
+ * can re-derive every skip from the record alone.
+ */
+export async function ocrStage(adapter, rendered, pageNumber, context, nativePage) {
+  return timed(() => {
+    const page = {
+      pageNumber,
+      geometry: rendered.renderedPage.geometry,
+      data: rendered.raster.data,
+      mimeType: rendered.raster.mimeType
+    };
+    if (!adapter.selective) return adapter.recognize(page);
+    const geometry = validateNativePageGeometry(pageNumber, nativePage, rendered.renderedPage);
+    const observations = normalizeNative(context.identity, pageNumber, geometry, nativePage.observations);
+    return adapter.recognize(page, {
+      observations,
+      lines: buildNativeLines(observations, renderedPixelsPerPoint(geometry)),
+      textLayerDistrust: nativePage.textLayerDistrust
+    });
+  });
 }
 
 /**

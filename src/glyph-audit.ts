@@ -36,7 +36,7 @@ export interface GlyphMismatch {
   withhold: boolean;
 }
 
-const LETTER = /\p{L}/u;
+export const LETTER = /\p{L}/u;
 
 // Scripts OCR must demonstrably read on the page before its readings can
 // testify against native letters of that script.
@@ -52,7 +52,8 @@ function scriptOf(ch: string): string {
   return 'Other';
 }
 
-function chars(text: string): string[] {
+/** NFKC-normalised characters with whitespace removed: the unit both audits align. */
+export function chars(text: string): string[] {
   return Array.from(text.normalize('NFKC').replace(/\s+/gu, ''));
 }
 
@@ -108,10 +109,23 @@ function alignNativeIntoOcr(native: string[], ocr: string[]): Array<string | nul
   return aligned;
 }
 
-export function auditNativeGlyphs(
+/** Per-font alignment evidence: what OCR read for each native letter of the font. */
+export interface FontLetterEvidence {
+  /** Every native observation in this font on the page. */
+  ids: string[];
+  /** Aligned occurrences per native letter. */
+  seen: Map<string, number>;
+  /** Per native letter: the other letters OCR read it as, with counts. */
+  subs: Map<string, Map<string, number>>;
+  observationLetters: Array<{ id: string; letters: Set<string> }>;
+  /** First-pass OCR observations whose text was aligned against this font. */
+  ocrIds: Set<string>;
+}
+
+export function fontLetterEvidence(
   nativeObservations: readonly NativeObservation[],
   ocrObservations: readonly OcrObservation[]
-): GlyphMismatch[] {
+): Map<string, FontLetterEvidence> {
   const firstPass = ocrObservations.filter((observation) => !observation.recoveryMethod);
   // A script OCR never emitted on this page is one it cannot read (e.g. a
   // model without Japanese reads kana as Han): its substitutions there are
@@ -124,17 +138,12 @@ export function auditNativeGlyphs(
     chars(observation.text).some((ch) => scriptOf(ch) === 'Hiragana' || scriptOf(ch) === 'Katakana'));
   if (nativeHasKana && !ocrScripts.has('Hiragana') && !ocrScripts.has('Katakana')) ocrScripts.delete('Han');
   const auditable = (ch: string): boolean => LETTER.test(ch) && ocrScripts.has(scriptOf(ch));
-  const byFont = new Map<string, {
-    ids: string[];
-    seen: Map<string, number>;
-    subs: Map<string, Map<string, number>>;
-    observationLetters: Array<{ id: string; letters: Set<string> }>;
-  }>();
+  const byFont = new Map<string, FontLetterEvidence>();
   for (const observation of nativeObservations) {
     const font = observation.font;
     if (!font) continue;
     const entry = byFont.get(font)
-      ?? byFont.set(font, { ids: [], seen: new Map(), subs: new Map(), observationLetters: [] }).get(font)!;
+      ?? byFont.set(font, { ids: [], seen: new Map(), subs: new Map(), observationLetters: [], ocrIds: new Set() }).get(font)!;
     entry.ids.push(observation.id);
     const nativeChars = chars(observation.text);
     if (!nativeChars.some(auditable)) continue;
@@ -150,6 +159,7 @@ export function auditNativeGlyphs(
       .join('');
     const aligned = alignNativeIntoOcr(nativeChars, chars(ocrText));
     entry.observationLetters.push({ id: observation.id, letters: new Set(nativeChars.filter(auditable)) });
+    for (const ocr of over) entry.ocrIds.add(ocr.id);
     nativeChars.forEach((ch, index) => {
       const read = aligned[index];
       if (read === null || read === undefined || !auditable(ch)) return;
@@ -160,7 +170,17 @@ export function auditNativeGlyphs(
       }
     });
   }
+  return byFont;
+}
 
+export function auditNativeGlyphs(
+  nativeObservations: readonly NativeObservation[],
+  ocrObservations: readonly OcrObservation[]
+): GlyphMismatch[] {
+  return glyphMismatches(fontLetterEvidence(nativeObservations, ocrObservations));
+}
+
+export function glyphMismatches(byFont: ReadonlyMap<string, FontLetterEvidence>): GlyphMismatch[] {
   const mismatches: GlyphMismatch[] = [];
   for (const [font, entry] of [...byFont].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     const letters: GlyphMismatch['letters'] = [];
