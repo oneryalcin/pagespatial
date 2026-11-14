@@ -145,7 +145,9 @@ Page text:
 These instructions tell the model, in every arm, that content can be read
 twice and to answer `disputed` on conflicting readings. So arm B is the
 unlabelled context read by a consumer who was told to look for conflicts.
-That is the stricter test of the label and it is the one that decides.
+This wording decides pass or fail because it was written before any
+answer was seen, not because it is the stricter test: on the shake-down set
+below it was the kinder wording to the label.
 
 **Secondary, plain instructions** (owner decision 10; reported, never part
 of pass or fail). Arms B and C asked again with instructions that say
@@ -195,9 +197,11 @@ text layer was right, and under the plain instructions B answered all 11
 correctly. They do not change how often B is wrong (1 of 26 either way), so
 on this set there was almost nothing for a label to prevent under either
 wording. The marker itself causes C's hedging: C hedged on 12 of the 13
-text-layer-right items under both wordings. The instructions were not
-changed on this evidence; changing them after a failed shake-down, in the
-direction that helps the label, is what pre-registration is for.
+text-layer-right items under both wordings. Under the plain
+instructions the label looked worse, not better: C hedged on 12 items that
+B answered correctly, and was wrong twice. The deciding instructions were
+left as they were, because rewording after seeing answers is what
+pre-registration forbids, in either direction.
 
 **Stop rule.**
 
@@ -395,7 +399,8 @@ usual way, with `score-candidate-witness.mjs`.
 
 ## Owner decisions
 
-Work proceeds on the defaults unless changed.
+Work proceeds on the defaults unless changed, except row 11, which needs
+an explicit yes because it spends on the owner's billing account.
 
 | # | Decision | Default |
 | --- | --- | --- |
@@ -408,8 +413,8 @@ Work proceeds on the defaults unless changed.
 | 7 | Step 3 escalation target | Below 30% of dev-corpus pages (my proposal; no measurement behind the number) |
 | 8 | Labelling time | About four sittings: step 1 answer keys, step 2 crops (two), chart gold |
 | 9 | Patent read by an attorney | Before the comparison is marketed; see below |
-| 10 | Step 1 answering instructions | Keep the instructions as recorded in step 1 for pass or fail; also ask B and C with the plain instructions as a declared secondary that decides nothing |
-| 11 | Step 1 spend cap | Raise from $10 to $30 to cover the scored run and the secondary (estimate in step 1); the scored run does not start under the $10 cap |
+| 10 | Step 1 answering instructions | Keep the instructions as recorded in step 1 for pass or fail, only because they came first; the plain instructions are the more typical consumer and the wording under which the label looked worse on the shake-down. Also ask B and C with the plain instructions as a declared secondary that decides nothing (`--plain-secondary`) |
+| 11 | Step 1 spend cap | **No default; needs an explicit yes.** The scored run does not start under the $10 cap. Estimate in step 1: about $14 for the scored run, about $11 more for the secondary. A cheaper route is to put the page text before the question so repeated pages are billed as cached; that changes the recorded instructions and needs the shake-down run again |
 
 When the owner accepts, the affected rows of `docs/workstreams.md` change in
 the same pull request as this document's status line.
