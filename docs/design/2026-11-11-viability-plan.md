@@ -126,6 +126,39 @@ record, so they differ in content and not in format:
   for each, so they do not point at the asked value. C's context format is
   the prototype for step 3.
 
+The answering instructions, the same in every arm (recorded 2026-11-14,
+before any scored call; unchanged since the shake-down):
+
+```text
+Answer the question using only the page text below. The page text was extracted from one page of a document by software.
+The same content can appear more than once, read in two ways. A marker of the form [DISPUTED: ...] means two readings of the same ink disagree.
+Return status "value" and the value exactly as the page text gives it, with its sign, currency symbol and percent sign, only when the page text supports a single reading.
+Return status "disputed" and the candidate readings when the page text gives conflicting readings of the asked value or marks it as disputed.
+Return status "not_found" when the page text does not contain the answer.
+
+Question: <question>
+
+Page text:
+<context>
+```
+
+These instructions tell the model, in every arm, that content can be read
+twice and to answer `disputed` on conflicting readings. So arm B is the
+unlabelled context read by a consumer who was told to look for conflicts.
+That is the stricter test of the label and it is the one that decides.
+
+**Secondary, plain instructions** (owner decision 10; reported, never part
+of pass or fail). Arms B and C asked again with instructions that say
+nothing about two readings or the marker, as a consumer who was told
+nothing would send:
+
+```text
+Answer the question using only the page text below. The page text was extracted from one page of a document by software.
+Return status "value" and the value exactly as the page text gives it, with its sign, currency symbol and percent sign.
+Return status "disputed" and the candidate values when you cannot settle on one value.
+Return status "not_found" when the page text does not contain the answer.
+```
+
 **Scoring.** Deterministic, no model judge. The answer is a value, so its
 critical tokens are compared with the target under the currency-tolerant
 rule of `scripts/evaluation/lib/recall-match.mjs` (a detached currency
@@ -144,6 +177,27 @@ against the text layer. Added 2026-11-11 before any scored call.
 
 **Shake-down.** Prompts and plumbing are tried only on the 46 pilot and
 batch 2 conflicts, which are not scored.
+
+One check was made there on 2026-11-14, after a reviewer asked whether the
+instructions leave the label nothing to prevent. The reading was fixed
+before the calls: if arm B still hedged on about the same items under the
+plain instructions, the instructions were not the cause. On the 26
+digit-differing items (unscored, older run; correct / wrong / hedged):
+
+| Context | Instructions as above | Plain instructions |
+| --- | --- | --- |
+| A, text layer only | 25 / 1 / 0 | not asked |
+| B, both readings, unlabelled | 14 / 1 / 11 | 24 / 1 / 1 |
+| C, both readings, labelled | 9 / 0 / 17 | 10 / 2 / 14 |
+
+The instructions cause B's hedging: all 11 hedges were on items where the
+text layer was right, and under the plain instructions B answered all 11
+correctly. They do not change how often B is wrong (1 of 26 either way), so
+on this set there was almost nothing for a label to prevent under either
+wording. The marker itself causes C's hedging: C hedged on 12 of the 13
+text-layer-right items under both wordings. The instructions were not
+changed on this evidence; changing them after a failed shake-down, in the
+direction that helps the label, is what pre-registration is for.
 
 **Stop rule.**
 
@@ -169,7 +223,9 @@ wrong in C < wrong in A                                   digit-differing stratu
 
 A hedge counts as neither. The second line prices a lost correct answer the
 same as a prevented wrong one, as the first rule does; the strata are pooled
-as sampled, not weighted to any population. If C passes the first rule and
+as sampled (94 digit-differing, 99 symbol-only, 49 control before the key
+read), not weighted to any population, so C against A is also read stratum
+by stratum from the same report. The rule is not changed. If C passes the first rule and
 fails this one, labels help only against unlabelled double readings: the
 second reading does not pay on pages that have a text layer, and the
 trust-record line continues only for pages without one (scans and charts),
@@ -192,6 +248,18 @@ each stratum so that cost is visible; the stop rule is not changed.
 5. Negatives: every item is scored in every arm; drops are counted.
 
 **Cost.** About 250 questions over three arms; spend cap $10. One to two days.
+
+Estimate on 2026-11-14 (owner decision 11): the cap does not cover the
+scored run. The scored pages are dense; their three contexts for the 242
+askable items come to 23.2 million characters, against 3.4 million for the
+shake-down, which billed 2.14 million prompt tokens and 0.28 million output
+and thinking tokens over 267 calls. Scaled, the scored run is about 14.4
+million prompt tokens and 0.8 million output tokens. Google's pricing page
+showed no row for `gemini-3.7-flash` in the part read; at the price it
+shows for 3.6 and 3.8 Flash ($0.75 in, $3.75 out per million) that is about
+$14, and the plain-instruction secondary about $11 more. About 4.1 million
+tokens are already used, about $4 to $6 at the same price. The billing page
+is the figure of record.
 Throwaway harness in `scripts/evaluation/`, result in `docs/trials/`.
 
 ## Step 2 — base rate on fresh pages
@@ -311,6 +379,11 @@ usual way, with `score-candidate-witness.mjs`.
 
 - **Step 1 null:** stop the hosted service and the labelled view. Keep the
   library as an Evidence Search component, or shelve it.
+- **Step 1 fails with fewer than 5 wrong answers per 100 in arm B:** the
+  first rule could not pass whatever C did. That reads as "a consumer told
+  to look for conflicts has nothing left for a label to prevent", not as
+  "labels do not work". The second condition and the plain-instruction
+  secondary then say whether the second reading itself pays.
 - **Step 1 beats unlabelled readings but not the text layer alone:** the
   second reading is dropped for pages that have a text layer; only scans
   and charts remain, subject to step 2.
@@ -335,6 +408,8 @@ Work proceeds on the defaults unless changed.
 | 7 | Step 3 escalation target | Below 30% of dev-corpus pages (my proposal; no measurement behind the number) |
 | 8 | Labelling time | About four sittings: step 1 answer keys, step 2 crops (two), chart gold |
 | 9 | Patent read by an attorney | Before the comparison is marketed; see below |
+| 10 | Step 1 answering instructions | Keep the instructions as recorded in step 1 for pass or fail; also ask B and C with the plain instructions as a declared secondary that decides nothing |
+| 11 | Step 1 spend cap | Raise from $10 to $30 to cover the scored run and the secondary (estimate in step 1); the scored run does not start under the $10 cap |
 
 When the owner accepts, the affected rows of `docs/workstreams.md` change in
 the same pull request as this document's status line.
