@@ -264,6 +264,24 @@ shows for 3.6 and 3.8 Flash ($0.75 in, $3.75 out per million) that is about
 $14, and the plain-instruction secondary about $11 more. About 4.1 million
 tokens are already used, about $4 to $6 at the same price. The billing page
 is the figure of record.
+
+**Thinking** (owner decision 12). The shake-down asked with the model's
+thinking at the API default, which is on; it was 0.28 of the 2.42 million
+tokens billed there. `thinkingBudget: 0` turns it off, as the repo's own
+Flash OCR path does, and would take about $3 off the scored run. It is not
+only a cost setting. The same 26 unscored digit-differing items asked with
+thinking off (correct / wrong / hedged):
+
+| Context | Thinking on | Thinking off |
+| --- | --- | --- |
+| A, text layer only | 25 / 1 / 0 | 25 / 1 / 0 |
+| B, both readings, unlabelled | 14 / 1 / 11 | 21 / 1 / 4 |
+| C, both readings, labelled | 9 / 0 / 17 | 2 / 0 / 24 |
+
+18 of 78 outcomes changed. Without thinking the model hedges on nearly
+every item on a page that carries markers, whether or not the marker is on
+the asked value. The harness records the setting with the answers and
+refuses to mix the two in one run.
 Throwaway harness in `scripts/evaluation/`, result in `docs/trials/`.
 
 ## Step 2 — base rate on fresh pages
@@ -399,8 +417,9 @@ usual way, with `score-candidate-witness.mjs`.
 
 ## Owner decisions
 
-Work proceeds on the defaults unless changed, except row 11, which needs
-an explicit yes because it spends on the owner's billing account.
+Work proceeds on the defaults unless changed, except rows 11 and 12: row 11
+needs an explicit yes because it spends on the owner's billing account, and
+row 12 is open.
 
 | # | Decision | Default |
 | --- | --- | --- |
@@ -415,6 +434,7 @@ an explicit yes because it spends on the owner's billing account.
 | 9 | Patent read by an attorney | Before the comparison is marketed; see below |
 | 10 | Step 1 answering instructions | Keep the instructions as recorded in step 1 for pass or fail, only because they came first; the plain instructions are the more typical consumer and the wording under which the label looked worse on the shake-down. Also ask B and C with the plain instructions as a declared secondary that decides nothing (`--plain-secondary`) |
 | 11 | Step 1 spend cap | **No default; needs an explicit yes.** The scored run does not start under the $10 cap. Estimate in step 1: about $14 for the scored run, about $11 more for the secondary. A cheaper route is to put the page text before the question so repeated pages are billed as cached; that changes the recorded instructions and needs the shake-down run again |
+| 12 | Step 1 thinking for answer calls | **Open.** The owner asked on 2026-11-14 for thinking off. It saves about $3 and changes the answers (table in step 1). My recommendation is on for the answer calls, so that a fail cannot be put down to a reader that did not reason, and off for the page-to-Markdown parse in step 2, which is transcription |
 
 When the owner accepts, the affected rows of `docs/workstreams.md` change in
 the same pull request as this document's status line.
